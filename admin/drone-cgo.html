@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BCGO — FLEET COMMAND CENTER v4</title>
+    <style>
+        :root {
+            --bg-dark: #0a0f14;
+            --panel-bg: #111820;
+            --text-main: #d1d5db;
+            --neon-green: #00ff88;
+            --neon-red: #ff3366;
+            --neon-blue: #00ccff;
+            --neon-yellow: #ffcc00;
+            --neon-purple: #a855f7;
+            --font-mono: 'Courier New', Courier, monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 10px;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-mono);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: background-color 0.5s;
+        }
+        body.emergency { background-color: #2a0000; }
+
+        /* ---------- SVG ICON ---------- */
+        .ico {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            vertical-align: -0.15em;
+            flex-shrink: 0;
+            line-height: 0;
+        }
+        .ico svg { width: 100%; height: 100%; display: block; }
+        .ico-sm { width: 10px; height: 10px; vertical-align: -0.05em; }
+
+        /* ---------- HEADER ---------- */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #1f2937;
+            padding-bottom: 8px;
+            margin-bottom: 8px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .header h1 {
+            margin: 0; font-size: 15px; color: var(--neon-blue);
+            text-shadow: 0 0 5px var(--neon-blue); white-space: nowrap;
+        }
+        .header-controls {
+            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        }
+        .header-controls > * { font-size: 11px; }
+
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 11px;
+            background: #1f2937;
+            color: var(--neon-green);
+            border: 1px solid var(--neon-green);
+            transition: all 0.3s;
+        }
+        .status-badge.danger {
+            color: var(--neon-red); border-color: var(--neon-red);
+            animation: blink 1s infinite;
+        }
+
+        .chip {
+            background: #1f2937;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #374151;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-main);
+            user-select: none;
+        }
+        .chip.value { color: var(--neon-blue); font-weight: bold; }
+
+        .ctrl-btn {
+            background: transparent;
+            border: 1px solid #374151;
+            color: var(--text-main);
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            font-size: 11px;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .ctrl-btn:hover { border-color: var(--neon-blue); color: var(--neon-blue); }
+        .ctrl-btn.active { border-color: var(--neon-green); color: var(--neon-green); }
+
+        .slider {
+            -webkit-appearance: none;
+            width: 80px;
+            height: 4px;
+            background: #374151;
+            border-radius: 2px;
+            outline: none;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px; height: 12px;
+            background: var(--neon-blue);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 5px var(--neon-blue);
+        }
+        .slider::-moz-range-thumb {
+            width: 12px; height: 12px;
+            background: var(--neon-blue);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
+        /* ---------- FLEET OVERVIEW ---------- */
+        .fleet-overview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            gap: 4px;
+            background: #1f2937;
+            padding: 8px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 11px;
+            border: 1px solid #374151;
+            text-align: center;
+        }
+        .fleet-stat span { display: block; font-size: 15px; font-weight: bold; }
+
+        /* ---------- MAIN GRID ---------- */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.4fr 1fr;
+            gap: 8px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid #1f2937;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            min-height: 0;
+        }
+        .panel-title {
+            font-size: 10px;
+            color: #6b7280;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px dashed #374151;
+            padding-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* ---------- TELEMETRY ---------- */
+        .telemetry-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 11px;
+            border-bottom: 1px solid #1f2937;
+            padding-bottom: 2px;
+        }
+        .val { font-weight: bold; color: var(--neon-blue); }
+        .val.danger { color: var(--neon-red); }
+        .val.warning { color: var(--neon-yellow); }
+        .val.success { color: var(--neon-green); }
+
+        .drone-selector {
+            display: flex; gap: 4px; margin-bottom: 8px;
+        }
+        .drone-selector input {
+            flex: 1; background: #000; color: var(--neon-blue);
+            border: 1px solid #374151; border-radius: 4px;
+            padding: 4px 6px; font-family: var(--font-mono); font-size: 11px;
+            text-align: center;
+        }
+        .drone-selector button {
+            background: #1f2937; border: 1px solid #374151;
+            color: var(--neon-green); padding: 4px 8px;
+            border-radius: 4px; cursor: pointer;
+            font-family: var(--font-mono); font-size: 11px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .drone-selector button:hover { border-color: var(--neon-green); }
+
+        /* ---------- SPARKLINE ---------- */
+        .sparkline-container {
+            background: #000;
+            border: 1px solid #1f2937;
+            border-radius: 4px;
+            padding: 4px;
+            margin-bottom: 6px;
+            position: relative;
+        }
+        .sparkline-container canvas { display: block; width: 100%; height: 40px; }
+        .sparkline-label {
+            position: absolute; top: 2px; left: 6px;
+            font-size: 9px; color: #6b7280; pointer-events: none;
+        }
+
+        /* ---------- FPV ---------- */
+        .fpv-container {
+            flex: 1;
+            background: #000;
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #374151;
+            min-height: 250px;
+        }
+        .fpv-overlay {
+            position: absolute;
+            top: 10px; left: 10px; right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--neon-green);
+            z-index: 10;
+            text-shadow: 1px 1px 2px #000;
+        }
+        .crosshair {
+            width: 60px; height: 60px;
+            border: 2px solid rgba(0, 255, 136, 0.5);
+            border-radius: 50%;
+            position: absolute;
+            z-index: 5;
+        }
+        .crosshair::before, .crosshair::after {
+            content: ''; position: absolute; background: rgba(0, 255, 136, 0.5);
+        }
+        .crosshair::before { width: 20px; height: 2px; top: 50%; left: -25px; transform: translateY(-50%); }
+        .crosshair::after  { width: 20px; height: 2px; top: 50%; right: -25px; transform: translateY(-50%); }
+        .fpv-bg-sim {
+            width: 100%; height: 100%;
+            background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)),
+                              url('https://images.unsplash.com/photo-1555899434-94d1368aa7af?auto=format&fit=crop&q=80&w=800');
+            background-size: cover;
+            background-position: center;
+            transition: filter 0.3s;
+        }
+        .fpv-bg-sim.jammed { filter: grayscale(1) contrast(2) brightness(0.4); }
+        .fpv-bg-sim.jammed::after {
+            content: ''; position: absolute; inset: 0;
+            background-image: repeating-linear-gradient(
+                0deg, rgba(0,0,0,0.7) 0, rgba(0,0,0,0.7) 1px,
+                transparent 1px, transparent 3px);
+            animation: scanlines 0.3s linear infinite;
+        }
+        @keyframes scanlines {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(3px); }
+        }
+        .fpv-container.emergency { border-color: var(--neon-red); box-shadow: 0 0 15px var(--neon-red); }
+
+        /* ---------- BUTTONS ---------- */
+        .btn {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid #374151;
+            padding: 8px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 10px;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .btn:hover { background: #1f2937; transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+        .btn.primary { border-color: var(--neon-green); color: var(--neon-green); }
+        .btn.primary:hover { background: rgba(0, 255, 136, 0.1); box-shadow: 0 0 8px rgba(0, 255, 136, 0.4); }
+        .btn.danger { border-color: var(--neon-red); color: var(--neon-red); }
+        .btn.danger:hover { background: rgba(255, 51, 102, 0.1); box-shadow: 0 0 8px rgba(255, 51, 102, 0.4); }
+        .btn.warning { border-color: var(--neon-yellow); color: var(--neon-yellow); }
+        .btn.warning:hover { background: rgba(255, 204, 0, 0.1); }
+        .btn.small { padding: 5px; font-size: 9px; }
+
+        .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+        .btn-row .btn { margin-bottom: 4px; }
+
+        hr { border: none; border-top: 1px solid #1f2937; margin: 8px 0; }
+
+        /* ---------- LOG ---------- */
+        .log-container {
+            flex: 1;
+            background: #000;
+            padding: 6px;
+            border-radius: 4px;
+            overflow-y: auto;
+            font-size: 9px;
+            line-height: 1.4;
+            border: 1px solid #1f2937;
+            min-height: 120px;
+        }
+        .log-entry { margin-bottom: 3px; word-break: break-word; }
+        .log-time { color: #6b7280; }
+        .log-INFO { color: var(--text-main); }
+        .log-SUCCESS { color: var(--neon-green); }
+        .log-WARNING { color: var(--neon-yellow); }
+        .log-DANGER { color: var(--neon-red); font-weight: bold; }
+
+        /* ---------- TOAST ---------- */
+        .toast-container {
+            position: fixed; top: 15px; right: 15px;
+            display: flex; flex-direction: column; gap: 6px;
+            z-index: 9999; pointer-events: none;
+        }
+        .toast {
+            background: #111820;
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            max-width: 260px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            animation: slideIn 0.3s ease-out;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .toast.danger { border-color: var(--neon-red); color: var(--neon-red); }
+        .toast.success { border-color: var(--neon-green); color: var(--neon-green); }
+        .toast.warning { border-color: var(--neon-yellow); color: var(--neon-yellow); }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to   { transform: translateX(0);    opacity: 1; }
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* ---------- KBD HINT ---------- */
+        .kbd {
+            background: #1f2937; padding: 1px 4px; border-radius: 3px;
+            font-size: 9px; color: #9ca3af; border: 1px solid #374151;
+        }
+
+        /* ---------- RESPONSIVE ---------- */
+        @media (max-width: 900px) {
+            .main-grid { grid-template-columns: 1fr; }
+            body { overflow-y: auto; height: auto; min-height: 100vh; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ================ HEADER ================ -->
+<div class="header">
+    <h1>BCGO // FLEET COMMAND <span style="font-size:9px;color:#6b7280">v4.0</span></h1>
+    <div class="header-controls">
+        <div class="chip">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+            <span id="missionElapsed" class="chip value">--:--:--</span>
+        </div>
+        <div class="chip">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></span>
+            <span id="sunLabel" class="chip value">DAY</span>
+        </div>
+        <div class="chip">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+            SPEED
+            <input id="speedSlider" type="range" min="0.5" max="5" step="0.5" value="1" class="slider">
+            <span id="speedLabel" class="chip value">1x</span>
+        </div>
+        <button id="muteBtn" class="ctrl-btn"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span> AUDIO</button>
+        <div id="networkStatus" class="status-badge">STARLINK_LINK_ACTIVE</div>
+    </div>
+</div>
+
+<!-- ================ FLEET OVERVIEW ================ -->
+<div class="fleet-overview">
+    <div class="fleet-stat">TOTAL <span id="statTotal" style="color: var(--neon-blue);">0</span></div>
+    <div class="fleet-stat">AKTIF <span id="statActive" style="color: var(--neon-green);">0</span></div>
+    <div class="fleet-stat">IDLE <span id="statIdle" style="color: #6b7280;">0</span></div>
+    <div class="fleet-stat">DARURAT <span id="statEmergency" style="color: var(--neon-red);">0</span></div>
+    <div class="fleet-stat">OFFLINE <span id="statOffline" style="color: #6b7280;">0</span></div>
+    <div class="fleet-stat">JAMMED <span id="statJammed" style="color: var(--neon-yellow);">0</span></div>
+</div>
+
+<!-- ================ MAIN GRID ================ -->
+<div class="main-grid">
+
+    <!-- ---------- LEFT: TELEMETRY ---------- -->
+    <div class="panel">
+        <div class="panel-title">
+            <span>Selected Drone Telemetry</span>
+            <span id="meshBadge" class="chip" style="font-size:9px;padding:1px 5px;">MESH: -</span>
+        </div>
+
+        <div class="drone-selector">
+            <button id="prevDrone" title="Prev drone (←)" aria-label="Prev drone">
+                <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></span>
+            </button>
+            <input id="droneInput" type="text" value="CGO-0001" maxlength="8">
+            <button id="nextDrone" title="Next drone (→)" aria-label="Next drone">
+                <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+            </button>
+        </div>
+
+        <div class="telemetry-item"><span>ID:</span> <span id="valDroneId" class="val warning">-</span></div>
+        <div class="telemetry-item"><span>STATE:</span> <span id="valState" class="val">IDLE</span></div>
+        <div class="telemetry-item"><span>BATTERY:</span> <span id="valBattery" class="val">100%</span></div>
+        <div class="telemetry-item"><span>SOLAR:</span> <span id="valSolar" class="val">+0 W</span></div>
+        <div class="telemetry-item"><span>ALTITUDE:</span> <span id="valAltitude" class="val">0 m</span></div>
+        <div class="telemetry-item"><span>SIGNAL:</span> <span id="valSignal" class="val">100%</span></div>
+        <div class="telemetry-item"><span>SECTOR:</span> <span id="valSector" class="val">(0,0)</span></div>
+        <div class="telemetry-item"><span>UPTIME:</span> <span id="valUptime" class="val">0s</span></div>
+
+        <div class="sparkline-container">
+            <span class="sparkline-label">BATTERY (60s)</span>
+            <canvas id="batteryChart"></canvas>
+        </div>
+        <div class="sparkline-container">
+            <span class="sparkline-label">SIGNAL (60s)</span>
+            <canvas id="signalChart"></canvas>
+        </div>
+
+        <div class="panel-title" style="margin-top: 8px;">Sensors</div>
+        <div class="telemetry-item"><span>WIND:</span> <span id="valWind" class="val">2.5 m/s</span></div>
+        <div class="telemetry-item"><span>SMOKE:</span> <span id="valSmoke" class="val">0 ppm</span></div>
+        <div class="telemetry-item"><span>ACOUSTIC:</span> <span id="valAcoustic" class="val">NORMAL</span></div>
+
+        <div class="panel-title" style="margin-top: 8px;">Defense</div>
+        <div class="telemetry-item"><span>JAMMING:</span> <span id="valJam" class="val">SECURE</span></div>
+    </div>
+
+    <!-- ---------- CENTER: FPV ---------- -->
+    <div class="panel">
+        <div class="panel-title">Live FPV Feed (Mata CGO)</div>
+        <div class="fpv-container" id="fpvContainer">
+            <div class="fpv-overlay">
+                <span id="targetLabel">TARGET: NONE</span>
+                <span id="fpvCoords">LAT: -6.2088 | LNG: 106.8456</span>
+            </div>
+            <div class="crosshair"></div>
+            <div class="fpv-bg-sim" id="fpvBg"></div>
+            <div class="fpv-overlay" style="top: auto; bottom: 10px;">
+                <span id="recIndicator"><span class="ico ico-sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg></span> REC</span>
+                <span id="fpvAlert" style="color: var(--neon-yellow);">SISTEM NORMAL</span>
+            </div>
+        </div>
+
+        <div class="panel-title" style="margin-top: 10px;">Mission Overview</div>
+        <div class="telemetry-item"><span>FORMATION:</span> <span id="valFormation" class="val success">grid</span></div>
+        <div class="telemetry-item"><span>MESH RELAY:</span> <span id="valMesh" class="val">STANDBY</span></div>
+    </div>
+
+    <!-- ---------- RIGHT: CONTROLS ---------- -->
+    <div class="panel">
+        <div class="panel-title">Swarm Controls (Global)</div>
+
+        <button class="btn primary" onclick="CGO_Fleet.deployAll()">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg></span>
+            DEPLOY ALL DRONES
+        </button>
+        <button class="btn warning" onclick="CGO_Fleet.returnAll()">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+            RETURN ALL TO BASE
+        </button>
+
+        <hr>
+
+        <div class="panel-title">Target Action (Selected Drone)</div>
+        <button class="btn" onclick="CGO_Fleet.interactSelected('Mr. Johny')" style="color: var(--neon-blue); border-color: var(--neon-blue);">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
+            INTERACT MR. JOHNY
+        </button>
+
+        <hr>
+
+        <div class="panel-title">Emergency</div>
+        <button class="btn danger" onclick="CGO_Fleet.triggerGlobalTsunami()">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+            GLOBAL TSUNAMI ALERT
+        </button>
+        <button class="btn danger" onclick="CGO_Fleet.activateVoidPulseAll()">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+            VOID PULSE (ALL)
+        </button>
+
+        <hr>
+
+        <div class="panel-title">Formation</div>
+        <div class="btn-row">
+            <button class="btn small" onclick="setFormation('grid')">GRID</button>
+            <button class="btn small" onclick="setFormation('circle')">CIRCLE</button>
+            <button class="btn small" onclick="setFormation('v')">V-SHAPE</button>
+            <button class="btn small" onclick="setFormation('line')">LINE</button>
+        </div>
+
+        <hr>
+
+        <div class="panel-title">System</div>
+        <div class="btn-row">
+            <button class="btn small primary" onclick="saveState()">
+                <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>
+                SAVE
+            </button>
+            <button class="btn small warning" onclick="loadState()">
+                <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></span>
+                LOAD
+            </button>
+        </div>
+        <button class="btn small" onclick="CGO_Fleet.reset(); initFleet();" style="border-color: var(--neon-red); color: var(--neon-red);">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></span>
+            RESET SYSTEM
+        </button>
+
+        <div class="panel-title" style="margin-top: 8px;">Black Box</div>
+        <div class="log-container" id="logContainer"></div>
+
+        <div style="margin-top:6px;font-size:9px;color:#6b7280;text-align:center;">
+            <span class="kbd">SPACE</span> deploy ·
+            <span class="kbd">R</span> return ·
+            <span class="kbd">T</span> tsunami ·
+            <span class="kbd">V</span> pulse ·
+            <span class="kbd">←/→</span> drone
+        </div>
+    </div>
+
+</div>
+
+<!-- ================ TOAST ================ -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ================ SCRIPT ================ -->
+<script src="drone-cgo.js"></script>
+<script>
+(function () {
+    "use strict";
+
+    // ---------------- Guard ----------------
+    if (typeof CGO_Fleet === "undefined") {
+        document.body.innerHTML =
+            '<div style="color:red;padding:20px;font-family:monospace">' +
+            'FATAL: drone-cgo.js tidak termuat. Pastikan file ada di folder yang sama.</div>';
+        return;
+    }
+
+    // ---------------- SVG icon registry ----------------
+    const ICONS = {
+        check:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+        x:          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+        rocket:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>',
+        home:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+        bell:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+        bolt:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+        folder:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+        volume:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>',
+        mute:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+        warning:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+        rec:        '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>'
+    };
+    const ico = (name, extra = '') =>
+        `<span class="ico${extra ? ' ' + extra : ''}" aria-hidden="true">${ICONS[name] || ''}</span>`;
+    const esc = (s) => String(s).replace(/[&<>"']/g, c =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // ---------------- DOM cache ----------------
+    const $ = (id) => document.getElementById(id);
+    const logContainer   = $("logContainer");
+    const toastContainer = $("toastContainer");
+
+    const batteryCanvas = $("batteryChart");
+    const signalCanvas  = $("signalChart");
+    const bctx = batteryCanvas.getContext("2d");
+    const sctx = signalCanvas.getContext("2d");
+
+    // ---------------- State UI ----------------
+    let currentDroneIdx = 1;
+    let muted = false;
+    let isEmergency = false;
+
+    // ---------------- Helpers ----------------
+    function fmtTime(s) {
+        s = Math.max(0, Math.floor(s));
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        return [h, m, sec].map(v => String(v).padStart(2, "0")).join(":");
+    }
+
+    function toast(msg, type = "info", duration = 2500) {
+        const el = document.createElement("div");
+        el.className = "toast " + (type === "info" ? "" : type);
+        el.innerHTML = msg;
+        toastContainer.appendChild(el);
+        setTimeout(() => {
+            el.style.transition = "opacity 0.3s, transform 0.3s";
+            el.style.opacity = "0";
+            el.style.transform = "translateX(100%)";
+            setTimeout(() => el.remove(), 350);
+        }, duration);
+    }
+
+    // ---------------- Sparkline ----------------
+    function drawSparkline(ctx, canvas, data, color, minVal, maxVal) {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        canvas.width  = rect.width  * dpr;
+        canvas.height = rect.height * dpr;
+
+        const w = canvas.width, h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+
+        // grid
+        ctx.strokeStyle = "#1f2937";
+        ctx.lineWidth = 1;
+        for (let i = 1; i < 4; i++) {
+            const y = (h / 4) * i;
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        }
+
+        if (!data.length) return;
+
+        const range = maxVal - minVal || 1;
+        const step = w / Math.max(data.length - 1, 1);
+
+        // fill
+        ctx.beginPath();
+        ctx.moveTo(0, h);
+        for (let i = 0; i < data.length; i++) {
+            const x = i * step;
+            const y = h - ((data[i] - minVal) / range) * (h - 4) - 2;
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo((data.length - 1) * step, h);
+        ctx.closePath();
+        ctx.fillStyle = color + "22";
+        ctx.fill();
+
+        // line
+        ctx.beginPath();
+        for (let i = 0; i < data.length; i++) {
+            const x = i * step;
+            const y = h - ((data[i] - minVal) / range) * (h - 4) - 2;
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.stroke();
+
+        // last dot
+        const lastX = (data.length - 1) * step;
+        const lastY = h - ((data[data.length - 1] - minVal) / range) * (h - 4) - 2;
+        ctx.beginPath();
+        ctx.arc(lastX, lastY, 2.5 * dpr, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+    }
+
+    // ---------------- Drone selection ----------------
+    function selectDroneById(id) {
+        if (!CGO_Fleet.drones.has(id)) {
+            toast(ico('x') + ' Drone tidak ditemukan: ' + esc(id), "danger");
+            return false;
+        }
+        CGO_Fleet.selectDrone(id);
+        currentDroneIdx = parseInt(id.split("-")[1], 10) || 1;
+        $("droneInput").value = id;
+        return true;
+    }
+
+    function stepDrone(delta) {
+        const total = CGO_Fleet.drones.size;
+        if (!total) return;
+        currentDroneIdx = ((currentDroneIdx - 1 + delta + total) % total) + 1;
+        const id = "CGO-" + String(currentDroneIdx).padStart(4, "0");
+        selectDroneById(id);
+    }
+
+    $("prevDrone").onclick = () => stepDrone(-1);
+    $("nextDrone").onclick = () => stepDrone(1);
+    $("droneInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            const v = $("droneInput").value.trim().toUpperCase();
+            selectDroneById(v.startsWith("CGO-") ? v : "CGO-" + v.padStart(4, "0"));
+        }
+    });
+
+    // ---------------- Speed control ----------------
+    const speedSlider = $("speedSlider");
+    speedSlider.addEventListener("input", () => {
+        const v = parseFloat(speedSlider.value);
+        $("speedLabel").innerText = v + "x";
+        CGO_Fleet.setSimulationSpeed(v);
+    });
+
+    // ---------------- Mute ----------------
+    const muteBtn = $("muteBtn");
+    muteBtn.onclick = () => {
+        muted = !muted;
+        CGO_Fleet.mute(muted);
+        muteBtn.classList.toggle("active", !muted);
+        muteBtn.innerHTML = muted
+            ? ico('mute') + ' MUTED'
+            : ico('volume') + ' AUDIO';
+        toast(muted ? "Audio dimatikan" : "Audio diaktifkan", "info", 1200);
+    };
+
+    // ---------------- Formation ----------------
+    window.setFormation = function (name) {
+        if (typeof CGO_Fleet.setFormation === "function") {
+            CGO_Fleet.setFormation(name);
+        } else {
+            toast("Formation → " + name.toUpperCase(), "info", 1500);
+        }
+        $("valFormation").innerText = name;
+    };
+
+    // ---------------- Persistence ----------------
+    window.saveState = function () {
+        try {
+            const json = CGO_Fleet.exportState();
+            localStorage.setItem("cgo_fleet_state", json);
+            toast(ico('check') + ' State tersimpan', "success");
+        } catch (e) {
+            toast(ico('x') + ' Gagal simpan: ' + esc(e.message), "danger");
+        }
+    };
+
+    window.loadState = function () {
+        try {
+            const json = localStorage.getItem("cgo_fleet_state");
+            if (!json) { toast(ico('warning') + ' Tidak ada state tersimpan', "warning"); return; }
+            if (CGO_Fleet.importState(json)) {
+                $("statTotal").innerText = CGO_Fleet.drones.size;
+                toast(ico('folder') + ' State dimuat', "success");
+            }
+        } catch (e) {
+            toast(ico('x') + ' Gagal muat: ' + esc(e.message), "danger");
+        }
+    };
+
+    // ---------------- Keyboard shortcuts ----------------
+    document.addEventListener("keydown", (e) => {
+        if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+        switch (e.key.toLowerCase()) {
+            case " ": e.preventDefault(); CGO_Fleet.deployAll(); break;
+            case "r": CGO_Fleet.returnAll(); break;
+            case "t": CGO_Fleet.triggerGlobalTsunami(); break;
+            case "v": CGO_Fleet.activateVoidPulseAll(); break;
+            case "arrowleft":  stepDrone(-1); break;
+            case "arrowright": stepDrone(1);  break;
+        }
+    });
+
+    // ---------------- Fleet init ----------------
+    function initFleet() {
+        logContainer.innerHTML = "";
+        CGO_Fleet.generateFleet(1000);
+        CGO_Fleet.startSimulation();
+        $("statTotal").innerText = CGO_Fleet.drones.size;
+
+        // mission timer
+        setInterval(() => {
+            const s = CGO_Fleet.getMissionElapsed();
+            $("missionElapsed").innerText = s ? fmtTime(s) : "--:--:--";
+        }, 1000);
+    }
+
+    // ---------------- Event bindings ----------------
+    CGO_Fleet.onEvent((data) => {
+        const ev = data.event;
+
+        // ---- Fleet stats ----
+        if (ev === "FLEET_STATS_UPDATE") {
+            const s = data.data;
+            $("statActive").innerText    = s.active;
+            $("statEmergency").innerText = s.emergency;
+            $("statJammed").innerText    = s.jammed;
+            $("statOffline").innerText   = s.offline;
+            $("statIdle").innerText      = s.idle ?? 0;
+
+            // Auto-mesh indicator
+            const meshEl = $("valMesh");
+            if (s.jammed > 0) {
+                meshEl.innerText = "RELAY " + s.jammed + " NODES";
+                meshEl.className = "val warning";
+                $("meshBadge").innerText = "MESH: " + s.jammed;
+                $("meshBadge").style.color = "var(--neon-yellow)";
+            } else {
+                meshEl.innerText = "STANDBY";
+                meshEl.className = "val";
+                $("meshBadge").innerText = "MESH: OK";
+                $("meshBadge").style.color = "var(--neon-green)";
+            }
+        }
+
+        // ---- Drone selected ----
+        if (ev === "DRONE_SELECTED") {
+            const d = data.data;
+            $("valDroneId").innerText = d.id;
+            $("droneInput").value = d.id;
+            currentDroneIdx = parseInt(d.id.split("-")[1], 10) || 1;
+            bctx.clearRect(0, 0, batteryCanvas.width, batteryCanvas.height);
+            sctx.clearRect(0, 0, signalCanvas.width, signalCanvas.height);
+        }
+
+        // ---- Telemetry update ----
+        if (ev === "TELEMETRY_UPDATE") {
+            const t = data.data;
+            const drone = CGO_Fleet.getSelectedDrone();
+            if (!drone) return;
+
+            $("valState").innerText  = drone.state;
+            $("valState").style.color =
+                (drone.state === "EMERGENCY" || drone.state === "OFFLINE") ? "var(--neon-red)" :
+                (drone.state === "MONITORING" || drone.state === "INTERACTING") ? "var(--neon-green)" :
+                "var(--neon-blue)";
+
+            $("valBattery").innerText = t.battery.toFixed(1) + "%";
+            $("valBattery").style.color =
+                t.battery < 20 ? "var(--neon-red)" :
+                t.battery < 40 ? "var(--neon-yellow)" : "var(--neon-blue)";
+
+            $("valSolar").innerText = "+" + t.solarInput.toFixed(1) + " W";
+            $("valSolar").style.color = t.isDaylight ? "var(--neon-green)" : "#6b7280";
+
+            $("valAltitude").innerText = t.altitude.toFixed(0) + " m";
+
+            $("valSignal").innerText = t.signalStrength + "%";
+            $("valSignal").style.color =
+                t.signalStrength < 30 ? "var(--neon-red)" :
+                t.signalStrength < 60 ? "var(--neon-yellow)" : "var(--neon-blue)";
+
+            $("valSector").innerText = `(${drone.sector.x},${drone.sector.y})`;
+            $("valUptime").innerText = fmtTime(t.uptime || 0);
+
+            $("valWind").innerText  = t.windSpeed + " m/s";
+            $("valSmoke").innerText = t.smokeLevel + " ppm";
+            $("valSmoke").style.color = t.smokeLevel > 30 ? "var(--neon-red)" : "var(--neon-blue)";
+
+            $("valAcoustic").innerText = t.acousticAlert ? "SOS DETECTED!" : "NORMAL";
+            $("valAcoustic").style.color = t.acousticAlert ? "var(--neon-red)" : "var(--neon-blue)";
+
+            // Day / Night
+            $("sunLabel").innerText = t.isDaylight ? "DAY " + Math.round(t.sunAngle) + "°" : "NIGHT";
+            $("sunLabel").style.color = t.isDaylight ? "var(--neon-yellow)" : "#6b7280";
+
+            // FPV target
+            $("targetLabel").innerText = t.currentTarget
+                ? "TARGET: " + t.currentTarget.toUpperCase()
+                : "TARGET: NONE";
+
+            // FPV coordinates
+            $("fpvCoords").innerText = `LAT: ${(-6.2088 + t.position.x * 0.0001).toFixed(4)} | LNG: ${(106.8456 + t.position.y * 0.0001).toFixed(4)}`;
+
+            // Jam visual
+            const fpvBg = $("fpvBg");
+            const rec   = $("recIndicator");
+            if (t.isJammed) {
+                $("valJam").innerText = "HOSTILE JAMMER";
+                $("valJam").style.color = "var(--neon-red)";
+                $("networkStatus").innerText = "SIGNAL LOST";
+                $("networkStatus").className = "status-badge danger";
+                $("fpvAlert").innerHTML = ico('warning') + ' SIGNAL INTERFERENCE';
+                $("fpvAlert").style.color = "var(--neon-red)";
+                fpvBg.classList.add("jammed");
+                rec.style.color = "var(--neon-red)";
+                rec.innerHTML = ico('rec', 'ico-sm') + ' LOST';
+            } else {
+                $("valJam").innerText = drone.state === "EMERGENCY" ? "EMERGENCY MODE" : "SECURE";
+                $("valJam").style.color = drone.state === "EMERGENCY" ? "var(--neon-yellow)" : "var(--neon-green)";
+                $("networkStatus").innerText = "STARLINK_LINK_ACTIVE";
+                $("networkStatus").className = "status-badge";
+                $("fpvAlert").innerHTML = isEmergency
+                    ? ico('bell') + ' TSUNAMI EVACUATION MODE'
+                    : 'SISTEM NORMAL';
+                $("fpvAlert").style.color = isEmergency ? "var(--neon-red)" : "var(--neon-yellow)";
+                fpvBg.classList.remove("jammed");
+                rec.style.color = "var(--neon-green)";
+                rec.innerHTML = ico('rec', 'ico-sm') + ' REC';
+            }
+
+            // Sparklines
+            const hist = drone.getHistory();
+            drawSparkline(bctx, batteryCanvas, hist.battery, "#00ccff", 0, 100);
+            drawSparkline(sctx, signalCanvas,  hist.signal,  "#00ff88", 0, 100);
+        }
+
+        // ---- Log ----
+        if (ev === "NEW_LOG") {
+            const log = data.data;
+            const el = document.createElement("div");
+            el.className = "log-entry";
+            el.innerHTML =
+                `<span class="log-time">[${log.time}]</span> ` +
+                `<span class="log-${log.type}">[${log.droneId}] ${log.message}</span>`;
+            logContainer.appendChild(el);
+            while (logContainer.children.length > 200) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // ---- Deploy / Return ----
+        if (ev === "FLEET_DEPLOYED") {
+            toast(ico('rocket') + ' ' + data.data.count + ' drone diluncurkan', "success");
+        }
+        if (ev === "FLEET_RETURNING") {
+            toast(ico('home') + ' ' + data.data.count + ' drone RTB', "warning");
+        }
+
+        // ---- Disaster ----
+        if (ev === "DISASTER_ALERT_ACTIVE") {
+            isEmergency = true;
+            document.body.classList.add("emergency");
+            $("fpvContainer").classList.add("emergency");
+            $("fpvAlert").innerHTML = ico('bell') + ' TSUNAMI EVACUATION MODE';
+            $("fpvAlert").style.color = "var(--neon-red)";
+            $("fpvAlert").style.fontWeight = "bold";
+            $("networkStatus").innerText = "EMERGENCY BROADCAST";
+            $("networkStatus").className = "status-badge danger";
+            toast(ico('bell') + ' TSUNAMI ALERT — ' + data.data.dronesAffected + ' drone', "danger", 5000);
+        }
+
+        // ---- Void Pulse ----
+        if (ev === "VOID_PULSE_ACTIVE") {
+            isEmergency = false;
+            document.body.classList.remove("emergency");
+            $("fpvContainer").classList.remove("emergency");
+            $("valJam").innerText = "SECURE (VOID PULSE)";
+            $("valJam").style.color = "var(--neon-green)";
+            $("networkStatus").innerText = "STARLINK SECURE";
+            $("networkStatus").className = "status-badge";
+            $("fpvAlert").innerHTML = 'SISTEM NORMAL';
+            $("fpvAlert").style.color = "var(--neon-yellow)";
+            $("fpvAlert").style.fontWeight = "normal";
+            toast(ico('bolt') + ' Void Pulse aktif — ' + data.data.dronesAffected + ' drone aman', "success");
+        }
+
+        // ---- Mute changed ----
+        if (ev === "MUTE_STATE_CHANGED") {
+            muteBtn.classList.toggle("active", !data.data);
+        }
+    });
+
+    // ---------------- Boot ----------------
+    initFleet();
+    muteBtn.classList.add("active");
+    selectDroneById("CGO-0001");
+
+    // First-gesture audio unlock
+    const primeAudio = () => {
+        try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (AC) {
+                const ctx = new AC();
+                if (ctx.state === "suspended") ctx.resume();
+                ctx.close && ctx.close();
+            }
+        } catch (_) {}
+        document.removeEventListener("click", primeAudio);
+        document.removeEventListener("keydown", primeAudio);
+    };
+    document.addEventListener("click", primeAudio);
+    document.addEventListener("keydown", primeAudio);
+
+    console.info("[BCGO UI] v4.0 ready ·", CGO_Fleet.drones.size, "drones loaded");
+})();
+</script>
+</body>
+</html>
