@@ -3,7 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BCGO — FLEET COMMAND CENTER v4</title>
+    <title>BCGO — FLEET COMMAND CENTER v5.0</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
     <style>
         :root {
             --bg-dark: #0a0f14;
@@ -21,7 +25,7 @@
 
         body {
             margin: 0;
-            padding: 10px;
+            padding: 8px;
             background-color: var(--bg-dark);
             color: var(--text-main);
             font-family: var(--font-mono);
@@ -53,29 +57,28 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #1f2937;
-            padding-bottom: 8px;
-            margin-bottom: 8px;
-            gap: 10px;
+            padding-bottom: 6px;
+            margin-bottom: 6px;
+            gap: 8px;
             flex-wrap: wrap;
         }
         .header h1 {
-            margin: 0; font-size: 15px; color: var(--neon-blue);
+            margin: 0; font-size: 14px; color: var(--neon-blue);
             text-shadow: 0 0 5px var(--neon-blue); white-space: nowrap;
         }
         .header-controls {
-            display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+            display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
         }
-        .header-controls > * { font-size: 11px; }
+        .header-controls > * { font-size: 10px; }
 
         .status-badge {
-            padding: 4px 8px;
+            padding: 3px 7px;
             border-radius: 4px;
             font-weight: bold;
-            font-size: 11px;
+            font-size: 10px;
             background: #1f2937;
             color: var(--neon-green);
             border: 1px solid var(--neon-green);
-            transition: all 0.3s;
         }
         .status-badge.danger {
             color: var(--neon-red); border-color: var(--neon-red);
@@ -84,13 +87,15 @@
 
         .chip {
             background: #1f2937;
-            padding: 4px 8px;
+            padding: 3px 7px;
             border-radius: 4px;
             border: 1px solid #374151;
-            font-size: 11px;
+            font-size: 10px;
             font-family: var(--font-mono);
             color: var(--text-main);
-            user-select: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
         .chip.value { color: var(--neon-blue); font-weight: bold; }
 
@@ -98,11 +103,11 @@
             background: transparent;
             border: 1px solid #374151;
             color: var(--text-main);
-            padding: 4px 8px;
+            padding: 3px 7px;
             border-radius: 4px;
             cursor: pointer;
             font-family: var(--font-mono);
-            font-size: 11px;
+            font-size: 10px;
             transition: all 0.2s;
             display: inline-flex;
             align-items: center;
@@ -113,22 +118,22 @@
 
         .slider {
             -webkit-appearance: none;
-            width: 80px;
-            height: 4px;
+            width: 70px;
+            height: 3px;
             background: #374151;
             border-radius: 2px;
             outline: none;
         }
         .slider::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 12px; height: 12px;
+            width: 10px; height: 10px;
             background: var(--neon-blue);
             border-radius: 50%;
             cursor: pointer;
             box-shadow: 0 0 5px var(--neon-blue);
         }
         .slider::-moz-range-thumb {
-            width: 12px; height: 12px;
+            width: 10px; height: 10px;
             background: var(--neon-blue);
             border-radius: 50%;
             cursor: pointer;
@@ -138,23 +143,23 @@
         /* ---------- FLEET OVERVIEW ---------- */
         .fleet-overview {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(70px, 1fr));
             gap: 4px;
             background: #1f2937;
-            padding: 8px;
+            padding: 6px;
             border-radius: 6px;
-            margin-bottom: 8px;
-            font-size: 11px;
+            margin-bottom: 6px;
+            font-size: 10px;
             border: 1px solid #374151;
             text-align: center;
         }
-        .fleet-stat span { display: block; font-size: 15px; font-weight: bold; }
+        .fleet-stat span { display: block; font-size: 14px; font-weight: bold; }
 
-        /* ---------- MAIN GRID ---------- */
+        /* ---------- MAIN GRID 3-COL ---------- */
         .main-grid {
             display: grid;
-            grid-template-columns: 1fr 1.4fr 1fr;
-            gap: 8px;
+            grid-template-columns: 0.9fr 1.4fr 1fr;
+            gap: 6px;
             flex: 1;
             min-height: 0;
         }
@@ -163,20 +168,20 @@
             background: var(--panel-bg);
             border: 1px solid #1f2937;
             border-radius: 8px;
-            padding: 10px;
+            padding: 8px;
             display: flex;
             flex-direction: column;
             overflow-y: auto;
             min-height: 0;
         }
         .panel-title {
-            font-size: 10px;
+            font-size: 9px;
             color: #6b7280;
-            margin-bottom: 6px;
+            margin-bottom: 5px;
             text-transform: uppercase;
             letter-spacing: 1px;
             border-bottom: 1px dashed #374151;
-            padding-bottom: 4px;
+            padding-bottom: 3px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -186,10 +191,10 @@
         .telemetry-item {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 5px;
-            font-size: 11px;
+            margin-bottom: 4px;
+            font-size: 10px;
             border-bottom: 1px solid #1f2937;
-            padding-bottom: 2px;
+            padding-bottom: 1px;
         }
         .val { font-weight: bold; color: var(--neon-blue); }
         .val.danger { color: var(--neon-red); }
@@ -197,115 +202,116 @@
         .val.success { color: var(--neon-green); }
 
         .drone-selector {
-            display: flex; gap: 4px; margin-bottom: 8px;
+            display: flex; gap: 3px; margin-bottom: 6px;
         }
         .drone-selector input {
             flex: 1; background: #000; color: var(--neon-blue);
             border: 1px solid #374151; border-radius: 4px;
-            padding: 4px 6px; font-family: var(--font-mono); font-size: 11px;
+            padding: 3px 5px; font-family: var(--font-mono); font-size: 10px;
             text-align: center;
         }
         .drone-selector button {
             background: #1f2937; border: 1px solid #374151;
-            color: var(--neon-green); padding: 4px 8px;
+            color: var(--neon-green); padding: 3px 6px;
             border-radius: 4px; cursor: pointer;
-            font-family: var(--font-mono); font-size: 11px;
+            font-family: var(--font-mono); font-size: 10px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
         }
         .drone-selector button:hover { border-color: var(--neon-green); }
 
-        /* ---------- SPARKLINE ---------- */
         .sparkline-container {
             background: #000;
             border: 1px solid #1f2937;
             border-radius: 4px;
-            padding: 4px;
-            margin-bottom: 6px;
+            padding: 3px;
+            margin-bottom: 4px;
             position: relative;
         }
-        .sparkline-container canvas { display: block; width: 100%; height: 40px; }
+        .sparkline-container canvas { display: block; width: 100%; height: 34px; }
         .sparkline-label {
-            position: absolute; top: 2px; left: 6px;
-            font-size: 9px; color: #6b7280; pointer-events: none;
+            position: absolute; top: 1px; left: 5px;
+            font-size: 8px; color: #6b7280; pointer-events: none;
         }
 
-        /* ---------- FPV ---------- */
-        .fpv-container {
-            flex: 1;
-            background: #000;
+        /* ---------- VIDEO PLAYER ---------- */
+        .video-container {
             position: relative;
-            border-radius: 8px;
+            background: #000;
+            border-radius: 6px;
             overflow: hidden;
+            border: 1px solid #374151;
+            min-height: 220px;
+            flex: 1;
+        }
+        .video-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .video-overlay {
+            position: absolute;
+            top: 6px; left: 6px; right: 6px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: var(--neon-green);
+            z-index: 5;
+            text-shadow: 1px 1px 2px #000;
+            pointer-events: none;
+        }
+        .video-overlay.bottom {
+            top: auto; bottom: 6px;
+        }
+        .video-overlay span { display: inline-flex; align-items: center; gap: 3px; }
+        .video-status {
+            position: absolute;
+            inset: 0;
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 1px solid #374151;
-            min-height: 250px;
-        }
-        .fpv-overlay {
-            position: absolute;
-            top: 10px; left: 10px; right: 10px;
-            display: flex;
-            justify-content: space-between;
-            font-size: 11px;
-            color: var(--neon-green);
+            background: rgba(0,0,0,0.7);
             z-index: 10;
-            text-shadow: 1px 1px 2px #000;
+            font-size: 11px;
+            color: var(--neon-yellow);
+            text-align: center;
+            padding: 10px;
+            flex-direction: column;
+            gap: 6px;
         }
-        .crosshair {
-            width: 60px; height: 60px;
-            border: 2px solid rgba(0, 255, 136, 0.5);
-            border-radius: 50%;
-            position: absolute;
-            z-index: 5;
+        .video-status.hidden { display: none; }
+
+        /* ---------- MAP ---------- */
+        #map {
+            height: 200px;
+            width: 100%;
+            border-radius: 6px;
+            margin-top: 6px;
+            border: 1px solid #374151;
+            background: #000;
+            z-index: 1;
         }
-        .crosshair::before, .crosshair::after {
-            content: ''; position: absolute; background: rgba(0, 255, 136, 0.5);
-        }
-        .crosshair::before { width: 20px; height: 2px; top: 50%; left: -25px; transform: translateY(-50%); }
-        .crosshair::after  { width: 20px; height: 2px; top: 50%; right: -25px; transform: translateY(-50%); }
-        .fpv-bg-sim {
-            width: 100%; height: 100%;
-            background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)),
-                              url('https://images.unsplash.com/photo-1555899434-94d1368aa7af?auto=format&fit=crop&q=80&w=800');
-            background-size: cover;
-            background-position: center;
-            transition: filter 0.3s;
-        }
-        .fpv-bg-sim.jammed { filter: grayscale(1) contrast(2) brightness(0.4); }
-        .fpv-bg-sim.jammed::after {
-            content: ''; position: absolute; inset: 0;
-            background-image: repeating-linear-gradient(
-                0deg, rgba(0,0,0,0.7) 0, rgba(0,0,0,0.7) 1px,
-                transparent 1px, transparent 3px);
-            animation: scanlines 0.3s linear infinite;
-        }
-        @keyframes scanlines {
-            0% { transform: translateY(0); }
-            100% { transform: translateY(3px); }
-        }
-        .fpv-container.emergency { border-color: var(--neon-red); box-shadow: 0 0 15px var(--neon-red); }
 
         /* ---------- BUTTONS ---------- */
         .btn {
             background: transparent;
             color: var(--text-main);
             border: 1px solid #374151;
-            padding: 8px;
-            margin-bottom: 6px;
+            padding: 6px;
+            margin-bottom: 4px;
             cursor: pointer;
             border-radius: 4px;
             font-family: var(--font-mono);
             font-weight: bold;
             text-transform: uppercase;
-            font-size: 10px;
+            font-size: 9px;
             transition: all 0.2s;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 5px;
         }
         .btn:hover { background: #1f2937; transform: translateY(-1px); }
         .btn:active { transform: translateY(0); }
@@ -315,26 +321,26 @@
         .btn.danger:hover { background: rgba(255, 51, 102, 0.1); box-shadow: 0 0 8px rgba(255, 51, 102, 0.4); }
         .btn.warning { border-color: var(--neon-yellow); color: var(--neon-yellow); }
         .btn.warning:hover { background: rgba(255, 204, 0, 0.1); }
-        .btn.small { padding: 5px; font-size: 9px; }
+        .btn.small { padding: 4px; font-size: 8px; }
 
-        .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-        .btn-row .btn { margin-bottom: 4px; }
+        .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+        .btn-row .btn { margin-bottom: 3px; }
 
-        hr { border: none; border-top: 1px solid #1f2937; margin: 8px 0; }
+        hr { border: none; border-top: 1px solid #1f2937; margin: 6px 0; }
 
         /* ---------- LOG ---------- */
         .log-container {
             flex: 1;
             background: #000;
-            padding: 6px;
+            padding: 5px;
             border-radius: 4px;
             overflow-y: auto;
-            font-size: 9px;
-            line-height: 1.4;
+            font-size: 8px;
+            line-height: 1.35;
             border: 1px solid #1f2937;
-            min-height: 120px;
+            min-height: 100px;
         }
-        .log-entry { margin-bottom: 3px; word-break: break-word; }
+        .log-entry { margin-bottom: 2px; word-break: break-word; }
         .log-time { color: #6b7280; }
         .log-INFO { color: var(--text-main); }
         .log-SUCCESS { color: var(--neon-green); }
@@ -343,19 +349,19 @@
 
         /* ---------- TOAST ---------- */
         .toast-container {
-            position: fixed; top: 15px; right: 15px;
-            display: flex; flex-direction: column; gap: 6px;
+            position: fixed; top: 12px; right: 12px;
+            display: flex; flex-direction: column; gap: 5px;
             z-index: 9999; pointer-events: none;
         }
         .toast {
             background: #111820;
             border: 1px solid var(--neon-blue);
             color: var(--neon-blue);
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 11px;
+            padding: 6px 10px;
+            border-radius: 5px;
+            font-size: 10px;
             font-family: var(--font-mono);
-            max-width: 260px;
+            max-width: 240px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             animation: slideIn 0.3s ease-out;
             pointer-events: auto;
@@ -375,7 +381,7 @@
         /* ---------- KBD HINT ---------- */
         .kbd {
             background: #1f2937; padding: 1px 4px; border-radius: 3px;
-            font-size: 9px; color: #9ca3af; border: 1px solid #374151;
+            font-size: 8px; color: #9ca3af; border: 1px solid #374151;
         }
 
         /* ---------- RESPONSIVE ---------- */
@@ -389,7 +395,7 @@
 
 <!-- ================ HEADER ================ -->
 <div class="header">
-    <h1>BCGO // FLEET COMMAND <span style="font-size:9px;color:#6b7280">v4.0</span></h1>
+    <h1>BCGO // FLEET COMMAND <span style="font-size:8px;color:#6b7280">v5.0</span></h1>
     <div class="header-controls">
         <div class="chip">
             <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
@@ -405,7 +411,10 @@
             <input id="speedSlider" type="range" min="0.5" max="5" step="0.5" value="1" class="slider">
             <span id="speedLabel" class="chip value">1x</span>
         </div>
-        <button id="muteBtn" class="ctrl-btn"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span> AUDIO</button>
+        <button id="muteBtn" class="ctrl-btn">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></span>
+            AUDIO
+        </button>
         <div id="networkStatus" class="status-badge">STARLINK_LINK_ACTIVE</div>
     </div>
 </div>
@@ -423,11 +432,11 @@
 <!-- ================ MAIN GRID ================ -->
 <div class="main-grid">
 
-    <!-- ---------- LEFT: TELEMETRY ---------- -->
+    <!-- ---------- KIRI: TELEMETRY ---------- -->
     <div class="panel">
         <div class="panel-title">
-            <span>Selected Drone Telemetry</span>
-            <span id="meshBadge" class="chip" style="font-size:9px;padding:1px 5px;">MESH: -</span>
+            <span>Selected Drone</span>
+            <span id="meshBadge" class="chip" style="font-size:8px;padding:1px 4px;">MESH: -</span>
         </div>
 
         <div class="drone-selector">
@@ -458,71 +467,82 @@
             <canvas id="signalChart"></canvas>
         </div>
 
-        <div class="panel-title" style="margin-top: 8px;">Sensors</div>
+        <div class="panel-title" style="margin-top: 6px;">Sensors</div>
         <div class="telemetry-item"><span>WIND:</span> <span id="valWind" class="val">2.5 m/s</span></div>
         <div class="telemetry-item"><span>SMOKE:</span> <span id="valSmoke" class="val">0 ppm</span></div>
         <div class="telemetry-item"><span>ACOUSTIC:</span> <span id="valAcoustic" class="val">NORMAL</span></div>
 
-        <div class="panel-title" style="margin-top: 8px;">Defense</div>
+        <div class="panel-title" style="margin-top: 6px;">Defense</div>
         <div class="telemetry-item"><span>JAMMING:</span> <span id="valJam" class="val">SECURE</span></div>
     </div>
 
-    <!-- ---------- CENTER: FPV ---------- -->
+    <!-- ---------- TENGAH: CCTV FEED + MAP ---------- -->
     <div class="panel">
-        <div class="panel-title">Live FPV Feed (Mata CGO)</div>
-        <div class="fpv-container" id="fpvContainer">
-            <div class="fpv-overlay">
-                <span id="targetLabel">TARGET: NONE</span>
-                <span id="fpvCoords">LAT: -6.2088 | LNG: 106.8456</span>
+        <div class="panel-title">
+            <span>Live CCTV Feed (OSM Surveillance)</span>
+            <span id="cctvCount" class="chip" style="font-size:8px;padding:1px 4px;">0 CCTV</span>
+        </div>
+
+        <div class="video-container">
+            <video id="cctvVideo" muted autoplay playsinline></video>
+            <div class="video-overlay">
+                <span id="camIdLabel">CAM: —</span>
+                <span id="camDistLabel">DIST: —</span>
             </div>
-            <div class="crosshair"></div>
-            <div class="fpv-bg-sim" id="fpvBg"></div>
-            <div class="fpv-overlay" style="top: auto; bottom: 10px;">
-                <span id="recIndicator"><span class="ico ico-sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg></span> REC</span>
-                <span id="fpvAlert" style="color: var(--neon-yellow);">SISTEM NORMAL</span>
+            <div class="video-overlay bottom">
+                <span id="streamStatus"><span class="ico ico-sm" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg></span> OFFLINE</span>
+                <span id="scanCoords" style="color:var(--neon-yellow);">LAT: -6.2088 | LNG: 106.8456</span>
+            </div>
+            <div id="videoStatusOverlay" class="video-status">
+                <span>Menunggu perintah scan CCTV...</span>
             </div>
         </div>
 
-        <div class="panel-title" style="margin-top: 10px;">Mission Overview</div>
+        <div id="map"></div>
+
+        <div class="panel-title" style="margin-top: 8px;">Mission Overview</div>
         <div class="telemetry-item"><span>FORMATION:</span> <span id="valFormation" class="val success">grid</span></div>
         <div class="telemetry-item"><span>MESH RELAY:</span> <span id="valMesh" class="val">STANDBY</span></div>
     </div>
 
-    <!-- ---------- RIGHT: CONTROLS ---------- -->
+    <!-- ---------- KANAN: CONTROLS + LOG ---------- -->
     <div class="panel">
-        <div class="panel-title">Swarm Controls (Global)</div>
-
+        <div class="panel-title">Swarm Controls</div>
         <button class="btn primary" onclick="CGO_Fleet.deployAll()">
             <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg></span>
-            DEPLOY ALL DRONES
+            DEPLOY ALL
         </button>
         <button class="btn warning" onclick="CGO_Fleet.returnAll()">
             <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
-            RETURN ALL TO BASE
+            RETURN ALL
         </button>
 
         <hr>
-
-        <div class="panel-title">Target Action (Selected Drone)</div>
+        <div class="panel-title">Target Action (Selected)</div>
         <button class="btn" onclick="CGO_Fleet.interactSelected('Mr. Johny')" style="color: var(--neon-blue); border-color: var(--neon-blue);">
             <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></span>
             INTERACT MR. JOHNY
         </button>
 
         <hr>
-
-        <div class="panel-title">Emergency</div>
-        <button class="btn danger" onclick="CGO_Fleet.triggerGlobalTsunami()">
-            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
-            GLOBAL TSUNAMI ALERT
-        </button>
-        <button class="btn danger" onclick="CGO_Fleet.activateVoidPulseAll()">
-            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
-            VOID PULSE (ALL)
+        <div class="panel-title">CCTV Scan</div>
+        <button class="btn" id="scanCCTVBtn" style="border-color: var(--neon-blue); color: var(--neon-blue);">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/></svg></span>
+            SCAN CCTV (OSM)
         </button>
 
         <hr>
+        <div class="panel-title">Emergency</div>
+        <button class="btn danger" onclick="CGO_Fleet.triggerGlobalTsunami()">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+            TSUNAMI ALERT
+        </button>
+        <button class="btn danger" onclick="CGO_Fleet.activateVoidPulseAll()">
+            <span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+            VOID PULSE
+        </button>
 
+        <hr>
         <div class="panel-title">Formation</div>
         <div class="btn-row">
             <button class="btn small" onclick="setFormation('grid')">GRID</button>
@@ -532,7 +552,6 @@
         </div>
 
         <hr>
-
         <div class="panel-title">System</div>
         <div class="btn-row">
             <button class="btn small primary" onclick="saveState()">
@@ -549,14 +568,16 @@
             RESET SYSTEM
         </button>
 
-        <div class="panel-title" style="margin-top: 8px;">Black Box</div>
+        <hr>
+        <div class="panel-title">Black Box</div>
         <div class="log-container" id="logContainer"></div>
 
-        <div style="margin-top:6px;font-size:9px;color:#6b7280;text-align:center;">
+        <div style="margin-top:5px;font-size:8px;color:#6b7280;text-align:center;">
             <span class="kbd">SPACE</span> deploy ·
             <span class="kbd">R</span> return ·
             <span class="kbd">T</span> tsunami ·
             <span class="kbd">V</span> pulse ·
+            <span class="kbd">C</span> scan ·
             <span class="kbd">←/→</span> drone
         </div>
     </div>
@@ -566,8 +587,12 @@
 <!-- ================ TOAST ================ -->
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- ================ SCRIPT ================ -->
+<!-- ================ LIBRARIES ================ -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script src="drone-cgo.js"></script>
+
+<!-- ================ APP LOGIC ================ -->
 <script>
 (function () {
     "use strict";
@@ -582,17 +607,20 @@
 
     // ---------------- SVG icon registry ----------------
     const ICONS = {
-        check:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
-        x:          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
-        rocket:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>',
-        home:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
-        bell:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
-        bolt:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
-        folder:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
-        volume:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>',
-        mute:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
-        warning:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
-        rec:        '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>'
+        check:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+        x:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+        rocket:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>',
+        home:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+        bell:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+        bolt:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+        folder:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+        volume:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>',
+        mute:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>',
+        warning: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+        rec:     '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="6"/></svg>',
+        signal:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/></svg>',
+        video:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>',
+        camera:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>'
     };
     const ico = (name, extra = '') =>
         `<span class="ico${extra ? ' ' + extra : ''}" aria-hidden="true">${ICONS[name] || ''}</span>`;
@@ -603,16 +631,22 @@
     const $ = (id) => document.getElementById(id);
     const logContainer   = $("logContainer");
     const toastContainer = $("toastContainer");
+    const videoEl        = $("cctvVideo");
+    const statusOverlay  = $("videoStatusOverlay");
 
     const batteryCanvas = $("batteryChart");
     const signalCanvas  = $("signalChart");
     const bctx = batteryCanvas.getContext("2d");
     const sctx = signalCanvas.getContext("2d");
 
-    // ---------------- State UI ----------------
+    // ---------------- State ----------------
     let currentDroneIdx = 1;
     let muted = false;
     let isEmergency = false;
+    let hls = null;
+    let map = null;
+    let cctvLayerGroup = null;
+    let droneMarker = null;
 
     // ---------------- Helpers ----------------
     function fmtTime(s) {
@@ -636,32 +670,52 @@
         }, duration);
     }
 
+    // Fallback logger — aman kalau drone-cgo.js v5.0 belum punya logGlobal
+    function logGlobal(message, type = "INFO") {
+        if (typeof CGO_Fleet.logGlobal === "function") {
+            CGO_Fleet.logGlobal(message, type);
+            return;
+        }
+        const el = document.createElement("div");
+        el.className = "log-entry";
+        const time = new Date().toTimeString().slice(0, 8);
+        el.innerHTML =
+            `<span class="log-time">[${time}]</span> ` +
+            `<span class="log-${type}">[SYS] ${esc(message)}</span>`;
+        logContainer.appendChild(el);
+        while (logContainer.children.length > 200) logContainer.removeChild(logContainer.firstChild);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function droneLatLng(drone) {
+        const baseLat = -6.2088;
+        const baseLng = 106.8456;
+        return {
+            lat: baseLat + drone.telemetry.position.x * 0.0001,
+            lng: baseLng + drone.telemetry.position.y * 0.0001
+        };
+    }
+
     // ---------------- Sparkline ----------------
     function drawSparkline(ctx, canvas, data, color, minVal, maxVal) {
         const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
-
         canvas.width  = rect.width  * dpr;
         canvas.height = rect.height * dpr;
-
         const w = canvas.width, h = canvas.height;
         ctx.clearRect(0, 0, w, h);
 
-        // grid
         ctx.strokeStyle = "#1f2937";
         ctx.lineWidth = 1;
         for (let i = 1; i < 4; i++) {
             const y = (h / 4) * i;
             ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
         }
-
         if (!data.length) return;
-
         const range = maxVal - minVal || 1;
         const step = w / Math.max(data.length - 1, 1);
 
-        // fill
         ctx.beginPath();
         ctx.moveTo(0, h);
         for (let i = 0; i < data.length; i++) {
@@ -674,7 +728,6 @@
         ctx.fillStyle = color + "22";
         ctx.fill();
 
-        // line
         ctx.beginPath();
         for (let i = 0; i < data.length; i++) {
             const x = i * step;
@@ -685,13 +738,150 @@
         ctx.lineWidth = 1.5 * dpr;
         ctx.stroke();
 
-        // last dot
         const lastX = (data.length - 1) * step;
         const lastY = h - ((data[data.length - 1] - minVal) / range) * (h - 4) - 2;
         ctx.beginPath();
         ctx.arc(lastX, lastY, 2.5 * dpr, 0, Math.PI * 2);
         ctx.fillStyle = color;
         ctx.fill();
+    }
+
+    // ---------------- Map ----------------
+    function initMap() {
+        if (typeof L === "undefined") {
+            console.warn("[BCGO] Leaflet tidak termuat. Map disabled.");
+            return;
+        }
+        try {
+            map = L.map("map").setView([-6.2088, 106.8456], 13);
+            L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                maxZoom: 19,
+                attribution: "© OpenStreetMap"
+            }).addTo(map);
+            cctvLayerGroup = L.layerGroup().addTo(map);
+
+            const droneIcon = L.divIcon({
+                className: "drone-marker",
+                html: '<div style="background:#00ccff;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 8px #00ccff"></div>',
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
+            });
+            droneMarker = L.marker([-6.2088, 106.8456], { icon: droneIcon }).addTo(map)
+                .bindPopup("Drone CGO-0001");
+
+            // Leaflet butuh invalidateSize saat panel resize
+            setTimeout(() => { if (map) map.invalidateSize(); }, 150);
+            window.addEventListener("resize", () => {
+                if (map) map.invalidateSize();
+            });
+        } catch (e) {
+            console.warn("[BCGO] Map init failed:", e);
+            map = null;
+        }
+    }
+
+    function updateDroneMarker(drone) {
+        if (!map || !droneMarker) return;
+        const ll = droneLatLng(drone);
+        droneMarker.setLatLng([ll.lat, ll.lng]);
+        droneMarker.bindPopup(`${drone.id} — ${drone.state}`);
+    }
+
+    // ---------------- Video HLS ----------------
+    function playStream(url, cctvInfo) {
+        statusOverlay.classList.add("hidden");
+
+        if (hls) {
+            hls.destroy();
+            hls = null;
+        }
+
+        const hasHls = (typeof Hls !== "undefined") && Hls.isSupported();
+        if (hasHls) {
+            hls = new Hls({
+                enableWorker: true,
+                lowLatencyMode: true
+            });
+            hls.loadSource(url);
+            hls.attachMedia(videoEl);
+
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                videoEl.play().catch(err => {
+                    console.warn("[HLS] Autoplay ditolak:", err);
+                });
+                $("streamStatus").innerHTML = ico('rec', 'ico-sm') + ' LIVE';
+                $("streamStatus").style.color = "var(--neon-green)";
+                toast(ico('video') + ' Stream CCTV aktif', "success");
+                logGlobal(`[STREAM] Live: ${(cctvInfo && cctvInfo.name) || "CCTV"}`, "SUCCESS");
+            });
+
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                console.error("[HLS] Error:", data);
+                if (data.fatal) {
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            logGlobal(`[HLS] Network error: ${data.details}`, "DANGER");
+                            hls.startLoad();
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            logGlobal(`[HLS] Media error, recover...`, "WARNING");
+                            hls.recoverMediaError();
+                            break;
+                        default:
+                            logGlobal(`[HLS] Fatal: ${data.details}`, "DANGER");
+                            hls.destroy();
+                            hls = null;
+                            statusOverlay.classList.remove("hidden");
+                            statusOverlay.innerHTML = ico('warning') + ' Stream gagal. Coba scan ulang.';
+                            break;
+                    }
+                }
+            });
+        } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
+            // Native HLS (Safari)
+            videoEl.src = url;
+            videoEl.addEventListener("loadedmetadata", () => {
+                videoEl.play();
+                $("streamStatus").innerHTML = ico('rec', 'ico-sm') + ' LIVE';
+                $("streamStatus").style.color = "var(--neon-green)";
+            }, { once: true });
+        } else {
+            statusOverlay.classList.remove("hidden");
+            statusOverlay.innerHTML = ico('warning') + ' Browser tidak mendukung HLS.';
+            logGlobal(`[HLS] Browser tidak mendukung HLS.`, "DANGER");
+        }
+
+        if (cctvInfo) {
+            $("camIdLabel").innerText = "CAM: " + (cctvInfo.name || cctvInfo.id);
+            $("camDistLabel").innerText = "DIST: " + cctvInfo.distance + "m";
+        }
+    }
+
+    // ---------------- CCTV Scan ----------------
+    async function scanCCTV() {
+        if (!CGO_Fleet.CCTV || typeof CGO_Fleet.CCTV.scanNearby !== "function") {
+            toast(ico('warning') + ' CCTV module tidak tersedia', "warning");
+            logGlobal("[CCTV] Module not available — pastikan drone-cgo.js v5.0+", "WARNING");
+            return;
+        }
+        const drone = CGO_Fleet.getSelectedDrone();
+        if (!drone) { toast(ico('warning') + ' Pilih drone dulu', "warning"); return; }
+
+        const ll = droneLatLng(drone);
+        $("scanCoords").innerText = `LAT: ${ll.lat.toFixed(4)} | LNG: ${ll.lng.toFixed(4)}`;
+        statusOverlay.classList.remove("hidden");
+        statusOverlay.innerHTML = ico('signal') + ' Memindai CCTV via OSM...';
+
+        try {
+            const result = await CGO_Fleet.CCTV.scanNearby(ll.lat, ll.lng, 5000);
+            if (!result) {
+                statusOverlay.innerHTML = ico('warning') + ' Scan gagal. Cek log.';
+                toast(ico('x') + ' Scan CCTV gagal', "danger");
+            }
+        } catch (err) {
+            statusOverlay.innerHTML = ico('x') + ' Error: ' + esc(err.message);
+            logGlobal(`[CCTV] ${err.message}`, "DANGER");
+        }
     }
 
     // ---------------- Drone selection ----------------
@@ -750,7 +940,8 @@
         } else {
             toast("Formation → " + name.toUpperCase(), "info", 1500);
         }
-        $("valFormation").innerText = name;
+        const el = $("valFormation");
+        if (el) el.innerText = name;
     };
 
     // ---------------- Persistence ----------------
@@ -777,6 +968,9 @@
         }
     };
 
+    // ---------------- Scan button ----------------
+    $("scanCCTVBtn").onclick = scanCCTV;
+
     // ---------------- Keyboard shortcuts ----------------
     document.addEventListener("keydown", (e) => {
         if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
@@ -785,6 +979,7 @@
             case "r": CGO_Fleet.returnAll(); break;
             case "t": CGO_Fleet.triggerGlobalTsunami(); break;
             case "v": CGO_Fleet.activateVoidPulseAll(); break;
+            case "c": scanCCTV(); break;
             case "arrowleft":  stepDrone(-1); break;
             case "arrowright": stepDrone(1);  break;
         }
@@ -797,7 +992,6 @@
         CGO_Fleet.startSimulation();
         $("statTotal").innerText = CGO_Fleet.drones.size;
 
-        // mission timer
         setInterval(() => {
             const s = CGO_Fleet.getMissionElapsed();
             $("missionElapsed").innerText = s ? fmtTime(s) : "--:--:--";
@@ -817,16 +1011,19 @@
             $("statOffline").innerText   = s.offline;
             $("statIdle").innerText      = s.idle ?? 0;
 
-            // Auto-mesh indicator
             const meshEl = $("valMesh");
             if (s.jammed > 0) {
-                meshEl.innerText = "RELAY " + s.jammed + " NODES";
-                meshEl.className = "val warning";
+                if (meshEl) {
+                    meshEl.innerText = "RELAY " + s.jammed + " NODES";
+                    meshEl.className = "val warning";
+                }
                 $("meshBadge").innerText = "MESH: " + s.jammed;
                 $("meshBadge").style.color = "var(--neon-yellow)";
             } else {
-                meshEl.innerText = "STANDBY";
-                meshEl.className = "val";
+                if (meshEl) {
+                    meshEl.innerText = "STANDBY";
+                    meshEl.className = "val";
+                }
                 $("meshBadge").innerText = "MESH: OK";
                 $("meshBadge").style.color = "var(--neon-green)";
             }
@@ -840,6 +1037,10 @@
             currentDroneIdx = parseInt(d.id.split("-")[1], 10) || 1;
             bctx.clearRect(0, 0, batteryCanvas.width, batteryCanvas.height);
             sctx.clearRect(0, 0, signalCanvas.width, signalCanvas.height);
+            if (map) {
+                const ll = droneLatLng(d);
+                map.setView([ll.lat, ll.lng], map.getZoom());
+            }
         }
 
         // ---- Telemetry update ----
@@ -875,47 +1076,37 @@
             $("valWind").innerText  = t.windSpeed + " m/s";
             $("valSmoke").innerText = t.smokeLevel + " ppm";
             $("valSmoke").style.color = t.smokeLevel > 30 ? "var(--neon-red)" : "var(--neon-blue)";
-
             $("valAcoustic").innerText = t.acousticAlert ? "SOS DETECTED!" : "NORMAL";
             $("valAcoustic").style.color = t.acousticAlert ? "var(--neon-red)" : "var(--neon-blue)";
 
-            // Day / Night
             $("sunLabel").innerText = t.isDaylight ? "DAY " + Math.round(t.sunAngle) + "°" : "NIGHT";
             $("sunLabel").style.color = t.isDaylight ? "var(--neon-yellow)" : "#6b7280";
 
-            // FPV target
-            $("targetLabel").innerText = t.currentTarget
-                ? "TARGET: " + t.currentTarget.toUpperCase()
-                : "TARGET: NONE";
-
-            // FPV coordinates
-            $("fpvCoords").innerText = `LAT: ${(-6.2088 + t.position.x * 0.0001).toFixed(4)} | LNG: ${(106.8456 + t.position.y * 0.0001).toFixed(4)}`;
+            // Map + coords
+            const ll = droneLatLng(drone);
+            $("scanCoords").innerText = `LAT: ${ll.lat.toFixed(4)} | LNG: ${ll.lng.toFixed(4)}`;
+            updateDroneMarker(drone);
 
             // Jam visual
-            const fpvBg = $("fpvBg");
-            const rec   = $("recIndicator");
             if (t.isJammed) {
                 $("valJam").innerText = "HOSTILE JAMMER";
                 $("valJam").style.color = "var(--neon-red)";
                 $("networkStatus").innerText = "SIGNAL LOST";
                 $("networkStatus").className = "status-badge danger";
-                $("fpvAlert").innerHTML = ico('warning') + ' SIGNAL INTERFERENCE';
-                $("fpvAlert").style.color = "var(--neon-red)";
-                fpvBg.classList.add("jammed");
-                rec.style.color = "var(--neon-red)";
-                rec.innerHTML = ico('rec', 'ico-sm') + ' LOST';
+                $("streamStatus").innerHTML = ico('rec', 'ico-sm') + ' LOST';
+                $("streamStatus").style.color = "var(--neon-red)";
             } else {
                 $("valJam").innerText = drone.state === "EMERGENCY" ? "EMERGENCY MODE" : "SECURE";
                 $("valJam").style.color = drone.state === "EMERGENCY" ? "var(--neon-yellow)" : "var(--neon-green)";
                 $("networkStatus").innerText = "STARLINK_LINK_ACTIVE";
                 $("networkStatus").className = "status-badge";
-                $("fpvAlert").innerHTML = isEmergency
-                    ? ico('bell') + ' TSUNAMI EVACUATION MODE'
-                    : 'SISTEM NORMAL';
-                $("fpvAlert").style.color = isEmergency ? "var(--neon-red)" : "var(--neon-yellow)";
-                fpvBg.classList.remove("jammed");
-                rec.style.color = "var(--neon-green)";
-                rec.innerHTML = ico('rec', 'ico-sm') + ' REC';
+                if (hls || videoEl.src) {
+                    $("streamStatus").innerHTML = ico('rec', 'ico-sm') + ' LIVE';
+                    $("streamStatus").style.color = "var(--neon-green)";
+                } else {
+                    $("streamStatus").innerHTML = ico('rec', 'ico-sm') + ' OFFLINE';
+                    $("streamStatus").style.color = "var(--neon-green)";
+                }
             }
 
             // Sparklines
@@ -951,10 +1142,6 @@
         if (ev === "DISASTER_ALERT_ACTIVE") {
             isEmergency = true;
             document.body.classList.add("emergency");
-            $("fpvContainer").classList.add("emergency");
-            $("fpvAlert").innerHTML = ico('bell') + ' TSUNAMI EVACUATION MODE';
-            $("fpvAlert").style.color = "var(--neon-red)";
-            $("fpvAlert").style.fontWeight = "bold";
             $("networkStatus").innerText = "EMERGENCY BROADCAST";
             $("networkStatus").className = "status-badge danger";
             toast(ico('bell') + ' TSUNAMI ALERT — ' + data.data.dronesAffected + ' drone', "danger", 5000);
@@ -964,15 +1151,63 @@
         if (ev === "VOID_PULSE_ACTIVE") {
             isEmergency = false;
             document.body.classList.remove("emergency");
-            $("fpvContainer").classList.remove("emergency");
-            $("valJam").innerText = "SECURE (VOID PULSE)";
-            $("valJam").style.color = "var(--neon-green)";
             $("networkStatus").innerText = "STARLINK SECURE";
             $("networkStatus").className = "status-badge";
-            $("fpvAlert").innerHTML = 'SISTEM NORMAL';
-            $("fpvAlert").style.color = "var(--neon-yellow)";
-            $("fpvAlert").style.fontWeight = "normal";
             toast(ico('bolt') + ' Void Pulse aktif — ' + data.data.dronesAffected + ' drone aman', "success");
+        }
+
+        // ================= CCTV EVENTS =================
+        if (ev === "CCTV_SCAN_START") {
+            $("cctvCount").innerText = "scanning...";
+        }
+
+        if (ev === "CCTV_SCAN_SUCCESS") {
+            const { cctvs, nearest, total } = data.data;
+            $("cctvCount").innerText = total + " CCTV";
+            $("cctvCount").style.color = total > 0 ? "var(--neon-green)" : "var(--neon-yellow)";
+
+            if (map && cctvLayerGroup) {
+                cctvLayerGroup.clearLayers();
+                for (const c of cctvs) {
+                    const marker = L.circleMarker([c.lat, c.lng], {
+                        radius: 5,
+                        color: c === nearest ? "#00ff88" : "#00ccff",
+                        fillColor: c === nearest ? "#00ff88" : "#00ccff",
+                        fillOpacity: 0.7,
+                        weight: 2
+                    }).bindPopup(
+                        `<b>${esc(c.name)}</b><br>` +
+                        `ID: ${esc(c.id)}<br>` +
+                        `Jarak: ${c.distance}m<br>` +
+                        `Tags: ${esc(JSON.stringify(c.tags).slice(0, 80))}`
+                    );
+                    cctvLayerGroup.addLayer(marker);
+                }
+                if (nearest) {
+                    map.setView([nearest.lat, nearest.lng], 14);
+                }
+            }
+
+            if (total > 0) {
+                toast(ico('camera') + ' ' + total + ' CCTV ditemukan', "success");
+                statusOverlay.innerHTML = 'Menghubungkan ke stream...';
+            } else {
+                toast(ico('warning') + ' Tidak ada CCTV di area ini', "warning");
+                statusOverlay.innerHTML = 'Tidak ada CCTV ditemukan. Coba area lain.';
+            }
+        }
+
+        if (ev === "CCTV_SCAN_ERROR") {
+            $("cctvCount").innerText = "ERROR";
+            $("cctvCount").style.color = "var(--neon-red)";
+            statusOverlay.classList.remove("hidden");
+            statusOverlay.innerHTML = ico('x') + ' Scan gagal: ' + esc(data.data.error);
+            toast(ico('x') + ' CCTV scan error', "danger");
+        }
+
+        if (ev === "CCTV_STREAM_READY") {
+            const { url, cctv } = data.data;
+            playStream(url, cctv);
         }
 
         // ---- Mute changed ----
@@ -982,11 +1217,12 @@
     });
 
     // ---------------- Boot ----------------
+    initMap();
     initFleet();
     muteBtn.classList.add("active");
     selectDroneById("CGO-0001");
 
-    // First-gesture audio unlock
+    // Prime audio unlock on first gesture
     const primeAudio = () => {
         try {
             const AC = window.AudioContext || window.webkitAudioContext;
@@ -1002,7 +1238,7 @@
     document.addEventListener("click", primeAudio);
     document.addEventListener("keydown", primeAudio);
 
-    console.info("[BCGO UI] v4.0 ready ·", CGO_Fleet.drones.size, "drones loaded");
+    console.info("[BCGO UI] v5.0 ready ·", CGO_Fleet.drones.size, "drones · CCTV engine active");
 })();
 </script>
 </body>
