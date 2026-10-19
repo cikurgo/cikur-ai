@@ -1,9 +1,13 @@
 /* ============================================================================
  * CIKUR GO — DRONE CGO FLEET ENGINE (THE BRAIN & SWARM)
  * File: drone-cgo.js
- * Version: 6.0.0 (Full Code + Live CCTV + GPS Integration)
+ * Version: 6.1.0 (Full Code + Live CCTV + GPS Integration + Simulate Flag)
  * ============================================================================
- * ZERO REGRESSION: Seluruh kode v4.0/v5.0 dipertahankan 100%
+ * ZERO REGRESSION: Seluruh kode v4.0/v5.0/v6.0 dipertahankan 100%
+ * New in 6.1.0:
+ *   - CCTVEngine emits `simulate` flag → UI chooses canvas vs HLS
+ *   - Empty PUBLIC_STREAMS by default (safe, uses canvas simulation)
+ *   - Optional `setStreamUrls()` API for plugging real HLS
  * ============================================================================ */
 
 (function (global) {
@@ -12,7 +16,7 @@
   // ==========================================================================
   // 0. KONFIGURASI & KONSTANTA
   // ==========================================================================
-  const VERSION        = "6.0.0";
+  const VERSION        = "6.1.0";
   const TICK_MS        = 1000;
   const DRONE_MAX_LOG  = 100;
   const FLEET_MAX_LOG  = 200;
@@ -451,19 +455,20 @@
   };
 
   // ==========================================================================
-  // 5. CCTV ENGINE (Live Streams + Overpass)
+  // 5. CCTV ENGINE (Live Streams + Overpass + Simulation Fallback)
   // ==========================================================================
   const CCTVEngine = {
     _activeStreams: new Map(),
     _lastScan: null,
     _scanInProgress: false,
 
-    // Stream CCTV publik HLS yang aktif (Non-Animasi)
-    PUBLIC_STREAMS: [
-      "https://5a5f765a4fcc2.streamlock.net:1936/live/nh4.stream/playlist.m3u8",
-      "https://kntvlive-f.akamaihd.net/i/kntvb1_1@15530/master.m3u8",
-      "https://zssd-platypus.hls.camzonecdn.com/CamzoneStreams/zssd-platypus/Playlist.m3u8"
-    ],
+    // Empty by default → UI will use canvas simulation.
+    // Plug real HLS URLs via `CCTVEngine.setStreamUrls([...])` at runtime.
+    PUBLIC_STREAMS: [],
+
+    setStreamUrls(urls) {
+      this.PUBLIC_STREAMS = Array.isArray(urls) ? urls.slice() : [];
+    },
 
     calculateDistance(lat1, lon1, lat2, lon2) {
       const R = 6371e3;
@@ -516,7 +521,7 @@
           if (elLat == null || elLon == null) continue;
           const dist = this.calculateDistance(lat, lng, elLat, elLon);
           if (dist > radius) continue;
-          
+
           cctvs.push({
             id: el.id,
             type: el.type,
@@ -550,11 +555,25 @@
     },
 
     _prepareStream(cctv, fleet) {
-      const idx = (cctv.id || 0) % this.PUBLIC_STREAMS.length;
-      const streamUrl = this.PUBLIC_STREAMS[idx];
-      this._activeStreams.set("default", { url: streamUrl, cctv });
-      fleet.logGlobal(`🎥 [CCTV] Menghubungkan ke feed publik → ${cctv.name}`, "SUCCESS");
-      fleet.emit("CCTV_STREAM_READY", { url: streamUrl, cctv, cctvId: cctv.id, distance: cctv.distance });
+      // If user configured real HLS URLs, try them.
+      if (this.PUBLIC_STREAMS && this.PUBLIC_STREAMS.length > 0) {
+        const idx = Math.abs(Number(cctv.id) || 0) % this.PUBLIC_STREAMS.length;
+        const streamUrl = this.PUBLIC_STREAMS[idx];
+        this._activeStreams.set("default", { url: streamUrl, cctv, simulate: false });
+        fleet.logGlobal(`🎥 [CCTV] Menghubungkan ke feed HLS → ${cctv.name}`, "SUCCESS");
+        fleet.emit("CCTV_STREAM_READY", {
+          url: streamUrl, cctv, cctvId: cctv.id,
+          distance: cctv.distance, simulate: false
+        });
+      } else {
+        // Canvas simulation mode (default, always works)
+        this._activeStreams.set("default", { url: null, cctv, simulate: true });
+        fleet.logGlobal(`🎥 [CCTV] Feed simulasi aktif → ${cctv.name}`, "SUCCESS");
+        fleet.emit("CCTV_STREAM_READY", {
+          url: null, cctv, cctvId: cctv.id,
+          distance: cctv.distance, simulate: true
+        });
+      }
     },
 
     playCCTV(cctv) {
@@ -894,9 +913,10 @@
     simulateDay: () => { FleetManager.isDaylight = true; },
     simulateNight: () => { FleetManager.isDaylight = false; },
     scanCCTV: (lat, lng, radius) => CCTVEngine.scanNearby(lat, lng, radius),
-    getLastScan: () => CCTVEngine.getLastScan()
+    getLastScan: () => CCTVEngine.getLastScan(),
+    setStreamUrls: (urls) => CCTVEngine.setStreamUrls(urls)
   };
 
-  console.info(`[CGO Fleet] v${VERSION} — CCTV + GPS + Zero Regression ready.`);
+  console.info(`[CGO Fleet] v${VERSION} — FPV/CCTV separation + Simulation fallback ready.`);
 
 })(typeof window !== "undefined" ? window : globalThis);
