@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BCGO — FLEET COMMAND CENTER v6.5</title>
+    <title>BCGO — FLEET COMMAND CENTER v6.6</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     
     <style>
@@ -36,15 +36,16 @@
         
         body.emergency { background-color: #2a0000; }
         
-        /* ================= IKON SVG ================= */
+        /* ================= IKON SVG (standar: stroke untuk line, fill untuk solid) ================= */
         .icon { 
             width: 14px; 
             height: 14px; 
-            fill: currentColor; 
             display: inline-block; 
             vertical-align: -2px; 
             margin-right: 4px; 
+            flex-shrink: 0;
         }
+        .icon.big { width: 20px; height: 20px; }
 
         /* ================= HEADER ================= */
         .header { 
@@ -120,15 +121,8 @@
             align-items: center; 
         }
         
-        .ctrl-btn:hover { 
-            border-color: var(--neon-blue); 
-            color: var(--neon-blue); 
-        }
-        
-        .ctrl-btn.active { 
-            border-color: var(--neon-green); 
-            color: var(--neon-green); 
-        }
+        .ctrl-btn:hover { border-color: var(--neon-blue); color: var(--neon-blue); }
+        .ctrl-btn.active { border-color: var(--neon-green); color: var(--neon-green); }
         
         .slider { 
             -webkit-appearance: none; 
@@ -171,7 +165,7 @@
         /* ================= MAIN GRID ================= */
         .main-grid { 
             display: grid; 
-            grid-template-columns: 0.9fr 1.4fr 1fr; 
+            grid-template-columns: 0.9fr 1.5fr 1fr; 
             gap: 6px; 
             flex: 1; 
             min-height: 0; 
@@ -267,34 +261,73 @@
             pointer-events: none; 
         }
 
-        /* ================= FPV KAMERA DRONE ================= */
-        .fpv-container { 
-            position: relative; 
-            background: #000; 
-            border-radius: 8px; 
-            overflow: hidden; 
-            border: 1px solid #374151; 
-            flex: 1; 
-            min-height: 220px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
+        /* ================= TAB VIDEO (FPV / CCTV / BOTH) ================= */
+        .video-tabs {
+            display: flex;
+            gap: 3px;
+            margin-bottom: 5px;
         }
-        
-        .fpv-container.emergency { 
-            border-color: var(--neon-red); 
-            box-shadow: 0 0 15px var(--neon-red); 
+        .video-tab {
+            flex: 1;
+            background: #1f2937;
+            border: 1px solid #374151;
+            color: #9ca3af;
+            padding: 5px 6px;
+            font-family: var(--font-mono);
+            font-size: 9px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-        
-        .fpv-container video { 
-            width: 100%; 
-            height: 100%; 
-            object-fit: cover; 
-            display: block; 
-            background: #000; 
+        .video-tab:hover { border-color: var(--neon-blue); color: var(--neon-blue); }
+        .video-tab.active {
+            border-color: var(--neon-blue);
+            color: var(--neon-blue);
+            background: #0a1620;
+            box-shadow: 0 0 6px rgba(0, 204, 255, 0.2);
         }
-        
-        /* Efek Garis Scanner */
+
+        /* ================= VIDEO GRID ================= */
+        .video-grid {
+            display: grid;
+            gap: 4px;
+            flex: 1;
+            min-height: 240px;
+        }
+        .video-grid[data-mode="fpv"],
+        .video-grid[data-mode="cctv"] { grid-template-columns: 1fr; }
+        .video-grid[data-mode="both"] { grid-template-columns: 1fr 1fr; }
+        .video-grid[data-mode="fpv"] #cctvPane,
+        .video-grid[data-mode="cctv"] #fpvPane { display: none; }
+
+        .video-pane {
+            position: relative;
+            background: #000;
+            border: 1px solid #374151;
+            border-radius: 6px;
+            overflow: hidden;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .video-pane canvas,
+        .video-pane video {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            object-fit: cover;
+            background: #000;
+        }
+        .video-pane.emergency { border-color: var(--neon-red); box-shadow: 0 0 15px var(--neon-red); }
+        .video-pane.jammed { border-color: var(--neon-red); }
+
+        /* Scanlines & efek CRT */
         .scanlines { 
             position: absolute; 
             inset: 0; 
@@ -309,15 +342,12 @@
             pointer-events: none; 
             z-index: 2; 
         }
-        
         .scanlines.hidden { display: none; }
-        
         @keyframes scan { 
             0% { background-position: 0 0, center; } 
             100% { background-position: 0 100px, center; } 
         }
-        
-        .fpv-container.jammed .scanlines { 
+        .video-pane.jammed .scanlines { 
             background: repeating-linear-gradient(
                 0deg, 
                 rgba(255, 51, 102, 0.12) 0, 
@@ -327,119 +357,72 @@
             ); 
             animation-duration: 0.8s; 
         }
-        
-        /* Crosshair Target */
-        .crosshair { 
-            width: 50px; 
-            height: 50px; 
-            border: 2px solid rgba(0, 255, 136, 0.6); 
-            border-radius: 50%; 
-            position: absolute; 
-            z-index: 5; 
-            pointer-events: none; 
-        }
-        
-        .crosshair::before, .crosshair::after { 
-            content: ''; 
-            position: absolute; 
-            background: rgba(0, 255, 136, 0.6); 
-        }
-        
-        .crosshair::before { 
-            width: 20px; 
-            height: 2px; 
-            top: 50%; 
-            left: -25px; 
-            transform: translateY(-50%); 
-        }
-        
-        .crosshair::after { 
-            width: 20px; 
-            height: 2px; 
-            top: 50%; 
-            right: -25px; 
-            transform: translateY(-50%); 
-        }
-        
-        /* Overlay Text FPV */
+
+        /* Overlay text di atas video */
         .fpv-overlay { 
             position: absolute; 
-            top: 8px; 
             left: 8px; 
             right: 8px; 
             display: flex; 
             justify-content: space-between; 
-            font-size: 10px; 
+            font-size: 9px; 
             color: var(--neon-green); 
             z-index: 6; 
             text-shadow: 1px 1px 2px #000; 
-            pointer-events: none; 
+            pointer-events: none;
+            font-weight: bold;
+            letter-spacing: 0.3px;
         }
-        
-        .fpv-overlay.bottom { top: auto; bottom: 28px; }
-        
+        .fpv-overlay.top { top: 6px; }
+        .fpv-overlay.bottom { bottom: 26px; }
+
         .fpv-status-bar { 
             position: absolute; 
             bottom: 0; 
             left: 0; 
             right: 0; 
             padding: 4px 8px; 
-            background: rgba(0, 0, 0, 0.7); 
+            background: rgba(0, 0, 0, 0.75); 
             font-size: 9px; 
             color: var(--neon-yellow); 
             display: flex; 
             justify-content: space-between; 
             z-index: 6; 
             border-top: 1px solid #374151; 
+            font-family: var(--font-mono);
         }
-        
         .fpv-status-bar.danger { 
             color: var(--neon-red); 
             background: rgba(40, 0, 0, 0.85); 
             animation: blink 1s infinite; 
         }
-        
+
         .video-status { 
             position: absolute; 
             inset: 0; 
             display: flex; 
             align-items: center; 
             justify-content: center; 
-            background: rgba(0, 0, 0, 0.75); 
+            background: rgba(0, 0, 0, 0.8); 
             z-index: 8; 
             font-size: 11px; 
             color: var(--neon-yellow); 
             text-align: center; 
             padding: 20px; 
+            line-height: 1.5;
         }
-        
         .video-status.hidden { display: none; }
-        
-        .video-mute-btn { 
-            position: absolute; 
-            top: 40px; 
-            right: 8px; 
-            background: rgba(0, 0, 0, 0.6); 
-            border: 1px solid #374151; 
-            color: var(--neon-green); 
-            padding: 4px 6px; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            font-size: 11px; 
-            z-index: 7; 
-            display: inline-flex; 
-            align-items: center; 
-        }
 
         /* ================= PETA (LEAFLET) ================= */
         #map { 
-            height: 200px; 
+            height: 180px; 
             width: 100%; 
             border-radius: 6px; 
             margin-top: 6px; 
             border: 1px solid #374151; 
             background: #000; 
             z-index: 1; 
+            flex-shrink: 0;
         }
         
         .map-controls { 
@@ -575,37 +558,109 @@
         @media (max-width: 900px) { 
             .main-grid { grid-template-columns: 1fr; } 
             body { overflow-y: auto; height: auto; min-height: 100vh; } 
+            .video-grid[data-mode="both"] { grid-template-columns: 1fr; }
+            .video-pane { min-height: 180px; }
         }
     </style>
 </head>
 <body>
 
-<!-- ================= SVG SPRITE (Ikon Vektor) ================= -->
-<svg xmlns="http://www.w3.org/2000/svg" style="display:none;">
-    <symbol id="i-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91 0zM12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
-    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
-    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
-    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
-    <symbol id="i-zap" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
-    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></symbol>
-    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
-    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></symbol>
-    <symbol id="i-volume" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></symbol>
-    <symbol id="i-mute" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></symbol>
-    <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
-    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
-    <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.64A9 9 0 0 0 20.49 15"/></symbol>
-    <symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
-    <symbol id="i-left" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></symbol>
-    <symbol id="i-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></symbol>
-    <symbol id="i-gps" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+<!-- ================= SVG SPRITE ================= -->
+<!-- Line icons: fill=none, stroke=currentColor -->
+<!-- Solid icons: fill=currentColor -->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none;" aria-hidden="true">
+    <!-- Solid icons -->
+    <symbol id="i-rocket" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91 0zM12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+        <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+    </symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"/>
+    </symbol>
+    <!-- Line icons (Feather-style) -->
+    <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <path d="M9 22V12h6v10"/>
+    </symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+        <circle cx="12" cy="12" r="3"/>
+    </symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+    </symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 7V5a2 2 0 0 1 2-2h2"/>
+        <path d="M17 3h2a2 2 0 0 1 2 2v2"/>
+        <path d="M21 17v2a2 2 0 0 1-2 2h-2"/>
+        <path d="M7 21H5a2 2 0 0 1-2-2v-2"/>
+        <line x1="7" y1="12" x2="17" y2="12"/>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+    </symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/>
+        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+    </symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor"/>
+        <line x1="23" y1="9" x2="17" y2="15"/>
+        <line x1="17" y1="9" x2="23" y2="15"/>
+    </symbol>
+    <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+        <polyline points="17 21 17 13 7 13 7 21"/>
+        <polyline points="7 3 7 8 15 8"/>
+    </symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/>
+        <polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.64A9 9 0 0 0 20.49 15"/>
+    </symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </symbol>
+    <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"/>
+    </symbol>
+    <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 18 15 12 9 6"/>
+    </symbol>
+    <symbol id="i-gps" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+        <circle cx="12" cy="10" r="3"/>
+    </symbol>
+    <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="23 7 16 12 23 17 23 7" fill="currentColor"/>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+    </symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+        <circle cx="12" cy="13" r="4"/>
+    </symbol>
 </svg>
 
 <!-- ================= HEADER ================= -->
 <div class="header">
     <h1>
-        <svg class="icon" style="width:20px;height:20px;color:var(--neon-blue);"><use href="#i-scan"/></svg> 
-        BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.5</span>
+        <svg class="icon big" style="color:var(--neon-blue);"><use href="#i-scan"/></svg> 
+        BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.6</span>
     </h1>
     
     <div class="header-controls">
@@ -651,7 +706,7 @@
         
         <div class="drone-selector">
             <button id="prevDrone"><svg class="icon"><use href="#i-left"/></svg></button>
-            <input id="droneInput" type="text" value="CGO-0001" maxlength="8">
+            <input id="droneInput" type="text" value="CGO-0001" maxlength="10">
             <button id="nextDrone"><svg class="icon"><use href="#i-right"/></svg></button>
         </div>
         
@@ -682,35 +737,58 @@
         <div class="telemetry-item"><span>JAMMING:</span> <span id="valJam" class="val">SECURE</span></div>
     </div>
 
-    <!-- ===== KOLOM TENGAH: LIVE VIDEO & MAP ===== -->
+    <!-- ===== KOLOM TENGAH: FPV + CCTV + MAP ===== -->
     <div class="panel">
         <div class="panel-title">
-            <span>Live CCTV Feed</span>
+            <span>Live Feed — FPV &amp; CCTV</span>
             <span id="cctvCount" class="chip" style="font-size:8px;padding:1px 4px;">0 CCTV</span>
         </div>
 
-        <div class="fpv-container" id="fpvContainer">
-            <video id="cctvVideo" muted autoplay playsinline></video>
-            <div class="scanlines" id="scanlines"></div>
-            <div class="crosshair"></div>
+        <div class="video-tabs">
+            <button class="video-tab active" data-tab="fpv">
+                <svg class="icon"><use href="#i-video"/></svg> FPV DRONE
+            </button>
+            <button class="video-tab" data-tab="cctv">
+                <svg class="icon"><use href="#i-camera"/></svg> CCTV
+            </button>
+            <button class="video-tab" data-tab="both">
+                <svg class="icon"><use href="#i-eye"/></svg> BOTH
+            </button>
+        </div>
 
-            <div class="fpv-overlay">
-                <span id="targetLabel">TARGET: NONE</span>
-                <span id="camIdLabel">CAM: —</span>
+        <div class="video-grid" id="videoGrid" data-mode="both">
+            <!-- === PANE FPV DRONE === -->
+            <div class="video-pane" id="fpvPane">
+                <canvas id="droneFpvCanvas"></canvas>
+                <div class="fpv-overlay top">
+                    <span id="targetLabel">TARGET: NONE</span>
+                    <span id="droneIdFpv">CGO-0001</span>
+                </div>
+                <div class="fpv-overlay bottom">
+                    <span id="fpvRec">● LIVE</span>
+                    <span id="fpvClock">--:--:--</span>
+                </div>
+                <div class="fpv-status-bar" id="fpvStatusBar">
+                    <span id="fpvCoordsBar">LAT: -6.2088 | LNG: 106.8456</span>
+                    <span id="fpvAlertBar">SISTEM NORMAL</span>
+                </div>
             </div>
 
-            <div class="fpv-overlay bottom">
-                <span id="recIndicator">● REC</span>
-                <span id="camDistLabel">DIST: — m</span>
+            <!-- === PANE CCTV === -->
+            <div class="video-pane" id="cctvPane">
+                <video id="cctvVideo" muted autoplay playsinline style="display:none;"></video>
+                <canvas id="cctvCanvas"></canvas>
+                <div class="scanlines" id="scanlines"></div>
+                <div class="fpv-overlay top">
+                    <span id="camIdLabel">CAM: —</span>
+                    <span id="camDistLabel">DIST: — m</span>
+                </div>
+                <div class="fpv-overlay bottom">
+                    <span id="cctvRec" style="color:#6b7280;">● OFF</span>
+                    <span id="cctvModeLabel" style="color:#6b7280;">IDLE</span>
+                </div>
+                <div id="videoStatusOverlay" class="video-status">Menunggu perintah scan CCTV...</div>
             </div>
-
-            <div class="fpv-status-bar" id="fpvStatusBar">
-                <span id="fpvCoordsBar">LAT: -6.2088 | LNG: 106.8456</span>
-                <span id="fpvAlertBar">SISTEM NORMAL</span>
-            </div>
-
-            <div id="videoStatusOverlay" class="video-status">Menunggu perintah scan CCTV...</div>
-            <button id="videoMuteBtn" class="video-mute-btn"><svg class="icon"><use href="#i-mute"/></svg></button>
         </div>
 
         <div id="map"></div>
@@ -802,7 +880,7 @@
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script src="drone-cgo.js"></script>
 
-<!-- Logika UI & Integrasi -->
+<!-- ================= UI LOGIC ================= -->
 <script>
 (function () {
     "use strict";
@@ -812,25 +890,28 @@
         return;
     }
 
-    // DOM Elements
+    // DOM
     const $ = (id) => document.getElementById(id);
     const logContainer   = $("logContainer");
     const toastContainer = $("toastContainer");
-    const videoEl        = $("cctvVideo");
+    const cctvVideo      = $("cctvVideo");
+    const cctvCanvas     = $("cctvCanvas");
+    const fpvCanvas      = $("droneFpvCanvas");
     const statusOverlay  = $("videoStatusOverlay");
     const scanlinesEl    = $("scanlines");
-    const fpvContainer   = $("fpvContainer");
+    const fpvPane        = $("fpvPane");
+    const cctvPane       = $("cctvPane");
     const fpvStatusBar   = $("fpvStatusBar");
+    const videoGrid      = $("videoGrid");
 
     const batteryCanvas = $("batteryChart");
     const signalCanvas  = $("signalChart");
     const bctx = batteryCanvas.getContext("2d");
     const sctx = signalCanvas.getContext("2d");
 
-    // State UI
+    // State
     let currentDroneIdx = 1;
     let muted = false;
-    let videoMuted = true;
     let isEmergency = false;
     let hls = null;
     let map = null;
@@ -839,8 +920,9 @@
     let droneMarker = null;
     let userGpsMarker = null;
     let lastScanCenter = null;
+    let cctvCamStore = new Map();
 
-    // Utilitas UI
+    // ============= Utility =============
     function fmtTime(s) {
         s = Math.max(0, Math.floor(s));
         const h = Math.floor(s / 3600);
@@ -871,33 +953,23 @@
         };
     }
 
-    // Draw Grafik Sparkline
     function drawSparkline(ctx, canvas, data, color, minVal, maxVal) {
         const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
-        
         canvas.width = rect.width * dpr;
         canvas.height = rect.height * dpr;
-        
         const w = canvas.width, h = canvas.height;
         ctx.clearRect(0, 0, w, h);
-        
         ctx.strokeStyle = "#1f2937";
         ctx.lineWidth = 1;
         for (let i = 1; i < 4; i++) {
             const y = (h / 4) * i;
-            ctx.beginPath(); 
-            ctx.moveTo(0, y); 
-            ctx.lineTo(w, y); 
-            ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
         }
-        
         if (!data.length) return;
-        
         const range = maxVal - minVal || 1;
         const step = w / Math.max(data.length - 1, 1);
-
         ctx.beginPath();
         ctx.moveTo(0, h);
         for (let i = 0; i < data.length; i++) {
@@ -909,42 +981,506 @@
         ctx.closePath();
         ctx.fillStyle = color + "22";
         ctx.fill();
-
         ctx.beginPath();
         for (let i = 0; i < data.length; i++) {
             const x = i * step;
             const y = h - ((data[i] - minVal) / range) * (h - 4) - 2;
-            if (i === 0) ctx.moveTo(x, y);
-            else ctx.lineTo(x, y);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.5 * dpr;
         ctx.stroke();
-
         const lastX = (data.length - 1) * step;
         const lastY = h - ((data[data.length - 1] - minVal) / range) * (h - 4) - 2;
-        ctx.beginPath();
-        ctx.arc(lastX, lastY, 2.5 * dpr, 0, Math.PI * 2);
-        ctx.fillStyle = color;
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(lastX, lastY, 2.5 * dpr, 0, Math.PI * 2);
+        ctx.fillStyle = color; ctx.fill();
     }
 
-    // Inisialisasi Peta Leaflet
+    // ============= FPV DRONE RENDERER (synthetic) =============
+    const FpvRenderer = {
+        canvas: fpvCanvas,
+        ctx: fpvCanvas.getContext("2d"),
+        w: 0, h: 0,
+        time: 0,
+        drone: null,
+        running: false,
+        raf: null,
+        _noise: null,
+
+        attach(drone) { this.drone = drone; },
+
+        _resize() {
+            const rect = this.canvas.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            this.canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+            this.canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+            this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            this.w = rect.width;
+            this.h = rect.height;
+        },
+
+        start() {
+            if (this.running) return;
+            this.running = true;
+            this._resize();
+            const loop = () => {
+                if (!this.running) return;
+                this.time += 0.016;
+                this._draw();
+                this.raf = requestAnimationFrame(loop);
+            };
+            loop();
+        },
+
+        stop() {
+            this.running = false;
+            if (this.raf) cancelAnimationFrame(this.raf);
+        },
+
+        _noiseCanvas() {
+            if (!this._noise) {
+                this._noise = document.createElement("canvas");
+                this._noise.width = 64;
+                this._noise.height = 64;
+            }
+            return this._noise;
+        },
+
+        _draw() {
+            if (!this.w || !this.h) this._resize();
+            if (!this.w || !this.h) return;
+            const ctx = this.ctx, w = this.w, h = this.h;
+            const t = this.drone?.telemetry || {};
+            const pos = t.position || { x: 0, y: 0, z: 0 };
+            const alt = t.altitude || 0;
+            const spd = t.speed || 0;
+            const day = t.isDaylight !== false;
+            const jam = t.isJammed || false;
+
+            // Sky
+            const sky = ctx.createLinearGradient(0, 0, 0, h * 0.55);
+            if (jam) { sky.addColorStop(0, "#2a0000"); sky.addColorStop(1, "#661111"); }
+            else if (day) { sky.addColorStop(0, "#0a1a2a"); sky.addColorStop(0.5, "#1a3a5a"); sky.addColorStop(1, "#8ab8d8"); }
+            else { sky.addColorStop(0, "#000010"); sky.addColorStop(1, "#1a1a3a"); }
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, w, h * 0.55);
+
+            // Sun/moon
+            if (day) {
+                const sx = w * 0.72, sy = h * 0.16;
+                const sg = ctx.createRadialGradient(sx, sy, 0, sx, sy, 70);
+                sg.addColorStop(0, "rgba(255,255,200,0.9)");
+                sg.addColorStop(1, "rgba(255,255,200,0)");
+                ctx.fillStyle = sg;
+                ctx.fillRect(sx - 70, sy - 70, 140, 140);
+            }
+
+            // Ground
+            const gr = ctx.createLinearGradient(0, h * 0.55, 0, h);
+            if (jam) { gr.addColorStop(0, "#331111"); gr.addColorStop(1, "#110000"); }
+            else if (day) { gr.addColorStop(0, "#3a4a3a"); gr.addColorStop(1, "#1a2a1a"); }
+            else { gr.addColorStop(0, "#0a0a1a"); gr.addColorStop(1, "#000"); }
+            ctx.fillStyle = gr;
+            ctx.fillRect(0, h * 0.55, w, h * 0.45);
+
+            // Perspective grid
+            const horizonY = h * 0.55;
+            ctx.strokeStyle = jam ? "rgba(255,80,80,0.18)" : "rgba(0,255,136,0.15)";
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 15; i++) {
+                const frac = i / 15;
+                const y = horizonY + frac * frac * h * 0.45;
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+            }
+            const drift = (this.time * (spd * 3 + 20)) % (w / 4);
+            for (let i = -8; i <= 8; i++) {
+                const xt = w / 2 + i * (w / 16) + drift * 0.1;
+                const xb = w / 2 + i * (w / 4) + drift;
+                ctx.beginPath(); ctx.moveTo(xt, horizonY); ctx.lineTo(xb, h); ctx.stroke();
+            }
+
+            // Buildings silhouette
+            const seed = Math.floor((pos.x + this.time * 0.1) / 3);
+            for (let i = 0; i < 10; i++) {
+                const bseed = (seed * 31 + i * 17) % 1000;
+                const bx = ((bseed * 7) % 100) / 100 * w;
+                const bw = 15 + ((bseed * 3) % 25);
+                const bh = 12 + ((bseed * 11) % 40);
+                const by = horizonY - bh;
+                if (by < 5) continue;
+                ctx.fillStyle = day ? "#2a3a4a" : "#0a1020";
+                ctx.fillRect(bx, by, bw, bh);
+                ctx.fillStyle = jam ? "rgba(255,80,80,0.5)" : "rgba(255,220,100,0.5)";
+                for (let wy = by + 4; wy < horizonY - 3; wy += 6) {
+                    for (let wx = bx + 3; wx < bx + bw - 3; wx += 5) {
+                        if ((wx + wy + bseed) % 3 === 0) ctx.fillRect(wx, wy, 2, 2);
+                    }
+                }
+            }
+
+            // Horizon glow
+            const hg = ctx.createLinearGradient(0, horizonY - 20, 0, horizonY + 20);
+            hg.addColorStop(0, "rgba(0,0,0,0)");
+            hg.addColorStop(0.5, jam ? "rgba(255,50,50,0.3)" : "rgba(0,255,136,0.2)");
+            hg.addColorStop(1, "rgba(0,0,0,0)");
+            ctx.fillStyle = hg;
+            ctx.fillRect(0, horizonY - 20, w, 40);
+
+            // Noise
+            const nc = this._noiseCanvas();
+            const nctx = nc.getContext("2d");
+            const img = nctx.createImageData(64, 64);
+            for (let i = 0; i < img.data.length; i += 4) {
+                const v = Math.random() * 255;
+                img.data[i] = v; img.data[i + 1] = v; img.data[i + 2] = v; img.data[i + 3] = 12;
+            }
+            nctx.putImageData(img, 0, 0);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(nc, 0, 0, w, h);
+            ctx.imageSmoothingEnabled = true;
+
+            // HUD
+            const cx = w / 2, cy = h / 2;
+            ctx.strokeStyle = jam ? "rgba(255,50,50,0.85)" : "rgba(0,255,136,0.85)";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(cx, cy, 28, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(cx - 42, cy); ctx.lineTo(cx - 10, cy);
+            ctx.moveTo(cx + 10, cy); ctx.lineTo(cx + 42, cy);
+            ctx.moveTo(cx, cy - 42); ctx.lineTo(cx, cy - 10);
+            ctx.moveTo(cx, cy + 10); ctx.lineTo(cx, cy + 42);
+            ctx.stroke();
+            ctx.fillStyle = jam ? "rgba(255,50,50,0.9)" : "rgba(0,255,136,0.9)";
+            ctx.beginPath(); ctx.arc(cx, cy, 2, 0, Math.PI * 2); ctx.fill();
+
+            // Compass ribbon
+            const heading = ((pos.x * 10) % 360 + 360) % 360;
+            const compassY = 16;
+            ctx.strokeStyle = "rgba(0,255,136,0.5)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(w / 2 - 60, compassY); ctx.lineTo(w / 2 + 60, compassY);
+            ctx.stroke();
+            for (let deg = -60; deg <= 60; deg += 15) {
+                const x = w / 2 + deg;
+                const major = ((heading + deg + 360) % 45) < 1;
+                ctx.beginPath();
+                ctx.moveTo(x, compassY); ctx.lineTo(x, compassY + (major ? 6 : 3));
+                ctx.stroke();
+            }
+            ctx.fillStyle = "rgba(0,255,136,0.95)";
+            ctx.font = "bold 8px monospace";
+            ctx.textAlign = "center";
+            ctx.fillText(Math.round(heading) + "°", w / 2, compassY - 3);
+
+            // Bottom HUD
+            ctx.font = "bold 9px monospace";
+            ctx.textAlign = "left";
+            ctx.fillStyle = "rgba(0,255,136,0.9)";
+            ctx.fillText("ALT " + Math.round(alt) + "m  SPD " + Math.round(spd), 8, h - 8);
+            ctx.textAlign = "right";
+            ctx.fillText("BAT " + Math.round(t.battery || 0) + "%", w - 8, h - 8);
+
+            // Jam overlay
+            if (jam) {
+                ctx.fillStyle = "rgba(255,50,50,0.08)";
+                ctx.fillRect(0, 0, w, h);
+                if (Math.floor(this.time * 2) % 2 === 0) {
+                    ctx.fillStyle = "rgba(255,50,50,0.9)";
+                    ctx.font = "bold 13px monospace";
+                    ctx.textAlign = "center";
+                    ctx.fillText("⚠ SIGNAL JAMMED", cx, cy - 55);
+                }
+            }
+        }
+    };
+
+    // ============= CCTV RENDERER (simulasi traffic cam) =============
+    const CctvRenderer = {
+        canvas: cctvCanvas,
+        ctx: cctvCanvas.getContext("2d"),
+        w: 0, h: 0,
+        time: 0,
+        running: false,
+        raf: null,
+        _noise: null,
+        cars: [],
+        camName: "CCTV-SIM",
+        coords: { lat: -6.2088, lng: 106.8456 },
+
+        setCam(name, lat, lng) {
+            this.camName = name || "CCTV-SIM";
+            if (lat != null) this.coords = { lat, lng };
+        },
+
+        _resize() {
+            const rect = this.canvas.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            this.canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+            this.canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+            this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            this.w = rect.width;
+            this.h = rect.height;
+        },
+
+        start() {
+            if (this.running) return;
+            this.running = true;
+            this._resize();
+            if (!this.cars.length) {
+                for (let i = 0; i < 8; i++) {
+                    this.cars.push({
+                        x: Math.random(),
+                        y: Math.random() * 0.5 + 0.55,
+                        speed: 0.015 + Math.random() * 0.03,
+                        color: ["#e74c3c", "#3498db", "#2ecc71", "#f1c40f", "#ecf0f1", "#9b59b6"][Math.floor(Math.random() * 6)],
+                        w: 6 + Math.random() * 4
+                    });
+                }
+            }
+            const loop = () => {
+                if (!this.running) return;
+                this.time += 0.016;
+                this._draw();
+                this.raf = requestAnimationFrame(loop);
+            };
+            loop();
+        },
+
+        stop() {
+            this.running = false;
+            if (this.raf) cancelAnimationFrame(this.raf);
+        },
+
+        _noiseCanvas() {
+            if (!this._noise) {
+                this._noise = document.createElement("canvas");
+                this._noise.width = 64; this._noise.height = 64;
+            }
+            return this._noise;
+        },
+
+        _draw() {
+            if (!this.w || !this.h) this._resize();
+            if (!this.w || !this.h) return;
+            const ctx = this.ctx, w = this.w, h = this.h;
+
+            ctx.fillStyle = "#050505";
+            ctx.fillRect(0, 0, w, h);
+
+            // Sky
+            const sky = ctx.createLinearGradient(0, 0, 0, h * 0.4);
+            sky.addColorStop(0, "#141418");
+            sky.addColorStop(1, "#252530");
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, w, h * 0.4);
+
+            // Buildings far
+            ctx.fillStyle = "#1a1a20";
+            for (let i = 0; i < 12; i++) {
+                const bw = 12 + (i * 7) % 20;
+                const bx = (i * 31) % w;
+                const bh = 15 + (i * 13) % 40;
+                ctx.fillRect(bx, h * 0.4 - bh, bw, bh);
+            }
+
+            // Road
+            const roadTopY = h * 0.4;
+            ctx.fillStyle = "#2a2a2a";
+            ctx.beginPath();
+            ctx.moveTo(w * 0.42, roadTopY);
+            ctx.lineTo(w * 0.58, roadTopY);
+            ctx.lineTo(w * 0.92, h);
+            ctx.lineTo(w * 0.08, h);
+            ctx.closePath();
+            ctx.fill();
+
+            // Sidewalk
+            ctx.fillStyle = "#1a1a1a";
+            ctx.fillRect(0, roadTopY, w * 0.42, h - roadTopY);
+            ctx.fillRect(w * 0.58, roadTopY, w * 0.42, h - roadTopY);
+
+            // Road center marking
+            ctx.strokeStyle = "#666";
+            ctx.lineWidth = 2;
+            ctx.setLineDash([12, 10]);
+            ctx.beginPath();
+            ctx.moveTo(w / 2, roadTopY); ctx.lineTo(w / 2, h);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Moving cars
+            for (const c of this.cars) {
+                c.y -= c.speed * 0.01;
+                if (c.y < 0.4) { c.y = 1.1; c.x = Math.random(); }
+                const cy = c.y;
+                const sz = (cy - 0.4) / 0.7;
+                if (sz <= 0) continue;
+                const roadT = w * 0.42 + (w * 0.16) * (1 - sz);
+                const roadB = w * 0.08 + (w * 0.84) * sz;
+                const px = roadT + (c.x * (roadB - roadT));
+                const py = roadTopY + (h - roadTopY) * sz;
+                const cw = c.w * sz + 4;
+                const ch = c.w * 0.7 * sz + 3;
+                ctx.fillStyle = c.color;
+                ctx.fillRect(px - cw / 2, py - ch / 2, cw, ch);
+                ctx.fillStyle = "rgba(255,255,200,0.9)";
+                ctx.fillRect(px - cw / 2 + 1, py - ch / 2, 2, 2);
+                ctx.fillRect(px + cw / 2 - 3, py - ch / 2, 2, 2);
+            }
+
+            // Grain
+            const nc = this._noiseCanvas();
+            const nctx = nc.getContext("2d");
+            const img = nctx.createImageData(64, 64);
+            for (let i = 0; i < img.data.length; i += 4) {
+                const v = Math.random() * 255;
+                img.data[i] = v; img.data[i + 1] = v; img.data[i + 2] = v; img.data[i + 3] = 22;
+            }
+            nctx.putImageData(img, 0, 0);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(nc, 0, 0, w, h);
+            ctx.imageSmoothingEnabled = true;
+
+            // HUD top
+            ctx.fillStyle = "rgba(0,0,0,0.6)";
+            ctx.fillRect(0, 0, w, 18);
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 9px monospace";
+            ctx.textAlign = "left";
+            const now = new Date();
+            const ts = now.toISOString().replace("T", " ").substring(0, 19);
+            ctx.fillText(ts, 5, 12);
+            ctx.textAlign = "right";
+            ctx.fillText(this.camName.substring(0, 20), w - 5, 12);
+
+            // HUD bottom
+            ctx.fillStyle = "rgba(0,0,0,0.6)";
+            ctx.fillRect(0, h - 16, w, 16);
+            ctx.fillStyle = "#ddd";
+            ctx.font = "9px monospace";
+            ctx.textAlign = "left";
+            ctx.fillText("LAT " + this.coords.lat.toFixed(4) + "  LNG " + this.coords.lng.toFixed(4), 5, h - 5);
+            ctx.textAlign = "right";
+            if (Math.floor(this.time * 2) % 2 === 0) {
+                ctx.fillStyle = "#ff3333";
+                ctx.fillText("● REC", w - 5, h - 5);
+            }
+        }
+    };
+
+    // ============= CCTV stream handler =============
+    function playStream(url, cctvInfo) {
+        // HLS attempt
+        statusOverlay.classList.add("hidden");
+        cctvCanvas.style.display = "none";
+        cctvVideo.style.display = "block";
+        if (hls) { hls.destroy(); hls = null; }
+        if (Hls.isSupported()) {
+            hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+            hls.loadSource(url);
+            hls.attachMedia(cctvVideo);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                cctvVideo.play().catch(() => { cctvVideo.muted = true; cctvVideo.play().catch(() => {}); });
+                $("cctvRec").innerText = "● LIVE";
+                $("cctvRec").style.color = "var(--neon-green)";
+                $("cctvModeLabel").innerText = "HLS LIVE";
+                $("cctvModeLabel").style.color = "var(--neon-green)";
+                toast("🎥 CCTV Live Stream Aktif", "success");
+                CGO_Fleet.logGlobal(`🎥 [STREAM] Live: ${cctvInfo?.name || "CCTV"}`, "SUCCESS");
+            });
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    CGO_Fleet.logGlobal(`❌ [HLS] ${data.type} — fallback ke simulasi`, "WARNING");
+                    startSimulatedCCTV(cctvInfo);
+                }
+            });
+        } else if (cctvVideo.canPlayType("application/vnd.apple.mpegurl")) {
+            cctvVideo.src = url;
+            cctvVideo.addEventListener("loadedmetadata", () => {
+                cctvVideo.play();
+                $("cctvRec").innerText = "● LIVE";
+                $("cctvRec").style.color = "var(--neon-green)";
+                $("cctvModeLabel").innerText = "HLS NATIVE";
+            });
+        } else {
+            startSimulatedCCTV(cctvInfo);
+        }
+    }
+
+    function startSimulatedCCTV(cctvInfo) {
+        if (hls) { hls.destroy(); hls = null; }
+        cctvVideo.style.display = "none";
+        cctvVideo.removeAttribute("src");
+        cctvCanvas.style.display = "block";
+        CctvRenderer.setCam(cctvInfo?.name || "CCTV-SIM",
+            cctvInfo?.lat ?? -6.2088, cctvInfo?.lng ?? 106.8456);
+        CctvRenderer.start();
+        statusOverlay.classList.add("hidden");
+        scanlinesEl.classList.remove("hidden");
+        $("cctvRec").innerText = "● SIM LIVE";
+        $("cctvRec").style.color = "var(--neon-yellow)";
+        $("cctvModeLabel").innerText = "SIMULATED";
+        $("cctvModeLabel").style.color = "var(--neon-yellow)";
+        if (cctvInfo) {
+            $("camIdLabel").innerText = "CAM: " + (cctvInfo.name || cctvInfo.id);
+            $("camDistLabel").innerText = "DIST: " + cctvInfo.distance + "m";
+        }
+        toast("🎥 Feed CCTV (Simulasi) Aktif", "info");
+    }
+
+    function stopCCTV() {
+        if (hls) { hls.destroy(); hls = null; }
+        CctvRenderer.stop();
+        cctvVideo.removeAttribute("src");
+        cctvVideo.load();
+        cctvVideo.style.display = "none";
+        cctvCanvas.style.display = "block";
+        cctvCanvas.getContext("2d").clearRect(0, 0, cctvCanvas.width, cctvCanvas.height);
+        statusOverlay.classList.remove("hidden");
+        statusOverlay.textContent = "Stream dihentikan.";
+        scanlinesEl.classList.remove("hidden");
+        $("cctvRec").innerText = "● OFF";
+        $("cctvRec").style.color = "#6b7280";
+        $("cctvModeLabel").innerText = "IDLE";
+        $("cctvModeLabel").style.color = "#6b7280";
+        $("camIdLabel").innerText = "CAM: —";
+        $("camDistLabel").innerText = "DIST: — m";
+        if (CGO_Fleet.CCTV) CGO_Fleet.CCTV.clearStream();
+    }
+
+    // ============= CCTV scan =============
+    async function scanCCTV() {
+        const drone = CGO_Fleet.getSelectedDrone();
+        if (!drone) { toast("Pilih drone dulu", "warning"); return; }
+        const ll = droneLatLng(drone);
+        statusOverlay.classList.remove("hidden");
+        statusOverlay.textContent = "📡 Memindai CCTV via OSM...";
+        $("cctvCount").innerText = "scanning...";
+        $("cctvCount").style.color = "var(--neon-yellow)";
+        try {
+            const result = await CGO_Fleet.CCTV.scanNearby(ll.lat, ll.lng, 5000);
+            if (!result) { statusOverlay.textContent = "Scan gagal. Cek log."; toast("Scan gagal", "danger"); }
+        } catch (err) {
+            statusOverlay.textContent = "Error: " + err.message;
+            CGO_Fleet.logGlobal(`❌ [CCTV] ${err.message}`, "DANGER");
+        }
+    }
+
+    // ============= Map =============
     function initMap() {
         map = L.map("map", { zoomControl: true }).setView([-6.2088, 106.8456], 13);
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OSM" }).addTo(map);
         cctvLayerGroup = L.layerGroup().addTo(map);
-
-        const droneIcon = L.divIcon({ 
-            className: "drone-marker", 
-            html: '<div style="background:#00ccff;width:12px;height:12px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 8px #00ccff"></div>', 
-            iconSize: [12, 12], 
-            iconAnchor: [6, 6] 
+        const droneIcon = L.divIcon({
+            className: "drone-marker",
+            html: '<div style="background:#00ccff;width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 10px #00ccff"></div>',
+            iconSize: [14, 14], iconAnchor: [7, 7]
         });
         droneMarker = L.marker([-6.2088, 106.8456], { icon: droneIcon }).addTo(map).bindPopup("Drone CGO-0001");
-
-        // Fitur Klik Peta untuk Presisi GPS
-        map.on('click', function(e) {
+        map.on("click", function (e) {
             const lat = e.latlng.lat.toFixed(6);
             const lng = e.latlng.lng.toFixed(6);
             $("mapCoordsDisplay").innerHTML = `<svg class="icon" style="color:var(--neon-green)"><use href="#i-gps"/></svg> ${lat}, ${lng}`;
@@ -960,181 +1496,77 @@
         droneMarker.bindPopup(`${drone.id} — ${drone.state}`);
     }
 
-    // Pemutar Video HLS
-    function playStream(url, cctvInfo) {
-        statusOverlay.classList.add("hidden");
-        scanlinesEl.classList.add("hidden");
-        
-        if (hls) { 
-            hls.destroy(); 
-            hls = null; 
-        }
-
-        if (Hls.isSupported()) {
-            hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-            hls.loadSource(url); 
-            hls.attachMedia(videoEl);
-            
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                videoEl.play().catch(() => { 
-                    videoEl.muted = true; 
-                    videoEl.play().catch(()=>{}); 
-                });
-                $("recIndicator").innerText = "● LIVE"; 
-                $("recIndicator").style.color = "var(--neon-green)";
-                toast("🎥 CCTV Live Stream Aktif", "success");
-                CGO_Fleet.logGlobal(`🎥 [STREAM] Live: ${cctvInfo?.name || "CCTV"}`, "SUCCESS");
-            });
-            
-            hls.on(Hls.Events.ERROR, (event, data) => {
-                if (data.fatal) {
-                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) { 
-                        CGO_Fleet.logGlobal(`❌ [HLS] Network: ${data.details}`, "DANGER"); 
-                        hls.startLoad(); 
-                    } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) { 
-                        CGO_Fleet.logGlobal(`⚠️ [HLS] Media error, recover...`, "WARNING"); 
-                        hls.recoverMediaError(); 
-                    } else { 
-                        hls.destroy(); 
-                        hls = null; 
-                        statusOverlay.classList.remove("hidden"); 
-                        statusOverlay.textContent = "Stream putus. Scan ulang."; 
-                        scanlinesEl.classList.remove("hidden"); 
-                    }
-                }
-            });
-        } else if (videoEl.canPlayType("application/vnd.apple.mpegurl")) {
-            videoEl.src = url; 
-            videoEl.addEventListener("loadedmetadata", () => { 
-                videoEl.play(); 
-                $("recIndicator").innerText = "● LIVE"; 
-                $("recIndicator").style.color = "var(--neon-green)"; 
-            });
-        } else {
-            statusOverlay.classList.remove("hidden"); 
-            statusOverlay.textContent = "Browser tidak support HLS."; 
-            CGO_Fleet.logGlobal("❌ [HLS] Browser tidak support HLS.", "DANGER");
-        }
-
-        if (cctvInfo) { 
-            $("camIdLabel").innerText = "CAM: " + (cctvInfo.name || cctvInfo.id); 
-            $("camDistLabel").innerText = "DIST: " + cctvInfo.distance + "m"; 
-        }
-    }
-
-    function stopStream() {
-        if (hls) { 
-            hls.destroy(); 
-            hls = null; 
-        }
-        videoEl.removeAttribute("src"); 
-        videoEl.load(); 
-        scanlinesEl.classList.remove("hidden");
-        statusOverlay.classList.remove("hidden"); 
-        statusOverlay.textContent = "Stream dihentikan.";
-        $("recIndicator").innerText = "● OFFLINE"; 
-        $("recIndicator").style.color = "#6b7280";
-        $("camIdLabel").innerText = "CAM: —"; 
-        $("camDistLabel").innerText = "DIST: — m";
-        if (CGO_Fleet.CCTV) CGO_Fleet.CCTV.clearStream();
-    }
-
-    // Panggil Scan CCTV
-    async function scanCCTV() {
-        const drone = CGO_Fleet.getSelectedDrone(); 
-        if (!drone) { 
-            toast("Pilih drone dulu", "warning"); 
-            return; 
-        }
-        
-        const ll = droneLatLng(drone);
-        statusOverlay.classList.remove("hidden"); 
-        statusOverlay.textContent = "📡 Memindai CCTV via OSM...";
-        $("cctvCount").innerText = "scanning..."; 
-        $("cctvCount").style.color = "var(--neon-yellow)";
-        
-        try {
-            const result = await CGO_Fleet.CCTV.scanNearby(ll.lat, ll.lng, 5000);
-            if (!result) { 
-                statusOverlay.textContent = "Scan gagal. Cek log."; 
-                toast("Scan gagal", "danger"); 
-            }
-        } catch (err) { 
-            statusOverlay.textContent = "Error: " + err.message; 
-            CGO_Fleet.logGlobal(`❌ [CCTV] ${err.message}`, "DANGER"); 
-        }
-    }
-
-    // Pemilihan Drone
+    // ============= Drone selection =============
     function selectDroneById(id) {
-        if (!CGO_Fleet.drones.has(id)) { 
-            toast("Drone tidak ditemukan", "danger"); 
-            return false; 
+        if (!CGO_Fleet.drones.has(id)) {
+            toast("Drone tidak ditemukan", "danger");
+            return false;
         }
-        CGO_Fleet.selectDrone(id); 
-        currentDroneIdx = parseInt(id.split("-")[1], 10) || 1; 
-        $("droneInput").value = id; 
+        CGO_Fleet.selectDrone(id);
+        currentDroneIdx = parseInt(id.split("-")[1], 10) || 1;
+        $("droneInput").value = id;
         return true;
     }
-    
-    function stepDrone(delta) { 
-        const total = CGO_Fleet.drones.size; 
-        if (!total) return; 
-        currentDroneIdx = ((currentDroneIdx - 1 + delta + total) % total) + 1; 
-        selectDroneById("CGO-" + String(currentDroneIdx).padStart(4, "0")); 
+    function stepDrone(delta) {
+        const total = CGO_Fleet.drones.size;
+        if (!total) return;
+        currentDroneIdx = ((currentDroneIdx - 1 + delta + total) % total) + 1;
+        selectDroneById("CGO-" + String(currentDroneIdx).padStart(4, "0"));
     }
-
     $("prevDrone").onclick = () => stepDrone(-1);
     $("nextDrone").onclick = () => stepDrone(1);
-    $("droneInput").addEventListener("keydown", (e) => { 
-        if (e.key === "Enter") { 
-            const v = $("droneInput").value.trim().toUpperCase(); 
-            selectDroneById(v.startsWith("CGO-") ? v : "CGO-" + v.padStart(4, "0")); 
-        } 
+    $("droneInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            const v = $("droneInput").value.trim().toUpperCase();
+            selectDroneById(v.startsWith("CGO-") ? v : "CGO-" + v.padStart(4, "0"));
+        }
     });
 
-    // Kontrol Slider Kecepatan
+    // ============= Tab switching =============
+    document.querySelectorAll(".video-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            const mode = tab.dataset.tab;
+            document.querySelectorAll(".video-tab").forEach(t => t.classList.remove("active"));
+            tab.classList.add("active");
+            videoGrid.dataset.mode = mode;
+            // Force resize canvases after layout change
+            setTimeout(() => {
+                FpvRenderer._resize();
+                CctvRenderer._resize();
+            }, 50);
+        });
+    });
+
+    // ============= Header controls =============
     const speedSlider = $("speedSlider");
-    speedSlider.addEventListener("input", () => { 
-        const v = parseFloat(speedSlider.value); 
-        $("speedLabel").innerText = v + "x"; 
-        CGO_Fleet.setSimulationSpeed(v); 
+    speedSlider.addEventListener("input", () => {
+        const v = parseFloat(speedSlider.value);
+        $("speedLabel").innerText = v + "x";
+        CGO_Fleet.setSimulationSpeed(v);
     });
 
-    // Tombol Mute Audio Global
     const muteBtn = $("muteBtn");
     muteBtn.onclick = () => {
-        muted = !muted; 
+        muted = !muted;
         CGO_Fleet.mute(muted);
         muteBtn.classList.toggle("active", !muted);
-        muteBtn.innerHTML = muted ? '<svg class="icon"><use href="#i-mute"/></svg> MUTED' : '<svg class="icon"><use href="#i-volume"/></svg> AUDIO';
+        muteBtn.innerHTML = muted
+            ? '<svg class="icon"><use href="#i-mute"/></svg> MUTED'
+            : '<svg class="icon"><use href="#i-volume"/></svg> AUDIO';
         toast(muted ? "Audio dimatikan" : "Audio diaktifkan", "info", 1200);
     };
 
-    // Tombol Mute Video Spesifik
-    const videoMuteBtn = $("videoMuteBtn");
-    videoMuteBtn.onclick = () => {
-        videoMuted = !videoMuted; 
-        videoEl.muted = videoMuted;
-        videoMuteBtn.innerHTML = videoMuted ? '<svg class="icon"><use href="#i-mute"/></svg>' : '<svg class="icon"><use href="#i-volume"/></svg>';
-        if (!videoMuted) videoEl.play().catch(() => {});
-    };
-
+    // CCTV scan buttons
     $("scanCCTVBtn").onclick = scanCCTV;
-    $("clearStreamBtn").onclick = stopStream;
+    $("clearStreamBtn").onclick = stopCCTV;
 
-    // Tombol GPS Saya
+    // GPS button
     $("gpsBtn").onclick = () => {
-        if (!navigator.geolocation) { 
-            toast("GPS tidak didukung browser", "danger"); 
-            return; 
-        }
+        if (!navigator.geolocation) { toast("GPS tidak didukung browser", "danger"); return; }
         $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-refresh"/></svg> MENCARI...';
-        
         navigator.geolocation.getCurrentPosition(
             (pos) => {
-                const lat = pos.coords.latitude; 
-                const lng = pos.coords.longitude;
+                const lat = pos.coords.latitude, lng = pos.coords.longitude;
                 if (map) {
                     map.setView([lat, lng], 15);
                     if (userGpsMarker) map.removeLayer(userGpsMarker);
@@ -1144,63 +1576,55 @@
                 }
                 $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
             },
-            (err) => { 
-                toast("Gagal akses GPS: " + err.message, "danger"); 
-                $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA'; 
+            (err) => {
+                toast("Gagal akses GPS: " + err.message, "danger");
+                $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
             },
             { enableHighAccuracy: true, timeout: 5000 }
         );
     };
 
-    // Fungsi Global UI
-    window.setFormation = (name) => { 
-        if (typeof CGO_Fleet.setFormation === "function") CGO_Fleet.setFormation(name); 
-        toast(`Formasi → ${name.toUpperCase()}`, "info", 1500); 
+    // ============= Global helpers =============
+    window.setFormation = (name) => {
+        if (typeof CGO_Fleet.setFormation === "function") CGO_Fleet.setFormation(name);
+        toast(`Formasi → ${name.toUpperCase()}`, "info", 1500);
     };
-    
-    window.saveState = () => { 
-        try { 
-            localStorage.setItem("cgo_fleet_state_v6", CGO_Fleet.exportState()); 
-            toast('<svg class="icon"><use href="#i-save"/></svg> State tersimpan', "success"); 
-        } catch (e) { 
-            toast("❌ Gagal simpan", "danger"); 
-        } 
+    window.saveState = () => {
+        try {
+            localStorage.setItem("cgo_fleet_state_v6", CGO_Fleet.exportState());
+            toast('<svg class="icon"><use href="#i-save"/></svg> State tersimpan', "success");
+        } catch (e) { toast("❌ Gagal simpan", "danger"); }
     };
-    
-    window.loadState = () => { 
-        try { 
-            const j = localStorage.getItem("cgo_fleet_state_v6"); 
-            if (!j) { 
-                toast("Tidak ada state", "warning"); 
-                return; 
-            } 
-            if (CGO_Fleet.importState(j)) { 
-                $("statTotal").innerText = CGO_Fleet.drones.size; 
-                toast('<svg class="icon"><use href="#i-folder"/></svg> State dimuat', "success"); 
-            } 
-        } catch (e) { 
-            toast("❌ Gagal muat", "danger"); 
-        } 
+    window.loadState = () => {
+        try {
+            const j = localStorage.getItem("cgo_fleet_state_v6");
+            if (!j) { toast("Tidak ada state", "warning"); return; }
+            if (CGO_Fleet.importState(j)) {
+                $("statTotal").innerText = CGO_Fleet.drones.size;
+                toast('<svg class="icon"><use href="#i-folder"/></svg> State dimuat', "success");
+            }
+        } catch (e) { toast("❌ Gagal muat", "danger"); }
     };
-    
-    window.resetSystem = () => { 
-        if (!confirm("Reset sistem?")) return; 
-        CGO_Fleet.reset(); 
-        stopStream(); 
-        if (map && cctvLayerGroup) cctvLayerGroup.clearLayers(); 
-        if (scanRadiusCircle && map) { map.removeLayer(scanRadiusCircle); scanRadiusCircle = null; } 
-        initFleet(); 
-        toast('<svg class="icon"><use href="#i-refresh"/></svg> Sistem di-reset', "warning"); 
+    window.resetSystem = () => {
+        if (!confirm("Reset sistem?")) return;
+        CGO_Fleet.reset();
+        stopCCTV();
+        if (map && cctvLayerGroup) cctvLayerGroup.clearLayers();
+        if (scanRadiusCircle && map) { map.removeLayer(scanRadiusCircle); scanRadiusCircle = null; }
+        initFleet();
+        toast('<svg class="icon"><use href="#i-refresh"/></svg> Sistem di-reset', "warning");
+    };
+    // Popup helper (avoids double JSON.stringify bug)
+    window.__playCam = (id) => {
+        const c = cctvCamStore.get(String(id));
+        if (c) CGO_Fleet.CCTV.playCCTV(c);
     };
 
-    // Shortcut Keyboard
+    // ============= Keyboard shortcuts =============
     document.addEventListener("keydown", (e) => {
         if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
         switch (e.key.toLowerCase()) {
-            case " ": 
-                e.preventDefault(); 
-                CGO_Fleet.deployAll(); 
-                break;
+            case " ": e.preventDefault(); CGO_Fleet.deployAll(); break;
             case "r": CGO_Fleet.returnAll(); break;
             case "t": CGO_Fleet.triggerGlobalTsunami(); break;
             case "v": CGO_Fleet.activateVoidPulseAll(); break;
@@ -1210,232 +1634,250 @@
         }
     });
 
+    // ============= Fleet init =============
     function initFleet() {
-        logContainer.innerHTML = ""; 
-        CGO_Fleet.generateFleet(1000); 
-        CGO_Fleet.startSimulation(); 
+        logContainer.innerHTML = "";
+        CGO_Fleet.generateFleet(1000);
+        CGO_Fleet.startSimulation();
         $("statTotal").innerText = CGO_Fleet.drones.size;
-        
-        if (!window._missionTimerSet) { 
-            window._missionTimerSet = true; 
-            setInterval(() => { 
-                const s = CGO_Fleet.getMissionElapsed(); 
-                $("missionElapsed").innerText = s ? fmtTime(s) : "--:--:--"; 
-            }, 1000); 
+        if (!window._missionTimerSet) {
+            window._missionTimerSet = true;
+            setInterval(() => {
+                const s = CGO_Fleet.getMissionElapsed();
+                $("missionElapsed").innerText = s ? fmtTime(s) : "--:--:--";
+                $("fpvClock").innerText = new Date().toLocaleTimeString();
+            }, 1000);
         }
     }
 
-    // Event Listener Utama dari Engine
+    // ============= Main event listener =============
     CGO_Fleet.onEvent((data) => {
         const ev = data.event;
-        
+
         if (ev === "FLEET_STATS_UPDATE") {
-            const s = data.data; 
-            $("statActive").innerText = s.active; 
-            $("statEmergency").innerText = s.emergency; 
-            $("statJammed").innerText = s.jammed; 
-            $("statOffline").innerText = s.offline; 
+            const s = data.data;
+            $("statActive").innerText = s.active;
+            $("statEmergency").innerText = s.emergency;
+            $("statJammed").innerText = s.jammed;
+            $("statOffline").innerText = s.offline;
             $("statIdle").innerText = s.idle ?? 0;
-            
-            if (s.jammed > 0) { 
-                $("meshBadge").innerText = "MESH: " + s.jammed; 
-                $("meshBadge").style.color = "var(--neon-yellow)"; 
-            } else { 
-                $("meshBadge").innerText = "MESH: OK"; 
-                $("meshBadge").style.color = "var(--neon-green)"; 
+            if (s.jammed > 0) {
+                $("meshBadge").innerText = "MESH: " + s.jammed;
+                $("meshBadge").style.color = "var(--neon-yellow)";
+            } else {
+                $("meshBadge").innerText = "MESH: OK";
+                $("meshBadge").style.color = "var(--neon-green)";
             }
         }
-        
+
         if (ev === "DRONE_SELECTED") {
-            const d = data.data; 
-            $("valDroneId").innerText = d.id; 
-            $("droneInput").value = d.id; 
-            currentDroneIdx = parseInt(d.id.split("-")[1], 10) || 1; 
-            bctx.clearRect(0, 0, batteryCanvas.width, batteryCanvas.height); 
+            const d = data.data;
+            $("valDroneId").innerText = d.id;
+            $("droneInput").value = d.id;
+            $("droneIdFpv").innerText = d.id;
+            currentDroneIdx = parseInt(d.id.split("-")[1], 10) || 1;
+            bctx.clearRect(0, 0, batteryCanvas.width, batteryCanvas.height);
             sctx.clearRect(0, 0, signalCanvas.width, signalCanvas.height);
-            if (map) { 
-                const ll = droneLatLng(d); 
-                map.setView([ll.lat, ll.lng], map.getZoom()); 
+            FpvRenderer.attach(d);
+            if (map) {
+                const ll = droneLatLng(d);
+                map.setView([ll.lat, ll.lng], map.getZoom());
             }
         }
-        
+
         if (ev === "TELEMETRY_UPDATE") {
-            const t = data.data; 
-            const drone = CGO_Fleet.getSelectedDrone(); 
+            const t = data.data;
+            const drone = CGO_Fleet.getSelectedDrone();
             if (!drone) return;
-            
-            $("valState").innerText = drone.state; 
-            $("valState").style.color = (drone.state === "EMERGENCY" || drone.state === "OFFLINE") ? "var(--neon-red)" : (drone.state === "MONITORING" || drone.state === "INTERACTING") ? "var(--neon-green)" : "var(--neon-blue)";
-            $("valBattery").innerText = t.battery.toFixed(1) + "%"; 
+
+            $("valState").innerText = drone.state;
+            $("valState").style.color = (drone.state === "EMERGENCY" || drone.state === "OFFLINE") ? "var(--neon-red)"
+                : (drone.state === "MONITORING" || drone.state === "INTERACTING") ? "var(--neon-green)" : "var(--neon-blue)";
+            $("valBattery").innerText = t.battery.toFixed(1) + "%";
             $("valBattery").style.color = t.battery < 20 ? "var(--neon-red)" : t.battery < 40 ? "var(--neon-yellow)" : "var(--neon-blue)";
-            $("valSolar").innerText = "+" + t.solarInput.toFixed(1) + " W"; 
+            $("valSolar").innerText = "+" + t.solarInput.toFixed(1) + " W";
             $("valSolar").style.color = t.isDaylight ? "var(--neon-green)" : "#6b7280";
-            $("valAltitude").innerText = t.altitude.toFixed(0) + " m"; 
-            $("valSignal").innerText = t.signalStrength + "%"; 
+            $("valAltitude").innerText = t.altitude.toFixed(0) + " m";
+            $("valSignal").innerText = t.signalStrength + "%";
             $("valSignal").style.color = t.signalStrength < 30 ? "var(--neon-red)" : t.signalStrength < 60 ? "var(--neon-yellow)" : "var(--neon-blue)";
-            $("valSector").innerText = `(${drone.sector.x},${drone.sector.y})`; 
+            $("valSector").innerText = `(${drone.sector.x},${drone.sector.y})`;
             $("valUptime").innerText = fmtTime(t.uptime || 0);
-            $("valWind").innerText = t.windSpeed + " m/s"; 
-            $("valSmoke").innerText = t.smokeLevel + " ppm"; 
+            $("valWind").innerText = t.windSpeed + " m/s";
+            $("valSmoke").innerText = t.smokeLevel + " ppm";
             $("valSmoke").style.color = t.smokeLevel > 30 ? "var(--neon-red)" : "var(--neon-blue)";
-            $("valAcoustic").innerText = t.acousticAlert ? "SOS DETECTED!" : "NORMAL"; 
+            $("valAcoustic").innerText = t.acousticAlert ? "SOS DETECTED!" : "NORMAL";
             $("valAcoustic").style.color = t.acousticAlert ? "var(--neon-red)" : "var(--neon-blue)";
-            $("sunLabel").innerText = t.isDaylight ? "DAY " + Math.round(t.sunAngle) + "°" : "NIGHT"; 
+            $("sunLabel").innerText = t.isDaylight ? "DAY " + Math.round(t.sunAngle) + "°" : "NIGHT";
             $("sunLabel").style.color = t.isDaylight ? "var(--neon-yellow)" : "#6b7280";
-            
             $("targetLabel").innerText = t.currentTarget ? "TARGET: " + t.currentTarget.toUpperCase() : "TARGET: NONE";
-            
-            const ll = droneLatLng(drone); 
-            $("fpvCoordsBar").innerText = `LAT: ${ll.lat.toFixed(4)} | LNG: ${ll.lng.toFixed(4)}`; 
+
+            const ll = droneLatLng(drone);
+            $("fpvCoordsBar").innerText = `LAT: ${ll.lat.toFixed(4)} | LNG: ${ll.lng.toFixed(4)}`;
             updateDroneMarker(drone);
 
             if (t.isJammed) {
-                $("valJam").innerText = "HOSTILE JAMMER"; 
-                $("valJam").style.color = "var(--neon-red)"; 
-                $("networkStatus").innerText = "SIGNAL LOST"; 
+                $("valJam").innerText = "HOSTILE JAMMER";
+                $("valJam").style.color = "var(--neon-red)";
+                $("networkStatus").innerText = "SIGNAL LOST";
                 $("networkStatus").className = "status-badge danger";
-                $("recIndicator").innerText = "● LOST"; 
-                $("recIndicator").style.color = "var(--neon-red)"; 
-                $("fpvAlertBar").innerText = "⚠ SIGNAL INTERFERENCE"; 
-                fpvStatusBar.classList.add("danger"); 
-                fpvContainer.classList.add("jammed");
+                $("fpvRec").innerText = "● LOST";
+                $("fpvRec").style.color = "var(--neon-red)";
+                $("fpvAlertBar").innerText = "⚠ SIGNAL INTERFERENCE";
+                fpvStatusBar.classList.add("danger");
+                fpvPane.classList.add("jammed");
             } else {
-                $("valJam").innerText = drone.state === "EMERGENCY" ? "EMERGENCY MODE" : "SECURE"; 
+                $("valJam").innerText = drone.state === "EMERGENCY" ? "EMERGENCY MODE" : "SECURE";
                 $("valJam").style.color = drone.state === "EMERGENCY" ? "var(--neon-yellow)" : "var(--neon-green)";
-                $("networkStatus").innerText = "STARLINK_LINK_ACTIVE"; 
+                $("networkStatus").innerText = "STARLINK_LINK_ACTIVE";
                 $("networkStatus").className = "status-badge";
-                if (!hls) { 
-                    $("recIndicator").innerText = "● REC"; 
-                    $("recIndicator").style.color = "var(--neon-green)"; 
-                }
-                $("fpvAlertBar").innerText = isEmergency ? "🚨 TSUNAMI EVACUATION" : "SISTEM NORMAL"; 
-                fpvStatusBar.classList.toggle("danger", isEmergency); 
-                fpvContainer.classList.remove("jammed");
+                $("fpvRec").innerText = "● LIVE";
+                $("fpvRec").style.color = "var(--neon-green)";
+                $("fpvAlertBar").innerText = isEmergency ? "🚨 TSUNAMI EVACUATION" : "SISTEM NORMAL";
+                fpvStatusBar.classList.toggle("danger", isEmergency);
+                fpvPane.classList.remove("jammed");
             }
-            
-            const hist = drone.getHistory(); 
-            drawSparkline(bctx, batteryCanvas, hist.battery, "#00ccff", 0, 100); 
+
+            const hist = drone.getHistory();
+            drawSparkline(bctx, batteryCanvas, hist.battery, "#00ccff", 0, 100);
             drawSparkline(sctx, signalCanvas, hist.signal, "#00ff88", 0, 100);
         }
-        
+
         if (ev === "NEW_LOG") {
-            const log = data.data; 
-            const el = document.createElement("div"); 
+            const log = data.data;
+            const el = document.createElement("div");
             el.className = "log-entry";
             el.innerHTML = `<span class="log-time">[${log.time}]</span> <span class="log-${log.type}">[${log.droneId}] ${log.message}</span>`;
-            logContainer.appendChild(el); 
-            while (logContainer.children.length > 200) logContainer.removeChild(logContainer.firstChild); 
+            logContainer.appendChild(el);
+            while (logContainer.children.length > 200) logContainer.removeChild(logContainer.firstChild);
             logContainer.scrollTop = logContainer.scrollHeight;
         }
-        
+
         if (ev === "FLEET_DEPLOYED") toast(`<svg class="icon"><use href="#i-rocket"/></svg> ${data.data.count} drone diluncurkan`, "success");
         if (ev === "FLEET_RETURNING") toast(`<svg class="icon"><use href="#i-home"/></svg> ${data.data.count} drone RTB`, "warning");
-        
+
         if (ev === "DISASTER_ALERT_ACTIVE") {
-            isEmergency = true; 
-            document.body.classList.add("emergency"); 
-            fpvContainer.classList.add("emergency");
-            $("networkStatus").innerText = "EMERGENCY BROADCAST"; 
+            isEmergency = true;
+            document.body.classList.add("emergency");
+            fpvPane.classList.add("emergency");
+            cctvPane.classList.add("emergency");
+            $("networkStatus").innerText = "EMERGENCY BROADCAST";
             $("networkStatus").className = "status-badge danger";
-            $("fpvAlertBar").innerText = "🚨 TSUNAMI EVACUATION"; 
+            $("fpvAlertBar").innerText = "🚨 TSUNAMI EVACUATION";
             fpvStatusBar.classList.add("danger");
             toast(`<svg class="icon"><use href="#i-alert"/></svg> TSUNAMI ALERT — ${data.data.dronesAffected} drone`, "danger", 5000);
         }
-        
         if (ev === "VOID_PULSE_ACTIVE") {
-            isEmergency = false; 
-            document.body.classList.remove("emergency"); 
-            fpvContainer.classList.remove("emergency");
-            $("networkStatus").innerText = "STARLINK SECURE"; 
-            $("networkStatus").className = "status-badge"; 
-            $("fpvAlertBar").innerText = "SISTEM NORMAL"; 
+            isEmergency = false;
+            document.body.classList.remove("emergency");
+            fpvPane.classList.remove("emergency");
+            cctvPane.classList.remove("emergency");
+            $("networkStatus").innerText = "STARLINK SECURE";
+            $("networkStatus").className = "status-badge";
+            $("fpvAlertBar").innerText = "SISTEM NORMAL";
             fpvStatusBar.classList.remove("danger");
-            $("valJam").innerText = "SECURE (VOID PULSE)"; 
-            $("valJam").style.color = "var(--neon-green)"; 
+            $("valJam").innerText = "SECURE (VOID PULSE)";
+            $("valJam").style.color = "var(--neon-green)";
             toast(`<svg class="icon"><use href="#i-zap"/></svg> Void Pulse aktif — ${data.data.dronesAffected} drone aman`, "success");
         }
-        
+
         if (ev === "CCTV_SCAN_START") {
-            $("cctvCount").innerText = "scanning..."; 
+            $("cctvCount").innerText = "scanning...";
             $("cctvCount").style.color = "var(--neon-yellow)";
-            if (lastScanCenter && map) { 
-                if (scanRadiusCircle) map.removeLayer(scanRadiusCircle); 
-                scanRadiusCircle = L.circle([lastScanCenter.lat, lastScanCenter.lng], { radius: 5000, color: "#00ccff", fillColor: "#00ccff", fillOpacity: 0.05, weight: 1, dashArray: "4 4" }).addTo(map); 
-            }
         }
-        
         if (ev === "CCTV_SCAN_SUCCESS") {
             const { cctvs, nearest, total, queryLat, queryLng } = data.data;
-            lastScanCenter = { lat: queryLat, lng: queryLng }; 
-            $("cctvCount").innerText = total + " CCTV"; 
+            lastScanCenter = { lat: queryLat, lng: queryLng };
+            $("cctvCount").innerText = total + " CCTV";
             $("cctvCount").style.color = total > 0 ? "var(--neon-green)" : "var(--neon-yellow)";
-            
+            cctvCamStore.clear();
             if (map && cctvLayerGroup) {
-                cctvLayerGroup.clearLayers(); 
+                cctvLayerGroup.clearLayers();
                 if (scanRadiusCircle) { map.removeLayer(scanRadiusCircle); scanRadiusCircle = null; }
-                
+                // Radius visualization
+                scanRadiusCircle = L.circle([queryLat, queryLng], {
+                    radius: 5000, color: "#00ccff", fillColor: "#00ccff", fillOpacity: 0.04,
+                    weight: 1, dashArray: "4 4"
+                }).addTo(map);
                 for (const c of cctvs) {
+                    cctvCamStore.set(String(c.id), c);
                     const isNearest = c === nearest;
-                    const marker = L.circleMarker([c.lat, c.lng], { radius: isNearest ? 7 : 5, color: isNearest ? "#00ff88" : "#00ccff", fillColor: isNearest ? "#00ff88" : "#00ccff", fillOpacity: 0.8, weight: 2 });
-                    marker.bindPopup(`<b>${c.name}</b><br>ID: ${c.id}<br>Jarak: ${c.distance}m<br>Tipe: ${c.surveillanceType}<br><button onclick="CGO_Fleet.CCTV.playCCTV(${JSON.stringify(JSON.stringify(c))})" style="margin-top:4px">▶ PLAY CAM</button>`);
+                    const marker = L.circleMarker([c.lat, c.lng], {
+                        radius: isNearest ? 7 : 5,
+                        color: isNearest ? "#00ff88" : "#00ccff",
+                        fillColor: isNearest ? "#00ff88" : "#00ccff",
+                        fillOpacity: 0.8, weight: 2
+                    });
+                    marker.bindPopup(
+                        `<b>${c.name}</b><br>ID: ${c.id}<br>Jarak: ${c.distance}m<br>Tipe: ${c.surveillanceType}<br>` +
+                        `<button onclick="window.__playCam('${c.id}')" style="margin-top:4px;padding:2px 6px;cursor:pointer">▶ PLAY CAM</button>`
+                    );
                     marker.on("click", () => CGO_Fleet.CCTV.playCCTV(c));
                     cctvLayerGroup.addLayer(marker);
                 }
                 if (nearest) map.setView([nearest.lat, nearest.lng], 14);
             }
-            if (total > 0) { 
-                toast(`📡 ${total} CCTV ditemukan`, "success"); 
-                statusOverlay.textContent = "Menghubungkan ke stream..."; 
-            } else { 
-                toast("Tidak ada CCTV", "warning"); 
-                statusOverlay.textContent = "Tidak ada CCTV dalam radius 5km."; 
-                scanlinesEl.classList.remove("hidden"); 
+            if (total > 0) {
+                toast(`📡 ${total} CCTV ditemukan`, "success");
+                statusOverlay.textContent = "Menghubungkan ke feed terdekat...";
+            } else {
+                toast("Tidak ada CCTV dalam radius", "warning");
+                statusOverlay.textContent = "Tidak ada CCTV dalam radius 5km.";
             }
         }
-        
-        if (ev === "CCTV_SCAN_ERROR") { 
-            $("cctvCount").innerText = "ERROR"; 
-            $("cctvCount").style.color = "var(--neon-red)"; 
-            statusOverlay.classList.remove("hidden"); 
-            statusOverlay.textContent = "Scan gagal: " + data.data.error; 
-            scanlinesEl.classList.remove("hidden"); 
-            toast("CCTV scan error", "danger"); 
+        if (ev === "CCTV_SCAN_ERROR") {
+            $("cctvCount").innerText = "ERROR";
+            $("cctvCount").style.color = "var(--neon-red)";
+            statusOverlay.classList.remove("hidden");
+            statusOverlay.textContent = "Scan gagal: " + data.data.error;
+            toast("CCTV scan error", "danger");
         }
-        
-        if (ev === "CCTV_STREAM_READY") { 
-            const { url, cctv } = data.data; 
-            playStream(url, cctv); 
+        if (ev === "CCTV_STREAM_READY") {
+            const { url, cctv, simulate } = data.data;
+            if (simulate || !url) startSimulatedCCTV(cctv);
+            else playStream(url, cctv);
         }
-        
-        if (ev === "MUTE_STATE_CHANGED") { 
-            muteBtn.classList.toggle("active", !data.data); 
+        if (ev === "MUTE_STATE_CHANGED") {
+            muteBtn.classList.toggle("active", !data.data);
         }
     });
 
-    // Start Aplikasi
-    initMap(); 
-    initFleet(); 
-    muteBtn.classList.add("active"); 
+    // ============= Boot =============
+    initMap();
+    initFleet();
+    FpvRenderer.start();
+    CctvRenderer.start(); // standby in case both modes requested
+    CctvRenderer.stop();  // but not visible until scan
+    muteBtn.classList.add("active");
     selectDroneById("CGO-0001");
 
-    // Prime Audio Context (Membuka izin suara browser)
-    const primeAudio = () => { 
-        try { 
-            const AC = window.AudioContext || window.webkitAudioContext; 
-            if (AC) { 
-                const ctx = new AC(); 
-                if (ctx.state === "suspended") ctx.resume(); 
-                if (ctx.close) ctx.close(); 
-            } 
-        } catch (_) {} 
-        document.removeEventListener("click", primeAudio); 
-        document.removeEventListener("keydown", primeAudio); 
+    // Window resize → re-measure canvases
+    let resizeTimer;
+    window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            FpvRenderer._resize();
+            CctvRenderer._resize();
+        }, 150);
+    });
+
+    // Prime Audio Context on first interaction
+    const primeAudio = () => {
+        try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (AC) {
+                const ctx = new AC();
+                if (ctx.state === "suspended") ctx.resume();
+                if (ctx.close) ctx.close();
+            }
+        } catch (_) {}
+        document.removeEventListener("click", primeAudio);
+        document.removeEventListener("keydown", primeAudio);
     };
-    document.addEventListener("click", primeAudio); 
+    document.addEventListener("click", primeAudio);
     document.addEventListener("keydown", primeAudio);
 
-    console.info("[BCGO UI] v6.5 ready · Full Uncompressed + Live CCTV + GPS");
+    console.info("[BCGO UI] v6.6 ready · FPV & CCTV separated · SVG icons fixed");
 })();
 </script>
 </body>
-                                                 </html>
+</html>
