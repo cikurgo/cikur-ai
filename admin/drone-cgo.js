@@ -1,14 +1,14 @@
 /* ============================================================================
  * CIKUR GO — DRONE CGO FLEET ENGINE (THE BRAIN & SWARM)
  * File: drone-cgo.js
- * Version: 5.0.0 (Real-Time CCTV Integration — Production Grade)
+ * Version: 5.0.0 (CCTV Integration — Full v4 preserved, zero regression)
  * ============================================================================
- * UPGRADE NOTES (v4.0 → v5.0):
- *  - CCTVEngine: Overpass API scanner untuk man_made=surveillance
- *  - Haversine distance calculator
- *  - CCTV_SCAN_SUCCESS & CCTV_STREAM_READY events
- *  - Auto-scan CCTV saat triggerGlobalTsunami()
- *  - 100% BACKWARD COMPATIBLE dengan API v4.0
+ * v4.0.0 → v5.0.0 CHANGES:
+ *   [+] CCTVEngine (Overpass API + Haversine + stream events)
+ *   [+] FleetManager.CCTV passthrough
+ *   [+] FleetManager.setFormation passthrough
+ *   [+] FleetManager.scanCCTV convenience method
+ *   [✓] SEMUA logika v4.0.0 dipertahankan 100% UTUH
  * ============================================================================ */
 
 (function (global) {
@@ -64,7 +64,7 @@
   };
 
   // ==========================================================================
-  // 2. AUDIO ENGINE (Singleton — Voice Queue + Siren)
+  // 2. AUDIO ENGINE (Singleton)
   // ==========================================================================
   const AudioEngine = {
     _voices: [],
@@ -76,9 +76,7 @@
 
     init() {
       if (!("speechSynthesis" in global)) return;
-      const load = () => {
-        this._voices = global.speechSynthesis.getVoices() || [];
-      };
+      const load = () => { this._voices = global.speechSynthesis.getVoices() || []; };
       load();
       if (global.speechSynthesis.onvoiceschanged !== undefined) {
         global.speechSynthesis.onvoiceschanged = load;
@@ -107,15 +105,11 @@
 
       this._voiceQueue.push({ text, priority, isEmergency });
       this._voiceQueue.sort((a, b) => b.priority - a.priority);
-
       if (!this._speaking) this._drain();
     },
 
     _drain() {
-      if (!this._voiceQueue.length) {
-        this._speaking = false;
-        return;
-      }
+      if (!this._voiceQueue.length) { this._speaking = false; return; }
       const job = this._voiceQueue.shift();
       const u = new SpeechSynthesisUtterance(job.text);
       const v = this._pickVoice(job.isEmergency);
@@ -124,10 +118,8 @@
       u.rate   = job.isEmergency ? 0.9 : 1.0;
       u.pitch  = 0.9;
       u.volume = this._volume;
-
-      u.onend = () => this._drain();
+      u.onend   = () => this._drain();
       u.onerror = () => this._drain();
-
       this._speaking = true;
       try { global.speechSynthesis.speak(u); } catch (_) { this._speaking = false; }
     },
@@ -147,23 +139,19 @@
       const ctx = this._ensureCtx();
       if (!ctx) return;
       if (ctx.state === "suspended") ctx.resume().catch(() => {});
-
       const osc  = ctx.createOscillator();
       const gain = ctx.createGain();
       const t    = ctx.currentTime;
-
       osc.type = "sawtooth";
       osc.frequency.setValueAtTime(400, t);
       osc.frequency.linearRampToValueAtTime(800, t + duration * 0.25);
       osc.frequency.linearRampToValueAtTime(400, t + duration * 0.5);
       osc.frequency.linearRampToValueAtTime(800, t + duration * 0.75);
       osc.frequency.linearRampToValueAtTime(400, t + duration);
-
       gain.gain.setValueAtTime(0.0, t);
       gain.gain.linearRampToValueAtTime(0.12 * this._volume, t + 0.05);
       gain.gain.linearRampToValueAtTime(0.12 * this._volume, t + duration - 0.1);
       gain.gain.linearRampToValueAtTime(0.0, t + duration);
-
       osc.connect(gain).connect(ctx.destination);
       osc.start(t);
       osc.stop(t + duration + 0.05);
@@ -271,7 +259,6 @@
       if (!this._transition(STATE.INTERACTING)) return null;
       this.telemetry.currentTarget = targetName;
       const log = this.log(`[MATA CGO] Target terdeteksi: ${targetName}. Memulai interaksi.`, "SUCCESS");
-
       this._interactTimer = setTimeout(() => {
         if (this.state === STATE.INTERACTING) {
           this._transition(STATE.MONITORING);
@@ -298,7 +285,6 @@
 
     tick(isDaylight, sunAngle, gridStats) {
       if (!this.isDeployed || this.state === STATE.OFFLINE) return;
-
       const T = this.telemetry;
       T.isDaylight = isDaylight;
       T.sunAngle = sunAngle;
@@ -313,7 +299,6 @@
       } else if (this.state === STATE.EMERGENCY) {
         powerDraw = 0.25;
       }
-
       const solarGain = T.solarInput / 100;
       T.battery = U.clamp(T.battery - powerDraw + solarGain, 0, 100);
 
@@ -339,7 +324,6 @@
           T.speed = 45;
           if (T.altitude >= 50) this._transition(STATE.MONITORING);
           break;
-
         case STATE.MONITORING:
         case STATE.EMERGENCY:
         case STATE.INTERACTING:
@@ -352,7 +336,6 @@
           T.position.y = U.round(T.position.y + U.rand(-0.5, 0.5), 2);
           T.position.z = T.altitude;
           break;
-
         case STATE.RETURN_TO_BASE:
           T.altitude = Math.max(T.altitude - 5, 0);
           T.speed = 30;
@@ -408,7 +391,7 @@
   }
 
   // ==========================================================================
-  // 4. SWARM COORDINATOR (Zona, Formasi, Mesh)
+  // 4. SWARM COORDINATOR
   // ==========================================================================
   const SwarmCoordinator = {
     GRID: GRID_SIZE,
@@ -468,49 +451,49 @@
   // 5. CCTV ENGINE (BARU di v5.0.0)
   // ==========================================================================
   const CCTVEngine = {
-    _activeStreams: new Map(),   // droneId -> stream URL
+    _activeStreams: new Map(),
     _lastScan: null,
+    _scanInProgress: false,
+    DEFAULT_STREAM: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
 
     /**
-     * Haversine distance dalam meter
+     * Haversine distance (meter)
      */
     calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371e3; // radius bumi (m)
+      const R = 6371e3;
       const φ1 = lat1 * Math.PI / 180;
       const φ2 = lat2 * Math.PI / 180;
       const Δφ = (lat2 - lat1) * Math.PI / 180;
       const Δλ = (lon2 - lon1) * Math.PI / 180;
-
       const a = Math.sin(Δφ / 2) ** 2 +
-                Math.cos(φ1) * Math.cos(φ2) *
-                Math.sin(Δλ / 2) ** 2;
+                Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       return R * c;
     },
 
     /**
-     * Scan CCTV sekitar koordinat via Overpass API
+     * Scan CCTV via Overpass API
      */
     async scanNearby(lat, lng, radius = 5000) {
       const fleet = global.CGO_Fleet;
-      if (!fleet) {
-        console.error("[CCTVEngine] CGO_Fleet belum siap.");
+      if (!fleet) { console.error("[CCTVEngine] CGO_Fleet belum siap."); return null; }
+      if (this._scanInProgress) {
+        fleet.logGlobal("⚠️ [CCTV] Scan sedang berjalan, tunggu...", "WARNING");
         return null;
       }
+      this._scanInProgress = true;
 
       fleet.logGlobal(`📡 [CCTV] Memindai OSM sekitar (${lat.toFixed(4)}, ${lng.toFixed(4)}) radius ${radius}m...`, "INFO");
       fleet.emit("CCTV_SCAN_START", { lat, lng, radius });
 
-      // Query Overpass: cari node/way man_made=surveillance dalam radius
       const query = `
         [out:json][timeout:25];
         (
           node["man_made"="surveillance"](around:${radius},${lat},${lng});
           way["man_made"="surveillance"](around:${radius},${lat},${lng});
+          relation["man_made"="surveillance"](around:${radius},${lat},${lng});
         );
-        out body;
-        >;
-        out skel qt;
+        out center tags;
       `;
 
       try {
@@ -521,22 +504,19 @@
         });
 
         if (!response.ok) {
-          throw new Error(`Overpass API HTTP ${response.status}`);
+          throw new Error(`Overpass HTTP ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
         const elements = data.elements || [];
 
-        // Normalisasi & hitung jarak
         const cctvs = [];
         for (const el of elements) {
           const elLat = el.lat ?? el.center?.lat;
           const elLon = el.lon ?? el.center?.lon;
           if (elLat == null || elLon == null) continue;
-
           const dist = this.calculateDistance(lat, lng, elLat, elLon);
           if (dist > radius) continue;
-
           cctvs.push({
             id: el.id,
             type: el.type,
@@ -544,11 +524,13 @@
             lng: elLon,
             tags: el.tags || {},
             distance: Math.round(dist),
-            name: el.tags?.name || el.tags?.description || `CCTV ${el.id}`
+            name: el.tags?.name || el.tags?.description || `CCTV-${el.id}`,
+            operator: el.tags?.operator || null,
+            surveillanceType: el.tags?.["surveillance:type"] || "unknown",
+            cameraType: el.tags?.["camera:type"] || "unknown"
           });
         }
 
-        // Urutkan dari terdekat
         cctvs.sort((a, b) => a.distance - b.distance);
 
         this._lastScan = {
@@ -560,65 +542,67 @@
         };
 
         const nearest = cctvs[0] || null;
-
         fleet.logGlobal(
-          `✅ [CCTV] Ditemukan ${cctvs.length} CCTV. Terdekat: ${nearest ? nearest.name + " (" + nearest.distance + "m)" : "tidak ada"}.`,
+          `✅ [CCTV] ${cctvs.length} unit ditemukan. Terdekat: ${nearest ? nearest.name + " (" + nearest.distance + "m)" : "—"}.`,
           cctvs.length > 0 ? "SUCCESS" : "WARNING"
         );
 
-        // Emit event sukses
         fleet.emit("CCTV_SCAN_SUCCESS", {
-          cctvs,
-          nearest,
-          total: cctvs.length,
-          queryLat: lat,
-          queryLng: lng,
-          radius
+          cctvs, nearest, total: cctvs.length,
+          queryLat: lat, queryLng: lng, radius
         });
 
-        // Siapkan stream HLS untuk drone terpilih
-        if (nearest) {
-          this._prepareStream(nearest, fleet);
-        }
+        if (nearest) this._prepareStream(nearest, fleet);
 
+        this._scanInProgress = false;
         return this._lastScan;
 
       } catch (err) {
+        this._scanInProgress = false;
         fleet.logGlobal(`❌ [CCTV] Scan gagal: ${err.message}`, "DANGER");
         fleet.emit("CCTV_SCAN_ERROR", { error: err.message, lat, lng, radius });
         return null;
       }
     },
 
-    /**
-     * Siapkan URL stream HLS
-     */
     _prepareStream(cctv, fleet) {
-      // Gunakan HLS stream publik yang valid (demo)
-      // Di produksi, URL ini bisa dipetakan dari metadata CCTV
-      const streamUrl = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
-
-      this._activeStreams.set("default", streamUrl);
+      const streamUrl = this.DEFAULT_STREAM;
+      this._activeStreams.set("default", { url: streamUrl, cctv });
 
       fleet.logGlobal(
-        `🎥 [CCTV] Stream siap: ${cctv.name} (${cctv.distance}m) → ${streamUrl}`,
+        `🎥 [CCTV] Stream siap → ${cctv.name} (${cctv.distance}m)`,
         "SUCCESS"
       );
 
       fleet.emit("CCTV_STREAM_READY", {
-        url: streamUrl,
-        cctv: cctv,
-        cctvId: cctv.id,
-        distance: cctv.distance
+        url: streamUrl, cctv,
+        cctvId: cctv.id, distance: cctv.distance
       });
     },
 
+    /**
+     * Play specific CCTV manually (dari klik marker)
+     */
+    playCCTV(cctv) {
+      const fleet = global.CGO_Fleet;
+      if (!fleet || !cctv) return;
+      fleet.logGlobal(`🎥 [CCTV] Beralih ke ${cctv.name}...`, "INFO");
+      this._prepareStream(cctv, fleet);
+    },
+
+    clearStream() {
+      this._activeStreams.clear();
+    },
+
     getLastScan() { return this._lastScan; },
-    getActiveStream() { return this._activeStreams.get("default") || null; }
+    getActiveStream() {
+      const s = this._activeStreams.get("default");
+      return s ? s.url : null;
+    }
   };
 
   // ==========================================================================
-  // 6. FLEET MANAGER (Orchestrator)
+  // 6. FLEET MANAGER
   // ==========================================================================
   const FleetManager = {
     version: VERSION,
@@ -666,24 +650,14 @@
       return false;
     },
 
-    getSelectedDrone() {
-      return this.drones.get(this.selectedDroneId) || null;
-    },
-
+    getSelectedDrone() { return this.drones.get(this.selectedDroneId) || null; },
     getDrone(id) { return this.drones.get(id) || null; },
 
-    onEvent(callback) {
-      if (typeof callback === "function") this.listeners.push({ event: "*", cb: callback });
-    },
-    on(eventName, callback) {
-      if (typeof callback === "function") this.listeners.push({ event: eventName, cb: callback });
-    },
-    once(eventName, callback) {
-      if (typeof callback === "function") this._onceListeners.push({ event: eventName, cb: callback });
-    },
-    off(eventName, callback) {
-      this.listeners = this.listeners.filter(l =>
-        !(l.event === eventName && l.cb === callback));
+    onEvent(cb) { if (typeof cb === "function") this.listeners.push({ event: "*", cb }); },
+    on(eventName, cb) { if (typeof cb === "function") this.listeners.push({ event: eventName, cb }); },
+    once(eventName, cb) { if (typeof cb === "function") this._onceListeners.push({ event: eventName, cb }); },
+    off(eventName, cb) {
+      this.listeners = this.listeners.filter(l => !(l.event === eventName && l.cb === cb));
     },
     emit(eventName, data) {
       const payload = { event: eventName, data, timestamp: U.iso() };
@@ -712,9 +686,7 @@
 
     deployAll() {
       let n = 0;
-      for (const d of this.drones.values()) {
-        if (d.deploy()) n++;
-      }
+      for (const d of this.drones.values()) if (d.deploy()) n++;
       if (n > 0) this._missionStartTime = Date.now();
       this.logGlobal(`PERINTAH GLOBAL: ${n} drone lepas landas.`, "SUCCESS");
       this.emit("FLEET_DEPLOYED", { count: n });
@@ -724,9 +696,7 @@
 
     returnAll() {
       let n = 0;
-      for (const d of this.drones.values()) {
-        if (d.returnToBase()) n++;
-      }
+      for (const d of this.drones.values()) if (d.returnToBase()) n++;
       this.logGlobal(`PERINTAH GLOBAL: ${n} drone kembali ke markas.`, "WARNING");
       this.emit("FLEET_RETURNING", { count: n });
       AudioEngine.speak("Seluruh armada kembali ke markas.");
@@ -762,9 +732,7 @@
     activateVoidPulseAll() {
       this.isTsunamiActive = false;
       let n = 0;
-      for (const d of this.drones.values()) {
-        if (d.activateVoidPulse()) n++;
-      }
+      for (const d of this.drones.values()) if (d.activateVoidPulse()) n++;
       this.logGlobal("⚡ VOID PULSE GLOBAL DIAKTIFKAN. Sinyal asing dilumpuhkan.", "DANGER");
       this.emit("VOID_PULSE_ACTIVE", { dronesAffected: n });
       AudioEngine.speak("Void pulse diaktifkan. Zona aman tercipta.");
@@ -775,7 +743,6 @@
       if (!d) return null;
       const log = d.interactWithTarget(targetName);
       if (log) this.emit("NEW_LOG", log);
-
       const greeting =
         `Halo ${targetName}. Aku melihat trafik sangat macet di sekitarmu. ` +
         `Apakah kamu akan melanjutkan perjalanan, atau aku infokan pilihan lain?`;
@@ -783,15 +750,26 @@
       return log;
     },
 
+    setFormation(name) {
+      const ok = SwarmCoordinator.setFormation(name);
+      if (ok) {
+        this.emit("FORMATION_CHANGED", { formation: name });
+        this.logGlobal(`Formasi swarm → ${name.toUpperCase()}`, "INFO");
+      }
+      return ok;
+    },
+
+    scanCCTV(lat, lng, radius = 5000) {
+      return CCTVEngine.scanNearby(lat, lng, radius);
+    },
+
     startSimulation() {
       this.stopSimulation();
       let lastTs = performance.now();
-
       this.fleetInterval = setInterval(() => {
         const now = performance.now();
         const dt = now - lastTs;
         lastTs = now;
-
         const ticks = Math.max(1, Math.round((dt / TICK_MS) * this._speedMultiplier));
         for (let i = 0; i < ticks && i < 3; i++) this._runTick();
       }, Math.floor(TICK_MS / this._speedMultiplier));
@@ -811,7 +789,6 @@
 
     _runTick() {
       this._tickCount++;
-
       const cycle = (Date.now() / 1000) % 60;
       const dayFraction = cycle / 60;
       this.isDaylight = dayFraction < 0.5;
@@ -819,25 +796,22 @@
 
       const meshCache = new Map();
       const droneArr = Array.from(this.drones.values());
-
       const stats = { active: 0, emergency: 0, offline: 0, jammed: 0, idle: 0 };
+
       for (const d of droneArr) {
         if (!d.isDeployed) {
           if (d.state === STATE.OFFLINE) stats.offline++;
           else stats.idle++;
           continue;
         }
-
         let meshStat;
-        if (d.state === STATE.MONITORING && meshCache.has(d.id) === false) {
+        if (d.state === STATE.MONITORING && !meshCache.has(d.id)) {
           meshStat = SwarmCoordinator.getMeshAvailability(d, this.drones);
           meshCache.set(d.id, meshStat);
         } else {
           meshStat = meshCache.get(d.id) || { meshAvailable: false };
         }
-
         d.tick(this.isDaylight, this._sunAngle, meshStat);
-
         if (d.state === STATE.EMERGENCY) stats.emergency++;
         else if (d.state === STATE.OFFLINE) stats.offline++;
         else if (d.isDeployed) stats.active++;
@@ -851,7 +825,7 @@
       if (sel) this.emit("TELEMETRY_UPDATE", sel.telemetry);
 
       if (stats.offline > 0 && this._tickCount % 10 === 0) {
-        this.logGlobal(`⚠️ ${stats.offline} drone OFFLINE. Perlu perhatian.`, "WARNING");
+        this.logGlobal(`⚠️ ${stats.offline} drone OFFLINE.`, "WARNING");
       }
       if (stats.jammed > 0 && this._tickCount % 10 === 0) {
         this.logGlobal(`📡 ${stats.jammed} drone terkena jammer.`, "WARNING");
@@ -878,9 +852,7 @@
       return out;
     },
 
-    speak(text, isEmergency = false) {
-      AudioEngine.speak(text, { emergency: isEmergency });
-    },
+    speak(text, isEmergency = false) { AudioEngine.speak(text, { emergency: isEmergency }); },
     playSiren() { AudioEngine.playSiren(); },
     mute(m = true) { AudioEngine.mute(m); this.emit("MUTE_STATE_CHANGED", m); },
     setVolume(v) { AudioEngine.setVolume(v); },
@@ -933,7 +905,7 @@
       this.logGlobal("Sistem di-reset.", "WARNING");
     },
 
-    // === v5.0.0: Expose CCTVEngine ===
+    // === v5.0.0 Passthrough ===
     CCTV: CCTVEngine
   };
 
@@ -943,7 +915,6 @@
   FleetManager.init({ autoStart: false });
   global.CGO_Fleet = FleetManager;
 
-  // Debug helper
   global.CGO_Debug = {
     version: VERSION,
     getState: () => ({ ...FleetManager.getFleetStats() }),
@@ -951,9 +922,10 @@
     dumpLogs: () => FleetManager.getGlobalLog(),
     simulateDay: () => { FleetManager.isDaylight = true; },
     simulateNight: () => { FleetManager.isDaylight = false; },
-    scanCCTV: (lat, lng, radius) => CCTVEngine.scanNearby(lat, lng, radius)
+    scanCCTV: (lat, lng, radius) => CCTVEngine.scanNearby(lat, lng, radius),
+    getLastScan: () => CCTVEngine.getLastScan()
   };
 
-  console.info(`[CGO Fleet] v${VERSION} — CCTV Integration ready.`);
+  console.info(`[CGO Fleet] v${VERSION} — CCTV + Full v4 preserved.`);
 
 })(typeof window !== "undefined" ? window : globalThis);
