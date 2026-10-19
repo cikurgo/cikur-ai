@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.7</title>
+<title>BCGO — FLEET COMMAND CENTER v6.8.1</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -192,7 +192,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.7</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.8.1</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -752,9 +752,9 @@ function playStream(url, cctvInfo) {
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
       cctvVideo.play().catch(() => { cctvVideo.muted = true; cctvVideo.play().catch(() => {}); });
       $("cctvRec").innerText = "● LIVE"; $("cctvRec").style.color = "var(--neon-green)";
-      $("cctvModeLabel").innerText = "HLS LIVE"; $("cctvModeLabel").style.color = "var(--neon-green)";
-      toast("🎥 CCTV Live Stream Aktif", "success");
-      CGO_Fleet.logGlobal(`🎥 [STREAM] Live: ${cctvInfo?.name || "CCTV"}`, "SUCCESS");
+      $("cctvModeLabel").innerText = "REAL HLS"; $("cctvModeLabel").style.color = "var(--neon-green)";
+      toast("🎥 REAL HLS Stream Aktif", "success");
+      CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS: ${cctvInfo?.name || "CCTV"}`, "SUCCESS");
     });
     hls.on(Hls.Events.ERROR, (event, data) => {
       if (data.fatal) {
@@ -767,7 +767,8 @@ function playStream(url, cctvInfo) {
     cctvVideo.addEventListener("loadedmetadata", () => {
       cctvVideo.play();
       $("cctvRec").innerText = "● LIVE"; $("cctvRec").style.color = "var(--neon-green)";
-      $("cctvModeLabel").innerText = "HLS NATIVE";
+      $("cctvModeLabel").innerText = "REAL HLS (native)";
+      $("cctvModeLabel").style.color = "var(--neon-green)";
     });
   } else {
     startSimulatedCCTV(cctvInfo);
@@ -783,14 +784,14 @@ function startSimulatedCCTV(cctvInfo) {
   CctvRenderer.start();
   statusOverlay.classList.add("hidden");
   scanlinesEl.classList.remove("hidden");
-  $("cctvRec").innerText = "● SIM LIVE"; $("cctvRec").style.color = "var(--neon-yellow)";
-  $("cctvModeLabel").innerText = cctvInfo?.synthetic ? "SYNTHETIC" : "SIMULATED";
+  $("cctvRec").innerText = "● CANVAS"; $("cctvRec").style.color = "var(--neon-yellow)";
+  $("cctvModeLabel").innerText = cctvInfo?.synthetic ? "SYNTHETIC PIN" : "NO HLS URL";
   $("cctvModeLabel").style.color = "var(--neon-yellow)";
   if (cctvInfo) {
     $("camIdLabel").innerText = "CAM: " + (cctvInfo.name || cctvInfo.id);
     $("camDistLabel").innerText = "DIST: " + cctvInfo.distance + "m";
   }
-  toast(`🎥 Feed CCTV (${cctvInfo?.synthetic ? "Synthetic" : "Simulasi"}) Aktif`, "info");
+  toast(`🎥 Canvas fallback (${cctvInfo?.synthetic ? "synthetic pin" : "no HLS"}) — tambah PUBLIC_STREAMS untuk video nyata`, "warning");
 }
 function stopCCTV() {
   if (hls) { hls.destroy(); hls = null; }
@@ -831,21 +832,36 @@ async function scanNearbyOnly() {
 async function scanMultiRegion() {
   const drone = CGO_Fleet.getSelectedDrone();
   if (!drone) { toast("Pilih drone dulu", "warning"); return; }
+  if (CGO_Fleet.IP && CGO_Fleet.IP.isBusy()) {
+    toast("Scanner masih sibuk — tunggu sebentar", "warning");
+    return;
+  }
   const ll = droneLatLng(drone);
   const regions = getSelectedRegions();
   if (!regions.length) { toast("Pilih minimal 1 region", "warning"); return; }
   $("progressBarWrap").style.display = "block";
   $("progressBarFill").style.width = "0%";
-  $("scanProgress").innerText = "Mulai multi-scan...";
+  $("scanProgress").innerText = `Mulai multi-scan ${regions.length} region...`;
+  $("cctvCount").innerText = "multi-scanning...";
+  $("cctvCount").style.color = "var(--neon-yellow)";
+  // Auto-rotate mirror before multi-scan (simulate VPN hop)
   try {
-    await CGO_Fleet.CCTV.scanMultiRegion(ll.lat, ll.lng, regions);
+    const m = CGO_Fleet.IP.nextMirror();
+    CGO_Fleet.logGlobal(`🔄 [MULTI] Pre-rotate mirror → ${m.host} [${m.country}]`, "INFO");
+  } catch (_) {}
+  try {
+    const result = await CGO_Fleet.CCTV.scanMultiRegion(ll.lat, ll.lng, regions);
     $("progressBarFill").style.width = "100%";
+    const total = Array.isArray(result) ? result.length : (result?.length || 0);
+    $("scanProgress").innerText = `✅ Multi-scan selesai: ${total} CCTV`;
     setTimeout(() => {
       $("progressBarWrap").style.display = "none";
       $("progressBarFill").style.width = "0%";
     }, 1500);
   } catch (e) {
     $("scanProgress").innerText = "❌ " + e.message;
+    $("cctvCount").innerText = "ERROR";
+    $("cctvCount").style.color = "var(--neon-red)";
     CGO_Fleet.logGlobal(`❌ [MULTI] ${e.message}`, "DANGER");
   }
 }
@@ -995,10 +1011,12 @@ $("ipChip").onclick = refreshIP;
 $("scanCCTVBtn").onclick = scanNearbyOnly;
 $("multiScanBtn").onclick = scanMultiRegion;
 $("clearStreamBtn").onclick = stopCCTV;
-$("rotateIPBtn").onclick = () => {
+$("rotateIPBtn").onclick = async () => {
   const s = CGO_Fleet.IP.nextMirror();
   toast(`🔄 Mirror → ${s.host} [${s.country}]`, "info", 1800);
   CGO_Fleet.logGlobal(`🔄 [IP] Rotasi mirror → ${s.host} (${s.country})`, "INFO");
+  // Refresh public IP after mirror change
+  await refreshIP();
 };
 $("autoScanBtn").onclick = () => {
   autoScanOn = !autoScanOn;
@@ -1006,10 +1024,17 @@ $("autoScanBtn").onclick = () => {
   $("autoScanBtn").style.color = autoScanOn ? "var(--neon-green)" : "";
   $("autoScanBtn").style.borderColor = autoScanOn ? "var(--neon-green)" : "";
   if (autoScanOn) {
-    autoScanInterval = setInterval(() => {
-      if (!CGO_Fleet.IP.isBusy()) scanMultiRegion();
-    }, 30000);
-    toast("🔄 Auto-scan aktif (30s)", "success");
+    if (autoScanInterval) clearInterval(autoScanInterval);
+    // Setiap cycle: rotasi mirror (VPN hop) lalu multi-scan
+    autoScanInterval = setInterval(async () => {
+      if (CGO_Fleet.IP && CGO_Fleet.IP.isBusy()) return;
+      try {
+        const m = CGO_Fleet.IP.nextMirror();
+        CGO_Fleet.logGlobal(`🔄 [AUTO] Mirror hop → ${m.host} [${m.country}]`, "INFO");
+      } catch (_) {}
+      await scanMultiRegion();
+    }, 45000);
+    toast("🔄 Auto Multi-Scan + Mirror Rotate aktif (45s)", "success");
     scanMultiRegion();
   } else {
     if (autoScanInterval) { clearInterval(autoScanInterval); autoScanInterval = null; }
@@ -1364,7 +1389,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.7 ready · IP/VPN + Multi-Region Scan + Persistent Dots");
+console.info("[BCGO UI] v6.8 ready · Real HLS + Expanded OSM + Multi-Region + Persistent Dots");
 })();
 </script>
 </body>

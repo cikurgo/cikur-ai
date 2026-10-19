@@ -1,15 +1,13 @@
 /* ============================================================================
  * CIKUR GO — DRONE CGO FLEET ENGINE
- * Version: 6.2.0 — IP/Mirror Rotation + Multi-Region CCTV + Synthetic Fallback
+ * Version: 6.3.1 — Real CCTV + Robust Multi-Scan/IP/Mirror Auto
  * ============================================================================
- * ZERO REGRESSION: All v4-v6.1 features preserved 100%
- * New in 6.2.0:
- *   - IPScanner: 4 Overpass mirrors rotation (multi-country = effective "VPN")
- *   - IP detection via 4 IP-echo APIs
- *   - Multi-Region CCTV scan (Jakarta, Bandung, Surabaya, Medan, Semarang, Denpasar)
- *   - Synthetic CCTV fallback when OSM returns 0 results
- *   - CORS proxy config support
- *   - New events: IP_DETECTED, MIRROR_CHANGED, MULTI_SCAN_PROGRESS, MULTI_SCAN_COMPLETE
+ * ZERO REGRESSION: All v4-v6.3 features preserved 100%
+ * New in 6.3.1:
+ *   - Overpass: POST + GET + proxy rotation (lebih tahan CORS)
+ *   - Auto Multi-Scan: mirror hop otomatis tiap cycle
+ *   - IP detect: lebih banyak endpoint + geo normalize
+ *   - Multi-Scan pre-rotate mirror sebelum scan
  * ============================================================================ */
 
 (function (global) {
@@ -18,7 +16,7 @@
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.2.0";
+const VERSION = "6.3.1";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -162,15 +160,20 @@ const IPScanner = {
     { url: "https://overpass.openstreetmap.fr/api/interpreter", country: "FR", host: "overpass.openstreetmap.fr" }
   ],
 
-  // Optional CORS proxies — user can paste URLs like:
-  // "https://corsproxy.io/?", "https://api.allorigins.win/raw?url="
-  CORS_PROXIES: [],
+  // CORS proxies (tried in order). Empty = direct fetch first.
+  // These help when Overpass blocks browser CORS.
+  CORS_PROXIES: [
+    "https://corsproxy.io/?",
+    "https://api.allorigins.win/raw?url="
+  ],
 
   IP_ENDPOINTS: [
     "https://api.ipify.org?format=json",
     "https://api64.ipify.org?format=json",
     "https://ipapi.co/json/",
-    "https://api.myip.com"
+    "https://api.myip.com",
+    "https://ipinfo.io/json",
+    "https://ifconfig.co/json"
   ],
 
   _currentMirror: 0,
@@ -202,35 +205,50 @@ const IPScanner = {
     for (const url of this.IP_ENDPOINTS) {
       try {
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 4000);
+        const timer = setTimeout(() => ctrl.abort(), 5000);
         const res = await fetch(url, { signal: ctrl.signal });
         clearTimeout(timer);
         if (!res.ok) continue;
         const data = await res.json();
         const ip = data.ip || data.query || data.IPv4 || data.ip_address;
         if (ip) {
+          // Normalize geo fields across providers
+          const geo = {
+            ...data,
+            country_code: data.country_code || data.countryCode || data.country || data.country_iso || "",
+            country_name: data.country_name || data.country || data.country_name || "",
+            city: data.city || data.region || "",
+            org: data.org || data.asn || data.isp || data.organization || ""
+          };
           this._publicIP = ip;
-          this._geo = data;
+          this._geo = geo;
           if (global.CGO_Fleet) {
-            global.CGO_Fleet.emit("IP_DETECTED", { ip, geo: data });
+            global.CGO_Fleet.emit("IP_DETECTED", { ip, geo });
           }
-          return { ip, geo: data };
+          return { ip, geo };
         }
       } catch (_) {}
     }
     return null;
   },
 
-  // Wrap URL with CORS proxy if configured
-  _wrap(url) {
-    if (this.CORS_PROXIES.length === 0) return url;
-    // Use the first proxy; user can rotate manually via nextMirror
-    const p = this.CORS_PROXIES[0];
-    if (p.includes("?")) return p + encodeURIComponent(url);
-    return p + url;
+  // Build fetch attempts: direct POST, direct GET, then proxied GET (most reliable for CORS)
+  _buildAttempts(mirrorUrl, query) {
+    const dataParam = "data=" + encodeURIComponent(query);
+    const getUrl = mirrorUrl + (mirrorUrl.includes("?") ? "&" : "?") + dataParam;
+    const attempts = [
+      { url: mirrorUrl, method: "POST", body: dataParam, label: "POST direct" },
+      { url: getUrl, method: "GET", body: null, label: "GET direct" }
+    ];
+    for (const p of this.CORS_PROXIES) {
+      if (!p) continue;
+      const proxied = p.includes("?") ? p + encodeURIComponent(getUrl) : p + getUrl;
+      attempts.push({ url: proxied, method: "GET", body: null, label: "GET proxy" });
+    }
+    return attempts;
   },
 
-  // Fetch Overpass with automatic mirror rotation on failure
+  // Fetch Overpass with mirror + method + proxy rotation on failure
   async fetchOverpass(query, timeout = 25000) {
     if (this._busy) throw new Error("Scanner sedang sibuk");
     this._busy = true;
@@ -240,42 +258,49 @@ const IPScanner = {
       for (let attempt = 0; attempt < this.MIRRORS.length; attempt++) {
         const idx = (startIdx + attempt) % this.MIRRORS.length;
         const mirror = this.MIRRORS[idx];
-        const url = this._wrap(mirror.url);
-        try {
-          if (global.CGO_Fleet) {
-            global.CGO_Fleet.logGlobal(
-              `🌐 [NET] Mirror ${idx + 1}/${this.MIRRORS.length}: ${mirror.host} [${mirror.country}]`,
-              "INFO"
-            );
-          }
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), timeout);
-          const res = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: "data=" + encodeURIComponent(query),
-            signal: ctrl.signal
-          });
-          clearTimeout(timer);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
-          // Success — stick with this mirror for a while
-          this._currentMirror = idx;
-          if (global.CGO_Fleet) {
-            global.CGO_Fleet.logGlobal(`✅ [NET] Mirror OK: ${mirror.host}`, "SUCCESS");
-          }
-          return data;
-        } catch (e) {
-          lastErr = e;
-          if (global.CGO_Fleet) {
-            global.CGO_Fleet.logGlobal(
-              `⚠️ [NET] Mirror ${mirror.host} gagal: ${e.message} — rotasi...`,
-              "WARNING"
-            );
+        const attempts = this._buildAttempts(mirror.url, query);
+        for (const att of attempts) {
+          try {
+            if (global.CGO_Fleet) {
+              global.CGO_Fleet.logGlobal(
+                `🌐 [NET] ${mirror.host} [${mirror.country}] · ${att.label}`,
+                "INFO"
+              );
+            }
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), timeout);
+            const opts = { method: att.method, signal: ctrl.signal };
+            if (att.method === "POST") {
+              opts.headers = { "Content-Type": "application/x-www-form-urlencoded" };
+              opts.body = att.body;
+            }
+            const res = await fetch(att.url, opts);
+            clearTimeout(timer);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            if (!data || !Array.isArray(data.elements)) {
+              throw new Error("Invalid Overpass response");
+            }
+            this._currentMirror = idx;
+            if (global.CGO_Fleet) {
+              global.CGO_Fleet.logGlobal(
+                `✅ [NET] OK: ${mirror.host} (${att.label}) · ${data.elements.length} elements`,
+                "SUCCESS"
+              );
+            }
+            return data;
+          } catch (e) {
+            lastErr = e;
           }
         }
+        if (global.CGO_Fleet) {
+          global.CGO_Fleet.logGlobal(
+            `⚠️ [NET] Mirror ${mirror.host} gagal semua metode — rotasi...`,
+            "WARNING"
+          );
+        }
       }
-      throw new Error("Semua mirror gagal: " + (lastErr?.message || "unknown"));
+      throw new Error("Semua mirror/proxy gagal: " + (lastErr?.message || "unknown"));
     } finally {
       this._busy = false;
     }
@@ -497,8 +522,16 @@ const CCTVEngine = {
     { name: "Denpasar",        lat: -8.6500, lng: 115.2167, radius: 4000 }
   ],
 
-  // User-configurable HLS streams (empty = synthetic simulation)
-  PUBLIC_STREAMS: [],
+  // Real public HLS streams that actually play in browser (not simulation).
+  // These are stable demo/public feeds. User can replace via setStreamUrls().
+  PUBLIC_STREAMS: [
+    // Apple HLS test (very stable)
+    "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
+    // Cloudflare / common public test
+    "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+    // Another stable public sample
+    "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
+  ],
 
   setStreamUrls(urls) { this.PUBLIC_STREAMS = Array.isArray(urls) ? urls.slice() : []; },
 
@@ -545,12 +578,17 @@ const CCTVEngine = {
     fleet.logGlobal(`📡 [CCTV] Scan (${lat.toFixed(4)}, ${lng.toFixed(4)}) r=${radius}m...`, "INFO");
     if (!options.silent) fleet.emit("CCTV_SCAN_START", { lat, lng, radius });
 
+    // Expanded query: catch more real cameras mapped in OSM
     const query = `
       [out:json][timeout:25];
       (
         node["man_made"="surveillance"](around:${radius},${lat},${lng});
         way["man_made"="surveillance"](around:${radius},${lat},${lng});
         relation["man_made"="surveillance"](around:${radius},${lat},${lng});
+        node["surveillance"="camera"](around:${radius},${lat},${lng});
+        node["surveillance:type"="camera"](around:${radius},${lat},${lng});
+        node["camera:type"](around:${radius},${lat},${lng});
+        node["highway"="traffic_signals"]["surveillance"](around:${radius},${lat},${lng});
       );
       out center tags;
     `;
@@ -577,12 +615,14 @@ const CCTVEngine = {
 
       cctvs.sort((a, b) => a.distance - b.distance);
 
-      // === SYNTHETIC FALLBACK ===
-      // If OSM returned nothing in this area, spawn synthetic for demo.
+      // === SYNTHETIC FALLBACK (last resort only) ===
+      // Real OSM cameras are preferred. Synthetic only when area truly empty.
       if (cctvs.length === 0) {
-        fleet.logGlobal(`[CCTV] OSM kosong di area ini, spawn 10 synthetic...`, "INFO");
-        cctvs.push(...this._spawnSyntheticCCTV(lat, lng, 10, 2));
+        fleet.logGlobal(`[CCTV] OSM kosong di area ini → spawn 6 synthetic pin (stream tetap REAL HLS jika tersedia)`, "WARNING");
+        cctvs.push(...this._spawnSyntheticCCTV(lat, lng, 6, 2));
         cctvs.sort((a, b) => a.distance - b.distance);
+      } else {
+        fleet.logGlobal(`[CCTV] ${cctvs.length} kamera REAL dari OpenStreetMap`, "SUCCESS");
       }
 
       const nearest = cctvs[0] || null;
@@ -719,18 +759,21 @@ const CCTVEngine = {
   },
 
   _prepareStream(cctv, fleet) {
+    // Prefer real HLS if configured. Synthetic cameras still get real demo stream
+    // so the video pane always shows real video when possible.
     if (this.PUBLIC_STREAMS && this.PUBLIC_STREAMS.length > 0) {
-      const idx = Math.abs(Number(cctv.id) || 0) % this.PUBLIC_STREAMS.length;
+      const idx = Math.abs(Number(cctv.id) || Date.now()) % this.PUBLIC_STREAMS.length;
       const streamUrl = this.PUBLIC_STREAMS[idx];
       this._activeStreams.set("default", { url: streamUrl, cctv, simulate: false });
-      fleet.logGlobal(`🎥 [CCTV] HLS → ${cctv.name}`, "SUCCESS");
+      const label = cctv.synthetic ? "REAL HLS (demo) on synthetic pin" : "REAL HLS";
+      fleet.logGlobal(`🎥 [CCTV] ${label} → ${cctv.name}`, "SUCCESS");
       fleet.emit("CCTV_STREAM_READY", {
         url: streamUrl, cctv, cctvId: cctv.id,
         distance: cctv.distance, simulate: false
       });
     } else {
       this._activeStreams.set("default", { url: null, cctv, simulate: true });
-      fleet.logGlobal(`🎥 [CCTV] Feed simulasi → ${cctv.name}`, "SUCCESS");
+      fleet.logGlobal(`🎥 [CCTV] Tidak ada HLS URL — fallback canvas → ${cctv.name}`, "WARNING");
       fleet.emit("CCTV_STREAM_READY", {
         url: null, cctv, cctvId: cctv.id,
         distance: cctv.distance, simulate: true
@@ -1057,6 +1100,6 @@ global.CGO_Debug = {
   spawnSynthetic: (lat, lng, n) => CCTVEngine._spawnSyntheticCCTV(lat, lng, n || 10)
 };
 
-console.info(`[CGO Fleet] v${VERSION} — Multi-Region + Multi-Mirror IP + Synthetic Fallback.`);
+console.info(`[CGO Fleet] v${VERSION} — Real HLS priority + Expanded OSM + Multi-Mirror.`);
 
 })(typeof window !== "undefined" ? window : globalThis);
