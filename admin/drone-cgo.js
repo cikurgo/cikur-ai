@@ -16,7 +16,7 @@
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.3.1";
+const VERSION = "6.3.2";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -643,8 +643,12 @@ const CCTVEngine = {
         });
       }
 
-      if (nearest && !options.skipStream) {
+      // Jangan putus stream aktif kecuali user minta eksplisit
+      const hasActive = this._activeStreams.has("default");
+      if (nearest && !options.skipStream && !hasActive) {
         this._prepareStream(nearest, fleet);
+      } else if (nearest && hasActive && !options.skipStream) {
+        fleet.logGlobal(`🎥 [CCTV] Stream aktif dipertahankan`, "INFO");
       }
 
       if (!options.allowConcurrent) this._scanInProgress = false;
@@ -753,7 +757,13 @@ const CCTVEngine = {
       "SUCCESS"
     );
 
-    if (nearest) this._prepareStream(nearest, fleet);
+    // Jangan putus stream yang sedang diputar — hanya update markers
+    const hasActive = this._activeStreams.has("default");
+    if (nearest && !hasActive) {
+      this._prepareStream(nearest, fleet);
+    } else if (hasActive) {
+      fleet.logGlobal(`🎥 [CCTV] Stream aktif dipertahankan (scan tidak memutus koneksi)`, "INFO");
+    }
     this._scanInProgress = false;
     return unique;
   },
@@ -764,6 +774,18 @@ const CCTVEngine = {
     if (this.PUBLIC_STREAMS && this.PUBLIC_STREAMS.length > 0) {
       const idx = Math.abs(Number(cctv.id) || Date.now()) % this.PUBLIC_STREAMS.length;
       const streamUrl = this.PUBLIC_STREAMS[idx];
+      // Jangan restart jika URL sama sudah aktif
+      const current = this._activeStreams.get("default");
+      if (current && current.url === streamUrl && !current.simulate) {
+        fleet.logGlobal(`🎥 [CCTV] Stream sudah aktif → ${cctv.name} (skip restart)`, "INFO");
+        // Update metadata saja
+        current.cctv = cctv;
+        fleet.emit("CCTV_STREAM_READY", {
+          url: streamUrl, cctv, cctvId: cctv.id,
+          distance: cctv.distance, simulate: false, skipped: true
+        });
+        return;
+      }
       this._activeStreams.set("default", { url: streamUrl, cctv, simulate: false });
       const label = cctv.synthetic ? "REAL HLS (demo) on synthetic pin" : "REAL HLS";
       fleet.logGlobal(`🎥 [CCTV] ${label} → ${cctv.name}`, "SUCCESS");

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.8.1</title>
+<title>BCGO — FLEET COMMAND CENTER v6.8.2</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -192,7 +192,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.8.1</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.8.2</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -336,9 +336,14 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
     <div class="progress-bar" id="progressBarWrap" style="display:none">
       <div class="progress-bar-fill" id="progressBarFill"></div>
     </div>
-    <button class="btn small" id="clearStreamBtn"
-      style="border-color:#6b7280;color:#9ca3af;margin-top:4px">
-      <svg class="icon"><use href="#i-x"/></svg> CLEAR STREAM</button>
+    <div class="btn-row" style="margin-top:4px">
+      <button class="btn small" id="cctvSoundBtn"
+        style="border-color:var(--neon-green);color:var(--neon-green)">
+        <svg class="icon"><use href="#i-volume"/></svg> CCTV 🔊</button>
+      <button class="btn small" id="clearStreamBtn"
+        style="border-color:#6b7280;color:#9ca3af">
+        <svg class="icon"><use href="#i-x"/></svg> CLEAR</button>
+    </div>
 
     <hr>
     <div class="panel-title">Target Action</div>
@@ -744,32 +749,42 @@ function playStream(url, cctvInfo) {
   statusOverlay.classList.add("hidden");
   cctvCanvas.style.display = "none";
   cctvVideo.style.display = "block";
+  // Mulai muted agar autoplay diizinkan browser, user bisa unmute via tombol
+  cctvVideo.muted = true;
+  cctvVideo.volume = 1.0;
   if (hls) { hls.destroy(); hls = null; }
   if (Hls.isSupported()) {
     hls = new Hls({ enableWorker: true, lowLatencyMode: true });
     hls.loadSource(url);
     hls.attachMedia(cctvVideo);
     hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      cctvVideo.play().catch(() => { cctvVideo.muted = true; cctvVideo.play().catch(() => {}); });
+      cctvVideo.play().catch(() => {
+        cctvVideo.muted = true;
+        cctvVideo.play().catch(() => {});
+      });
       $("cctvRec").innerText = "● LIVE"; $("cctvRec").style.color = "var(--neon-green)";
       $("cctvModeLabel").innerText = "REAL HLS"; $("cctvModeLabel").style.color = "var(--neon-green)";
-      toast("🎥 REAL HLS Stream Aktif", "success");
+      if (cctvInfo) {
+        $("camIdLabel").innerText = "CAM: " + (cctvInfo.name || cctvInfo.id);
+        $("camDistLabel").innerText = "DIST: " + (cctvInfo.distance != null ? cctvInfo.distance + "m" : "—");
+      }
+      toast("🎥 REAL HLS Aktif — ketuk 🔊 untuk suara", "success");
       CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS: ${cctvInfo?.name || "CCTV"}`, "SUCCESS");
     });
     hls.on(Hls.Events.ERROR, (event, data) => {
       if (data.fatal) {
-        CGO_Fleet.logGlobal(`❌ [HLS] ${data.type} — fallback simulasi`, "WARNING");
+        CGO_Fleet.logGlobal(`❌ [HLS] ${data.type} — fallback canvas`, "WARNING");
         startSimulatedCCTV(cctvInfo);
       }
     });
   } else if (cctvVideo.canPlayType("application/vnd.apple.mpegurl")) {
     cctvVideo.src = url;
     cctvVideo.addEventListener("loadedmetadata", () => {
-      cctvVideo.play();
+      cctvVideo.play().catch(() => {});
       $("cctvRec").innerText = "● LIVE"; $("cctvRec").style.color = "var(--neon-green)";
       $("cctvModeLabel").innerText = "REAL HLS (native)";
       $("cctvModeLabel").style.color = "var(--neon-green)";
-    });
+    }, { once: true });
   } else {
     startSimulatedCCTV(cctvInfo);
   }
@@ -990,12 +1005,14 @@ async function refreshIP() {
   try {
     const info = await CGO_Fleet.IP.detectIP();
     if (info && info.ip) {
-      const country = (info.geo?.country_code || info.geo?.countryCode || "??").toUpperCase();
+      let cc = (info.geo?.country_code || info.geo?.countryCode || info.geo?.country || "").toString().toUpperCase();
+      if (cc.length > 3) cc = cc.slice(0, 2); // "INDONESIA" → "IN"
+      if (!cc || cc === "??") cc = "ID"; // fallback umum untuk IP lokal ID
       const city = info.geo?.city || "";
-      $("ipText").innerText = `IP: ${info.ip} [${country}]${city ? " · " + city : ""}`;
-      $("ipChip").classList.add("vpn"); // assume VPN/proxy if geo works → colored
-      $("ipChip").title = `IP publik: ${info.ip}\nNegara: ${info.geo?.country_name || country}\nKota: ${city}\nASN: ${info.geo?.org || "?"}`;
-      CGO_Fleet.logGlobal(`🌐 [IP] ${info.ip} [${country}] ${city}`, "SUCCESS");
+      $("ipText").innerText = `IP: ${info.ip} [${cc}]${city ? " · " + city : ""}`;
+      $("ipChip").classList.add("vpn");
+      $("ipChip").title = `IP publik: ${info.ip}\nNegara: ${info.geo?.country_name || cc}\nKota: ${city}\nASN: ${info.geo?.org || "?"}`;
+      CGO_Fleet.logGlobal(`🌐 [IP] ${info.ip} [${cc}] ${city}`, "SUCCESS");
     } else {
       $("ipText").innerText = "IP: unknown";
       $("ipChip").classList.remove("vpn");
@@ -1011,6 +1028,34 @@ $("ipChip").onclick = refreshIP;
 $("scanCCTVBtn").onclick = scanNearbyOnly;
 $("multiScanBtn").onclick = scanMultiRegion;
 $("clearStreamBtn").onclick = stopCCTV;
+$("cctvSoundBtn").onclick = () => {
+  if (!cctvVideo || cctvVideo.style.display === "none") {
+    toast("Belum ada stream CCTV aktif", "warning");
+    return;
+  }
+  cctvVideo.muted = !cctvVideo.muted;
+  if (!cctvVideo.muted) {
+    cctvVideo.volume = 1.0;
+    cctvVideo.play().catch(() => {});
+    $("cctvSoundBtn").style.color = "var(--neon-green)";
+    $("cctvSoundBtn").style.borderColor = "var(--neon-green)";
+    toast("🔊 Suara CCTV ON", "success", 1500);
+    CGO_Fleet.logGlobal("🔊 [CCTV] Audio unmuted", "SUCCESS");
+  } else {
+    $("cctvSoundBtn").style.color = "#9ca3af";
+    $("cctvSoundBtn").style.borderColor = "#6b7280";
+    toast("🔇 Suara CCTV OFF", "info", 1200);
+  }
+};
+// Tap video pane juga bisa unmute
+cctvPane.addEventListener("click", () => {
+  if (cctvVideo && cctvVideo.style.display !== "none" && cctvVideo.muted) {
+    cctvVideo.muted = false;
+    cctvVideo.volume = 1.0;
+    cctvVideo.play().catch(() => {});
+    toast("🔊 Suara CCTV ON (tap)", "success", 1200);
+  }
+});
 $("rotateIPBtn").onclick = async () => {
   const s = CGO_Fleet.IP.nextMirror();
   toast(`🔄 Mirror → ${s.host} [${s.country}]`, "info", 1800);
@@ -1025,16 +1070,17 @@ $("autoScanBtn").onclick = () => {
   $("autoScanBtn").style.borderColor = autoScanOn ? "var(--neon-green)" : "";
   if (autoScanOn) {
     if (autoScanInterval) clearInterval(autoScanInterval);
-    // Setiap cycle: rotasi mirror (VPN hop) lalu multi-scan
+    // Interval lebih longgar agar stream tidak terganggu terus-menerus
     autoScanInterval = setInterval(async () => {
       if (CGO_Fleet.IP && CGO_Fleet.IP.isBusy()) return;
       try {
         const m = CGO_Fleet.IP.nextMirror();
         CGO_Fleet.logGlobal(`🔄 [AUTO] Mirror hop → ${m.host} [${m.country}]`, "INFO");
       } catch (_) {}
+      // Scan hanya update markers — stream aktif TIDAK diputus (engine-side)
       await scanMultiRegion();
-    }, 45000);
-    toast("🔄 Auto Multi-Scan + Mirror Rotate aktif (45s)", "success");
+    }, 90000);
+    toast("🔄 Auto Multi-Scan aktif (90s) — stream tetap stabil", "success");
     scanMultiRegion();
   } else {
     if (autoScanInterval) { clearInterval(autoScanInterval); autoScanInterval = null; }
@@ -1342,7 +1388,15 @@ CGO_Fleet.onEvent((data) => {
   }
 
   if (ev === "CCTV_STREAM_READY") {
-    const { url, cctv, simulate } = data.data;
+    const { url, cctv, simulate, skipped } = data.data;
+    // skipped = stream sudah aktif, jangan restart (hindari putus koneksi)
+    if (skipped) {
+      if (cctv) {
+        $("camIdLabel").innerText = "CAM: " + (cctv.name || cctv.id);
+        $("camDistLabel").innerText = "DIST: " + (cctv.distance != null ? cctv.distance + "m" : "—");
+      }
+      return;
+    }
     if (simulate || !url) startSimulatedCCTV(cctv);
     else playStream(url, cctv);
   }
