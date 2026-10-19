@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.8.2</title>
+<title>BCGO — FLEET COMMAND CENTER v6.9.2</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -142,7 +142,6 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 .kbd{background:#1f2937;padding:1px 4px;border-radius:3px;font-size:8px;
   color:#9ca3af;border:1px solid #374151}
 .kbd-hint{margin-top:6px;font-size:8px;color:#6b7280;text-align:center;line-height:1.6}
-/* MULTI SCAN SECTION */
 .region-checks{display:grid;grid-template-columns:1fr 1fr;gap:2px;
   margin-top:4px;font-size:8px}
 .region-checks label{display:flex;align-items:center;gap:3px;cursor:pointer;
@@ -154,6 +153,15 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 .progress-bar{height:3px;background:#1f2937;border-radius:2px;overflow:hidden;margin-top:3px}
 .progress-bar-fill{height:100%;background:var(--neon-green);width:0%;transition:width .3s;
   box-shadow:0 0 4px var(--neon-green)}
+.diagnostic-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:10000;
+  display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.diagnostic-overlay.active{display:flex}
+.diagnostic-box{background:#111820;border:1px solid #00ccff;border-radius:8px;
+  padding:16px;max-width:600px;width:100%;max-height:80vh;overflow-y:auto}
+.diagnostic-box h3{margin:0 0 10px;color:var(--neon-blue);font-size:14px}
+.diagnostic-result{font-size:10px;padding:4px 0;border-bottom:1px solid #1f2937;display:flex;
+  justify-content:space-between;gap:8px}
+.diag-ok{color:var(--neon-green)}.diag-fail{color:var(--neon-red)}.diag-unknown{color:var(--neon-yellow)}
 @media (max-width:900px){
   .main-grid{grid-template-columns:1fr}
   body{overflow-y:auto;height:auto;min-height:100vh}
@@ -192,7 +200,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.8.2</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.9.2</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -289,9 +297,11 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
       </div>
       <div class="video-pane" id="cctvPane">
         <video id="cctvVideo" muted autoplay playsinline style="display:none"></video>
+        <iframe id="cctvEmbed" title="CCTV Real Public" allow="autoplay; fullscreen" allowfullscreen
+          style="display:none;position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;z-index:3"></iframe>
         <canvas id="cctvCanvas"></canvas>
         <div class="scanlines" id="scanlines"></div>
-        <div class="fpv-overlay top">
+        <div class="fpv-overlay top" style="z-index:7">
           <span id="camIdLabel">CAM: —</span>
           <span id="camDistLabel">DIST: — m</span>
         </div>
@@ -337,9 +347,9 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
       <div class="progress-bar-fill" id="progressBarFill"></div>
     </div>
     <div class="btn-row" style="margin-top:4px">
-      <button class="btn small" id="cctvSoundBtn"
-        style="border-color:var(--neon-green);color:var(--neon-green)">
-        <svg class="icon"><use href="#i-volume"/></svg> CCTV 🔊</button>
+      <button class="btn small" id="diagnosticBtn"
+        style="border-color:var(--neon-yellow);color:var(--neon-yellow)">
+        <svg class="icon"><use href="#i-scan"/></svg> DIAGNOSTIC</button>
       <button class="btn small" id="clearStreamBtn"
         style="border-color:#6b7280;color:#9ca3af">
         <svg class="icon"><use href="#i-x"/></svg> CLEAR</button>
@@ -388,12 +398,22 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
       <span class="kbd">V</span> pulse ·
       <span class="kbd">C</span> scan ·
       <span class="kbd">M</span> multi ·
+      <span class="kbd">D</span> diag ·
       <span class="kbd">←/→</span> drone
     </div>
   </div>
 </div>
 
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- Diagnostic overlay -->
+<div class="diagnostic-overlay" id="diagOverlay">
+  <div class="diagnostic-box">
+    <h3>🔍 CCTV Diagnostic</h3>
+    <div id="diagResults">Menjalankan test...</div>
+    <button class="btn small" id="closeDiagBtn" style="margin-top:10px">TUTUP</button>
+  </div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -411,6 +431,7 @@ const $ = (id) => document.getElementById(id);
 const logContainer   = $("logContainer");
 const toastContainer = $("toastContainer");
 const cctvVideo      = $("cctvVideo");
+const cctvEmbed      = $("cctvEmbed");
 const cctvCanvas     = $("cctvCanvas");
 const fpvCanvas      = $("droneFpvCanvas");
 const statusOverlay  = $("videoStatusOverlay");
@@ -437,6 +458,7 @@ let lastScanCenter = null;
 let cctvCamStore = new Map();
 let autoScanInterval = null;
 let autoScanOn = false;
+let iframeLoadTimer = null;
 
 function fmtTime(s) {
   s = Math.max(0, Math.floor(s));
@@ -745,11 +767,61 @@ const CctvRenderer = {
 };
 
 /* ============= CCTV stream handlers ============= */
+function clearIframeTimer() {
+  if (iframeLoadTimer) { clearTimeout(iframeLoadTimer); iframeLoadTimer = null; }
+}
+
+function playEmbed(embedUrl, cctvInfo) {
+  statusOverlay.classList.add("hidden");
+  if (hls) { hls.destroy(); hls = null; }
+  CctvRenderer.stop();
+  cctvVideo.style.display = "none";
+  cctvVideo.removeAttribute("src");
+  cctvCanvas.style.display = "none";
+  scanlinesEl.classList.add("hidden");
+  cctvEmbed.style.display = "block";
+  cctvEmbed.src = embedUrl;
+
+  /* Reset state UI */
+  $("cctvRec").innerText = "● LOADING"; $("cctvRec").style.color = "var(--neon-yellow)";
+  $("cctvModeLabel").innerText = "EMBED"; $("cctvModeLabel").style.color = "var(--neon-yellow)";
+  if (cctvInfo) {
+    $("camIdLabel").innerText = "CAM: " + (cctvInfo.name || cctvInfo.id);
+    $("camDistLabel").innerText = "DIST: " + (cctvInfo.distance != null ? cctvInfo.distance + "m" : "—");
+  }
+
+  /* Deteksi iframe gagal: timer 8 detik */
+  clearIframeTimer();
+  iframeLoadTimer = setTimeout(() => {
+    /* Cek apakah iframe benar-benar kosong (indikasi X-Frame-Options) */
+    try {
+      const doc = cctvEmbed.contentDocument || cctvEmbed.contentWindow.document;
+      if (!doc || doc.body === null) throw new Error("empty");
+      /* Jika ada body dengan konten, anggap berhasil */
+      if (doc.body.innerHTML.trim().length > 0) {
+        $("cctvRec").innerText = "● LIVE"; $("cctvRec").style.color = "var(--neon-green)";
+        $("cctvModeLabel").innerText = "REAL PUBLIC"; $("cctvModeLabel").style.color = "var(--neon-green)";
+        toast("🎥 CCTV PUBLIK REAL: " + (cctvInfo?.name || "Live"), "success");
+        CGO_Fleet.logGlobal(`🎥 [STREAM] REAL PUBLIC embed: ${cctvInfo?.name || embedUrl}`, "SUCCESS");
+      } else {
+        throw new Error("empty body");
+      }
+    } catch (_) {
+      /* Kemungkinan besar diblokir X-Frame-Options / CSP */
+      $("cctvRec").innerText = "● BLOCKED"; $("cctvRec").style.color = "var(--neon-red)";
+      $("cctvModeLabel").innerText = "X-FRAME BLOCKED"; $("cctvModeLabel").style.color = "var(--neon-red)";
+      toast("⚠️ Iframe diblokir situs — coba portal di tab baru", "warning", 4000);
+      CGO_Fleet.logGlobal(`⚠️ [STREAM] Iframe diblokir: ${cctvInfo?.name || embedUrl}`, "WARNING");
+    }
+  }, 8000);
+}
+
 function playStream(url, cctvInfo) {
   statusOverlay.classList.add("hidden");
   cctvCanvas.style.display = "none";
+  if (cctvEmbed) { cctvEmbed.style.display = "none"; cctvEmbed.removeAttribute("src"); }
+  clearIframeTimer();
   cctvVideo.style.display = "block";
-  // Mulai muted agar autoplay diizinkan browser, user bisa unmute via tombol
   cctvVideo.muted = true;
   cctvVideo.volume = 1.0;
   if (hls) { hls.destroy(); hls = null; }
@@ -789,10 +861,13 @@ function playStream(url, cctvInfo) {
     startSimulatedCCTV(cctvInfo);
   }
 }
+
 function startSimulatedCCTV(cctvInfo) {
   if (hls) { hls.destroy(); hls = null; }
   cctvVideo.style.display = "none";
   cctvVideo.removeAttribute("src");
+  if (cctvEmbed) { cctvEmbed.style.display = "none"; cctvEmbed.removeAttribute("src"); }
+  clearIframeTimer();
   cctvCanvas.style.display = "block";
   CctvRenderer.setCam(cctvInfo?.name || "CCTV-SIM",
     cctvInfo?.lat ?? -6.2088, cctvInfo?.lng ?? 106.8456);
@@ -800,20 +875,23 @@ function startSimulatedCCTV(cctvInfo) {
   statusOverlay.classList.add("hidden");
   scanlinesEl.classList.remove("hidden");
   $("cctvRec").innerText = "● CANVAS"; $("cctvRec").style.color = "var(--neon-yellow)";
-  $("cctvModeLabel").innerText = cctvInfo?.synthetic ? "SYNTHETIC PIN" : "NO HLS URL";
+  $("cctvModeLabel").innerText = cctvInfo?.synthetic ? "SYNTHETIC PIN" : "NO STREAM URL";
   $("cctvModeLabel").style.color = "var(--neon-yellow)";
   if (cctvInfo) {
     $("camIdLabel").innerText = "CAM: " + (cctvInfo.name || cctvInfo.id);
     $("camDistLabel").innerText = "DIST: " + cctvInfo.distance + "m";
   }
-  toast(`🎥 Canvas fallback (${cctvInfo?.synthetic ? "synthetic pin" : "no HLS"}) — tambah PUBLIC_STREAMS untuk video nyata`, "warning");
+  toast(`🎥 Canvas fallback (${cctvInfo?.synthetic ? "synthetic pin" : "no stream url"})`, "warning");
 }
+
 function stopCCTV() {
   if (hls) { hls.destroy(); hls = null; }
   CctvRenderer.stop();
   cctvVideo.removeAttribute("src");
   cctvVideo.load();
   cctvVideo.style.display = "none";
+  if (cctvEmbed) { cctvEmbed.style.display = "none"; cctvEmbed.removeAttribute("src"); }
+  clearIframeTimer();
   cctvCanvas.style.display = "block";
   cctvCanvas.getContext("2d").clearRect(0, 0, cctvCanvas.width, cctvCanvas.height);
   statusOverlay.classList.remove("hidden");
@@ -823,7 +901,6 @@ function stopCCTV() {
   $("cctvModeLabel").innerText = "IDLE"; $("cctvModeLabel").style.color = "#6b7280";
   $("camIdLabel").innerText = "CAM: —"; $("camDistLabel").innerText = "DIST: — m";
   if (CGO_Fleet.CCTV) CGO_Fleet.CCTV.clearStream();
-  // NOTE: cctvLayerGroup NOT cleared → dots persist
 }
 
 async function scanNearbyOnly() {
@@ -844,6 +921,7 @@ async function scanNearbyOnly() {
     CGO_Fleet.logGlobal(`❌ [CCTV] ${err.message}`, "DANGER");
   }
 }
+
 async function scanMultiRegion() {
   const drone = CGO_Fleet.getSelectedDrone();
   if (!drone) { toast("Pilih drone dulu", "warning"); return; }
@@ -859,7 +937,6 @@ async function scanMultiRegion() {
   $("scanProgress").innerText = `Mulai multi-scan ${regions.length} region...`;
   $("cctvCount").innerText = "multi-scanning...";
   $("cctvCount").style.color = "var(--neon-yellow)";
-  // Auto-rotate mirror before multi-scan (simulate VPN hop)
   try {
     const m = CGO_Fleet.IP.nextMirror();
     CGO_Fleet.logGlobal(`🔄 [MULTI] Pre-rotate mirror → ${m.host} [${m.country}]`, "INFO");
@@ -880,17 +957,44 @@ async function scanMultiRegion() {
     CGO_Fleet.logGlobal(`❌ [MULTI] ${e.message}`, "DANGER");
   }
 }
+
 function getSelectedRegions() {
   const checks = document.querySelectorAll("#regionChecks input[type=checkbox]:checked");
   const all = CGO_Fleet.CCTV.REGIONS || [];
   return Array.from(checks).map(cb => all.find(r => r.name === cb.value)).filter(Boolean);
 }
+
 function buildRegionChecks() {
   const container = $("regionChecks");
   const regions = CGO_Fleet.CCTV.REGIONS || [];
   container.innerHTML = regions.map((r, i) =>
     `<label><input type="checkbox" value="${r.name}" ${i < 4 ? "checked" : ""}><span>${r.name}</span></label>`
   ).join("");
+}
+
+async function runDiagnostic() {
+  const overlay = $("diagOverlay");
+  const resultsEl = $("diagResults");
+  overlay.classList.add("active");
+  resultsEl.innerHTML = "Menjalankan test...";
+
+  try {
+    const results = await CGO_Fleet.diagnoseCCTV();
+    if (!results.length) {
+      resultsEl.innerHTML = '<div class="diagnostic-result"><span>Tidak ada URL untuk diuji</span></div>';
+      return;
+    }
+    resultsEl.innerHTML = results.map(r => {
+      const cls = r.status === "OK" ? "diag-ok" : (r.status.startsWith("FAIL") ? "diag-fail" : "diag-unknown");
+      const icon = r.status === "OK" ? "✅" : (r.status.startsWith("FAIL") ? "❌" : "⚠️");
+      return `<div class="diagnostic-result">
+        <span><b>${r.name}</b> <span style="color:#6b7280">[${r.type}]</span></span>
+        <span class="${cls}">${icon} ${r.status}</span>
+      </div>`;
+    }).join("");
+  } catch (e) {
+    resultsEl.innerHTML = `<div class="diagnostic-result diag-fail">Error: ${e.message}</div>`;
+  }
 }
 
 /* ============= Map ============= */
@@ -913,12 +1017,14 @@ function initMap() {
     toast(`<svg class="icon"><use href="#i-gps"/></svg> Presisi: ${lat}, ${lng}`, "success");
   });
 }
+
 function updateDroneMarker(drone) {
   if (!map || !droneMarker) return;
   const ll = droneLatLng(drone);
   droneMarker.setLatLng([ll.lat, ll.lng]);
   droneMarker.bindPopup(`${drone.id} — ${drone.state}`);
 }
+
 function renderCCTVMarkers(cctvs, nearest) {
   if (!map || !cctvLayerGroup) return;
   cctvLayerGroup.clearLayers();
@@ -927,12 +1033,14 @@ function renderCCTVMarkers(cctvs, nearest) {
     cctvCamStore.set(String(c.id), c);
     const isNearest = c === nearest;
     const isSynth = !!c.synthetic;
-    const color = isSynth ? "#ffcc00" : (isNearest ? "#00ff88" : "#00ccff");
-    const radius = isNearest ? 8 : (isSynth ? 5 : 6);
+    const isPortal = !!c.isPortal;
+    const isReal = !!(c.realPublic || c.embed);
+    const color = isPortal ? "#a855f7" : (isReal ? "#ff3366" : (isSynth ? "#ffcc00" : (isNearest ? "#00ff88" : "#00ccff")));
+    const radius = (isReal || isPortal) ? 9 : (isNearest ? 8 : (isSynth ? 5 : 6));
     const marker = L.circleMarker([c.lat, c.lng], {
-      radius, color, fillColor: color, fillOpacity: .85, weight: 2
+      radius, color, fillColor: color, fillOpacity: .9, weight: 2
     });
-    const label = isSynth ? "SIM" : (c.surveillanceType || "?");
+    const label = isPortal ? "PORTAL RESMI" : (isReal ? "LIVE PUBLIC" : (isSynth ? "SIM" : (c.surveillanceType || "?")));
     const distTxt = c.distance != null ? c.distance + "m" : "?";
     marker.bindPopup(
       `<div style="font-family:monospace;font-size:11px;line-height:1.4">` +
@@ -1006,8 +1114,8 @@ async function refreshIP() {
     const info = await CGO_Fleet.IP.detectIP();
     if (info && info.ip) {
       let cc = (info.geo?.country_code || info.geo?.countryCode || info.geo?.country || "").toString().toUpperCase();
-      if (cc.length > 3) cc = cc.slice(0, 2); // "INDONESIA" → "IN"
-      if (!cc || cc === "??") cc = "ID"; // fallback umum untuk IP lokal ID
+      if (cc.length > 3) cc = cc.slice(0, 2);
+      if (!cc || cc === "??") cc = "ID";
       const city = info.geo?.city || "";
       $("ipText").innerText = `IP: ${info.ip} [${cc}]${city ? " · " + city : ""}`;
       $("ipChip").classList.add("vpn");
@@ -1028,41 +1136,19 @@ $("ipChip").onclick = refreshIP;
 $("scanCCTVBtn").onclick = scanNearbyOnly;
 $("multiScanBtn").onclick = scanMultiRegion;
 $("clearStreamBtn").onclick = stopCCTV;
-$("cctvSoundBtn").onclick = () => {
-  if (!cctvVideo || cctvVideo.style.display === "none") {
-    toast("Belum ada stream CCTV aktif", "warning");
-    return;
-  }
-  cctvVideo.muted = !cctvVideo.muted;
-  if (!cctvVideo.muted) {
-    cctvVideo.volume = 1.0;
-    cctvVideo.play().catch(() => {});
-    $("cctvSoundBtn").style.color = "var(--neon-green)";
-    $("cctvSoundBtn").style.borderColor = "var(--neon-green)";
-    toast("🔊 Suara CCTV ON", "success", 1500);
-    CGO_Fleet.logGlobal("🔊 [CCTV] Audio unmuted", "SUCCESS");
-  } else {
-    $("cctvSoundBtn").style.color = "#9ca3af";
-    $("cctvSoundBtn").style.borderColor = "#6b7280";
-    toast("🔇 Suara CCTV OFF", "info", 1200);
-  }
+$("diagnosticBtn").onclick = runDiagnostic;
+$("closeDiagBtn").onclick = () => $("diagOverlay").classList.remove("active");
+$("diagOverlay").onclick = (e) => {
+  if (e.target === $("diagOverlay")) $("diagOverlay").classList.remove("active");
 };
-// Tap video pane juga bisa unmute
-cctvPane.addEventListener("click", () => {
-  if (cctvVideo && cctvVideo.style.display !== "none" && cctvVideo.muted) {
-    cctvVideo.muted = false;
-    cctvVideo.volume = 1.0;
-    cctvVideo.play().catch(() => {});
-    toast("🔊 Suara CCTV ON (tap)", "success", 1200);
-  }
-});
+
 $("rotateIPBtn").onclick = async () => {
   const s = CGO_Fleet.IP.nextMirror();
   toast(`🔄 Mirror → ${s.host} [${s.country}]`, "info", 1800);
   CGO_Fleet.logGlobal(`🔄 [IP] Rotasi mirror → ${s.host} (${s.country})`, "INFO");
-  // Refresh public IP after mirror change
   await refreshIP();
 };
+
 $("autoScanBtn").onclick = () => {
   autoScanOn = !autoScanOn;
   $("autoScanBtn").innerText = autoScanOn ? "AUTO: ON" : "AUTO: OFF";
@@ -1070,14 +1156,12 @@ $("autoScanBtn").onclick = () => {
   $("autoScanBtn").style.borderColor = autoScanOn ? "var(--neon-green)" : "";
   if (autoScanOn) {
     if (autoScanInterval) clearInterval(autoScanInterval);
-    // Interval lebih longgar agar stream tidak terganggu terus-menerus
     autoScanInterval = setInterval(async () => {
       if (CGO_Fleet.IP && CGO_Fleet.IP.isBusy()) return;
       try {
         const m = CGO_Fleet.IP.nextMirror();
         CGO_Fleet.logGlobal(`🔄 [AUTO] Mirror hop → ${m.host} [${m.country}]`, "INFO");
       } catch (_) {}
-      // Scan hanya update markers — stream aktif TIDAK diputus (engine-side)
       await scanMultiRegion();
     }, 90000);
     toast("🔄 Auto Multi-Scan aktif (90s) — stream tetap stabil", "success");
@@ -1147,18 +1231,22 @@ window.resetSystem = () => {
 window.__playCam = (id) => {
   const c = cctvCamStore.get(String(id));
   if (!c) { toast("CCTV tidak ditemukan", "danger"); return; }
-  // Pan map
   if (map) map.setView([c.lat, c.lng], Math.max(map.getZoom(), 15));
-  // Toast with location
   toast(
     `<svg class="icon"><use href="#i-map-pin"/></svg> <b>${c.name}</b><br>` +
     `<span style="font-size:9px;opacity:.8">${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} · ${c.distance || "?"}m</span>`,
     c.synthetic ? "warning" : "success", 3000
   );
   CGO_Fleet.logGlobal(`📍 [MAP] Klik CCTV: ${c.name} @ ${c.lat.toFixed(4)},${c.lng.toFixed(4)}`, "INFO");
-  // Auto-connect stream
+
+  /* Portal → buka tab baru */
+  if (c.isPortal && c.openInNewTab) {
+    window.open(c.embed || c.url, "_blank", "noopener,noreferrer");
+    toast(`🌐 ${c.name} dibuka di tab baru`, "info", 2500);
+    return;
+  }
+
   CGO_Fleet.CCTV.playCCTV(c);
-  // Switch to CCTV tab
   const cctvTab = document.querySelector('.video-tab[data-tab="cctv"]');
   if (cctvTab && !cctvTab.classList.contains("active")) cctvTab.click();
 };
@@ -1173,6 +1261,7 @@ document.addEventListener("keydown", (e) => {
     case "v": CGO_Fleet.activateVoidPulseAll(); break;
     case "c": scanNearbyOnly(); break;
     case "m": scanMultiRegion(); break;
+    case "d": runDiagnostic(); break;
     case "arrowleft": stepDrone(-1); break;
     case "arrowright": stepDrone(1); break;
   }
@@ -1351,10 +1440,8 @@ CGO_Fleet.onEvent((data) => {
     $("cctvCount").innerText = total + " CCTV";
     $("cctvCount").style.color = total > 0 ? "var(--neon-green)" : "var(--neon-yellow)";
 
-    // Render all markers
     renderCCTVMarkers(cctvs, nearest);
 
-    // Draw scan radius
     if (map && scanRadiusCircle) map.removeLayer(scanRadiusCircle);
     if (map) {
       scanRadiusCircle = L.circle([queryLat, queryLng], {
@@ -1388,8 +1475,8 @@ CGO_Fleet.onEvent((data) => {
   }
 
   if (ev === "CCTV_STREAM_READY") {
-    const { url, cctv, simulate, skipped } = data.data;
-    // skipped = stream sudah aktif, jangan restart (hindari putus koneksi)
+    const d = data.data;
+    const { url, embed, cctv, simulate, skipped, realPublic, openInNewTab } = d;
     if (skipped) {
       if (cctv) {
         $("camIdLabel").innerText = "CAM: " + (cctv.name || cctv.id);
@@ -1397,8 +1484,29 @@ CGO_Fleet.onEvent((data) => {
       }
       return;
     }
-    if (simulate || !url) startSimulatedCCTV(cctv);
-    else playStream(url, cctv);
+    if (openInNewTab) {
+      /* Portal: hanya tampilkan info, buka tab baru saat diklik */
+      $("cctvRec").innerText = "● PORTAL"; $("cctvRec").style.color = "#a855f7";
+      $("cctvModeLabel").innerText = "TAB BARU"; $("cctvModeLabel").style.color = "#a855f7";
+      if (cctv) {
+        $("camIdLabel").innerText = "CAM: " + (cctv.name || cctv.id);
+        $("camDistLabel").innerText = "DIST: " + (cctv.distance != null ? cctv.distance + "m" : "—");
+      }
+      statusOverlay.classList.remove("hidden");
+      statusOverlay.textContent = "Portal resmi — klik marker untuk membuka di tab baru.";
+      return;
+    }
+    if (embed || realPublic) {
+      playEmbed(embed || cctv?.embed, cctv);
+    } else if (simulate || !url) {
+      startSimulatedCCTV(cctv);
+    } else {
+      playStream(url, cctv);
+    }
+  }
+
+  if (ev === "CCTV_DIAGNOSTIC_RESULT") {
+    /* Hasil diagnostic ditangani langsung di runDiagnostic() */
   }
 
   if (ev === "MUTE_STATE_CHANGED") {
@@ -1416,7 +1524,6 @@ CctvRenderer.stop();
 muteBtn.classList.add("active");
 selectDroneById("CGO-0001");
 refreshIP();
-// Pre-scan after 2s to populate dots
 setTimeout(() => { scanNearbyOnly(); }, 2000);
 
 let resizeTimer;
@@ -1443,8 +1550,8 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.8 ready · Real HLS + Expanded OSM + Multi-Region + Persistent Dots");
+console.info("[BCGO UI] v6.9.2 ready · Real CCTV + Proxy + Diagnostic + Honest UI");
 })();
 </script>
 </body>
-    </html>
+</html>
