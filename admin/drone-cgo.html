@@ -856,6 +856,67 @@ function hideFallbackBar() {
   if (bar) bar.style.display = "none";
 }
 
+/* HLS bawaan browser (Safari/iPhone, Chrome terbaru): <video src> tidak butuh izin CORS */
+function nativeHlsSupported() {
+  try { return !!(cctvVideo.canPlayType && cctvVideo.canPlayType("application/vnd.apple.mpegurl")); }
+  catch (_) { return false; }
+}
+function tryNativeHls(src, token) {
+  return new Promise((resolve) => {
+    let done = false, timer = null;
+    const onOk = () => finish(true);
+    const onErr = () => finish(false);
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      cctvVideo.removeEventListener("playing", onOk);
+      cctvVideo.removeEventListener("error", onErr);
+      if (!ok) {
+        try { cctvVideo.pause(); } catch (_) {}
+        cctvVideo.removeAttribute("src");
+        try { cctvVideo.load(); } catch (_) {}
+      }
+      resolve(ok && token === playToken);
+    };
+    cctvVideo.addEventListener("playing", onOk);
+    cctvVideo.addEventListener("error", onErr);
+    timer = setTimeout(() => finish(false), 10000);
+    cctvVideo.muted = true;
+    cctvVideo.src = src;
+    try { const pr = cctvVideo.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (_) {}
+  });
+}
+
+/* Coba satu sumber HLS; sukses hanya bila segmen video pertama benar-benar termuat */
+function tryHlsSource(src, token) {
+  return new Promise((resolve) => {
+    if (typeof Hls === "undefined" || !Hls.isSupported()) return resolve(false);
+    let done = false, timer = null;
+    const h = new Hls({
+      enableWorker: true, lowLatencyMode: true,
+      manifestLoadingMaxRetry: 0, levelLoadingMaxRetry: 0, fragLoadingMaxRetry: 1
+    });
+    hls = h;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      if (!ok) { try { h.destroy(); } catch (_) {} if (hls === h) hls = null; }
+      resolve(ok && token === playToken);
+    };
+    timer = setTimeout(() => finish(false), 10000);
+    h.on(Hls.Events.MANIFEST_PARSED, () => {
+      if (token !== playToken) return;
+      cctvVideo.play().catch(() => { cctvVideo.muted = true; cctvVideo.play().catch(() => {}); });
+    });
+    h.on(Hls.Events.FRAG_LOADED, () => finish(token === playToken));
+    h.on(Hls.Events.ERROR, (event, data) => { if (data && data.fatal) finish(false); });
+    h.loadSource(src);
+    h.attachMedia(cctvVideo);
+  });
+}
+
 async function playEmbed(embedUrl, cctvInfo, opts) {
   opts = opts || {};
   const token = ++playToken;
@@ -874,8 +935,49 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
   setRec("● LOADING", "var(--neon-yellow)", "MENGHUBUNGKAN");
   setCamLabels(cctvInfo, opts);
 
-  /* Proxy dipakai jika tersedia — tanpa proxy, situs hampir pasti menolak di-iframe */
   const E = CGO_Fleet.CCTV;
+
+  /* 1) Putar stream HLS-nya langsung di pemutar video (tanpa iframe → tidak kena blokir frame) */
+  if (opts.hlsCandidate && !opts.noProxy) {
+    cctvEmbed.style.display = "none";
+    cctvVideo.style.display = "block";
+    cctvVideo.muted = true;
+    setRec("● LOADING", "var(--neon-yellow)", "HLS LANGSUNG");
+    let hlsVia = "langsung";
+    let okHls = false;
+    if (nativeHlsSupported()) {
+      okHls = await tryNativeHls(opts.hlsCandidate, token);
+      hlsVia = "native";
+      if (token !== playToken) return;
+    }
+    if (!okHls) {
+      hlsVia = "langsung";
+      okHls = await tryHlsSource(opts.hlsCandidate, token);
+      if (token !== playToken) return;
+    }
+    if (!okHls && E.getProxyUrl() && await E.checkProxy()) {
+      if (token !== playToken) return;
+      setRec("● LOADING", "var(--neon-yellow)", "HLS VIA PROXY");
+      okHls = await tryHlsSource(E.proxify(opts.hlsCandidate), token);
+      hlsVia = "proxy";
+      if (token !== playToken) return;
+    }
+    if (okHls) {
+      setRec("● LIVE", "var(--neon-green)", hlsVia === "proxy" ? "REAL HLS · PROXY" : (hlsVia === "native" ? "REAL HLS · NATIVE" : "REAL HLS · LANGSUNG"));
+      hideFallbackBar();
+      toast("🎥 CCTV LIVE (HLS " + hlsVia + "): " + (cctvInfo?.name || ""), "success");
+      CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS ${hlsVia}: ${cctvInfo?.name || opts.hlsCandidate}`, "SUCCESS");
+      return;
+    }
+    CGO_Fleet.logGlobal(`⚠️ [STREAM] HLS ${cctvInfo?.name || ""} gagal (CORS/jaringan) — mencoba iframe`, "WARNING");
+    if (hls) { try { hls.destroy(); } catch (_) {} hls = null; }
+    cctvVideo.style.display = "none";
+    cctvVideo.removeAttribute("src");
+    cctvEmbed.style.display = "block";
+    setRec("● LOADING", "var(--neon-yellow)", "MENGHUBUNGKAN");
+  }
+
+  /* Proxy dipakai jika tersedia — tanpa proxy, situs hampir pasti menolak di-iframe */
   let src = embedUrl, via = "direct";
   if (opts.noProxy) {
     via = "open";
@@ -1245,7 +1347,7 @@ function renderCCTVList(cctvs) {
   $("cctvListCount").innerText = `${n.live} live · ${n.all} total`;
 
   tabs.innerHTML = "";
-  [["all", "SEMUA"], ["live", "LIVE"], ["portal", "PORTAL"], ["pin", "PIN"]].forEach(([key, label]) => {
+  [["all", "SEMUA"], ["live", "LIVE"], ["portal", "PORTAL"], ["pin", "PIN/SIM"]].forEach(([key, label]) => {
     const b = document.createElement("button");
     b.className = "btn small";
     b.style.cssText = "flex:1;margin:0;padding:3px;" + (listFilter === key ? "border-color:var(--neon-green);color:var(--neon-green)" : "");
@@ -1280,7 +1382,7 @@ function renderCCTVList(cctvs) {
     dist.textContent = c.distance != null ? (c.distance >= 1000 ? (c.distance / 1000).toFixed(1) + "km" : c.distance + "m") : "";
     const badge = document.createElement("span");
     badge.style.cssText = "flex:0 0 auto;font-size:8px;padding:1px 4px;border-radius:3px;border:1px solid " + color + ";color:" + color;
-    badge.textContent = (active ? "▶ " : "") + kindLabel[k];
+    badge.textContent = (active ? "▶ " : "") + (c.synthetic ? "SIM" : kindLabel[k]);
     row.appendChild(dot); row.appendChild(name); row.appendChild(dist); row.appendChild(badge);
     row.onclick = () => window.__playCam(c.id);
     box.appendChild(row);
@@ -1824,7 +1926,7 @@ CGO_Fleet.onEvent((data) => {
       toast("ℹ️ Memutar feed publik umum (bukan lokasi pin)", "info", 3500);
     }
     if (embed || realPublic) {
-      playEmbed(embed || cctv?.embed, cctv, { substitute: !!d.substitute, noProxy: !!(d.noProxy || (cctv && cctv.noProxy)) });
+      playEmbed(embed || cctv?.embed, cctv, { substitute: !!d.substitute, noProxy: !!(d.noProxy || (cctv && cctv.noProxy)), hlsCandidate: d.hlsCandidate || (cctv && cctv.hlsAuto) || null });
     } else if (simulate || !url) {
       startSimulatedCCTV(cctv);
     } else {
@@ -1890,7 +1992,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.12.0 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
+console.info("[BCGO UI] v6.14.0 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
 })();
 </script>
 </body>

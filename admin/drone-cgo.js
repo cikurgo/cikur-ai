@@ -1,8 +1,12 @@
 /* ============================================================================
  * CIKUR GO — DRONE CGO FLEET ENGINE
- * Version: 6.9.0 — Real CCTV + Proxy + Diagnostic + Honest UI (Live-First + Katalog + Progresif)
+ * Version: 6.10.0 — Real CCTV + Proxy + Diagnostic + Honest UI (Live-First + Katalog + Progresif + HLS-Langsung)
  * ============================================================================
  * ZERO REGRESSION: Semua fitur v4–v6.5 dipertahankan 100%
+ * v6.10.0 (kamera BaliTower diputar tanpa iframe):
+ *   - Tiap embed BaliTower diturunkan ke stream HLS-nya (…/<kode>/index.m3u8) → hlsAuto
+ *   - DIAGNOSTIC memeriksa HLS langsung (CORS) sehingga jelas kamera mana yang bisa
+ *     diputar tanpa proxy
  * v6.9.0 (scan terasa hidup):
  *   - Multi-scan menayangkan kamera live terdekat SEGERA (tanpa menunggu 11 wilayah selesai)
  *   - Event CCTV_SCAN_PROGRESSIVE dikirim tiap wilayah selesai → daftar & peta terisi bertahap
@@ -35,7 +39,7 @@
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.9.0";
+const VERSION = "6.10.0";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -780,7 +784,14 @@ const CCTVEngine = {
     };
     if (rc.hls) e.hls = rc.hls;
     if (rc.noProxy) e.noProxy = true;
+    const auto = rc.hls ? null : this._hlsFromEmbed(rc.embed);
+    if (auto) e.hlsAuto = auto;
     return e;
+  },
+  /* Halaman embed BaliTower = pemutar Flussonic; stream HLS-nya ada di folder yang sama */
+  _hlsFromEmbed(embed) {
+    const m = String(embed || "").match(/^https?:\/\/(cctv\.balitower\.co\.id)\/([^/?#]+)\/embed\.html/i);
+    return m ? "https://" + m[1] + "/" + m[2] + "/index.m3u8" : null;
   },
 
   /* Gabungan sementara (dedupe + kamera live/portal) untuk tampilan progresif */
@@ -1096,6 +1107,7 @@ const CCTVEngine = {
         `🎥 [CCTV] REAL PUBLIC → ${cctv.name} (${cctv.distance}m)${opts.substitute ? " [pengganti pin]" : ""}`, "SUCCESS");
       fleet.emit("CCTV_STREAM_READY", {
         url: null, embed: cctv.embed, embedDirect: cctv.embed, noProxy: !!cctv.noProxy,
+        hlsCandidate: cctv.hlsAuto || null,
         embedProxy: (proxy && !cctv.noProxy) ? this.proxify(cctv.embed) : null, proxyUrl: proxy,
         cctv, cctvId: cctv.id, distance: cctv.distance, simulate: false, realPublic: true,
         substitute: !!opts.substitute, requested: opts.requested || null
@@ -1197,7 +1209,7 @@ const CCTVEngine = {
     const proxy = this.getProxyUrl();
     const proxyOk = proxy ? await this.checkProxy(true) : false;
     const testUrls = [
-      ...this.REAL_PUBLIC_CAMS.map(c => ({ name: c.name, type: c.hls ? "HLS" : (c.noProxy ? "YouTube" : "BaliTower"), url: c.hls || c.embed, noProxy: !!c.noProxy })),
+      ...this.REAL_PUBLIC_CAMS.map(c => ({ name: c.name, type: c.hls ? "HLS" : (c.noProxy ? "YouTube" : "BaliTower"), url: c.hls || this._hlsFromEmbed(c.embed) || c.embed, noProxy: !!c.noProxy })),
       ...this.PUBLIC_STREAMS.map((u, i) => ({ name: `HLS-${i + 1}`, type: "HLS", url: u })),
       ...this.REGION_PORTALS.map(p => ({ name: p.name, type: "Portal", url: p.url }))
     ];
@@ -1221,6 +1233,16 @@ const CCTVEngine = {
           } else {
             status = "FAIL: " + (j && j.status ? `HTTP ${j.status}` : (j && j.error) || "tidak ada respons");
           }
+        } else if (/\.m3u8(\?|$)/i.test(t.url)) {
+          /* HLS: uji CORS sungguhan — jika lolos, kamera bisa diputar langsung tanpa proxy */
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 8000);
+          try {
+            const res = await fetch(t.url, { method: "GET", mode: "cors", signal: ctrl.signal });
+            try { if (res.body && res.body.cancel) res.body.cancel(); } catch (_) {}
+            if (res.ok) { status = "OK"; detail = "HLS langsung bisa (CORS diizinkan, tanpa proxy)"; }
+            else status = "FAIL: HTTP " + res.status;
+          } finally { clearTimeout(timer); }
         } else {
           const ctrl = new AbortController();
           const timer = setTimeout(() => ctrl.abort(), 8000);
@@ -1231,6 +1253,7 @@ const CCTVEngine = {
         }
       } catch (e) {
         status = "FAIL: " + (e && e.name === "AbortError" ? "timeout" : (e && e.message));
+        if (/\.m3u8(\?|$)/i.test(t.url) && !proxyOk) detail = "diblokir CORS/jaringan — butuh proxy";
       }
       return { ...t, status, detail };
     };
@@ -1565,6 +1588,6 @@ global.CGO_Debug = {
   checkProxy: (force) => CCTVEngine.checkProxy(force)
 };
 
-console.info(`[CGO Fleet] v${VERSION} — Real CCTV + Proxy + Diagnostic + Honest UI (Live-First + Katalog + Progresif)`);
+console.info(`[CGO Fleet] v${VERSION} — Real CCTV + Proxy + Diagnostic + Honest UI (Live-First + Katalog + Progresif + HLS-Langsung)`);
 
 })(typeof window !== "undefined" ? window : globalThis);
