@@ -297,7 +297,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
       </div>
       <div class="video-pane" id="cctvPane">
         <video id="cctvVideo" muted autoplay playsinline style="display:none"></video>
-        <iframe id="cctvEmbed" title="CCTV Real Public" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="no-referrer"
+        <iframe id="cctvEmbed" title="CCTV Real Public" allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowfullscreen
           style="display:none;position:absolute;inset:0;width:100%;height:100%;border:0;background:#000;z-index:3"></iframe>
         <canvas id="cctvCanvas"></canvas>
         <div class="scanlines" id="scanlines"></div>
@@ -318,6 +318,18 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
       <button id="gpsBtn" class="btn small"
         style="width:auto;margin:0;border-color:var(--neon-blue);color:var(--neon-blue)">
         <svg class="icon"><use href="#i-gps"/></svg> GPS Saya</button>
+    </div>
+    <div id="cctvListWrap" style="margin-top:6px">
+      <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:4px">
+        <span>Daftar CCTV Temuan <span id="cctvListCount" style="color:var(--neon-green)">0</span></span>
+        <span style="display:flex;gap:3px">
+          <button class="btn small" id="camPrevBtn" style="width:auto;padding:2px 8px;margin:0">◀</button>
+          <button class="btn small" id="camNextBtn" style="width:auto;padding:2px 8px;margin:0">▶</button>
+          <button class="btn small" id="camTourBtn" style="width:auto;padding:2px 6px;margin:0">AUTO TOUR: OFF</button>
+        </span>
+      </div>
+      <div id="cctvListTabs" style="display:flex;gap:3px;margin-bottom:4px"></div>
+      <div id="cctvList" style="max-height:260px;overflow-y:auto;border:1px solid #1f2937;border-radius:4px;background:#000"></div>
     </div>
   </div>
 
@@ -804,7 +816,11 @@ function ensureFallbackBar() {
     "font-size:9px;line-height:1.4;color:var(--neon-yellow);font-family:var(--font-mono);text-align:center";
   bar.innerHTML = '<div id="cctvFallbackMsg" style="margin-bottom:5px"></div>' +
     '<button class="btn small" id="cctvFbOpen" style="display:inline-block;width:auto;padding:4px 8px">BUKA TAB BARU</button> ' +
-    '<button class="btn small" id="cctvFbRetry" style="display:inline-block;width:auto;padding:4px 8px">COBA LAGI</button>';
+    '<button class="btn small" id="cctvFbRetry" style="display:inline-block;width:auto;padding:4px 8px">COBA LAGI</button>' +
+    '<div id="cctvFbSetup" style="display:none;margin-top:5px">' +
+    '<button class="btn small" id="cctvFbCopy" style="display:inline-block;width:auto;padding:4px 8px;margin:2px">1· SALIN KODE PROXY</button>' +
+    '<button class="btn small" id="cctvFbCf" style="display:inline-block;width:auto;padding:4px 8px;margin:2px">2· BUKA CLOUDFLARE</button>' +
+    '<div style="margin-top:3px;color:#9ca3af">3· Create Worker → tempel kode → Deploy → tempel alamatnya di panel CCTV Proxy → SET</div></div>';
   cctvPane.appendChild(bar);
   $("cctvFbOpen").onclick = () => {
     if (currentEmbed && currentEmbed.direct) window.open(currentEmbed.direct, "_blank", "noopener,noreferrer");
@@ -812,11 +828,27 @@ function ensureFallbackBar() {
   $("cctvFbRetry").onclick = () => {
     if (currentEmbed) playEmbed(currentEmbed.direct, currentEmbed.cctv, currentEmbed.opts);
   };
+  $("cctvFbCf").onclick = () => {
+    window.open("https://dash.cloudflare.com/?to=/:account/workers-and-pages/create", "_blank", "noopener,noreferrer");
+  };
+  $("cctvFbCopy").onclick = async () => {
+    try {
+      const res = await fetch("proxy-worker.js", { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const code = await res.text();
+      await navigator.clipboard.writeText(code);
+      toast("✅ Kode proxy tersalin — lanjut langkah 2", "success", 3500);
+    } catch (e) {
+      toast("Tidak bisa menyalin otomatis (" + e.message + "). Membuka proxy-worker.js — salin manual atau unggah file itu ke folder yang sama dengan halaman ini.", "warning", 6000);
+      window.open("proxy-worker.js", "_blank", "noopener");
+    }
+  };
   return bar;
 }
 function showFallbackBar(msg) {
   const bar = ensureFallbackBar();
   $("cctvFallbackMsg").textContent = msg;
+  $("cctvFbSetup").style.display = CGO_Fleet.CCTV.getProxyUrl() ? "none" : "block";
   bar.style.display = "block";
 }
 function hideFallbackBar() {
@@ -845,7 +877,9 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
   /* Proxy dipakai jika tersedia — tanpa proxy, situs hampir pasti menolak di-iframe */
   const E = CGO_Fleet.CCTV;
   let src = embedUrl, via = "direct";
-  if (E.getProxyUrl()) {
+  if (opts.noProxy) {
+    via = "open";
+  } else if (E.getProxyUrl()) {
     const alive = await E.checkProxy();
     if (token !== playToken) return;
     if (alive) {
@@ -870,7 +904,13 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
   cctvEmbed.onload = () => {
     if (token !== playToken) return;
     clearIframeTimer();
-    if (via === "proxy") {
+    if (via === "open") {
+      /* Embed resmi (mis. YouTube): dimuat langsung. Isi video tidak bisa diperiksa dari halaman */
+      setRec("● EMBED", "var(--neon-green)", "RESMI · LANGSUNG");
+      hideFallbackBar();
+      toast("🎥 " + (cctvInfo?.name || "Kamera") + " (embed resmi)", "success");
+      CGO_Fleet.logGlobal(`🎥 [STREAM] Embed resmi: ${cctvInfo?.name || embedUrl}`, "SUCCESS");
+    } else if (via === "proxy") {
       setRec("● LIVE", "var(--neon-green)", "REAL PUBLIC · PROXY");
       hideFallbackBar();
       toast("🎥 CCTV PUBLIK REAL: " + (cctvInfo?.name || "Live"), "success");
@@ -911,52 +951,67 @@ async function playStream(url, cctvInfo, d) {
   setCamLabels(cctvInfo, d);
   setRec("● LOADING", "var(--neon-yellow)", "HLS");
 
-  let src = url;
+  let src = url, via = "direct";
   if (d.hlsProxy) {
     const alive = await CGO_Fleet.CCTV.checkProxy();
     if (token !== playToken) return;
-    if (alive) src = d.hlsProxy;
+    if (alive) { src = d.hlsProxy; via = "proxy"; }
   }
-  const onFail = (why) => {
+  const onFail = (why, parsed) => {
     if (token !== playToken) return;
     clearIframeTimer();
+    /* Lewat proxy gagal sebelum video jalan (mis. domain belum di whitelist) → coba langsung sekali */
+    if (via === "proxy" && !parsed && !onFail.retried) {
+      onFail.retried = true;
+      CGO_Fleet.logGlobal(`⚠️ [HLS] Via proxy gagal (${why}) — mencoba langsung`, "WARNING");
+      if (hls) { hls.destroy(); hls = null; }
+      via = "direct";
+      begin(url);
+      return;
+    }
     CGO_Fleet.logGlobal(`❌ [HLS] ${why} — fallback canvas`, "WARNING");
     startSimulatedCCTV(cctvInfo);
   };
-  /* Manifest tidak datang dalam 15 detik → jangan menggantung selamanya */
-  iframeLoadTimer = setTimeout(() => onFail("timeout manifest"), 15000);
-
-  if (typeof Hls !== "undefined" && Hls.isSupported()) {
-    hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-    hls.loadSource(src);
-    hls.attachMedia(cctvVideo);
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
-      if (token !== playToken) return;
-      clearIframeTimer();
-      cctvVideo.play().catch(() => {
-        cctvVideo.muted = true;
-        cctvVideo.play().catch(() => {});
-      });
-      setRec("● LIVE", "var(--neon-green)", "REAL HLS");
-      setCamLabels(cctvInfo, d);
-      toast("🎥 REAL HLS Aktif — ketuk 🔊 untuk suara", "success");
-      CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS: ${cctvInfo?.name || "CCTV"}`, "SUCCESS");
-    });
-    hls.on(Hls.Events.ERROR, (event, data) => {
-      if (data.fatal) onFail(data.type);
-    });
-  } else if (cctvVideo.canPlayType("application/vnd.apple.mpegurl")) {
-    cctvVideo.src = src;
-    cctvVideo.addEventListener("loadedmetadata", () => {
-      if (token !== playToken) return;
-      clearIframeTimer();
-      cctvVideo.play().catch(() => {});
-      setRec("● LIVE", "var(--neon-green)", "REAL HLS (native)");
-    }, { once: true });
-  } else {
+  let parsed = false;
+  const begin = (useSrc) => {
+    /* Manifest tidak datang dalam 15 detik → jangan menggantung selamanya */
     clearIframeTimer();
-    startSimulatedCCTV(cctvInfo);
-  }
+    iframeLoadTimer = setTimeout(() => onFail("timeout manifest", parsed), 15000);
+    if (typeof Hls !== "undefined" && Hls.isSupported()) {
+      hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+      hls.loadSource(useSrc);
+      hls.attachMedia(cctvVideo);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (token !== playToken) return;
+        parsed = true;
+        clearIframeTimer();
+        cctvVideo.play().catch(() => {
+          cctvVideo.muted = true;
+          cctvVideo.play().catch(() => {});
+        });
+        setRec("● LIVE", "var(--neon-green)", "REAL HLS");
+        setCamLabels(cctvInfo, d);
+        toast("🎥 REAL HLS Aktif — ketuk 🔊 untuk suara", "success");
+        CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS: ${cctvInfo?.name || "CCTV"}`, "SUCCESS");
+      });
+      hls.on(Hls.Events.ERROR, (event, data) => {
+        if (data.fatal) onFail(data.type, parsed);
+      });
+    } else if (cctvVideo.canPlayType("application/vnd.apple.mpegurl")) {
+      cctvVideo.src = useSrc;
+      cctvVideo.addEventListener("loadedmetadata", () => {
+        if (token !== playToken) return;
+        parsed = true;
+        clearIframeTimer();
+        cctvVideo.play().catch(() => {});
+        setRec("● LIVE", "var(--neon-green)", "REAL HLS (native)");
+      }, { once: true });
+    } else {
+      clearIframeTimer();
+      startSimulatedCCTV(cctvInfo);
+    }
+  };
+  begin(src);
 }
 
 function startSimulatedCCTV(cctvInfo) {
@@ -1160,6 +1215,131 @@ function renderCCTVMarkers(cctvs, nearest) {
   }
 }
 
+/* ============= Daftar CCTV temuan ============= */
+let camList = [];
+let listFilter = "all";
+let listLimit = 80;
+let activeCamId = null;
+let tourOn = false, tourTimer = null, tourSec = 12, tourElapsed = 0;
+
+function camKind(c) {
+  if (c.isPortal) return "portal";
+  return (c.realPublic || c.embed || c.hls) ? "live" : "pin";
+}
+function camColor(c) {
+  const k = camKind(c);
+  return k === "live" ? "#00ff88" : (k === "portal" ? "#a855f7" : (c.synthetic ? "#ffcc00" : "#00ccff"));
+}
+function sortCams(list) {
+  const rank = { live: 0, portal: 1, pin: 2 };
+  return list.slice().sort((a, b) => (rank[camKind(a)] - rank[camKind(b)]) || ((a.distance || 0) - (b.distance || 0)));
+}
+function liveCams() { return camList.filter(c => camKind(c) === "live"); }
+
+function renderCCTVList(cctvs) {
+  if (cctvs) { camList = sortCams(cctvs); }
+  const box = $("cctvList"), tabs = $("cctvListTabs");
+  if (!box || !tabs) return;
+  const n = { all: camList.length, live: 0, portal: 0, pin: 0 };
+  for (const c of camList) n[camKind(c)]++;
+  $("cctvListCount").innerText = `${n.live} live · ${n.all} total`;
+
+  tabs.innerHTML = "";
+  [["all", "SEMUA"], ["live", "LIVE"], ["portal", "PORTAL"], ["pin", "PIN"]].forEach(([key, label]) => {
+    const b = document.createElement("button");
+    b.className = "btn small";
+    b.style.cssText = "flex:1;margin:0;padding:3px;" + (listFilter === key ? "border-color:var(--neon-green);color:var(--neon-green)" : "");
+    b.textContent = `${label} ${n[key]}`;
+    b.onclick = () => { listFilter = key; listLimit = 80; renderCCTVList(); };
+    tabs.appendChild(b);
+  });
+
+  box.innerHTML = "";
+  const shown = camList.filter(c => listFilter === "all" || camKind(c) === listFilter);
+  if (!shown.length) {
+    const e = document.createElement("div");
+    e.style.cssText = "padding:8px;font-size:9px;color:#6b7280;text-align:center";
+    e.textContent = camList.length ? "Tidak ada di kategori ini" : "Belum ada hasil — jalankan SCAN NEARBY / MULTI-AUTO SCAN";
+    box.appendChild(e);
+    return;
+  }
+  const kindLabel = { live: "LIVE", portal: "PORTAL", pin: "PIN" };
+  shown.slice(0, listLimit).forEach(c => {
+    const k = camKind(c), color = camColor(c), active = String(c.id) === String(activeCamId);
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:6px;padding:6px;border-bottom:1px solid #111827;cursor:pointer;font-size:10px;" +
+      "border-left:3px solid " + (active ? color : "transparent") + ";" + (active ? "background:#0a1620;" : "");
+    row.dataset.id = String(c.id);
+    const dot = document.createElement("span");
+    dot.style.cssText = "width:8px;height:8px;border-radius:50%;flex:0 0 8px;background:" + color;
+    const name = document.createElement("span");
+    name.style.cssText = "flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap";
+    name.textContent = c.name;
+    const dist = document.createElement("span");
+    dist.style.cssText = "color:#6b7280;flex:0 0 auto";
+    dist.textContent = c.distance != null ? (c.distance >= 1000 ? (c.distance / 1000).toFixed(1) + "km" : c.distance + "m") : "";
+    const badge = document.createElement("span");
+    badge.style.cssText = "flex:0 0 auto;font-size:8px;padding:1px 4px;border-radius:3px;border:1px solid " + color + ";color:" + color;
+    badge.textContent = (active ? "▶ " : "") + kindLabel[k];
+    row.appendChild(dot); row.appendChild(name); row.appendChild(dist); row.appendChild(badge);
+    row.onclick = () => window.__playCam(c.id);
+    box.appendChild(row);
+  });
+  if (shown.length > listLimit) {
+    const more = document.createElement("button");
+    more.className = "btn small";
+    more.style.cssText = "width:100%;margin:0";
+    more.textContent = `TAMPILKAN LEBIH (${shown.length - listLimit})`;
+    more.onclick = () => { listLimit += 80; renderCCTVList(); };
+    box.appendChild(more);
+  }
+}
+
+/* Putar kamera live berikutnya/sebelumnya tanpa menggeser peta atau menampilkan toast */
+function stepCam(dir, quiet) {
+  const live = liveCams();
+  if (!live.length) { if (!quiet) toast("Belum ada kamera live — jalankan scan dulu", "warning", 2500); return false; }
+  let i = live.findIndex(c => String(c.id) === String(activeCamId));
+  i = i < 0 ? (dir > 0 ? 0 : live.length - 1) : (i + dir + live.length) % live.length;
+  const c = live[i];
+  activeCamId = c.id;
+  tourElapsed = 0;
+  CGO_Fleet.CCTV.playCCTV(c);
+  renderCCTVList();
+  const row = $("cctvList") && Array.from($("cctvList").children || []).find(r => r.dataset && r.dataset.id === String(c.id));
+  if (row && row.scrollIntoView) { try { row.scrollIntoView({ block: "nearest" }); } catch (_) {} }
+  return true;
+}
+function tourTick() {
+  if (!tourOn) return;
+  tourElapsed++;
+  const st = $("cctvRec").innerText || "";
+  const bad = /ERROR|TIMEOUT|CANVAS/.test(st);
+  if (tourElapsed >= tourSec || (bad && tourElapsed >= 4)) stepCam(1, true);
+}
+function setTour(on) {
+  tourOn = on;
+  $("camTourBtn").innerText = on ? "AUTO TOUR: ON" : "AUTO TOUR: OFF";
+  $("camTourBtn").style.color = on ? "var(--neon-green)" : "";
+  $("camTourBtn").style.borderColor = on ? "var(--neon-green)" : "";
+  if (tourTimer) { clearInterval(tourTimer); tourTimer = null; }
+  if (on) { tourElapsed = 0; tourTimer = setInterval(tourTick, 1000); }
+}
+$("camPrevBtn").onclick = () => stepCam(-1, false);
+$("camNextBtn").onclick = () => stepCam(1, false);
+$("camTourBtn").onclick = () => {
+  if (!tourOn) {
+    if (!liveCams().length) { toast("Belum ada kamera live — jalankan scan dulu", "warning", 2500); return; }
+    setTour(true);
+    toast(`▶ Auto Tour: ganti kamera tiap ${tourSec} detik`, "success", 2500);
+    stepCam(1, true);
+  } else {
+    setTour(false);
+    toast("⏸ Auto Tour dimatikan", "warning", 1800);
+  }
+};
+window.__setTourSeconds = (n) => { tourSec = Math.max(1, Math.floor(Number(n) || 12)); };
+
 /* ============= Drone selection ============= */
 function selectDroneById(id) {
   if (!CGO_Fleet.drones.has(id)) { toast("Drone tidak ditemukan", "danger"); return false; }
@@ -1353,6 +1533,7 @@ window.resetSystem = () => {
   CGO_Fleet.reset();
   stopCCTV();
   if (map && cctvLayerGroup) cctvLayerGroup.clearLayers();
+  setTour(false); activeCamId = null; renderCCTVList([]);
   if (scanRadiusCircle && map) { map.removeLayer(scanRadiusCircle); scanRadiusCircle = null; }
   initFleet();
   toast('<svg class="icon"><use href="#i-refresh"/></svg> Sistem di-reset', "warning");
@@ -1557,6 +1738,15 @@ CGO_Fleet.onEvent((data) => {
     $("progressBarFill").style.width = pct + "%";
   }
 
+  if (ev === "CCTV_SCAN_PROGRESSIVE") {
+    /* Hasil bertahap: daftar & peta terisi saat scan masih berjalan */
+    const pd = data.data;
+    $("cctvCount").innerText = pd.total + " CCTV · " + pd.live + " LIVE";
+    $("cctvCount").style.color = "var(--neon-yellow)";
+    renderCCTVMarkers(pd.cctvs, null);
+    renderCCTVList(pd.cctvs);
+  }
+
   if (ev === "MULTI_SCAN_COMPLETE") {
     const { total, regions } = data.data;
     $("scanProgress").innerHTML = `✅ Selesai: ${total} CCTV dari ${regions} region`;
@@ -1566,10 +1756,12 @@ CGO_Fleet.onEvent((data) => {
   if (ev === "CCTV_SCAN_SUCCESS") {
     const { cctvs, nearest, total, queryLat, queryLng } = data.data;
     lastScanCenter = { lat: queryLat, lng: queryLng };
-    $("cctvCount").innerText = total + " CCTV";
+    const liveN = data.data.live;
+    $("cctvCount").innerText = total + " CCTV" + (typeof liveN === "number" ? " · " + liveN + " LIVE" : "");
     $("cctvCount").style.color = total > 0 ? "var(--neon-green)" : "var(--neon-yellow)";
 
     renderCCTVMarkers(cctvs, nearest);
+    renderCCTVList(cctvs);
 
     if (map && scanRadiusCircle) map.removeLayer(scanRadiusCircle);
     if (map) {
@@ -1606,6 +1798,7 @@ CGO_Fleet.onEvent((data) => {
   if (ev === "CCTV_STREAM_READY") {
     const d = data.data;
     const { url, embed, cctv, simulate, skipped, realPublic, openInNewTab } = d;
+    if (d.cctvId != null && !openInNewTab) { activeCamId = d.cctvId; renderCCTVList(); }
     if (skipped) {
       if (cctv) {
         $("camIdLabel").innerText = "CAM: " + (cctv.name || cctv.id);
@@ -1631,7 +1824,7 @@ CGO_Fleet.onEvent((data) => {
       toast("ℹ️ Memutar feed publik umum (bukan lokasi pin)", "info", 3500);
     }
     if (embed || realPublic) {
-      playEmbed(embed || cctv?.embed, cctv, { substitute: !!d.substitute });
+      playEmbed(embed || cctv?.embed, cctv, { substitute: !!d.substitute, noProxy: !!(d.noProxy || (cctv && cctv.noProxy)) });
     } else if (simulate || !url) {
       startSimulatedCCTV(cctv);
     } else {
@@ -1665,6 +1858,7 @@ FpvRenderer.start();
 CctvRenderer.start();
 CctvRenderer.stop();
 muteBtn.classList.add("active");
+renderCCTVList([]);
 selectDroneById("CGO-0001");
 $("proxyUrlInput").value = CGO_Fleet.CCTV.getProxyUrl() || "";
 refreshProxyIdle();
@@ -1696,7 +1890,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.10.0 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
+console.info("[BCGO UI] v6.12.0 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
 })();
 </script>
 </body>
