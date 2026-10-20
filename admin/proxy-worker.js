@@ -10,7 +10,7 @@
  *   (opsional) Settings → Variables → EXTRA_ALLOWED_DOMAINS = domain1.com,domain2.com
  * ============================================================================ */
 /* ===== CORE:BEGIN (Web-standard API; dipakai juga oleh proxy-worker.js) ===== */
-const PROXY_VERSION = "2.0.1";
+const PROXY_VERSION = "2.0.0";
 
 /* Whitelist domain yang diizinkan untuk diproksi */
 const ALLOWED_DOMAINS = [
@@ -140,9 +140,7 @@ function createHandler(cfg) {
     return body.split(/\r?\n/).map(line => {
       if (!line) return line;
       if (line.charAt(0) === "#") {
-        return line
-          .replace(/URI="([^"]+)"/gi, (m, u) => 'URI="' + rw.ref(u) + '"')
-          .replace(/URI='([^']+)'/gi, (m, u) => "URI='" + rw.ref(u) + "'");
+        return line.replace(/URI="([^"]+)"/g, (m, u) => 'URI="' + rw.ref(u) + '"');
       }
       return rw.ref(line);
     }).join("\n");

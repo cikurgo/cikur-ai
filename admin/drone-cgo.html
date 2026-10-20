@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.10.3</title>
+<title>BCGO — FLEET COMMAND CENTER v6.10.5</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -200,7 +200,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.10.3</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.10.5</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -823,9 +823,7 @@ function ensureFallbackBar() {
     '<div style="margin-top:3px;color:#9ca3af">3· Create Worker → tempel kode → Deploy → tempel alamatnya di panel CCTV Proxy → SET</div></div>';
   cctvPane.appendChild(bar);
   $("cctvFbOpen").onclick = () => {
-    if (!currentEmbed) return;
-    const hls = currentEmbed.opts && currentEmbed.opts.hlsCandidate;
-    window.open(hls || currentEmbed.direct, "_blank", "noopener,noreferrer");
+    if (currentEmbed && currentEmbed.direct) window.open(currentEmbed.direct, "_blank", "noopener,noreferrer");
   };
   $("cctvFbRetry").onclick = () => {
     if (currentEmbed) playEmbed(currentEmbed.direct, currentEmbed.cctv, currentEmbed.opts);
@@ -919,61 +917,6 @@ function tryHlsSource(src, token) {
   });
 }
 
-/* CORS-proxy publik otomatis: playlist + segmen di-rewrite → blob untuk hls.js */
-const AUTO_CORS_WRAP = [
-  (u) => "https://corsproxy.io/?" + encodeURIComponent(u),
-  (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u)
-];
-let _lastAutoBlob = null;
-function _wrapCors(abs, wrapIdx) {
-  const wrap = AUTO_CORS_WRAP[wrapIdx];
-  return wrap ? wrap(abs) : abs;
-}
-async function buildAutoProxiedHls(m3u8Url, token) {
-  const base = m3u8Url;
-  for (let wi = 0; wi < AUTO_CORS_WRAP.length; wi++) {
-    if (token !== playToken) return null;
-    try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 10000);
-      let res;
-      try { res = await fetch(_wrapCors(base, wi), { signal: ctrl.signal, cache: "no-store" }); }
-      finally { clearTimeout(timer); }
-      if (!res.ok) continue;
-      let body = await res.text();
-      if (!body || body.indexOf("#EXTM3U") < 0) continue;
-      const lines = body.split(/\r?\n/).map((line) => {
-        if (!line) return line;
-        if (line.charAt(0) === "#") {
-          return line
-            .replace(/URI="([^"]+)"/gi, (m, u) => {
-              try { return 'URI="' + _wrapCors(new URL(u, base).href, wi) + '"'; } catch (_) { return m; }
-            })
-            .replace(/URI='([^']+)'/gi, (m, u) => {
-              try { return "URI='" + _wrapCors(new URL(u, base).href, wi) + "'"; } catch (_) { return m; }
-            });
-        }
-        const t = line.trim();
-        if (!t || /^(#|data:)/i.test(t)) return line;
-        try {
-          const abs = new URL(t, base).href;
-          if (!/^https?:/i.test(abs)) return line;
-          return _wrapCors(abs, wi);
-        } catch (_) { return line; }
-      });
-      if (_lastAutoBlob) { try { URL.revokeObjectURL(_lastAutoBlob); } catch (_) {} }
-      _lastAutoBlob = URL.createObjectURL(new Blob([lines.join("\n")], { type: "application/vnd.apple.mpegurl" }));
-      return _lastAutoBlob;
-    } catch (_) {}
-  }
-  return null;
-}
-async function tryAutoCorsHls(m3u8Url, token) {
-  const blobUrl = await buildAutoProxiedHls(m3u8Url, token);
-  if (!blobUrl || token !== playToken) return false;
-  return tryHlsSource(blobUrl, token);
-}
-
 async function playEmbed(embedUrl, cctvInfo, opts) {
   opts = opts || {};
   const token = ++playToken;
@@ -1019,15 +962,8 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
       hlsVia = "proxy";
       if (token !== playToken) return;
     }
-    if (!okHls) {
-      if (token !== playToken) return;
-      setRec("● LOADING", "var(--neon-yellow)", "HLS AUTO-CORS");
-      okHls = await tryAutoCorsHls(opts.hlsCandidate, token);
-      hlsVia = "auto-cors";
-      if (token !== playToken) return;
-    }
     if (okHls) {
-      setRec("● LIVE", "var(--neon-green)", hlsVia === "proxy" ? "REAL HLS · PROXY" : (hlsVia === "auto-cors" ? "REAL HLS · AUTO" : (hlsVia === "native" ? "REAL HLS · NATIVE" : "REAL HLS · LANGSUNG")));
+      setRec("● LIVE", "var(--neon-green)", hlsVia === "proxy" ? "REAL HLS · PROXY" : (hlsVia === "native" ? "REAL HLS · NATIVE" : "REAL HLS · LANGSUNG"));
       hideFallbackBar();
       toast("🎥 CCTV LIVE (HLS " + hlsVia + "): " + (cctvInfo?.name || ""), "success");
       CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS ${hlsVia}: ${cctvInfo?.name || opts.hlsCandidate}`, "SUCCESS");
@@ -1095,11 +1031,8 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
   iframeLoadTimer = setTimeout(() => {
     if (token !== playToken) return;
     setRec("● TIMEOUT", "var(--neon-red)", "TIDAK ADA RESPON");
-    const needProxy = !E.getProxyUrl() || !(E._proxyOk);
-    showFallbackBar(needProxy
-      ? "Timeout: situs memblokir iframe. Coba AUTO-CORS/HLS atau atur proxy Worker, atau buka tab baru."
-      : "Kamera belum merespons setelah 15 detik. Coba lagi atau buka tab baru.");
-    toast(needProxy ? "⚠️ Coba lagi / buka tab baru / set proxy" : "⚠️ Kamera belum merespons", "warning", 4000);
+    showFallbackBar("Kamera belum merespons setelah 15 detik. Coba lagi atau buka di tab baru.");
+    toast("⚠️ Kamera belum merespons", "warning", 3500);
     CGO_Fleet.logGlobal(`⚠️ [STREAM] Timeout memuat: ${cctvInfo?.name || embedUrl}`, "WARNING");
   }, 15000);
 }
@@ -1126,9 +1059,10 @@ async function playStream(url, cctvInfo, d) {
     if (token !== playToken) return;
     if (alive) { src = d.hlsProxy; via = "proxy"; }
   }
-  const onFail = async (why, parsed) => {
+  const onFail = (why, parsed) => {
     if (token !== playToken) return;
     clearIframeTimer();
+    /* Lewat proxy gagal sebelum video jalan (mis. domain belum di whitelist) → coba langsung sekali */
     if (via === "proxy" && !parsed && !onFail.retried) {
       onFail.retried = true;
       CGO_Fleet.logGlobal(`⚠️ [HLS] Via proxy gagal (${why}) — mencoba langsung`, "WARNING");
@@ -1136,21 +1070,6 @@ async function playStream(url, cctvInfo, d) {
       via = "direct";
       begin(url);
       return;
-    }
-    if (via !== "auto-cors" && !onFail.autoTried && url && /\.m3u8(\?|$)/i.test(url)) {
-      onFail.autoTried = true;
-      CGO_Fleet.logGlobal(`⚠️ [HLS] ${why} — mencoba AUTO-CORS`, "WARNING");
-      if (hls) { try { hls.destroy(); } catch (_) {} hls = null; }
-      setRec("● LOADING", "var(--neon-yellow)", "HLS AUTO-CORS");
-      const ok = await tryAutoCorsHls(url, token);
-      if (token !== playToken) return;
-      if (ok) {
-        via = "auto-cors";
-        setRec("● LIVE", "var(--neon-green)", "REAL HLS · AUTO");
-        toast("🎥 REAL HLS (auto): " + (cctvInfo?.name || ""), "success");
-        CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS auto-cors: ${cctvInfo?.name || url}`, "SUCCESS");
-        return;
-      }
     }
     CGO_Fleet.logGlobal(`❌ [HLS] ${why} — fallback canvas`, "WARNING");
     startSimulatedCCTV(cctvInfo);
@@ -1382,12 +1301,13 @@ function renderCCTVMarkers(cctvs, nearest) {
     const marker = L.circleMarker([c.lat, c.lng], {
       radius, color, fillColor: color, fillOpacity: .9, weight: 2
     });
-    const label = isPortal ? "PORTAL RESMI" : (isReal ? "LIVE PUBLIC" : (isSynth ? "SIM" : (c.surveillanceType || "?")));
+    const access = c.accessType || (c.hls || c.hlsAuto ? "hls" : (c.noProxy ? "youtube" : (isPortal ? "portal" : (isReal ? "embed" : "pin"))));
+    const label = isPortal ? "PORTAL RESMI" : (isReal ? ("LIVE · " + String(access).toUpperCase()) : (isSynth ? "SIM" : (c.surveillanceType || "?")));
     const distTxt = c.distance != null ? c.distance + "m" : "?";
     marker.bindPopup(
       `<div style="font-family:monospace;font-size:11px;line-height:1.4">` +
       `<b style="color:${color}">${c.name}</b><br>` +
-      `ID: ${c.id}<br>Jarak: ${distTxt}<br>Tipe: ${label}<br>` +
+      `ID: ${c.id}<br>Jarak: ${distTxt}<br>Akses: ${label}<br>` +
       `Lat: ${c.lat.toFixed(5)}<br>Lng: ${c.lng.toFixed(5)}<br>` +
       `<button onclick="window.__playCam('${c.id}')" ` +
       `style="margin-top:6px;padding:4px 8px;cursor:pointer;font-family:monospace;` +
@@ -1620,30 +1540,16 @@ function refreshProxyIdle() {
 }
 $("proxySetBtn").onclick = async () => {
   const v = $("proxyUrlInput").value.trim();
-  if (!v) {
-    CGO_Fleet.CCTV.setProxyUrl("");
-    $("proxyUrlInput").value = "";
-    refreshProxyIdle();
-    toast("Proxy dimatikan", "warning", 1800);
-    return;
-  }
-  if (v.length > 280 || /PROXY_VERSION|createHandler|ALLOWED_DOMAINS|===== CORE/i.test(v) || /[\r\n]/.test(v)) {
-    $("proxyUrlInput").value = "";
-    toast("❌ Jangan tempel isi file. Tempel ALAMAT Worker (https://xxx.workers.dev)", "danger", 5000);
-    const el = $("proxyStatus");
-    if (el) { el.textContent = "Salah: isi URL proxy, bukan kode sumber."; el.style.color = "var(--neon-red)"; }
-    return;
-  }
   const applied = CGO_Fleet.CCTV.setProxyUrl(v);
   $("proxyUrlInput").value = applied || "";
   if (!applied) {
     refreshProxyIdle();
-    toast("❌ URL proxy tidak valid", "danger", 3500);
+    toast("Proxy dimatikan", "warning", 1800);
     return;
   }
   toast("Mengecek proxy...", "info", 1500);
   const ok = await CGO_Fleet.CCTV.checkProxy(true);
-  toast(ok ? "✅ Proxy aktif" : "❌ Proxy tidak merespons — pastikan Worker sudah Deploy", ok ? "success" : "danger", 3000);
+  toast(ok ? "✅ Proxy aktif" : "❌ Proxy tidak merespons", ok ? "success" : "danger", 2500);
   if (ok && currentEmbed) playEmbed(currentEmbed.direct, currentEmbed.cctv, currentEmbed.opts);
 };
 $("proxyUrlInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("proxySetBtn").click(); });
@@ -2020,12 +1926,21 @@ CGO_Fleet.onEvent((data) => {
     } else if (d.substitute && !embed) {
       toast("ℹ️ Memutar feed publik umum (bukan lokasi pin)", "info", 3500);
     }
-    if (embed || realPublic) {
-      playEmbed(embed || cctv?.embed, cctv, { substitute: !!d.substitute, noProxy: !!(d.noProxy || (cctv && cctv.noProxy)), hlsCandidate: d.hlsCandidate || (cctv && cctv.hlsAuto) || null });
-    } else if (simulate || !url) {
+    /* Urutkan jenis akses: HLS URL murni → playStream; embed/YouTube/BaliTower → playEmbed; else canvas */
+    const hlsUrl = url || d.hls || (cctv && cctv.hls) || null;
+    const emb = embed || (cctv && cctv.embed) || null;
+    if (d.hlsLive || (hlsUrl && !emb)) {
+      playStream(hlsUrl, cctv, d);
+    } else if (emb || realPublic) {
+      playEmbed(emb, cctv, {
+        substitute: !!d.substitute,
+        noProxy: !!(d.noProxy || (cctv && cctv.noProxy)),
+        hlsCandidate: d.hlsCandidate || (cctv && (cctv.hlsAuto || cctv.hls)) || null
+      });
+    } else if (simulate || !hlsUrl) {
       startSimulatedCCTV(cctv);
     } else {
-      playStream(url, cctv, d);
+      playStream(hlsUrl, cctv, d);
     }
   }
 
@@ -2033,8 +1948,7 @@ CGO_Fleet.onEvent((data) => {
     const { url: pu, ok: pok } = data.data;
     const el = $("proxyStatus");
     if (el) {
-      const short = pu && pu.length > 60 ? pu.slice(0, 57) + "…" : (pu || "");
-      el.textContent = pok ? "✅ Proxy aktif: " + short : "❌ Proxy tidak merespons: " + short;
+      el.textContent = pok ? "✅ Proxy aktif: " + pu : "❌ Proxy tidak merespons: " + pu;
       el.style.color = pok ? "var(--neon-green)" : "var(--neon-red)";
     }
   }
@@ -2088,7 +2002,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.10.3 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
+console.info("[BCGO UI] v6.10.5 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
 })();
 </script>
 </body>
