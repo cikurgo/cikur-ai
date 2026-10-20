@@ -39,7 +39,7 @@
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.10.0";
+const VERSION = "6.10.3";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -584,7 +584,7 @@ const CCTVEngine = {
     { name: "Portal Pelindung Bandung", lat: -6.9175, lng: 107.6191, url: "https://pelindung.bandung.go.id/", region: "Bandung", openInNewTab: true },
     { name: "Portal CCTV Jogja", lat: -7.7956, lng: 110.3695, url: "https://cctv.jogjakota.go.id/", region: "Yogyakarta", openInNewTab: true },
     { name: "Portal CCTV Semarang", lat: -6.9932, lng: 110.4203, url: "https://pantausemar.semarangkota.go.id/", region: "Semarang", openInNewTab: true },
-    { name: "Portal CCTV Denpasar", lat: -8.6500, lng: 115.2167, url: "http://atcs.denpasarkota.go.id/", region: "Denpasar", openInNewTab: true },
+    { name: "Portal CCTV Denpasar", lat: -8.6500, lng: 115.2167, url: "https://atcs.denpasarkota.go.id/", region: "Denpasar", openInNewTab: true },
     { name: "Portal CCTV Jakarta Publik", lat: -6.1751, lng: 106.8272, url: "https://jakcctv.jakarta.go.id/publik", region: "Jakarta", openInNewTab: true }
   ],
 
@@ -597,8 +597,17 @@ const CCTVEngine = {
     if (!u) return null;
     u = String(u).trim();
     if (!u) return null;
+    /* Tolak paste isi file proxy-worker.js / sampah */
+    if (u.length > 280 || /[\r\n]/.test(u)) return null;
+    if (/PROXY_VERSION|ALLOWED_DOMAINS|createHandler|HEADERS_TO_|function\s+respond|===== CORE/i.test(u)) return null;
     if (!/^https?:\/\//i.test(u)) u = "https://" + u;
-    return u.replace(/\/+$/, "");
+    let parsed;
+    try { parsed = new URL(u); } catch (_) { return null; }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    const host = (parsed.hostname || "").toLowerCase();
+    if (!host || host === "*") return null;
+    if (host !== "localhost" && !/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i.test(host)) return null;
+    return parsed.origin;
   },
   setProxyUrl(url) {
     this.PROXY_URL = this._normProxy(url);
@@ -614,14 +623,23 @@ const CCTVEngine = {
   },
   getProxyUrl() {
     if (this.PROXY_URL) return this.PROXY_URL;
-    try { if (global.CGO_ProxyURL) return this._normProxy(global.CGO_ProxyURL); } catch (_) {}
+    const tryOne = (raw) => {
+      const n = this._normProxy(raw);
+      if (n) { this.PROXY_URL = n; return n; }
+      return null;
+    };
+    try { if (global.CGO_ProxyURL) { const n = tryOne(global.CGO_ProxyURL); if (n) return n; } } catch (_) {}
     try {
       const q = global.location && new URLSearchParams(global.location.search).get("proxy");
-      if (q) return this._normProxy(q);
+      if (q) { const n = tryOne(q); if (n) return n; }
     } catch (_) {}
     try {
       const sv = global.localStorage && global.localStorage.getItem("cgo_proxy_url");
-      if (sv) return this._normProxy(sv);
+      if (sv) {
+        const n = this._normProxy(sv);
+        if (n) { this.PROXY_URL = n; return n; }
+        try { global.localStorage.removeItem("cgo_proxy_url"); } catch (_) {}
+      }
     } catch (_) {}
     try {
       const loc = global.location;
@@ -874,29 +892,30 @@ const CCTVEngine = {
     fleet.logGlobal(`📡 [CCTV] Scan (${lat.toFixed(4)}, ${lng.toFixed(4)}) r=${radius}m...`, "INFO");
     if (!options.silent) fleet.emit("CCTV_SCAN_START", { lat, lng, radius });
 
-    await this.ensureCatalog();
-    /* v6.7: kamera live tidak bergantung pada Overpass — siapkan & putar dulu */
-    const live = this._liveEntries(lat, lng, { realMax: Math.max(radius, 20000), portalMax: 50000 });
-    if (!options.skipStream && !this._activeStreams.has("default")) {
-      const firstLive = live.find(c => !c.isPortal);
-      if (firstLive) this._prepareStream(firstLive, fleet);
-    }
-
-    const query = `
-      [out:json][timeout:25];
-      (
-        node["man_made"="surveillance"](around:${radius},${lat},${lng});
-        way["man_made"="surveillance"](around:${radius},${lat},${lng});
-        relation["man_made"="surveillance"](around:${radius},${lat},${lng});
-        node["surveillance"="camera"](around:${radius},${lat},${lng});
-        node["surveillance:type"="camera"](around:${radius},${lat},${lng});
-        node["camera:type"](around:${radius},${lat},${lng});
-        node["highway"="traffic_signals"]["surveillance"](around:${radius},${lat},${lng});
-      );
-      out center tags;
-    `;
-
+    let live = [];
     try {
+      await this.ensureCatalog();
+      /* v6.7: kamera live tidak bergantung pada Overpass — siapkan & putar dulu */
+      live = this._liveEntries(lat, lng, { realMax: Math.max(radius, 20000), portalMax: 50000 });
+      if (!options.skipStream && !this._activeStreams.has("default")) {
+        const firstLive = live.find(c => !c.isPortal);
+        if (firstLive) this._prepareStream(firstLive, fleet);
+      }
+
+      const query = `
+        [out:json][timeout:25];
+        (
+          node["man_made"="surveillance"](around:${radius},${lat},${lng});
+          way["man_made"="surveillance"](around:${radius},${lat},${lng});
+          relation["man_made"="surveillance"](around:${radius},${lat},${lng});
+          node["surveillance"="camera"](around:${radius},${lat},${lng});
+          node["surveillance:type"="camera"](around:${radius},${lat},${lng});
+          node["camera:type"](around:${radius},${lat},${lng});
+          node["highway"="traffic_signals"]["surveillance"](around:${radius},${lat},${lng});
+        );
+        out center tags;
+      `;
+
       const data = await IPScanner.fetchOverpass(query, 25000);
       const elements = data.elements || [];
       const cctvs = [];
@@ -954,10 +973,8 @@ const CCTVEngine = {
         fleet.logGlobal(`🎥 [CCTV] Stream aktif dipertahankan`, "INFO");
       }
 
-      if (!options.allowConcurrent) this._scanInProgress = false;
       return { cctvs, nearest, queryLat: lat, queryLng: lng, radius };
     } catch (err) {
-      if (!options.allowConcurrent) this._scanInProgress = false;
       fleet.logGlobal(`❌ [CCTV] ${err.message}`, "DANGER");
       if (!options.silent) {
         /* v6.7: Overpass gagal ≠ kamera live hilang. Tampilkan kamera live; synthetic hanya jika kosong */
@@ -980,6 +997,8 @@ const CCTVEngine = {
         return { cctvs, nearest, queryLat: lat, queryLng: lng, radius, fallback: true };
       }
       return null;
+    } finally {
+      if (!options.allowConcurrent) this._scanInProgress = false;
     }
   },
 
