@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.10.7</title>
+<title>BCGO — FLEET COMMAND CENTER v6.9.2</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -200,7 +200,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.10.7</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.9.2</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -309,6 +309,11 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
           <span id="cctvRec" style="color:#6b7280">● OFF</span>
           <span id="cctvModeLabel" style="color:#6b7280">IDLE</span>
         </div>
+        <button type="button" id="cctvSoundBtn" class="btn small"
+          style="position:absolute;right:8px;bottom:36px;z-index:12;width:auto;margin:0;padding:6px 10px;
+                 border-color:var(--neon-green);color:var(--neon-green);background:rgba(0,0,0,.65);font-size:10px">
+          <svg class="icon"><use href="#i-mute"/></svg> SUARA OFF
+        </button>
         <div id="videoStatusOverlay" class="video-status">Menunggu perintah scan CCTV...</div>
       </div>
     </div>
@@ -917,7 +922,6 @@ function tryHlsSource(src, token) {
   });
 }
 
-/* Fallback stream yang terbukti OK (diagnostic HLS-1/HLS-2) */
 function pickPublicHls() {
   try {
     const list = (CGO_Fleet && CGO_Fleet.CCTV && CGO_Fleet.CCTV.PUBLIC_STREAMS) || [];
@@ -967,7 +971,6 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
     const isBali = /balitower\.co\.id/i.test(opts.hlsCandidate || "");
     let hlsVia = "langsung";
     let okHls = false;
-    /* BaliTower: lewati native/direct (CORS pasti gagal) — hemat waktu → proxy singkat → Batam */
     if (!isBali) {
       setRec("● LOADING", "var(--neon-yellow)", "HLS LANGSUNG");
       if (nativeHlsSupported()) {
@@ -995,7 +998,6 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
       CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS ${hlsVia}: ${cctvInfo?.name || opts.hlsCandidate}`, "SUCCESS");
       return;
     }
-    /* Diagnostic: Batam OK — panel tetap tayang video real */
     if (await playPublicFallback(cctvInfo, token, "HLS lokasi gagal")) return;
     CGO_Fleet.logGlobal(`⚠️ [STREAM] HLS ${cctvInfo?.name || ""} gagal (CORS/jaringan) — mencoba iframe`, "WARNING");
     if (hls) { try { hls.destroy(); } catch (_) {} hls = null; }
@@ -1020,7 +1022,6 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
         setRec("● ERROR", "var(--neon-red)", "KAMERA: " + why);
         cctvEmbed.removeAttribute("src");
         CGO_Fleet.logGlobal(`⚠️ [STREAM] ${cctvInfo?.name || embedUrl} → ${why}`, "WARNING");
-        /* Diagnostic: HLS Batam OK — tayangkan itu agar panel tidak kosong */
         if (await playPublicFallback(cctvInfo, token, why)) return;
         showFallbackBar("Situs kamera tidak bisa dibuka (" + why + "). Coba kamera lain atau buka di tab baru.");
         toast("⚠️ Kamera tidak merespons (" + why + ")", "warning", 3500);
@@ -1058,13 +1059,12 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
   };
   cctvEmbed.src = src;
 
-  iframeLoadTimer = setTimeout(async () => {
+  iframeLoadTimer = setTimeout(() => {
     if (token !== playToken) return;
     setRec("● TIMEOUT", "var(--neon-red)", "TIDAK ADA RESPON");
-    CGO_Fleet.logGlobal(`⚠️ [STREAM] Timeout memuat: ${cctvInfo?.name || embedUrl}`, "WARNING");
-    if (await playPublicFallback(cctvInfo, token, "iframe timeout")) return;
     showFallbackBar("Kamera belum merespons setelah 15 detik. Coba lagi atau buka di tab baru.");
     toast("⚠️ Kamera belum merespons", "warning", 3500);
+    CGO_Fleet.logGlobal(`⚠️ [STREAM] Timeout memuat: ${cctvInfo?.name || embedUrl}`, "WARNING");
   }, 15000);
 }
 
@@ -1514,15 +1514,52 @@ speedSlider.addEventListener("input", () => {
   CGO_Fleet.setSimulationSpeed(v);
 });
 const muteBtn = $("muteBtn");
+function applyCctvAudio(wantSound) {
+  try {
+    if (!cctvVideo) return;
+    cctvVideo.muted = !wantSound;
+    cctvVideo.volume = wantSound ? 1.0 : 0;
+    if (wantSound) {
+      const pr = cctvVideo.play();
+      if (pr && pr.catch) pr.catch(() => {});
+    }
+  } catch (_) {}
+  const fab = $("cctvSoundBtn");
+  if (fab) {
+    fab.innerHTML = wantSound
+      ? '<svg class="icon"><use href="#i-volume"/></svg> SUARA ON'
+      : '<svg class="icon"><use href="#i-mute"/></svg> SUARA OFF';
+    fab.classList.toggle("active", wantSound);
+  }
+}
 muteBtn.onclick = () => {
   muted = !muted;
   CGO_Fleet.mute(muted);
+  applyCctvAudio(!muted);
   muteBtn.classList.toggle("active", !muted);
   muteBtn.innerHTML = muted
     ? '<svg class="icon"><use href="#i-mute"/></svg> MUTED'
     : '<svg class="icon"><use href="#i-volume"/></svg> AUDIO';
-  toast(muted ? "Audio dimatikan" : "Audio diaktifkan", "info", 1200);
+  toast(muted ? "Audio dimatikan" : "Audio CCTV/drone aktif", "info", 1500);
 };
+const cctvSoundBtnEl = $("cctvSoundBtn");
+if (cctvSoundBtnEl) {
+  cctvSoundBtnEl.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    muted = !muted;
+    CGO_Fleet.mute(muted);
+    applyCctvAudio(!muted);
+    if (muteBtn) {
+      muteBtn.classList.toggle("active", !muted);
+      muteBtn.innerHTML = muted
+        ? '<svg class="icon"><use href="#i-mute"/></svg> MUTED'
+        : '<svg class="icon"><use href="#i-volume"/></svg> AUDIO';
+    }
+    toast(muted ? "Suara CCTV OFF" : "Suara CCTV ON", "info", 1200);
+  };
+}
+
 
 /* ============= IP chip ============= */
 async function refreshIP() {
@@ -1619,24 +1656,43 @@ $("gpsBtn").onclick = () => {
   if (!navigator.geolocation) { toast("GPS tidak didukung", "danger"); return; }
   $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-refresh"/></svg> MENCARI...';
   navigator.geolocation.getCurrentPosition(
-    (pos) => {
+    async (pos) => {
       const lat = pos.coords.latitude, lng = pos.coords.longitude;
       if (map) {
         map.setView([lat, lng], 15);
         if (userGpsMarker) map.removeLayer(userGpsMarker);
         userGpsMarker = L.circleMarker([lat, lng], {
           radius: 8, color: "#00ff88", fillColor: "#00ff88", fillOpacity: .8
-        }).addTo(map).bindPopup("Lokasi Anda").openPopup();
+        }).addTo(map).bindPopup("Lokasi GPS Anda").openPopup();
         $("mapCoordsDisplay").innerHTML = `<svg class="icon" style="color:var(--neon-green)"><use href="#i-gps"/></svg> ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-        toast("Lokasi GPS ditemukan", "success");
       }
+      /* Pindahkan drone ke GPS agar scanNearby memakai titik ini */
+      try {
+        const drone = CGO_Fleet.getSelectedDrone();
+        if (drone && drone.telemetry && drone.telemetry.position) {
+          /* posisi relatif ke base default -6.2088,106.8456 */
+          const baseLat = -6.2088, baseLng = 106.8456;
+          drone.telemetry.position.x = (lat - baseLat) / 0.0001;
+          drone.telemetry.position.y = (lng - baseLng) / 0.0001;
+          if (typeof updateDroneMarker === "function") updateDroneMarker(drone);
+        }
+      } catch (_) {}
       $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
+      toast("📍 GPS OK — scan CCTV di sekitar Anda...", "success", 2500);
+      CGO_Fleet.logGlobal(`📍 [GPS] ${lat.toFixed(5)}, ${lng.toFixed(5)} — scan nearby`, "SUCCESS");
+      try {
+        statusOverlay.classList.remove("hidden");
+        statusOverlay.textContent = "📡 Scan CCTV di lokasi GPS...";
+        await CGO_Fleet.CCTV.scanNearby(lat, lng, 5000);
+      } catch (e) {
+        toast("Scan GPS gagal: " + (e.message || e), "danger");
+      }
     },
     (err) => {
       toast("Gagal akses GPS: " + err.message, "danger");
       $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
     },
-    { enableHighAccuracy: true, timeout: 5000 }
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
   );
 };
 
@@ -1682,15 +1738,8 @@ window.__playCam = (id) => {
   );
   CGO_Fleet.logGlobal(`📍 [MAP] Klik CCTV: ${c.name} @ ${c.lat.toFixed(4)},${c.lng.toFixed(4)}`, "INFO");
 
-  /* Portal: proxy aktif → tampil di panel; else tab baru */
+  /* Portal → buka tab baru */
   if (c.isPortal && c.openInNewTab) {
-    const E = CGO_Fleet.CCTV;
-    if (E.getProxyUrl() && E._proxyOk) {
-      activeCamId = c.id;
-      renderCCTVList();
-      playEmbed(c.embed || c.url, c, { noProxy: false, hlsCandidate: null });
-      return;
-    }
     window.open(c.embed || c.url, "_blank", "noopener,noreferrer");
     toast(`🌐 ${c.name} dibuka di tab baru`, "info", 2500);
     return;
@@ -2038,7 +2087,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.10.7 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
+console.info("[BCGO UI] v6.14.0 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
 })();
 </script>
 </body>
