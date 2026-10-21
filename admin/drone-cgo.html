@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.14.0</title>
+<title>BCGO — FLEET COMMAND CENTER v6.15.2</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -200,7 +200,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.14.0</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.15.2</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -495,7 +495,7 @@ function fmtTime(s) {
 function toast(msg, type = "info", duration = 2500) {
   const el = document.createElement("div");
   el.className = "toast " + (type === "info" ? "" : type);
-  el.innerHTML = msg;
+  el.textContent = String(msg == null ? "" : msg);
   toastContainer.appendChild(el);
   setTimeout(() => {
     el.style.transition = "opacity .3s, transform .3s";
@@ -837,16 +837,24 @@ function ensureFallbackBar() {
     window.open("https://dash.cloudflare.com/?to=/:account/workers-and-pages/create", "_blank", "noopener,noreferrer");
   };
   $("cctvFbCopy").onclick = async () => {
+    let code;
     try {
       const res = await fetch("proxy-worker.js", { cache: "no-store" });
       if (!res.ok) throw new Error("HTTP " + res.status);
-      const code = await res.text();
-      await navigator.clipboard.writeText(code);
-      toast("✅ Kode tersalin. Tempel di Cloudflare (langkah 2) — JANGAN di kolom proxy di halaman ini", "success", 6000);
+      code = await res.text();
     } catch (e) {
-      toast("Tidak bisa menyalin otomatis (" + e.message + "). Membuka proxy-worker.js — salin manual atau unggah file itu ke folder yang sama dengan halaman ini.", "warning", 6000);
-      window.open("proxy-worker.js", "_blank", "noopener");
+      toast("File proxy-worker.js tidak ditemukan. Letakkan file itu di folder yang sama jika ingin menyiapkan proxy.", "warning", 6000);
+      return;
     }
+    let copied = false;
+    try {
+      await navigator.clipboard.writeText(code);
+      copied = true;
+    } catch (_) {
+      copied = await copyText(code);
+    }
+    if (!copied) window.prompt("Salin kode ini ke Cloudflare (jangan ke kolom alamat proxy):", code);
+    toast(copied ? "✅ Kode tersalin. Tempel di Cloudflare (langkah 2) — JANGAN di kolom proxy di halaman ini" : "Salin kode dari kotak yang muncul.", copied ? "success" : "warning", 6000);
   };
   return bar;
 }
@@ -1332,7 +1340,7 @@ async function runDiagnostic() {
       const cls = r.status === "OK" ? "diag-ok" : (r.status.startsWith("FAIL") ? "diag-fail" : "diag-unknown");
       const icon = r.status === "OK" ? "✅" : (r.status.startsWith("FAIL") ? "❌" : "⚠️");
       return `<div class="diagnostic-result">
-        <span><b>${r.name}</b> <span style="color:#6b7280">[${r.type}]</span></span>
+        <span><b>${escHtml(r.name)}</b> <span style="color:#6b7280">[${escHtml(r.type)}]</span></span>
         <span class="${cls}">${icon} ${escHtml(r.status)}${r.detail ? ' <span style="color:#6b7280">· ' + escHtml(r.detail) + '</span>' : ''}</span>
       </div>`;
     }).join("");
@@ -1350,7 +1358,10 @@ async function runDiagnostic() {
     };
     resultsEl.appendChild(rb);
   } catch (e) {
-    resultsEl.innerHTML = `<div class="diagnostic-result diag-fail">Error: ${e.message}</div>`;
+    const errorEl = document.createElement("div");
+    errorEl.className = "diagnostic-result diag-fail";
+    errorEl.textContent = "Error: " + String(e && e.message ? e.message : e);
+    resultsEl.replaceChildren(errorEl);
   }
 }
 
@@ -1376,9 +1387,9 @@ function initMap() {
   droneMarker = L.marker([-6.2088, 106.8456], { icon: droneIcon }).addTo(map).bindPopup("Drone CGO-0001");
   map.on("click", (e) => {
     const lat = e.latlng.lat.toFixed(6), lng = e.latlng.lng.toFixed(6);
-    $("mapCoordsDisplay").innerHTML = `<svg class="icon" style="color:var(--neon-green)"><use href="#i-gps"/></svg> ${lat}, ${lng}`;
+    $("mapCoordsDisplay").textContent = `📍 ${lat}, ${lng}`;
     L.popup().setLatLng(e.latlng).setContent(`Koordinat Presisi:<br><b>${lat}, ${lng}</b>`).openOn(map);
-    toast(`<svg class="icon"><use href="#i-gps"/></svg> Presisi: ${lat}, ${lng}`, "success");
+    toast(`📍 Presisi: ${lat}, ${lng}`, "success");
   });
 }
 
@@ -1394,6 +1405,8 @@ function renderCCTVMarkers(cctvs, nearest) {
   cctvLayerGroup.clearLayers();
   cctvCamStore.clear();
   for (const c of cctvs) {
+    const lat = Number(c.lat), lng = Number(c.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
     cctvCamStore.set(String(c.id), c);
     const isNearest = c === nearest;
     const isSynth = !!c.synthetic;
@@ -1407,15 +1420,33 @@ function renderCCTVMarkers(cctvs, nearest) {
     const access = c.accessType || (c.hls || c.hlsAuto ? "hls" : (c.noProxy ? "youtube" : (isPortal ? "portal" : (isReal ? "embed" : "pin"))));
     const label = isPortal ? "PORTAL RESMI" : (isReal ? ("LIVE · " + String(access).toUpperCase()) : (isSynth ? "SIM" : (c.surveillanceType || "?")));
     const distTxt = c.distance != null ? c.distance + "m" : "?";
-    marker.bindPopup(
-      `<div style="font-family:monospace;font-size:11px;line-height:1.4">` +
-      `<b style="color:${color}">${c.name}</b><br>` +
-      `ID: ${c.id}<br>Jarak: ${distTxt}<br>Akses: ${label}<br>` +
-      `Lat: ${c.lat.toFixed(5)}<br>Lng: ${c.lng.toFixed(5)}<br>` +
-      `<button onclick="window.__playCam('${c.id}')" ` +
-      `style="margin-top:6px;padding:4px 8px;cursor:pointer;font-family:monospace;` +
-      `background:${color};color:#000;border:none;border-radius:3px;font-weight:bold">▶ CONNECT</button></div>`
-    );
+    const popup = document.createElement("div");
+    popup.style.cssText = "font-family:monospace;font-size:11px;line-height:1.4";
+    const heading = document.createElement("b");
+    heading.style.color = color;
+    heading.textContent = String(c.name || "CCTV");
+    popup.appendChild(heading);
+    popup.appendChild(document.createElement("br"));
+    [
+      `ID: ${String(c.id)}`,
+      `Jarak: ${distTxt}`,
+      `Akses: ${label}`,
+      `Lat: ${lat.toFixed(5)}`,
+      `Lng: ${lng.toFixed(5)}`
+    ].forEach((text) => {
+      popup.appendChild(document.createTextNode(text));
+      popup.appendChild(document.createElement("br"));
+    });
+    const connectButton = document.createElement("button");
+    connectButton.type = "button";
+    connectButton.textContent = "▶ CONNECT";
+    connectButton.style.cssText = `margin-top:6px;padding:4px 8px;cursor:pointer;font-family:monospace;background:${color};color:#000;border:none;border-radius:3px;font-weight:bold`;
+    connectButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      window.__playCam(c.id);
+    });
+    popup.appendChild(connectButton);
+    marker.bindPopup(popup);
     marker.on("click", () => window.__playCam(c.id));
     cctvLayerGroup.addLayer(marker);
   }
@@ -1760,7 +1791,7 @@ $("gpsBtn").onclick = () => {
         userGpsMarker = L.circleMarker([lat, lng], {
           radius: 8, color: "#00ff88", fillColor: "#00ff88", fillOpacity: .8
         }).addTo(map).bindPopup("Lokasi GPS Anda").openPopup();
-        $("mapCoordsDisplay").innerHTML = `<svg class="icon" style="color:var(--neon-green)"><use href="#i-gps"/></svg> ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    $("mapCoordsDisplay").textContent = `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
       }
       /* Pindahkan drone ke GPS agar scanNearby memakai titik ini */
       try {
@@ -1815,7 +1846,7 @@ window.setFormation = (name) => {
 window.saveState = () => {
   try {
     localStorage.setItem("cgo_fleet_state_v6", CGO_Fleet.exportState());
-    toast('<svg class="icon"><use href="#i-save"/></svg> State tersimpan', "success");
+    toast("💾 State tersimpan", "success");
   } catch (e) { toast("❌ Gagal simpan", "danger"); }
 };
 window.loadState = () => {
@@ -1824,7 +1855,7 @@ window.loadState = () => {
     if (!j) { toast("Tidak ada state", "warning"); return; }
     if (CGO_Fleet.importState(j)) {
       $("statTotal").innerText = CGO_Fleet.drones.size;
-      toast('<svg class="icon"><use href="#i-folder"/></svg> State dimuat', "success");
+      toast("📂 State dimuat", "success");
     }
   } catch (e) { toast("❌ Gagal muat", "danger"); }
 };
@@ -1836,15 +1867,14 @@ window.resetSystem = () => {
   setTour(false); activeCamId = null; renderCCTVList([]);
   if (scanRadiusCircle && map) { map.removeLayer(scanRadiusCircle); scanRadiusCircle = null; }
   initFleet();
-  toast('<svg class="icon"><use href="#i-refresh"/></svg> Sistem di-reset', "warning");
+  toast("🔄 Sistem di-reset", "warning");
 };
 window.__playCam = (id) => {
   const c = cctvCamStore.get(String(id));
   if (!c) { toast("CCTV tidak ditemukan", "danger"); return; }
   if (map) map.setView([c.lat, c.lng], Math.max(map.getZoom(), 15));
   toast(
-    `<svg class="icon"><use href="#i-map-pin"/></svg> <b>${c.name}</b><br>` +
-    `<span style="font-size:9px;opacity:.8">${c.lat.toFixed(5)}, ${c.lng.toFixed(5)} · ${c.distance || "?"}m</span>`,
+    `📍 ${String(c.name || "CCTV")} · ${Number(c.lat).toFixed(5)}, ${Number(c.lng).toFixed(5)} · ${c.distance || "?"}m`,
     c.synthetic ? "warning" : "success", 3000
   );
   CGO_Fleet.logGlobal(`📍 [MAP] Klik CCTV: ${c.name} @ ${c.lat.toFixed(4)},${c.lng.toFixed(4)}`, "INFO");
@@ -1982,14 +2012,21 @@ CGO_Fleet.onEvent((data) => {
     const log = data.data;
     const el = document.createElement("div");
     el.className = "log-entry";
-    el.innerHTML = `<span class="log-time">[${log.time}]</span> <span class="log-${log.type}">[${log.droneId}] ${log.message}</span>`;
+    const timeEl = document.createElement("span");
+    timeEl.className = "log-time";
+    timeEl.textContent = `[${String(log.time || "")}] `;
+    const messageEl = document.createElement("span");
+    messageEl.className = "log-" + String(log.type || "INFO").replace(/[^a-z0-9_-]/gi, "");
+    messageEl.textContent = `[${String(log.droneId || "")}] ${String(log.message || "")}`;
+    el.appendChild(timeEl);
+    el.appendChild(messageEl);
     logContainer.appendChild(el);
     while (logContainer.children.length > 200) logContainer.removeChild(logContainer.firstChild);
     logContainer.scrollTop = logContainer.scrollHeight;
   }
 
-  if (ev === "FLEET_DEPLOYED") toast(`<svg class="icon"><use href="#i-rocket"/></svg> ${data.data.count} drone diluncurkan`, "success");
-  if (ev === "FLEET_RETURNING") toast(`<svg class="icon"><use href="#i-home"/></svg> ${data.data.count} drone RTB`, "warning");
+  if (ev === "FLEET_DEPLOYED") toast(`🚀 ${data.data.count} drone diluncurkan`, "success");
+  if (ev === "FLEET_RETURNING") toast(`🏠 ${data.data.count} drone RTB`, "warning");
 
   if (ev === "DISASTER_ALERT_ACTIVE") {
     isEmergency = true;
@@ -1999,7 +2036,7 @@ CGO_Fleet.onEvent((data) => {
     $("networkStatus").innerText = "EMERGENCY BROADCAST"; $("networkStatus").className = "status-badge danger";
     $("fpvAlertBar").innerText = "🚨 TSUNAMI EVACUATION";
     fpvStatusBar.classList.add("danger");
-    toast(`<svg class="icon"><use href="#i-alert"/></svg> TSUNAMI ALERT — ${data.data.dronesAffected} drone`, "danger", 5000);
+    toast(`🚨 TSUNAMI ALERT — ${data.data.dronesAffected} drone`, "danger", 5000);
   }
   if (ev === "VOID_PULSE_ACTIVE") {
     isEmergency = false;
@@ -2010,7 +2047,7 @@ CGO_Fleet.onEvent((data) => {
     $("fpvAlertBar").innerText = "SISTEM NORMAL";
     fpvStatusBar.classList.remove("danger");
     $("valJam").innerText = "SECURE (VOID PULSE)"; $("valJam").style.color = "var(--neon-green)";
-    toast(`<svg class="icon"><use href="#i-zap"/></svg> Void Pulse aktif — ${data.data.dronesAffected} drone aman`, "success");
+    toast(`⚡ Void Pulse aktif — ${data.data.dronesAffected} drone aman`, "success");
   }
 
   if (ev === "IP_DETECTED") {
@@ -2033,7 +2070,7 @@ CGO_Fleet.onEvent((data) => {
   if (ev === "MULTI_SCAN_PROGRESS") {
     const { current, total, region } = data.data;
     const pct = Math.round((current / total) * 100);
-    $("scanProgress").innerHTML = `📡 [${current}/${total}] ${region} — ${pct}%`;
+    $("scanProgress").textContent = `📡 [${current}/${total}] ${region} — ${pct}%`;
     $("progressBarWrap").style.display = "block";
     $("progressBarFill").style.width = pct + "%";
   }
@@ -2049,7 +2086,7 @@ CGO_Fleet.onEvent((data) => {
 
   if (ev === "MULTI_SCAN_COMPLETE") {
     const { total, regions } = data.data;
-    $("scanProgress").innerHTML = `✅ Selesai: ${total} CCTV dari ${regions} region`;
+    $("scanProgress").textContent = `✅ Selesai: ${total} CCTV dari ${regions} region`;
     setTimeout(() => { $("scanProgress").innerText = ""; }, 5000);
   }
 
@@ -2212,7 +2249,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.14.0 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
+console.info("[BCGO UI] v6.15.2 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
 })();
 </script>
 </body>
