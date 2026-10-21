@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.15.3</title>
+<title>BCGO — FLEET COMMAND CENTER v6.16.0</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -200,7 +200,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.15.3</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.16.0</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -969,7 +969,7 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
   let hlsWhy = "";
 
   /* 1) Putar stream HLS-nya langsung di pemutar video (tanpa iframe → tidak kena blokir frame) */
-  if (opts.hlsCandidate && !opts.noProxy) {
+  if (opts.hlsCandidate) {
     cctvEmbed.style.display = "none";
     cctvVideo.style.display = "block";
     cctvVideo.muted = true;
@@ -1102,35 +1102,56 @@ async function playStream(url, cctvInfo, d) {
   setCamLabels(cctvInfo, d);
   setRec("● LOADING", "var(--neon-yellow)", "HLS");
 
-  let src = url, via = "direct";
-  if (d.hlsProxy) {
-    const alive = await CGO_Fleet.CCTV.checkProxy();
-    if (token !== playToken) return;
-    if (alive) { src = d.hlsProxy; via = "proxy"; }
+  /* Susun kandidat: direct dulu (CORS-ok seperti Batam), lalu proxy */
+  const candidates = [];
+  const seen = new Set();
+  const push = (u, via) => {
+    if (!u || seen.has(u)) return;
+    seen.add(u);
+    candidates.push({ url: u, via });
+  };
+  push(url, "direct");
+  if (Array.isArray(d.streams)) {
+    for (const s of d.streams) {
+      if (s && s.type === "hls") {
+        push(s.url, "direct");
+        if (s.proxied) push(s.proxied, "proxy");
+      }
+    }
   }
-  const onFail = (why, parsed) => {
+  if (d.hlsProxy) push(d.hlsProxy, "proxy");
+  if (d.hlsCandidate && d.hlsCandidate !== url) push(d.hlsCandidate, "direct");
+
+  let candIdx = 0;
+  let via = "direct";
+  let parsed = false;
+
+  const onFail = (why) => {
     if (token !== playToken) return;
     clearIframeTimer();
-    /* Lewat proxy gagal sebelum video jalan (mis. domain belum di whitelist) → coba langsung sekali */
-    if (via === "proxy" && !parsed && !onFail.retried) {
-      onFail.retried = true;
-      CGO_Fleet.logGlobal(`⚠️ [HLS] Via proxy gagal (${why}) — mencoba langsung`, "WARNING");
-      if (hls) { hls.destroy(); hls = null; }
-      via = "direct";
-      begin(url);
+    if (hls) { try { hls.destroy(); } catch (_) {} hls = null; }
+    candIdx++;
+    if (candIdx < candidates.length) {
+      CGO_Fleet.logGlobal(`⚠️ [HLS] ${why} — coba kandidat ${candIdx + 1}/${candidates.length}`, "WARNING");
+      begin(candidates[candIdx]);
       return;
     }
-    CGO_Fleet.logGlobal(`❌ [HLS] ${why} — fallback canvas`, "WARNING");
+    CGO_Fleet.logGlobal(`❌ [HLS] semua kandidat gagal (${why})`, "WARNING");
     startSimulatedCCTV(cctvInfo);
   };
-  let parsed = false;
-  const begin = (useSrc) => {
-    /* Manifest tidak datang dalam 15 detik → jangan menggantung selamanya */
+
+  const begin = (cand) => {
+    via = cand.via;
+    parsed = false;
+    setRec("● LOADING", "var(--neon-yellow)", via === "proxy" ? "HLS · PROXY" : "HLS · LANGSUNG");
     clearIframeTimer();
-    iframeLoadTimer = setTimeout(() => onFail("timeout manifest", parsed), 15000);
+    iframeLoadTimer = setTimeout(() => onFail("timeout manifest"), 15000);
     if (typeof Hls !== "undefined" && Hls.isSupported()) {
-      hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-      hls.loadSource(useSrc);
+      hls = new Hls({
+        enableWorker: true, lowLatencyMode: true,
+        manifestLoadingMaxRetry: 1, levelLoadingMaxRetry: 1, fragLoadingMaxRetry: 2
+      });
+      hls.loadSource(cand.url);
       hls.attachMedia(cctvVideo);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (token !== playToken) return;
@@ -1140,29 +1161,36 @@ async function playStream(url, cctvInfo, d) {
           cctvVideo.muted = true;
           cctvVideo.play().catch(() => {});
         });
-        setRec("● LIVE", "var(--neon-green)", "REAL HLS");
+        setRec("● LIVE", "var(--neon-green)", via === "proxy" ? "REAL HLS · PROXY" : "REAL HLS");
         setCamLabels(cctvInfo, d);
         toast("🎥 REAL HLS Aktif — ketuk 🔊 untuk suara", "success");
-        CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS: ${cctvInfo?.name || "CCTV"}`, "SUCCESS");
+        CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS (${via}): ${cctvInfo?.name || "CCTV"}`, "SUCCESS");
       });
       hls.on(Hls.Events.ERROR, (event, data) => {
-        if (data.fatal) onFail(data.type, parsed);
+        if (data.fatal) onFail(data.type || "fatal");
       });
     } else if (cctvVideo.canPlayType("application/vnd.apple.mpegurl")) {
-      cctvVideo.src = useSrc;
+      cctvVideo.src = cand.url;
       cctvVideo.addEventListener("loadedmetadata", () => {
         if (token !== playToken) return;
         parsed = true;
         clearIframeTimer();
         cctvVideo.play().catch(() => {});
         setRec("● LIVE", "var(--neon-green)", "REAL HLS (native)");
+        CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS native: ${cctvInfo?.name || "CCTV"}`, "SUCCESS");
       }, { once: true });
+      cctvVideo.addEventListener("error", () => onFail("native-error"), { once: true });
     } else {
       clearIframeTimer();
-      startSimulatedCCTV(cctvInfo);
+      onFail("no-hls-support");
     }
   };
-  begin(src);
+
+  if (!candidates.length) {
+    startSimulatedCCTV(cctvInfo);
+    return;
+  }
+  begin(candidates[0]);
 }
 
 function startSimulatedCCTV(cctvInfo) {
@@ -1385,12 +1413,68 @@ function initMap() {
     iconSize: [14, 14], iconAnchor: [7, 7]
   });
   droneMarker = L.marker([-6.2088, 106.8456], { icon: droneIcon }).addTo(map).bindPopup("Drone CGO-0001");
-  map.on("click", (e) => {
-    const lat = e.latlng.lat.toFixed(6), lng = e.latlng.lng.toFixed(6);
-    $("mapCoordsDisplay").textContent = `📍 ${lat}, ${lng}`;
-    L.popup().setLatLng(e.latlng).setContent(`Koordinat Presisi:<br><b>${lat}, ${lng}</b>`).openOn(map);
-    toast(`📍 Presisi: ${lat}, ${lng}`, "success");
+  map.on("click", async (e) => {
+    const lat = e.latlng.lat, lng = e.latlng.lng;
+    const latS = lat.toFixed(6), lngS = lng.toFixed(6);
+    $("mapCoordsDisplay").textContent = `📍 ${latS}, ${lngS}`;
+    L.popup().setLatLng(e.latlng).setContent(
+      `Koordinat Presisi:<br><b>${latS}, ${lngS}</b><br><span style="color:#00ff88">📡 Auto-scan CCTV…</span>`
+    ).openOn(map);
+    toast(`📍 Scan CCTV @ ${latS}, ${lngS}`, "success", 2000);
+    await scanAtPoint(lat, lng, { source: "map", radius: 5000 });
   });
+}
+
+/** Pindahkan drone + scan + paksa putar feed real terdekat (GPS / klik peta) */
+async function scanAtPoint(lat, lng, opts) {
+  opts = opts || {};
+  const radius = opts.radius || 5000;
+  const source = opts.source || "scan";
+  try {
+    const drone = CGO_Fleet.getSelectedDrone();
+    if (drone && drone.telemetry && drone.telemetry.position) {
+      const baseLat = -6.2088, baseLng = 106.8456;
+      drone.telemetry.position.x = (lat - baseLat) / 0.0001;
+      drone.telemetry.position.y = (lng - baseLng) / 0.0001;
+      if (typeof updateDroneMarker === "function") updateDroneMarker(drone);
+    }
+  } catch (_) {}
+
+  stopCCTV();
+  statusOverlay.classList.remove("hidden");
+  statusOverlay.textContent = `📡 Memindai CCTV real di sekitar (${source})…`;
+  CGO_Fleet.logGlobal(`📍 [${source.toUpperCase()}] ${lat.toFixed(5)}, ${lng.toFixed(5)} — scan + forcePlay`, "SUCCESS");
+
+  try {
+    const result = await CGO_Fleet.CCTV.scanNearby(lat, lng, radius, { forcePlay: true });
+    const tab = document.querySelector('.video-tab[data-tab="cctv"]');
+    if (tab && !tab.classList.contains("active")) tab.click();
+
+    if (result && result.bestPlay) {
+      const bp = result.bestPlay;
+      const km = bp.distance != null ? Math.round(bp.distance / 1000) : null;
+      statusOverlay.classList.remove("hidden");
+      statusOverlay.textContent = `🎥 Memutar: ${bp.name}${km != null ? " ≈ " + km + " km" : ""}${bp.remote ? " [remote]" : ""}`;
+      return result;
+    }
+    /* Tidak ada di radius lokal → autoStream progressive (Batam/katalog) */
+    statusOverlay.textContent = "📡 Tidak ada feed lokal — mencari stream real terdekat di katalog…";
+    const pick = CGO_Fleet.CCTV.autoStream(lat, lng);
+    if (pick) {
+      const km = pick.distance != null ? Math.round(pick.distance / 1000) : null;
+      statusOverlay.textContent = `🎥 Memutar (katalog): ${pick.name}${km != null ? " ≈ " + km + " km" : ""}${pick.remote ? " [remote]" : ""}`;
+      toast(`🎥 Stream real: ${pick.name}`, "success", 3000);
+    } else {
+      statusOverlay.textContent = "Tidak ada feed CCTV publik yang dapat diputar di titik ini.";
+      toast("Tidak ada feed real tersedia", "warning", 3500);
+    }
+    return result;
+  } catch (e) {
+    statusOverlay.classList.remove("hidden");
+    statusOverlay.textContent = "Scan gagal: " + (e.message || e);
+    toast("Scan gagal: " + (e.message || e), "danger");
+    return null;
+  }
 }
 
 function updateDroneMarker(drone) {
@@ -1791,37 +1875,12 @@ $("gpsBtn").onclick = () => {
         userGpsMarker = L.circleMarker([lat, lng], {
           radius: 8, color: "#00ff88", fillColor: "#00ff88", fillOpacity: .8
         }).addTo(map).bindPopup("Lokasi GPS Anda").openPopup();
-    $("mapCoordsDisplay").textContent = `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+        $("mapCoordsDisplay").textContent = `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
       }
-      /* Pindahkan drone ke GPS agar scanNearby memakai titik ini */
-      try {
-        const drone = CGO_Fleet.getSelectedDrone();
-        if (drone && drone.telemetry && drone.telemetry.position) {
-          /* posisi relatif ke base default -6.2088,106.8456 */
-          const baseLat = -6.2088, baseLng = 106.8456;
-          drone.telemetry.position.x = (lat - baseLat) / 0.0001;
-          drone.telemetry.position.y = (lng - baseLng) / 0.0001;
-          if (typeof updateDroneMarker === "function") updateDroneMarker(drone);
-        }
-      } catch (_) {}
       $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
-      toast("📍 GPS OK — scan CCTV di sekitar Anda...", "success", 2500);
-      CGO_Fleet.logGlobal(`📍 [GPS] ${lat.toFixed(5)}, ${lng.toFixed(5)} — scan nearby`, "SUCCESS");
+      toast("📍 GPS OK — scan & putar CCTV real…", "success", 2500);
       try {
-        /* Hentikan feed sebelumnya agar tayangan lama tidak terlihat seolah berasal
-           dari koordinat GPS yang baru. Scan memilih feed terkonfigurasi berlokasi dekat. */
-        stopCCTV();
-        statusOverlay.classList.remove("hidden");
-        statusOverlay.textContent = "📡 Memindai feed terkonfigurasi (public/private/VPN) dalam radius 5 km...";
-        const result = await CGO_Fleet.CCTV.scanNearby(lat, lng, 5000);
-        if (result && !result.bestPlay) {
-          statusOverlay.classList.remove("hidden");
-          statusOverlay.textContent = "GPS terbaca, tetapi tidak ada feed terkonfigurasi yang dapat diputar dalam radius 5 km. Periksa cameras.json, koneksi LAN/VPN, dan format feed.";
-        }
-      } catch (e) {
-        statusOverlay.classList.remove("hidden");
-        statusOverlay.textContent = "Scan GPS gagal: " + (e.message || e);
-        toast("Scan GPS gagal: " + (e.message || e), "danger");
+        await scanAtPoint(lat, lng, { source: "gps", radius: 5000 });
       } finally {
         gpsScanInProgress = false;
         $("gpsBtn").disabled = false;
@@ -2156,8 +2215,11 @@ CGO_Fleet.onEvent((data) => {
       }
       return;
     }
+    /* Auto buka tab CCTV saat stream siap */
+    const cctvTab = document.querySelector('.video-tab[data-tab="cctv"]');
+    if (cctvTab && !cctvTab.classList.contains("active")) cctvTab.click();
+
     if (openInNewTab) {
-      /* Portal: hanya tampilkan info, buka tab baru saat diklik */
       $("cctvRec").innerText = "● PORTAL"; $("cctvRec").style.color = "#a855f7";
       $("cctvModeLabel").innerText = "TAB BARU"; $("cctvModeLabel").style.color = "#a855f7";
       if (cctv) {
@@ -2173,7 +2235,7 @@ CGO_Fleet.onEvent((data) => {
     } else if (d.substitute && !embed) {
       toast("ℹ️ Memutar feed publik umum (bukan lokasi pin)", "info", 3500);
     }
-    /* Urutkan jenis akses: HLS URL murni → playStream; embed/YouTube/BaliTower → playEmbed; else canvas */
+    /* Cascade: HLS pure → playStream (pakai streams[]); embed → playEmbed (HLS candidate dulu) */
     const hlsUrl = url || d.hls || (cctv && cctv.hls) || null;
     const emb = embed || (cctv && cctv.embed) || null;
     if (d.hlsLive || (hlsUrl && !emb)) {
@@ -2182,7 +2244,8 @@ CGO_Fleet.onEvent((data) => {
       playEmbed(emb, cctv, {
         substitute: !!d.substitute,
         noProxy: !!(d.noProxy || (cctv && cctv.noProxy)),
-        hlsCandidate: d.hlsCandidate || (cctv && (cctv.hlsAuto || cctv.hls)) || null
+        hlsCandidate: d.hlsCandidate || (cctv && (cctv.hlsAuto || cctv.hls)) || null,
+        streams: d.streams || null
       });
     } else if (simulate || !hlsUrl) {
       startSimulatedCCTV(cctv);
@@ -2249,7 +2312,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.15.3 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
+console.info("[BCGO UI] v6.16.0 ready · Max Real Access + GPS/Map Auto-Scan + Stream Cascade");
 })();
 </script>
 </body>

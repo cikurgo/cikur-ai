@@ -1,34 +1,24 @@
 /* ============================================================================
  * CIKUR GO - DRONE CGO FLEET ENGINE
- * Version: 6.15.3
+ * Version: 6.16.0
  * ============================================================================
+ * Perubahan v6.16.0 (dari v6.15.3) — MAX REAL ACCESS + GPS/MAP AUTO:
+ *
+ *   [M1] _pickProgressive(): hierarki radius 5→25→50→500→∞ km agar SELALU
+ *        ada kandidat real (HLS/embed) saat tersedia di katalog.
+ *   [M2] scanNearby/scanMulti: pakai _pickProgressive; options.forcePlay
+ *        memaksa ganti stream aktif (klik GPS / klik peta).
+ *   [M3] Substitute pin tanpa feed: radius progressive (bukan hard 25 km).
+ *   [M4] HLS pure: streams[] selalu berisi direct + proxy (jika ada) agar
+ *        UI bisa cascade tanpa tergantung noProxy.
+ *   [M5] autoStream dipanggil otomatis dari UI saat GPS/map tak menemukan
+ *        bestPlay lokal — Batam/remote tetap ditandai remote.
+ *
  * Perubahan v6.15.3 (dari v6.15.2):
+ *   [G12] Katalog cameras.json tidak di-fetch dari file://.
+ *   [G13] Cache katalog + retry 30 dtk.
  *
- *   [G12] Katalog cameras.json tidak di-fetch dari file:// — browser memblokirnya.
- *   [G13] Hasil katalog di-cache; scan multi-region tidak mengulang fetch gagal
- *         untuk setiap region, dan kegagalan jaringan dicoba ulang setelah 30 dtk.
- *
- * Perubahan v6.15.2 (dari v6.15.1) — MULTI AUTO ACCESS REAL FIX:
- *
- *   [G1] Semua sort `a.distance - b.distance` di-normalisasi via distOf()
- *        → entri tanpa koordinat (distance=null) tidak lagi melompat ke atas.
- *   [G2] _pickBestPlayable: entri tanpa lat/lng hanya lolos saat maxKm=Infinity
- *        → tidak menyamar "dekat 5km" saat posisi tidak diketahui.
- *   [G3] _prepareStream: SEMUA cabang (embed/hls/portal/skip) mengirim
- *        payload lengkap [C4] (streams, hlsProxy, noProxy, embedDirect,
- *        hlsCandidate, portalInfo, openInNewTab, requested).
- *   [G4] _buildEmbedStreams() helper — susun streams[] berprioritas
- *        (HLS-proxy > HLS-direct > Embed-proxy > Embed-direct).
- *   [G5] _nearestLive() juga mencari PUBLIC_STREAMS (Batam, custom HLS).
- *   [G6] scanNearby/scanMultiRegion initial-pick: portal/synthetic TIDAK
- *        boleh jadi "active stream" yang memblokir stream real (root cause bug).
- *   [G7] scanNearby/scanMultiRegion stream activation: jika feed aktif
- *        adalah portal/synthetic, otomatis di-upgrade ke stream real.
- *   [G8] _isActiveRealStream() helper — bedakan stream real vs portal/sim.
- *   [G9] _mergePartial: field baru tidak ditimpa null/undefined [B2].
- *   [G10] autoStream: hierarki identik scanMultiRegion [F6];
- *         BATAM_STREAM_DEFAULT jadi fallback terakhir sebelum remote-clone.
- *   [G11] scanNearby catch-fallback juga menerapkan G1/G6/G7.
+ * Perubahan v6.15.2 — MULTI AUTO ACCESS REAL FIX: G1–G11.
  * ============================================================================ */
 
 (function (global) {
@@ -37,7 +27,7 @@
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.15.3";
+const VERSION = "6.16.0";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -972,6 +962,37 @@ const CCTVEngine = {
       .sort((a, b) => b.s - a.s);
     return scored.length ? scored[0].c : null;
   },
+
+  // [M1] progressive radius: prioritaskan dekat, perluas sampai ada stream real
+  _pickProgressive(list, lat, lng, opts = {}) {
+    if (!list || !list.length) return null;
+    const steps = [5, 25, 50, 500, Infinity];
+    const finalize = (pick) => {
+      if (!pick) return null;
+      // Hitung ulang jarak thd titik query (bukan jarak cache scan sebelumnya)
+      if (lat != null && lng != null && pick.lat != null && pick.lng != null) {
+        const d = Math.round(this.calculateDistance(lat, lng, pick.lat, pick.lng));
+        pick = { ...pick, distance: d };
+        if (d > 50000) pick.remote = true;
+        else delete pick.remote;
+      } else if (pick.distance != null && pick.distance > 50000) {
+        pick = { ...pick, remote: true };
+      }
+      return pick;
+    };
+    for (const km of steps) {
+      const pick = finalize(this._pickBestPlayable(list, lat, lng, km, opts));
+      if (pick) return pick;
+    }
+    if (!opts.includePortal) {
+      for (const km of steps) {
+        const pick = finalize(this._pickBestPlayable(list, lat, lng, km, { includePortal: true }));
+        if (pick) return pick;
+      }
+    }
+    return null;
+  },
+
   _camEntry(rc, dist) {
     const e = {
       id: "REAL-" + rc.name.replace(/\s+/g, "-"),
@@ -994,24 +1015,29 @@ const CCTVEngine = {
     return m ? "https://" + m[1] + "/" + m[2] + "/index.m3u8" : null;
   },
   _primePick(live, lat, lng, opts = {}) {
-    return this._pickBestPlayable(live, lat, lng, 5, opts);
+    return this._pickProgressive(live, lat, lng, opts);
   },
 
-  // [G4] helper susun streams[] berprioritas
+  // [G4]+[M4] streams[] berprioritas: HLS-direct > HLS-proxy > Embed-proxy > Embed-direct
+  // Direct dulu karena banyak feed publik (Batam) sudah CORS-ok; proxy cadangan.
   _buildEmbedStreams(cctv, proxy) {
     const streams = [];
     if (cctv.hlsAuto) {
+      streams.push({ type: "hls", url: cctv.hlsAuto, proxied: null });
+      if (proxy) streams.push({ type: "hls", url: cctv.hlsAuto, proxied: this.proxify(cctv.hlsAuto) });
+    }
+    if (cctv.embed) {
       if (proxy && !cctv.noProxy) {
-        streams.push({ type: "hls", url: cctv.hlsAuto, proxied: this.proxify(cctv.hlsAuto) });
-        streams.push({ type: "hls", url: cctv.hlsAuto, proxied: null });
-      } else {
-        streams.push({ type: "hls", url: cctv.hlsAuto, proxied: null });
+        streams.push({ type: "embed", url: cctv.embed, proxied: this.proxify(cctv.embed) });
       }
+      streams.push({ type: "embed", url: cctv.embed, proxied: null });
     }
-    if (proxy && !cctv.noProxy) {
-      streams.push({ type: "embed", url: cctv.embed, proxied: this.proxify(cctv.embed) });
-    }
-    streams.push({ type: "embed", url: cctv.embed, proxied: null });
+    return streams;
+  },
+
+  _buildHlsStreams(streamUrl, proxy, noProxy) {
+    const streams = [{ type: "hls", url: streamUrl, proxied: null }];
+    if (proxy) streams.push({ type: "hls", url: streamUrl, proxied: this.proxify(streamUrl) });
     return streams;
   },
 
@@ -1142,17 +1168,20 @@ const CCTVEngine = {
     if (!options.silent) fleet.emit("CCTV_SCAN_START", { lat, lng, radius });
 
     await this.ensureCatalog();
+    // live lokal (radius scan) + katalog luas untuk progressive real stream
     const live = this._liveEntries(lat, lng, { realMax: radius, portalMax: Math.max(radius, 40000) });
+    const liveWide = this._liveEntries(lat, lng, {
+      realMax: Infinity, portalMax: Math.max(radius, 80000), streamMax: Infinity
+    });
 
-    // [G6] initial-pick: prioritaskan stream real, bukan portal
-    if (!options.skipStream && !this._activeStreams.has("default")) {
-      let first = this._primePick(live, lat, lng);
-      if (!first) first = this._primePick(live, lat, lng, { includePortal: true });
-      if (!first) first = this._nearestLive(lat, lng, 25);
-      if (!first && live && live.length) {
-        first = this._pickBestPlayable(live, lat, lng, Infinity) || null;
-      }
+    // [G6]+[M2] initial-pick: prioritaskan stream real; forcePlay dari GPS/map
+    const forcePlay = !!options.forcePlay;
+    if (!options.skipStream && (forcePlay || !this._activeStreams.has("default"))) {
+      let first = this._primePick(liveWide, lat, lng);
+      if (!first) first = this._nearestLive(lat, lng, 50);
+      if (!first) first = this._pickProgressive(liveWide, lat, lng, { includePortal: true });
       if (first) this._prepareStream(first, fleet, {
+        force: forcePlay,
         substitute: !!(first.id && !live.some(c => c.id === first.id))
       });
     }
@@ -1207,14 +1236,16 @@ const CCTVEngine = {
       cctvs.sort((a, b) => distOf(a) - distOf(b));
 
       const nearest = cctvs[0] || null;
-      let bestPlay = this._pickBestPlayable(cctvs, lat, lng, Math.max(0.1, radius / 1000));
-      if (!bestPlay) bestPlay = this._pickBestPlayable(cctvs, lat, lng, Math.max(0.1, radius / 1000), { includePortal: true });
+      // [M1] progressive: lokal dulu, perluas ke katalog luas
+      let bestPlay = this._pickProgressive(cctvs, lat, lng);
+      if (!bestPlay) bestPlay = this._pickProgressive(liveWide, lat, lng);
+      if (!bestPlay) bestPlay = this._pickProgressive(cctvs, lat, lng, { includePortal: true });
       this._lastScan = {
         queryLat: lat, queryLng: lng, radius, cctvs, nearest, bestPlay, timestamp: U.iso()
       };
 
       fleet.logGlobal(
-        `✅ [CCTV] ${cctvs.length} unit. Putar: ${bestPlay ? bestPlay.name + (bestPlay.isPortal ? " [portal]" : "") : "—"} · terdekat pin: ${nearest ? nearest.name + " (" + nearest.distance + "m)" : "—"}`,
+        `✅ [CCTV] ${cctvs.length} unit. Putar: ${bestPlay ? bestPlay.name + (bestPlay.isPortal ? " [portal]" : "") + (bestPlay.remote ? " [remote]" : "") : "—"} · terdekat pin: ${nearest ? nearest.name + " (" + nearest.distance + "m)" : "—"}`,
         cctvs.length > 0 ? "SUCCESS" : "WARNING"
       );
       if (!options.silent) {
@@ -1222,18 +1253,18 @@ const CCTVEngine = {
           cctvs, nearest, bestPlay, total: cctvs.length,
           live: cctvs.filter(c => c.realPublic && !c.isPortal && (c.embed || c.hls || c.hlsAuto)).length,
           queryLat: lat, queryLng: lng, radius,
-          bestPlayRemote: false
+          bestPlayRemote: !!(bestPlay && bestPlay.remote)
         });
       }
 
-      // [G7] upgrade portal/synthetic → stream real
+      // [G7]+[M2] upgrade / forcePlay dari GPS-map
       const current = this._activeStreams.get("default");
       const hasRealActive = this._isActiveRealStream(current);
-      if (bestPlay && !options.skipStream && !hasRealActive) {
+      if (bestPlay && !options.skipStream && (forcePlay || !hasRealActive)) {
         if (current && (current.openInNewTab || current.simulate)) {
           fleet.logGlobal(`🔄 [CCTV] Mengganti feed lama dengan stream real: ${bestPlay.name}`, "SUCCESS");
         }
-        this._prepareStream(bestPlay, fleet, { force: !!current });
+        this._prepareStream(bestPlay, fleet, { force: forcePlay || !!current });
       } else if (bestPlay && !options.skipStream && hasRealActive) {
         fleet.logGlobal(`🎥 [CCTV] Stream real aktif dipertahankan`, "INFO");
       }
@@ -1242,34 +1273,36 @@ const CCTVEngine = {
     } catch (err) {
       fleet.logGlobal(`❌ [CCTV] ${err.message}`, "DANGER");
       if (!options.silent) {
-        const fallbackLive = this._liveEntries(lat, lng, { realMax: Infinity, portalMax: 40000 });
+        const fallbackLive = this._liveEntries(lat, lng, {
+          realMax: Infinity, portalMax: 80000, streamMax: Infinity
+        });
         const cctvs = fallbackLive.slice();
         if (cctvs.length === 0) cctvs.push(...this._spawnSyntheticCCTV(lat, lng, 8, 2));
         // [G11] sort null-safe juga di fallback
         cctvs.sort((a, b) => distOf(a) - distOf(b));
         const nearest = cctvs[0];
-        let bestPlay = this._pickBestPlayable(cctvs, lat, lng, Math.max(0.1, radius / 1000));
-        if (!bestPlay) bestPlay = this._pickBestPlayable(cctvs, lat, lng, Math.max(0.1, radius / 1000), { includePortal: true });
+        let bestPlay = this._pickProgressive(cctvs, lat, lng);
+        if (!bestPlay) bestPlay = this._pickProgressive(cctvs, lat, lng, { includePortal: true });
         this._lastScan = { queryLat: lat, queryLng: lng, radius, cctvs, nearest, bestPlay, timestamp: U.iso() };
         fleet.emit("CCTV_SCAN_SUCCESS", {
           cctvs, nearest, bestPlay, total: cctvs.length,
           live: cctvs.filter(c => c.realPublic && !c.isPortal && (c.embed || c.hls || c.hlsAuto)).length,
           queryLat: lat, queryLng: lng, radius, fallback: true, overpassFailed: true,
-          bestPlayRemote: false
+          bestPlayRemote: !!(bestPlay && bestPlay.remote)
         });
         const realN = cctvs.filter(c => c.realPublic).length;
         fleet.logGlobal(
           realN > 0
             ? `[CCTV] Overpass gagal - ${realN} kamera live tetap dimuat (${cctvs.length} total)`
             : `[CCTV] Fallback: spawn ${cctvs.length} synthetic`, "WARNING");
-        // [G11] upgrade portal/sim juga di fallback
+        // [G11]+[M2] upgrade / forcePlay di fallback
         const current = this._activeStreams.get("default");
         const hasRealActive = this._isActiveRealStream(current);
-        if (bestPlay && !options.skipStream && !hasRealActive) {
+        if (bestPlay && !options.skipStream && (forcePlay || !hasRealActive)) {
           if (current && (current.openInNewTab || current.simulate)) {
             fleet.logGlobal(`🔄 [CCTV] (fallback) Mengganti feed lama dengan stream real: ${bestPlay.name}`, "SUCCESS");
           }
-          this._prepareStream(bestPlay, fleet, { force: !!current });
+          this._prepareStream(bestPlay, fleet, { force: forcePlay || !!current });
         }
         return { cctvs, nearest, bestPlay, queryLat: lat, queryLng: lng, radius, fallback: true };
       }
@@ -1291,15 +1324,14 @@ const CCTVEngine = {
     this._scanInProgress = true;
     try {
       await this.ensureCatalog();
-      // [G6] initial-pick prioritas stream real
+      // [G6]+[M1] initial-pick progressive — prioritaskan stream real
       if (!this._activeStreams.has("default")) {
-        const live0 = this._liveEntries(baseLat, baseLng, { realMax: 5000, portalMax: 40000 });
+        const live0 = this._liveEntries(baseLat, baseLng, {
+          realMax: Infinity, portalMax: 80000, streamMax: Infinity
+        });
         let first = this._primePick(live0, baseLat, baseLng);
-        if (!first) first = this._primePick(live0, baseLat, baseLng, { includePortal: true });
-        if (!first) first = this._nearestLive(baseLat, baseLng, 25);
-        if (!first && live0 && live0.length) {
-          first = this._pickBestPlayable(live0, baseLat, baseLng, Infinity) || null;
-        }
+        if (!first) first = this._nearestLive(baseLat, baseLng, 50);
+        if (!first) first = this._pickProgressive(live0, baseLat, baseLng, { includePortal: true });
         if (first) this._prepareStream(first, fleet, {
           substitute: !!(first.id && !live0.some(c => c.id === first.id))
         });
@@ -1365,18 +1397,13 @@ const CCTVEngine = {
       unique.sort((a, b) => distOf(a) - distOf(b));
       const nearest = unique[0] || null;
 
-      let bestPlay = this._pickBestPlayable(unique, baseLat, baseLng, 5);
-      if (!bestPlay) bestPlay = this._pickBestPlayable(unique, baseLat, baseLng, 50);
-      if (!bestPlay) bestPlay = this._pickBestPlayable(unique, baseLat, baseLng, 50, { includePortal: true });
-      if (!bestPlay) bestPlay = this._pickBestPlayable(unique, baseLat, baseLng, 500);
-      if (!bestPlay) bestPlay = this._pickBestPlayable(unique, baseLat, baseLng, Infinity, { includePortal: true });
+      // [M1] progressive multi — sama presisi dengan scanNearby/autoStream
+      let bestPlay = this._pickProgressive(unique, baseLat, baseLng);
       if (!bestPlay) {
         const cand = unique
           .filter(c => !c.isPortal && (c.hls || c.embed || c.hlsAuto))
           .sort((a, b) => this._playabilityScore(b) - this._playabilityScore(a))[0] || null;
         if (cand) bestPlay = { ...cand, remote: true };
-      } else if (bestPlay.distance != null && bestPlay.distance > 50000) {
-        bestPlay = { ...bestPlay, remote: true };
       }
 
       this._lastScan = {
@@ -1466,18 +1493,18 @@ const CCTVEngine = {
       return;
     }
 
-    // ---------- HLS langsung (Batam) ----------
+    // ---------- HLS langsung (Batam / custom) ----------
     if (cctv.realPublic && cctv.hls && !cctv.embed && !cctv.isPortal) {
       const streamUrl = cctv.hls;
       const current = this._activeStreams.get("default");
-      const hlsProxy = (proxy && !cctv.noProxy) ? this.proxify(streamUrl) : null;
+      const streams = this._buildHlsStreams(streamUrl, proxy, !!cctv.noProxy);
+      const hlsProxy = streams.find(s => s.proxied)?.proxied || null;
       if (!force && current && current.url === streamUrl && !current.simulate) {
         current.cctv = cctv;
         fleet.emit("CCTV_STREAM_READY", {
           url: streamUrl, hlsProxy, proxyUrl: proxy,
           embed: null, embedDirect: null, hlsCandidate: streamUrl,
-          noProxy: !!cctv.noProxy,
-          streams: [{ type: "hls", url: streamUrl, proxied: hlsProxy }],
+          noProxy: !!cctv.noProxy, streams,
           cctv, cctvId: cctv.id, distance: cctv.distance,
           simulate: false, hlsLive: true, realPublic: true, skipped: true,
           substitute: !!opts.substitute, requested: opts.requested || null,
@@ -1490,13 +1517,12 @@ const CCTVEngine = {
         substitute: !!opts.substitute
       });
       fleet.logGlobal(
-        `🎥 [CCTV] HLS KAMERA -> ${cctv.name}${cctv.distance != null ? " (" + cctv.distance + "m)" : ""}${opts.substitute ? " [pengganti pin]" : ""}`,
+        `🎥 [CCTV] HLS KAMERA -> ${cctv.name}${cctv.distance != null ? " (" + cctv.distance + "m)" : ""}${opts.substitute ? " [pengganti pin]" : ""}${cctv.remote ? " [remote]" : ""}`,
         "SUCCESS");
       fleet.emit("CCTV_STREAM_READY", {
         url: streamUrl, hlsProxy, proxyUrl: proxy,
         embed: null, embedDirect: null, hlsCandidate: streamUrl,
-        noProxy: !!cctv.noProxy,
-        streams: [{ type: "hls", url: streamUrl, proxied: hlsProxy }],
+        noProxy: !!cctv.noProxy, streams,
         cctv, cctvId: cctv.id, distance: cctv.distance,
         simulate: false, hlsLive: true, realPublic: true,
         substitute: !!opts.substitute, requested: opts.requested || null,
@@ -1505,12 +1531,15 @@ const CCTVEngine = {
       return;
     }
 
-    // ---------- pengganti pin ----------
-    if (!cctv.isPortal && !cctv.embed && !cctv.hls && !opts.noSubstitute) {
-      const near = this._nearestLive(cctv.lat, cctv.lng, 25);
+    // ---------- pengganti pin [M3] progressive ----------
+    if (!cctv.isPortal && !cctv.embed && !cctv.hls && !cctv.hlsAuto && !opts.noSubstitute) {
+      const nearList = this._liveEntries(cctv.lat, cctv.lng, {
+        realMax: Infinity, portalMax: 0, streamMax: Infinity
+      });
+      const near = this._pickProgressive(nearList, cctv.lat, cctv.lng);
       if (near) {
         fleet.logGlobal(
-          `🎥 [CCTV] ${cctv.name} tidak punya feed publik -> pengganti: ${near.name} (${near.distance}m)`, "INFO");
+          `🎥 [CCTV] ${cctv.name} tidak punya feed publik -> pengganti: ${near.name}${near.distance != null ? " (" + near.distance + "m)" : ""}`, "INFO");
         this._prepareStream(near, fleet, { force, substitute: true, requested: cctv });
         return;
       }
@@ -1572,17 +1601,13 @@ const CCTVEngine = {
     });
   },
 
-  // [G10] hierarki identik scanMultiRegion [F6], Batam jadi fallback terakhir
+  // [G10]+[M1] progressive pick; Batam/remote fallback terakhir
   autoStream(lat, lng) {
     const fleet = global.CGO_Fleet;
     if (!fleet) return null;
     const all = this._liveEntries(lat, lng, { realMax: Infinity, portalMax: Infinity, streamMax: Infinity });
 
-    let pick = this._pickBestPlayable(all, lat, lng, 5);
-    if (!pick) pick = this._pickBestPlayable(all, lat, lng, 50);
-    if (!pick) pick = this._pickBestPlayable(all, lat, lng, 50, { includePortal: true });
-    if (!pick) pick = this._pickBestPlayable(all, lat, lng, 500);
-    if (!pick) pick = this._pickBestPlayable(all, lat, lng, Infinity, { includePortal: true });
+    let pick = this._pickProgressive(all, lat, lng);
     if (!pick && this.BATAM_STREAM_DEFAULT) {
       const batam = this.getPlayableCandidates(lat, lng, Infinity)
         .find(c => c.hls && /matanya\.batam\.go\.id/i.test(c.hls));
@@ -1992,6 +2017,6 @@ global.CGO_Debug = {
   isActiveRealStream: () => CCTVEngine._isActiveRealStream(CCTVEngine._activeStreams.get("default"))
 };
 
-console.info(`[CGO Fleet] v${VERSION} — Multi Auto Access Real FIX`);
+console.info(`[CGO Fleet] v${VERSION} — Max Real Access + GPS/Map Auto`);
 
 })(typeof window !== "undefined" ? window : globalThis);
