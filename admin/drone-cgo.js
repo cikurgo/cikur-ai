@@ -39,7 +39,7 @@
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.10.7";
+const VERSION = "6.10.0";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -550,11 +550,8 @@ const CCTVEngine = {
 
   /* HLS publik NYATA (bukan film demo) */
   PUBLIC_STREAMS: [
-    /* Diuji 2026-10-21 via Worker: playlist + segmen HTTP 200 (live) */
-    "https://matanya.batam.go.id/cctv/batuaji/stream.m3u8",
-    "https://matanya.batam.go.id/cctv/atap/stream.m3u8",
-    "https://matanya.batam.go.id/cctv/simpkuda2/stream.m3u8",
-    "https://matanya.batam.go.id/cctv/danganom2/stream.m3u8"
+    "https://matanya.batam.go.id/cctv/casablanca2/stream.m3u8",
+    "https://matanya.batam.go.id/cctv/danganom1/stream.m3u8"
   ],
 
   /* Kamera publik real — hanya BaliTower HTTPS */
@@ -587,7 +584,7 @@ const CCTVEngine = {
     { name: "Portal Pelindung Bandung", lat: -6.9175, lng: 107.6191, url: "https://pelindung.bandung.go.id/", region: "Bandung", openInNewTab: true },
     { name: "Portal CCTV Jogja", lat: -7.7956, lng: 110.3695, url: "https://cctv.jogjakota.go.id/", region: "Yogyakarta", openInNewTab: true },
     { name: "Portal CCTV Semarang", lat: -6.9932, lng: 110.4203, url: "https://pantausemar.semarangkota.go.id/", region: "Semarang", openInNewTab: true },
-    { name: "Portal CCTV Denpasar", lat: -8.6500, lng: 115.2167, url: "https://atcs.denpasarkota.go.id/", region: "Denpasar", openInNewTab: true },
+    { name: "Portal CCTV Denpasar", lat: -8.6500, lng: 115.2167, url: "http://atcs.denpasarkota.go.id/", region: "Denpasar", openInNewTab: true },
     { name: "Portal CCTV Jakarta Publik", lat: -6.1751, lng: 106.8272, url: "https://jakcctv.jakarta.go.id/publik", region: "Jakarta", openInNewTab: true }
   ],
 
@@ -600,16 +597,8 @@ const CCTVEngine = {
     if (!u) return null;
     u = String(u).trim();
     if (!u) return null;
-    if (u.length > 280 || /[\r\n]/.test(u)) return null;
-    if (/PROXY_VERSION|ALLOWED_DOMAINS|createHandler|HEADERS_TO_|function\s+respond|===== CORE/i.test(u)) return null;
     if (!/^https?:\/\//i.test(u)) u = "https://" + u;
-    let parsed;
-    try { parsed = new URL(u); } catch (_) { return null; }
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
-    const host = (parsed.hostname || "").toLowerCase();
-    if (!host || host === "*") return null;
-    if (host !== "localhost" && !/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i.test(host)) return null;
-    return parsed.origin;
+    return u.replace(/\/+$/, "");
   },
   setProxyUrl(url) {
     this.PROXY_URL = this._normProxy(url);
@@ -889,19 +878,8 @@ const CCTVEngine = {
     /* v6.7: kamera live tidak bergantung pada Overpass — siapkan & putar dulu */
     const live = this._liveEntries(lat, lng, { realMax: Math.max(radius, 20000), portalMax: 50000 });
     if (!options.skipStream && !this._activeStreams.has("default")) {
-      /* Utamakan HLS publik (Batam) yang diagnostic-nya OK — panel langsung tayang */
-      if (this.PUBLIC_STREAMS && this.PUBLIC_STREAMS.length) {
-        this._prepareStream({
-          id: "PUBLIC-HLS-0",
-          name: "HLS Publik · Batam",
-          lat, lng, distance: 0,
-          realPublic: true, hls: this.PUBLIC_STREAMS[0],
-          accessType: "hls", surveillanceType: "public_hls"
-        }, fleet);
-      } else {
-        const firstLive = live.find(c => !c.isPortal);
-        if (firstLive) this._prepareStream(firstLive, fleet);
-      }
+      const firstLive = live.find(c => !c.isPortal);
+      if (firstLive) this._prepareStream(firstLive, fleet);
     }
 
     const query = `
@@ -976,8 +954,10 @@ const CCTVEngine = {
         fleet.logGlobal(`🎥 [CCTV] Stream aktif dipertahankan`, "INFO");
       }
 
+      if (!options.allowConcurrent) this._scanInProgress = false;
       return { cctvs, nearest, queryLat: lat, queryLng: lng, radius };
     } catch (err) {
+      if (!options.allowConcurrent) this._scanInProgress = false;
       fleet.logGlobal(`❌ [CCTV] ${err.message}`, "DANGER");
       if (!options.silent) {
         /* v6.7: Overpass gagal ≠ kamera live hilang. Tampilkan kamera live; synthetic hanya jika kosong */
@@ -1000,8 +980,6 @@ const CCTVEngine = {
         return { cctvs, nearest, queryLat: lat, queryLng: lng, radius, fallback: true };
       }
       return null;
-    } finally {
-      if (!options.allowConcurrent) this._scanInProgress = false;
     }
   },
 

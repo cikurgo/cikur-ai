@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.10.7</title>
+<title>BCGO — FLEET COMMAND CENTER v6.9.2</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -200,7 +200,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.10.7</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.9.2</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -881,7 +881,7 @@ function tryNativeHls(src, token) {
     };
     cctvVideo.addEventListener("playing", onOk);
     cctvVideo.addEventListener("error", onErr);
-    timer = setTimeout(() => finish(false), 6000);
+    timer = setTimeout(() => finish(false), 10000);
     cctvVideo.muted = true;
     cctvVideo.src = src;
     try { const pr = cctvVideo.play(); if (pr && pr.catch) pr.catch(() => {}); } catch (_) {}
@@ -905,7 +905,7 @@ function tryHlsSource(src, token) {
       if (!ok) { try { h.destroy(); } catch (_) {} if (hls === h) hls = null; }
       resolve(ok && token === playToken);
     };
-    timer = setTimeout(() => finish(false), 6000);
+    timer = setTimeout(() => finish(false), 10000);
     h.on(Hls.Events.MANIFEST_PARSED, () => {
       if (token !== playToken) return;
       cctvVideo.play().catch(() => { cctvVideo.muted = true; cctvVideo.play().catch(() => {}); });
@@ -915,28 +915,6 @@ function tryHlsSource(src, token) {
     h.loadSource(src);
     h.attachMedia(cctvVideo);
   });
-}
-
-/* Fallback stream yang terbukti OK (diagnostic HLS-1/HLS-2) */
-function pickPublicHls() {
-  try {
-    const list = (CGO_Fleet && CGO_Fleet.CCTV && CGO_Fleet.CCTV.PUBLIC_STREAMS) || [];
-    return list.length ? list[0] : null;
-  } catch (_) { return null; }
-}
-async function playPublicFallback(cctvInfo, token, reason) {
-  const u = pickPublicHls();
-  if (!u || token !== playToken) return false;
-  CGO_Fleet.logGlobal(`⚠️ [STREAM] ${reason} — fallback HLS publik (Batam)`, "WARNING");
-  setRec("● LOADING", "var(--neon-yellow)", "HLS BATAM");
-  toast("⚠️ Lokasi timeout — memutar HLS publik Batam (terbukti OK)", "warning", 3500);
-  const E = CGO_Fleet.CCTV;
-  const proxy = E.getProxyUrl();
-  await playStream(u, cctvInfo ? { ...cctvInfo, name: (cctvInfo.name || "Cam") + " · Batam" } : { name: "HLS Batam" }, {
-    substitute: true,
-    hlsProxy: proxy ? E.proxify(u) : null
-  });
-  return true;
 }
 
 async function playEmbed(embedUrl, cctvInfo, opts) {
@@ -964,22 +942,18 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
     cctvEmbed.style.display = "none";
     cctvVideo.style.display = "block";
     cctvVideo.muted = true;
-    const isBali = /balitower\.co\.id/i.test(opts.hlsCandidate || "");
+    setRec("● LOADING", "var(--neon-yellow)", "HLS LANGSUNG");
     let hlsVia = "langsung";
     let okHls = false;
-    /* BaliTower: lewati native/direct (CORS pasti gagal) — hemat waktu → proxy singkat → Batam */
-    if (!isBali) {
-      setRec("● LOADING", "var(--neon-yellow)", "HLS LANGSUNG");
-      if (nativeHlsSupported()) {
-        okHls = await tryNativeHls(opts.hlsCandidate, token);
-        hlsVia = "native";
-        if (token !== playToken) return;
-      }
-      if (!okHls) {
-        hlsVia = "langsung";
-        okHls = await tryHlsSource(opts.hlsCandidate, token);
-        if (token !== playToken) return;
-      }
+    if (nativeHlsSupported()) {
+      okHls = await tryNativeHls(opts.hlsCandidate, token);
+      hlsVia = "native";
+      if (token !== playToken) return;
+    }
+    if (!okHls) {
+      hlsVia = "langsung";
+      okHls = await tryHlsSource(opts.hlsCandidate, token);
+      if (token !== playToken) return;
     }
     if (!okHls && E.getProxyUrl() && await E.checkProxy()) {
       if (token !== playToken) return;
@@ -995,8 +969,6 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
       CGO_Fleet.logGlobal(`🎥 [STREAM] REAL HLS ${hlsVia}: ${cctvInfo?.name || opts.hlsCandidate}`, "SUCCESS");
       return;
     }
-    /* Diagnostic: Batam OK — panel tetap tayang video real */
-    if (await playPublicFallback(cctvInfo, token, "HLS lokasi gagal")) return;
     CGO_Fleet.logGlobal(`⚠️ [STREAM] HLS ${cctvInfo?.name || ""} gagal (CORS/jaringan) — mencoba iframe`, "WARNING");
     if (hls) { try { hls.destroy(); } catch (_) {} hls = null; }
     cctvVideo.style.display = "none";
@@ -1019,11 +991,9 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
         const why = pr.status ? "HTTP " + pr.status : (pr.error || "tidak ada respons");
         setRec("● ERROR", "var(--neon-red)", "KAMERA: " + why);
         cctvEmbed.removeAttribute("src");
-        CGO_Fleet.logGlobal(`⚠️ [STREAM] ${cctvInfo?.name || embedUrl} → ${why}`, "WARNING");
-        /* Diagnostic: HLS Batam OK — tayangkan itu agar panel tidak kosong */
-        if (await playPublicFallback(cctvInfo, token, why)) return;
         showFallbackBar("Situs kamera tidak bisa dibuka (" + why + "). Coba kamera lain atau buka di tab baru.");
         toast("⚠️ Kamera tidak merespons (" + why + ")", "warning", 3500);
+        CGO_Fleet.logGlobal(`⚠️ [STREAM] ${cctvInfo?.name || embedUrl} → ${why}`, "WARNING");
         return;
       }
       src = E.proxify(embedUrl); via = "proxy";
@@ -1058,13 +1028,12 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
   };
   cctvEmbed.src = src;
 
-  iframeLoadTimer = setTimeout(async () => {
+  iframeLoadTimer = setTimeout(() => {
     if (token !== playToken) return;
     setRec("● TIMEOUT", "var(--neon-red)", "TIDAK ADA RESPON");
-    CGO_Fleet.logGlobal(`⚠️ [STREAM] Timeout memuat: ${cctvInfo?.name || embedUrl}`, "WARNING");
-    if (await playPublicFallback(cctvInfo, token, "iframe timeout")) return;
     showFallbackBar("Kamera belum merespons setelah 15 detik. Coba lagi atau buka di tab baru.");
     toast("⚠️ Kamera belum merespons", "warning", 3500);
+    CGO_Fleet.logGlobal(`⚠️ [STREAM] Timeout memuat: ${cctvInfo?.name || embedUrl}`, "WARNING");
   }, 15000);
 }
 
@@ -1682,15 +1651,8 @@ window.__playCam = (id) => {
   );
   CGO_Fleet.logGlobal(`📍 [MAP] Klik CCTV: ${c.name} @ ${c.lat.toFixed(4)},${c.lng.toFixed(4)}`, "INFO");
 
-  /* Portal: proxy aktif → tampil di panel; else tab baru */
+  /* Portal → buka tab baru */
   if (c.isPortal && c.openInNewTab) {
-    const E = CGO_Fleet.CCTV;
-    if (E.getProxyUrl() && E._proxyOk) {
-      activeCamId = c.id;
-      renderCCTVList();
-      playEmbed(c.embed || c.url, c, { noProxy: false, hlsCandidate: null });
-      return;
-    }
     window.open(c.embed || c.url, "_blank", "noopener,noreferrer");
     toast(`🌐 ${c.name} dibuka di tab baru`, "info", 2500);
     return;
@@ -1963,20 +1925,12 @@ CGO_Fleet.onEvent((data) => {
     } else if (d.substitute && !embed) {
       toast("ℹ️ Memutar feed publik umum (bukan lokasi pin)", "info", 3500);
     }
-    const hlsUrl = url || d.hls || (cctv && cctv.hls) || null;
-    const emb = embed || (cctv && cctv.embed) || null;
-    if (d.hlsLive || (hlsUrl && !emb)) {
-      playStream(hlsUrl, cctv, d);
-    } else if (emb || realPublic) {
-      playEmbed(emb, cctv, {
-        substitute: !!d.substitute,
-        noProxy: !!(d.noProxy || (cctv && cctv.noProxy)),
-        hlsCandidate: d.hlsCandidate || (cctv && (cctv.hlsAuto || cctv.hls)) || null
-      });
-    } else if (simulate || !hlsUrl) {
+    if (embed || realPublic) {
+      playEmbed(embed || cctv?.embed, cctv, { substitute: !!d.substitute, noProxy: !!(d.noProxy || (cctv && cctv.noProxy)), hlsCandidate: d.hlsCandidate || (cctv && cctv.hlsAuto) || null });
+    } else if (simulate || !url) {
       startSimulatedCCTV(cctv);
     } else {
-      playStream(hlsUrl, cctv, d);
+      playStream(url, cctv, d);
     }
   }
 
@@ -2038,7 +1992,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.10.7 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
+console.info("[BCGO UI] v6.14.0 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
 })();
 </script>
 </body>

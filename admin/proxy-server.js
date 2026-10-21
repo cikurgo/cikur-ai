@@ -32,7 +32,7 @@
  * ============================================================================ */
 
 /* ===== CORE:BEGIN (Web-standard API; dipakai juga oleh proxy-worker.js) ===== */
-const PROXY_VERSION = "2.0.1";
+const PROXY_VERSION = "2.0.0";
 
 /* Whitelist domain yang diizinkan untuk diproksi */
 const ALLOWED_DOMAINS = [
@@ -83,7 +83,7 @@ function createHandler(cfg) {
   const allowed = new Set(ALLOWED_DOMAINS);
   String(cfg.extraDomains || "").split(",").map(s => s.trim().toLowerCase())
     .filter(Boolean).forEach(d => allowed.add(d));
-  const timeoutMs = cfg.timeoutMs || 25000;
+  const timeoutMs = cfg.timeoutMs || 15000;
   const maxRedirects = 5;
 
   function respond(body, status, headers) {
@@ -162,9 +162,7 @@ function createHandler(cfg) {
     return body.split(/\r?\n/).map(line => {
       if (!line) return line;
       if (line.charAt(0) === "#") {
-        return line
-          .replace(/URI="([^"]+)"/gi, (m, u) => 'URI="' + rw.ref(u) + '"')
-          .replace(/URI='([^']+)'/gi, (m, u) => "URI='" + rw.ref(u) + "'");
+        return line.replace(/URI="([^"]+)"/g, (m, u) => 'URI="' + rw.ref(u) + '"');
       }
       return rw.ref(line);
     }).join("\n");
