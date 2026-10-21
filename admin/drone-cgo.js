@@ -1,7 +1,13 @@
 /* ============================================================================
  * CIKUR GO - DRONE CGO FLEET ENGINE
- * Version: 6.15.2
+ * Version: 6.15.3
  * ============================================================================
+ * Perubahan v6.15.3 (dari v6.15.2):
+ *
+ *   [G12] Katalog cameras.json tidak di-fetch dari file:// — browser memblokirnya.
+ *   [G13] Hasil katalog di-cache; scan multi-region tidak mengulang fetch gagal
+ *         untuk setiap region, dan kegagalan jaringan dicoba ulang setelah 30 dtk.
+ *
  * Perubahan v6.15.2 (dari v6.15.1) — MULTI AUTO ACCESS REAL FIX:
  *
  *   [G1] Semua sort `a.distance - b.distance` di-normalisasi via distOf()
@@ -31,7 +37,7 @@
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.15.2";
+const VERSION = "6.15.3";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -758,31 +764,57 @@ const CCTVEngine = {
 
   CATALOG_URL: "cameras.json",
   _catalogPromise: null,
+  _catalogResult: null,
+  _catalogFailedAt: 0,
+  _catalogRetryMs: 30000,
   ensureCatalog() {
-    if (!this._catalogPromise) {
-      this._catalogPromise = this.loadCatalog().then(r => {
-        if (r && r.error) this._catalogPromise = null;
-        return r;
-      });
+    if (this._catalogPromise) return this._catalogPromise;
+    if (this._catalogResult) {
+      const isLocalFile = this._catalogResult.error === "file-origin";
+      const canReuse = !this._catalogResult.error ||
+        isLocalFile ||
+        Date.now() - this._catalogFailedAt < this._catalogRetryMs;
+      if (canReuse) return Promise.resolve(this._catalogResult);
     }
+    this._catalogPromise = this.loadCatalog().then(r => {
+      this._catalogResult = r;
+      this._catalogFailedAt = r && r.error ? Date.now() : 0;
+      return r;
+    }).finally(() => {
+      this._catalogPromise = null;
+    });
     return this._catalogPromise;
   },
   async loadCatalog(url) {
     const out = { added: 0, skipped: 0, error: null };
     try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 4000);
-      let res;
-      try { res = await fetch(url || this.CATALOG_URL, { cache: "no-store", signal: ctrl.signal }); }
-      finally { clearTimeout(t); }
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const j = await res.json();
-      const list = Array.isArray(j) ? j : ((j && j.cameras) || []);
-      for (const c of list) { if (this._addCatalogCam(c)) out.added++; else out.skipped++; }
+      const target = url || this.CATALOG_URL;
+      let protocol = "";
+      try {
+        protocol = new URL(target, global.location && global.location.href || "http://localhost/").protocol;
+      } catch (_) {}
+      if (protocol === "file:") {
+        out.error = "file-origin";
+      } else {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 4000);
+        let res;
+        try { res = await fetch(target, { cache: "no-store", signal: ctrl.signal }); }
+        finally { clearTimeout(t); }
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const j = await res.json();
+        const list = Array.isArray(j) ? j : ((j && j.cameras) || []);
+        for (const c of list) { if (this._addCatalogCam(c)) out.added++; else out.skipped++; }
+      }
     } catch (e) { out.error = e && e.name === "AbortError" ? "timeout" : (e && e.message); }
     if (global.CGO_Fleet) {
       global.CGO_Fleet.emit("CATALOG_LOADED", out);
       if (out.added) global.CGO_Fleet.logGlobal(`📚 [CCTV] Katalog: ${out.added} kamera ditambahkan`, "SUCCESS");
+      if (out.error === "file-origin") {
+        global.CGO_Fleet.logGlobal("⚠️ [CCTV] cameras.json dilewati: file:// tidak bisa memuat katalog lokal; gunakan server HTTP/HTTPS.", "WARNING");
+      } else if (out.error) {
+        global.CGO_Fleet.logGlobal(`⚠️ [CCTV] Katalog tidak dimuat (${out.error}); feed bawaan tetap tersedia.`, "WARNING");
+      }
     }
     return out;
   },
