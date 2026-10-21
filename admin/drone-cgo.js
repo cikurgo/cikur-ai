@@ -1,10 +1,109 @@
+/* ============================================================================
+ * CIKUR GO — DRONE CGO FLEET ENGINE
+ * Version: 6.15.0 — Multi Auto-Access CCTV (GPS-first) + Zero-Regresi
+ * ============================================================================
+ * RINGKASAN v6.15.0 (dari v6.14.0):
+ *   [A1] scanMultiRegion(): bestPlay berjenjang 5 km → 50 km → global;
+ *        field `remote:true` ditandai pada feed jauh; payload
+ *        CCTV_SCAN_SUCCESS ditambah `bestPlayRemote` (aditif).
+ *   [A2] PUBLIC_STREAMS jadi array objek {name,lat,lng,hls,region,
+ *        accessType,realPublic,noProxy}; _liveEntries() memasukkan HLS Batam
+ *        sebagai kandidat nyata (label jarak sebenarnya, bukan "kamera sekitar").
+ *        setStreamUrls() tetap menerima string lama dan menormalkannya;
+ *        getStreamUrls() baru (aditif) mengembalikan array string.
+ *   [A3] ensureCatalog(): promise di-reset setelah error → retry berikutnya
+ *        memicu loadCatalog() ulang (maks. 1 retry per pemanggilan scan).
+ *   [A4] _prepareStream() BaliTower: field `streams[]` berprioritas — HLS dulu
+ *        bila proxy tidak ada; embed via proxy bila tersedia. Field lama
+ *        (embed, embedDirect, hlsCandidate, embedProxy, noProxy, proxyUrl)
+ *        tetap dikirim persis; `hlsProxy` ditambah (aditif).
+ *   [A5] Kamera private/VPN tidak pernah di-proxy (noProxy:true) dan skor
+ *        playability-nya dipotong setengah → kamera publik selalu menang.
+ *   [A6] Prime-pick fallback berlapis (prime → nearest ≤25 km → entri live
+ *        pertama, termasuk portal-info) agar selalu ada stream awal yang logis.
+ *   [A7] Radius portal di scanNearby() kini ≥ 40 km (konsisten
+ *        findNearestRealCam()).
+ *   [B1] _liveEntries(): entri jauh (>50 km) ditandai `farFromUser`;
+ *        merge progresif di _mergePartial() menyaring feed > 200 km.
+ *   [B2] _mergePartial(): field baru (remote/farFromUser/accessType) tidak
+ *        ditimpa `undefined` saat menggabungkan.
+ *   [B3] _addCatalogCam(): dedupe key = name|lat.toFixed(4)|lng.toFixed(4).
+ *   [B4] _normProxy(): trim dulu, baru tes whitespace/kode yang ditempel.
+ *   [B5] _osmStream(): http:// hanya diterima untuk host private/VPN
+ *        (noProxy:true); https tetap seperti semula.
+ *   [B6] scanNearby() fallback Overpass: pakai _liveEntries(Infinity, 40 km);
+ *        synthetic hanya di-spawn bila hasil akhir benar-benar kosong.
+ *   [B7] _prepareStream() HLS non-BaliTower: hlsProxy menghormati noProxy.
+ *   [B8] _prepareStream() portal: tambah `portalInfo:true` (aditif).
+ *   [C1] CCTVEngine.getPlayableCandidates(lat, lng, maxKm) — kandidat live
+ *        terurut skor playability lalu jarak.
+ *   [C2] CCTVEngine.autoStream(lat, lng) — pilih kandidat terbaik & putar
+ *        (force:true); didaftarkan juga di CGO_Debug.autoStream.
+ *   [C3] CCTVEngine.BATAM_STREAM_DEFAULT = true — fallback HLS Batam
+ *        (CORS *) saat tidak ada kandidat lokal ≤ 50 km.
+ *   [C4] Semua payload CCTV_STREAM_READY menyertakan field lama + field baru
+ *        (streams, hlsProxy, portalInfo, openInNewTab, dst.) — aditif penuh.
+ *
+ * ----------------------------------------------------------------------------
+ * ZERO REGRESSION INTENT: mempertahankan struktur dan fitur yang sudah ada;
+ * Multi-access memakai endpoint kamera yang dikonfigurasi/diizinkan pemiliknya;
+ * tidak menebak kredensial, membypass autentikasi, atau memindai jaringan secara liar.
+ * v6.14.0:
+ *   - Katalog cameras.json mendukung profil akses public / private / vpn untuk endpoint HLS/embed
+ *   - Akses private/VPN hanya dipakai jika endpoint memang dikonfigurasi; VPN harus aktif pada perangkat/gateway
+ *   - Multi-scan tidak pernah autoplay kamera jauh dari GPS; prioritas feed berkoordinat <= 5 km
+ *   - Identitas accessType dipertahankan dari katalog sampai peta, daftar, dan pemutar
+ * v6.13.0:
+ *   - Tombol GPS memprioritaskan kamera publik berkoordinat dalam radius pencarian
+ *   - Tidak menyamarkan HLS Batam/kota lain sebagai kamera di lokasi GPS pengguna
+ *   - Tidak menampilkan canvas sintetis sebagai tayangan CCTV live
+ *   - Hitungan LIVE hanya menghitung kamera dengan URL feed publik
+ * v6.12.0 (gabungan hasil uji Worker + audit):
+ *   - HLS publik tetap tersedia untuk diagnosis/katalog, tetapi tidak dipakai sebagai
+ *     pengganti otomatis kamera yang lokasinya berbeda
+ *   - Tombol suara CCTV, scan otomatis saat GPS ditemukan, portal Denpasar HTTPS
+ * v6.11.0 (alamat proxy divalidasi + alasan kegagalan HLS):
+ *   - Alamat proxy harus URL sungguhan; teks/kode yang tertempel ditolak dan sisa nilai rusak
+ *     di penyimpanan HP dibersihkan otomatis
+ *   - explainHls(): memberi tahu KENAPA stream gagal (CORS / tidak terjangkau)
+ *   - HLS bawaan browser juga dicoba sebagai usaha terakhir (Chrome Android)
+ * v6.10.0 (kamera BaliTower diputar tanpa iframe):
+ *   - Tiap embed BaliTower diturunkan ke stream HLS-nya (…/<kode>/index.m3u8) → hlsAuto
+ *   - DIAGNOSTIC memeriksa HLS langsung (CORS) sehingga jelas kamera mana yang bisa
+ *     diputar tanpa proxy
+ * v6.9.0 (scan terasa hidup):
+ *   - Multi-scan menayangkan kamera live terdekat SEGERA (tanpa menunggu 11 wilayah selesai)
+ *   - Event CCTV_SCAN_PROGRESSIVE dikirim tiap wilayah selesai → daftar & peta terisi bertahap
+ * v6.8.0 (hasil scan bisa jadi tayangan):
+ *   - Katalog kamera cameras.json (embed / hls / youtube / portal) dimuat otomatis
+ *   - Pin OSM yang punya tag webcam (contact:webcam, webcam, camera:url, stream) ikut
+ *     menjadi kamera live (YouTube / HLS) atau portal
+ *   - Event scan membawa jumlah "live" agar UI tidak menyamakan pin dengan tayangan
+ * v6.7.0 (perbaikan CCTV tidak termuat):
+ *   - Kamera live (BaliTower) tidak lagi bergantung pada Overpass: dimuat & diputar
+ *     langsung; bila Overpass gagal, kamera live tetap tampil (dulu hanya pin synthetic)
+ *   - Proxy BENAR-BENAR dipakai (embedProxy / hlsProxy), + checkProxy() & probe()
+ *   - Pin tanpa feed dapat menawarkan kamera publik terdekat jika ada feed berkoordinat; tidak memakai stream kota lain
+ *   - Portal tidak lagi tertimpa HLS Batam; multi-scan tidak memilih portal sbg stream
+ *   - Duplikat hasil multi-scan dihapus; _scanInProgress tidak bisa macet (try/finally)
+ *   - fetchOverpass punya batas waktu total (dulu bisa 5+ menit)
+ *   - diagnoseCCTV akurat (via proxy /probe), paralel, ber-timeout
+ * Perubahan fokus CCTV (v6.6.0):
+ *   - REAL_PUBLIC_CAMS: hanya BaliTower HTTPS (sumber yang realistis embed)
+ *   - PUBLIC_STREAMS: HLS nyata (Batam), bukan film demo
+ *   - REGION_PORTALS: ditandai openInNewTab (tidak dipaksa iframe)
+ *   - _prepareStream: prioritas feed publik berkoordinat; kondisi tanpa feed dilaporkan jelas
+ *   - diagnoseCCTV(): test semua URL dan laporkan status
+ *   - Proxy integration: gunakan CGO_ProxyURL jika tersedia
+ * ============================================================================ */
+
 (function (global) {
 "use strict";
 
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.14.0";
+const VERSION = "6.15.0";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -13,6 +112,14 @@ const RTB_THRESHOLD = 15;
 const RTB_HYSTERESIS = 20;
 const MESH_RADIUS = 3;
 const GRID_SIZE = 32;
+
+/* Koordinat default untuk normalisasi string lama → objek */
+const BATAM_STREAM_COORDS = {
+  "https://matanya.batam.go.id/cctv/batuaji/stream.m3u8":   { name: "Batu Aji (Batam)",   lat: 1.1300, lng: 104.0300 },
+  "https://matanya.batam.go.id/cctv/atap/stream.m3u8":      { name: "Atap (Batam)",       lat: 1.1300, lng: 104.0500 },
+  "https://matanya.batam.go.id/cctv/simpkuda2/stream.m3u8": { name: "Simpang Kuda (Batam)", lat: 1.1250, lng: 104.0450 },
+  "https://matanya.batam.go.id/cctv/danganom2/stream.m3u8": { name: "Danganom (Batam)",   lat: 1.1200, lng: 104.0400 }
+};
 
 const STATE = Object.freeze({
   IDLE:"IDLE", DEPLOYING:"DEPLOYING", MONITORING:"MONITORING",
@@ -496,12 +603,15 @@ const SwarmCoordinator = {
 };
 
 // ==========================================================================
-// 6. CCTV ENGINE (Real Priority + Proxy + Diagnostic)
+// 6. CCTV ENGINE (Real Priority + Proxy + Diagnostic + v6.15.0)
 // ==========================================================================
 const CCTVEngine = {
   _activeStreams: new Map(),
   _lastScan: null,
   _scanInProgress: false,
+
+  /* C3 — flag default: prioritaskan HLS Batam saat tidak ada kandidat ≤ 50 km */
+  BATAM_STREAM_DEFAULT: true,
 
   REGIONS: [
     { name: "Jakarta Pusat",   lat: -6.1751, lng: 106.8272, radius: 4000 },
@@ -517,13 +627,13 @@ const CCTVEngine = {
     { name: "Denpasar",        lat: -8.6500, lng: 115.2167, radius: 4000 }
   ],
 
-  /* HLS publik NYATA (bukan film demo) */
+  /* HLS publik NYATA (bukan film demo) — [A2] array objek + koordinat */
   PUBLIC_STREAMS: [
     /* Diuji 2026-10-21 via Worker: playlist + segmen HTTP 200 (live) */
-    "https://matanya.batam.go.id/cctv/batuaji/stream.m3u8",
-    "https://matanya.batam.go.id/cctv/atap/stream.m3u8",
-    "https://matanya.batam.go.id/cctv/simpkuda2/stream.m3u8",
-    "https://matanya.batam.go.id/cctv/danganom2/stream.m3u8"
+    { name: "Batu Aji (Batam)",    lat: 1.1300, lng: 104.0300, hls: "https://matanya.batam.go.id/cctv/batuaji/stream.m3u8",   region: "Batam", accessType: "hls", realPublic: true, noProxy: true },
+    { name: "Atap (Batam)",        lat: 1.1300, lng: 104.0500, hls: "https://matanya.batam.go.id/cctv/atap/stream.m3u8",      region: "Batam", accessType: "hls", realPublic: true, noProxy: true },
+    { name: "Simpang Kuda (Batam)", lat: 1.1250, lng: 104.0450, hls: "https://matanya.batam.go.id/cctv/simpkuda2/stream.m3u8", region: "Batam", accessType: "hls", realPublic: true, noProxy: true },
+    { name: "Danganom (Batam)",    lat: 1.1200, lng: 104.0400, hls: "https://matanya.batam.go.id/cctv/danganom2/stream.m3u8", region: "Batam", accessType: "hls", realPublic: true, noProxy: true }
   ],
 
   /* Kamera publik real — hanya BaliTower HTTPS */
@@ -567,12 +677,14 @@ const CCTVEngine = {
 
   _normProxy(u) {
     if (u == null) return null;
-    u = String(u).trim();
-    if (!u || u.length > 280 || /\s/.test(u)) return null;
-    if (/PROXY_VERSION|ALLOWED_DOMAINS|createHandler|HEADERS_TO_|function\s+respond|===== CORE/i.test(u)) return null;
-    if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+    /* [B4] trim dulu, baru tes whitespace/kode yang ditempel */
+    const raw = String(u).trim();
+    if (!raw || raw.length > 280 || /\s/.test(raw)) return null;
+    if (/PROXY_VERSION|ALLOWED_DOMAINS|createHandler|HEADERS_TO_|function\s+respond|===== CORE/i.test(raw)) return null;
+    let v = raw;
+    if (!/^https?:\/\//i.test(v)) v = "https://" + v;
     let p;
-    try { p = new URL(u); } catch (_) { return null; }
+    try { p = new URL(v); } catch (_) { return null; }
     if (p.protocol !== "http:" && p.protocol !== "https:") return null;
     const h = (p.hostname || "").toLowerCase();
     if (!h || h === "*" || !/^[a-z0-9.-]+$/i.test(h)) return null;
@@ -675,7 +787,30 @@ const CCTVEngine = {
       return { ok: false, status: 0, error: e.name === "AbortError" ? "timeout" : e.message };
     } finally { clearTimeout(t); }
   },
-  setStreamUrls(urls) { this.PUBLIC_STREAMS = Array.isArray(urls) ? urls.slice() : []; },
+
+  /* [A2] setStreamUrls: normalisasi string lama → objek, kembalikan array string */
+  _normalizeStreamEntry(s) {
+    if (!s) return null;
+    if (typeof s === "string") {
+      const d = BATAM_STREAM_COORDS[s] || {};
+      return {
+        name: d.name || "HLS",
+        lat: d.lat, lng: d.lng,
+        hls: s, region: "Batam",
+        accessType: "hls", realPublic: true, noProxy: true
+      };
+    }
+    if (typeof s === "object" && s.hls) return s;
+    return null;
+  },
+  setStreamUrls(urls) {
+    const arr = Array.isArray(urls) ? urls : [];
+    this.PUBLIC_STREAMS = arr.map(u => this._normalizeStreamEntry(u)).filter(Boolean);
+    return this.getStreamUrls();
+  },
+  getStreamUrls() {
+    return this.PUBLIC_STREAMS.map(s => typeof s === "string" ? s : (s && s.hls) || "");
+  },
 
   calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
@@ -709,8 +844,14 @@ const CCTVEngine = {
   /* ---------- Katalog kamera (cameras.json) ---------- */
   CATALOG_URL: "cameras.json",
   _catalogPromise: null,
+  /* [A3] retry otomatis setelah error */
   ensureCatalog() {
-    if (!this._catalogPromise) this._catalogPromise = this.loadCatalog();
+    if (!this._catalogPromise) {
+      this._catalogPromise = this.loadCatalog().then(r => {
+        if (r && r.error) this._catalogPromise = null;
+        return r;
+      });
+    }
     return this._catalogPromise;
   },
   async loadCatalog(url) {
@@ -766,21 +907,31 @@ const CCTVEngine = {
         return !!u.hostname;
       } catch (_) { return false; }
     };
-    const has = (arr) => arr.some(x => x.name === name);
+    /* [B3] dedupe key = name + lat.toFixed(4) + lng.toFixed(4) */
+    const dedupeKey = (n, la, lo) => `${n}|${Number(la).toFixed(4)}|${Number(lo).toFixed(4)}`;
+    const has = (arr) => arr.some(x => dedupeKey(x.name, x.lat, x.lng) === dedupeKey(name, lat, lng));
+
     if (type === "portal") {
       if (!isValidUrl(url) || has(this.REGION_PORTALS)) return false;
       this.REGION_PORTALS.push({ name, lat, lng, url, region, openInNewTab: true, accessType });
       return true;
     }
     if (has(this.REAL_PUBLIC_CAMS)) return false;
+    /* [A5] kamera private/VPN tidak pernah di-proxy */
+    const noProxy = isConfiguredNetwork;
+
     if (["embed", "private-embed", "vpn-embed"].includes(type)) {
       if (!isValidUrl(url)) return false;
-      this.REAL_PUBLIC_CAMS.push({ name, lat, lng, embed: url, region, accessType, configuredAccess: true, realPublic: true });
+      const entry = { name, lat, lng, embed: url, region, accessType, configuredAccess: true, realPublic: true };
+      if (noProxy) entry.noProxy = true;
+      this.REAL_PUBLIC_CAMS.push(entry);
       return true;
     }
     if (["hls", "private-hls", "vpn-hls"].includes(type)) {
       if (!isValidUrl(url)) return false;
-      this.REAL_PUBLIC_CAMS.push({ name, lat, lng, hls: url, region, accessType, configuredAccess: true, realPublic: true });
+      const entry = { name, lat, lng, hls: url, region, accessType, configuredAccess: true, realPublic: true };
+      if (noProxy) entry.noProxy = true;
+      this.REAL_PUBLIC_CAMS.push(entry);
       return true;
     }
     if (type === "youtube") {
@@ -813,36 +964,54 @@ const CCTVEngine = {
     if (!raw) return null;
     const url = String(raw).trim();
     if (!/^https?:\/\//i.test(url)) return null;
-    const secure = /^https:\/\//i.test(url);   /* halaman HTTPS memblokir sumber http (mixed content) */
+    const secure = /^https:\/\//i.test(url);
+    /* [B5] http:// hanya diterima untuk host private/VPN; publik wajib https */
+    let isPrivateHttp = false;
+    if (!secure) {
+      const access = this._classifyConfiguredAccess(url, "");
+      if (access !== "private" && access !== "vpn") return null;
+      isPrivateHttp = true;
+    }
+    const noProxy = isPrivateHttp;
     const yt = this._youtubeEmbed(url);
     if (yt) return { realPublic: true, embed: yt, noProxy: true, accessType: "youtube", surveillanceType: "osm_stream", fromOSM: true };
     /* HLS langsung (paling mudah diputar di browser bila CORS mengizinkan) */
-    if (secure && /\.m3u8(\?|$)/i.test(url)) {
-      return { realPublic: true, hls: url, accessType: "hls", surveillanceType: "osm_stream", fromOSM: true };
+    if (/\.m3u8(\?|$)/i.test(url)) {
+      const out = { realPublic: true, hls: url, accessType: "hls", surveillanceType: "osm_stream", fromOSM: true };
+      if (noProxy) out.noProxy = true;
+      return out;
     }
     /* Embed page (mis. BaliTower/Flussonic) */
-    if (secure && (/\/embed(\.html)?(\?|$)/i.test(url) || /balitower\.co\.id/i.test(url))) {
+    if (/\/embed(\.html)?(\?|$)/i.test(url) || /balitower\.co\.id/i.test(url)) {
       const hlsAuto = this._hlsFromEmbed(url);
-      return {
+      const out = {
         realPublic: true, embed: url, accessType: "embed",
         hlsAuto: hlsAuto || undefined,
         surveillanceType: "osm_stream", fromOSM: true
       };
+      if (noProxy) out.noProxy = true;
+      return out;
     }
     if (!strong) return null;   /* situs biasa bukan kamera */
-    return { realPublic: true, embed: url, isPortal: true, openInNewTab: true, accessType: "portal", surveillanceType: "osm_portal", fromOSM: true };
+    const out = { realPublic: true, embed: url, isPortal: true, openInNewTab: true, accessType: "portal", surveillanceType: "osm_portal", fromOSM: true };
+    if (noProxy) out.noProxy = true;
+    return out;
   },
   /* Pilih kamera yang paling mungkin tayang di browser tanpa Worker */
   _playabilityScore(c) {
     if (!c) return -1;
-    if (c.isPortal) return 1;
-    if (c.noProxy && c.embed) return 80;           /* YouTube embed */
-    if (c.hls && /matanya\.batam\.go\.id/i.test(c.hls)) return 90; /* CORS * */
-    if (c.hls) return 70;                          /* HLS lain */
-    if (c.hlsAuto || (c.embed && /balitower/i.test(c.embed || ""))) return 40; /* butuh proxy */
-    if (c.embed) return 30;
-    if (c.realPublic) return 20;
-    return 0;
+    let s;
+    if (c.isPortal) s = 1;
+    else if (c.noProxy && c.embed) s = 80;           /* YouTube embed */
+    else if (c.hls && /matanya\.batam\.go\.id/i.test(c.hls)) s = 90; /* CORS * */
+    else if (c.hls) s = 70;                          /* HLS lain */
+    else if (c.hlsAuto || (c.embed && /balitower/i.test(c.embed || ""))) s = 40; /* butuh proxy */
+    else if (c.embed) s = 30;
+    else if (c.realPublic) s = 20;
+    else s = 0;
+    /* [A5] kamera private/VPN selalu kalah skor dari kamera publik */
+    if (c.accessType === "private" || c.accessType === "vpn") s = Math.floor(s * 0.5);
+    return s;
   },
   _pickBestPlayable(list, preferLat, preferLng, maxKm = 25) {
     if (!list || !list.length) return null;
@@ -894,20 +1063,47 @@ const CCTVEngine = {
     const seen = new Map();
     for (const c of allCCTVs) { const k = String(c.id); if (!seen.has(k)) seen.set(k, c); }
     for (const c of this._liveEntries(baseLat, baseLng, { realMax: Infinity, portalMax: Infinity })) {
+      /* [B1] progresif: saring feed > 200 km agar list tidak dipenuhi kamera jauh */
+      if (c.distance != null && c.distance > 200000) continue;
       const k = String(c.id);
-      if (seen.has(k)) seen.get(k).distance = c.distance; else seen.set(k, c);
+      if (seen.has(k)) {
+        const prev = seen.get(k);
+        prev.distance = c.distance;
+        /* [B2] pertahankan field baru, jangan timpa dengan undefined */
+        if (c.remote != null) prev.remote = c.remote;
+        if (c.farFromUser != null) prev.farFromUser = c.farFromUser;
+        if (prev.accessType == null && c.accessType != null) prev.accessType = c.accessType;
+      } else {
+        seen.set(k, c);
+      }
     }
     return Array.from(seen.values()).sort((a, b) => a.distance - b.distance);
   },
 
-  /* Entri kamera live (BaliTower) + portal — murni lokal, tanpa jaringan */
+  /* Entri kamera live (BaliTower) + HLS publik (Batam) + portal — murni lokal, tanpa jaringan */
   _liveEntries(lat, lng, opts = {}) {
     const realMax = opts.realMax != null ? opts.realMax : 20000;
     const portalMax = opts.portalMax != null ? opts.portalMax : 50000;
     const out = [];
+    /* [A2 + B1] public HLS streams (Batam) — kandidat nyata, label jarak asli */
+    for (const raw of this.PUBLIC_STREAMS) {
+      const s = this._normalizeStreamEntry(raw);
+      if (!s || !s.hls) continue;
+      const dist = (s.lat != null && s.lng != null)
+        ? Math.round(this.calculateDistance(lat, lng, s.lat, s.lng))
+        : null;
+      if (dist != null && dist > realMax) continue;
+      const e = this._camEntry(s, dist);
+      e.farFromUser = dist != null && dist > 50000;
+      out.push(e);
+    }
     for (const rc of this.REAL_PUBLIC_CAMS) {
       const dist = Math.round(this.calculateDistance(lat, lng, rc.lat, rc.lng));
-      if (dist <= realMax) out.push(this._camEntry(rc, dist));
+      if (dist <= realMax) {
+        const e = this._camEntry(rc, dist);
+        e.farFromUser = dist > 50000;
+        out.push(e);
+      }
     }
     for (const p of this.REGION_PORTALS) {
       const dist = Math.round(this.calculateDistance(lat, lng, p.lat, p.lng));
@@ -917,7 +1113,8 @@ const CCTVEngine = {
           lat: p.lat, lng: p.lng, distance: dist,
           name: p.name, surveillanceType: "portal_live",
           realPublic: true, embed: p.url, region: p.region,
-          isPortal: true, openInNewTab: true
+          isPortal: true, openInNewTab: true,
+          farFromUser: dist > 50000
         });
       }
     }
@@ -972,10 +1169,14 @@ const CCTVEngine = {
     await this.ensureCatalog();
     /* Kamera publik yang berkoordinat di sekitar lokasi. Portal jauh dan stream tanpa
        koordinat tidak dianggap sebagai CCTV lokal. */
-    const live = this._liveEntries(lat, lng, { realMax: radius, portalMax: radius });
+    /* [A7] radius portal minimal 40 km */
+    const live = this._liveEntries(lat, lng, { realMax: radius, portalMax: Math.max(radius, 40000) });
     if (!options.skipStream && !this._activeStreams.has("default")) {
-      const first = this._primePick(live, lat, lng);
-      if (first) this._prepareStream(first, fleet);
+      /* [A6] prime-pick fallback berlapis */
+      let first = this._primePick(live, lat, lng);
+      if (!first) first = this._nearestLive(lat, lng, 25);
+      if (!first && live && live.length) first = live[0];
+      if (first) this._prepareStream(first, fleet, { substitute: !!(first.id && !live.some(c => c.id === first.id)) });
     }
 
     const query = `
@@ -1055,8 +1256,10 @@ const CCTVEngine = {
     } catch (err) {
       fleet.logGlobal(`❌ [CCTV] ${err.message}`, "DANGER");
       if (!options.silent) {
-        /* v6.7: Overpass gagal ≠ kamera live hilang. Tampilkan kamera live; synthetic hanya jika kosong */
-        const cctvs = live.slice();
+        /* v6.7: Overpass gagal ≠ kamera live hilang. Tampilkan kamera live; synthetic hanya jika kosong.
+           [B6] fallback pakai _liveEntries(Infinity, 40 km) — bukan variabel `live` yang bisa kosong. */
+        const fallbackLive = this._liveEntries(lat, lng, { realMax: Infinity, portalMax: 40000 });
+        const cctvs = fallbackLive.slice();
         if (cctvs.length === 0) cctvs.push(...this._spawnSyntheticCCTV(lat, lng, 8, 2));
         cctvs.sort((a, b) => a.distance - b.distance);
         const nearest = cctvs[0];
@@ -1094,9 +1297,12 @@ const CCTVEngine = {
     try {
       await this.ensureCatalog();
       if (!this._activeStreams.has("default")) {
-        const live0 = this._liveEntries(baseLat, baseLng, { realMax: 5000, portalMax: 0 });
-        const first = this._primePick(live0, baseLat, baseLng);
-        if (first) this._prepareStream(first, fleet);
+        /* [A6 + A7] prime-pick fallback berlapis, portal ≤ 40 km sebagai info */
+        const live0 = this._liveEntries(baseLat, baseLng, { realMax: 5000, portalMax: 40000 });
+        let first = this._primePick(live0, baseLat, baseLng);
+        if (!first) first = this._nearestLive(baseLat, baseLng, 25);
+        if (!first && live0 && live0.length) first = live0[0];
+        if (first) this._prepareStream(first, fleet, { substitute: !!(first.id && !live0.some(c => c.id === first.id)) });
       }
       const allCCTVs = [];
       let scanned = 0;
@@ -1146,7 +1352,12 @@ const CCTVEngine = {
         const key = String(c.id);
         if (seen.has(key)) {
           const prev = unique.find(u => String(u.id) === key);
-          if (prev) prev.distance = c.distance;
+          if (prev) {
+            prev.distance = c.distance;
+            if (c.remote != null) prev.remote = c.remote;
+            if (c.farFromUser != null) prev.farFromUser = c.farFromUser;
+            if (prev.accessType == null && c.accessType != null) prev.accessType = c.accessType;
+          }
           continue;
         }
         seen.add(key);
@@ -1155,9 +1366,16 @@ const CCTVEngine = {
 
       unique.sort((a, b) => a.distance - b.distance);
       const nearest = unique[0] || null;
-      /* Multi-scan boleh menampilkan berbagai wilayah, tetapi autoplay harus sesuai lokasi GPS.
-         Profil private/VPN yang dikonfigurasi tetap memenuhi syarat jika jaraknya <= 5 km. */
-      const bestPlay = this._pickBestPlayable(unique, baseLat, baseLng, 5);
+
+      /* [A1] bestPlay berjenjang 5 km → 50 km → global (remote:true) */
+      let bestPlay = this._pickBestPlayable(unique, baseLat, baseLng, 5);
+      if (!bestPlay) bestPlay = this._pickBestPlayable(unique, baseLat, baseLng, 50);
+      if (!bestPlay) {
+        bestPlay = unique
+          .filter(c => !c.isPortal && (c.hls || c.embed || c.hlsAuto))
+          .sort((a, b) => this._playabilityScore(b) - this._playabilityScore(a))[0] || null;
+        if (bestPlay) bestPlay.remote = true;
+      }
 
       this._lastScan = {
         queryLat: baseLat, queryLng: baseLng,
@@ -1168,15 +1386,25 @@ const CCTVEngine = {
         cctvs: unique, nearest, bestPlay, total: unique.length,
         live: unique.filter(c => c.realPublic && !c.isPortal && (c.embed || c.hls || c.hlsAuto)).length,
         queryLat: baseLat, queryLng: baseLng,
-        radius: 5000, multiRegion: true
+        radius: 5000, multiRegion: true,
+        bestPlayRemote: !!(bestPlay && bestPlay.remote)
       });
       fleet.emit("MULTI_SCAN_COMPLETE", { total: unique.length, regions: list.length });
-      fleet.logGlobal(`✅ [MULTI] Selesai: ${unique.length} CCTV dari ${list.length} region · feed lokal: ${bestPlay ? bestPlay.name : "tidak ditemukan"}`, "SUCCESS");
 
       const hasActive = this._activeStreams.has("default");
-      if (bestPlay && !hasActive) this._prepareStream(bestPlay, fleet);
-      else if (bestPlay && hasActive) fleet.logGlobal(`🎥 [CCTV] Stream aktif dipertahankan`, "INFO");
-      else if (!hasActive) fleet.logGlobal("ℹ️ [MULTI] Tidak ada feed yang dapat diputar dalam radius 5 km; tidak mengganti dengan kamera jauh.", "WARNING");
+      if (bestPlay && !hasActive) {
+        this._prepareStream(bestPlay, fleet);
+        const distLabel = (bestPlay.distance != null) ? " ≈ " + Math.round(bestPlay.distance / 1000) + " km" : "";
+        fleet.logGlobal(
+          `📡 [MULTI] Feed terpilih: ${bestPlay.name}${distLabel}${bestPlay.remote ? " [remote]" : ""}`,
+          bestPlay.remote ? "WARNING" : "SUCCESS"
+        );
+      } else if (bestPlay && hasActive) {
+        fleet.logGlobal(`🎥 [CCTV] Stream aktif dipertahankan`, "INFO");
+      } else if (!hasActive) {
+        fleet.logGlobal("ℹ️ [MULTI] Tidak ada feed yang dapat diputar (bahkan fallback global).", "WARNING");
+      }
+      fleet.logGlobal(`✅ [MULTI] Selesai: ${unique.length} CCTV dari ${list.length} region`, "SUCCESS");
 
       return unique;
     } finally {
@@ -1205,19 +1433,33 @@ const CCTVEngine = {
         url: null, embed: cctv.embed, cctv, simulate: false, realPublic: true,
         substitute: !!opts.substitute
       });
+
+      /* [A4] streams berprioritas + field lama utuh */
+      const embedProxy = (proxy && !cctv.noProxy) ? this.proxify(cctv.embed) : null;
+      const hlsProxy = (proxy && !cctv.noProxy && cctv.hlsAuto) ? this.proxify(cctv.hlsAuto) : null;
+      const streams = [];
+      if (!proxy && cctv.hlsAuto) streams.push({ type: "hls", url: cctv.hlsAuto });
+      if (proxy && cctv.hlsAuto) streams.push({ type: "hls", url: cctv.hlsAuto, proxied: this.proxify(cctv.hlsAuto) });
+      if (proxy) streams.push({ type: "embed", url: cctv.embed, proxied: this.proxify(cctv.embed) });
+      streams.push({ type: "embed", url: cctv.embed });
+
       fleet.logGlobal(
-        `🎥 [CCTV] REAL PUBLIC → ${cctv.name} (${cctv.distance}m)${opts.substitute ? " [pengganti pin]" : ""}`, "SUCCESS");
+        `🎥 [CCTV] REAL PUBLIC → ${cctv.name} (${cctv.distance}m)${opts.substitute ? " [pengganti pin]" : ""} (streams: ${streams.length})`, "SUCCESS");
       fleet.emit("CCTV_STREAM_READY", {
         url: null, embed: cctv.embed, embedDirect: cctv.embed, noProxy: !!cctv.noProxy,
         hlsCandidate: cctv.hlsAuto || null,
-        embedProxy: (proxy && !cctv.noProxy) ? this.proxify(cctv.embed) : null, proxyUrl: proxy,
+        hlsProxy,
+        embedProxy,
+        proxyUrl: proxy,
+        streams,
         cctv, cctvId: cctv.id, distance: cctv.distance, simulate: false, realPublic: true,
-        substitute: !!opts.substitute, requested: opts.requested || null
+        substitute: !!opts.substitute, requested: opts.requested || null,
+        openInNewTab: false, portalInfo: false
       });
       return;
     }
 
-    /* 1b) Kamera dengan stream HLS sendiri (katalog / tag OSM) */
+    /* 1b) Kamera dengan stream HLS sendiri (katalog / tag OSM / Batam) */
     if (cctv.realPublic && cctv.hls && !cctv.embed && !cctv.isPortal) {
       const streamUrl = cctv.hls;
       const current = this._activeStreams.get("default");
@@ -1227,11 +1469,16 @@ const CCTVEngine = {
         return;
       }
       this._activeStreams.set("default", { url: streamUrl, embed: null, cctv, simulate: false, substitute: !!opts.substitute });
+      /* [B7] hlsProxy hormati noProxy */
+      const hlsProxy = (proxy && !cctv.noProxy) ? this.proxify(streamUrl) : null;
       fleet.logGlobal(`🎥 [CCTV] HLS KAMERA → ${cctv.name}${cctv.distance != null ? " (" + cctv.distance + "m)" : ""}${opts.substitute ? " [pengganti pin]" : ""}`, "SUCCESS");
       fleet.emit("CCTV_STREAM_READY", {
-        url: streamUrl, hlsProxy: proxy ? this.proxify(streamUrl) : null, proxyUrl: proxy,
+        url: streamUrl, hlsProxy, proxyUrl: proxy,
         embed: null, cctv, cctvId: cctv.id, distance: cctv.distance, simulate: false, hlsLive: true,
-        substitute: !!opts.substitute, requested: opts.requested || null
+        substitute: !!opts.substitute, requested: opts.requested || null,
+        noProxy: !!cctv.noProxy,
+        openInNewTab: false, portalInfo: false,
+        streams: [{ type: "hls", url: streamUrl, proxied: hlsProxy }]
       });
       return;
     }
@@ -1251,9 +1498,11 @@ const CCTVEngine = {
     if (cctv.isPortal && cctv.openInNewTab) {
       this._activeStreams.set("default", { url: null, embed: cctv.embed, cctv, simulate: false, openInNewTab: true });
       fleet.logGlobal(`🌐 [CCTV] Portal → ${cctv.name} (buka tab baru)`, "INFO");
+      /* [B8] portalInfo aditif */
       fleet.emit("CCTV_STREAM_READY", {
         url: null, embed: cctv.embed, cctv, cctvId: cctv.id,
-        distance: cctv.distance, simulate: false, openInNewTab: true
+        distance: cctv.distance, simulate: false, openInNewTab: true,
+        portalInfo: true
       });
       return;
     }
@@ -1281,6 +1530,41 @@ const CCTVEngine = {
     return s ? s.url : null;
   },
 
+  /* [C1] kandidat live terurut playability desc, distance asc */
+  getPlayableCandidates(lat, lng, maxKm = Infinity) {
+    const list = this._liveEntries(lat, lng, { realMax: Infinity, portalMax: Infinity });
+    const filtered = list.filter(c => {
+      if (!c) return false;
+      if (c.isPortal) return false;
+      if (!(c.hls || c.embed || c.hlsAuto)) return false;
+      if (maxKm !== Infinity && c.distance != null && c.distance > maxKm * 1000) return false;
+      return true;
+    });
+    return filtered.sort((a, b) => {
+      const sa = this._playabilityScore(a), sb = this._playabilityScore(b);
+      if (sb !== sa) return sb - sa;
+      return (a.distance == null ? Infinity : a.distance) - (b.distance == null ? Infinity : b.distance);
+    });
+  },
+
+  /* [C2] autoStream: pilih kandidat terbaik & putar */
+  autoStream(lat, lng) {
+    const fleet = global.CGO_Fleet;
+    if (!fleet) return null;
+    let pick = this.getPlayableCandidates(lat, lng, 50)[0] || null;
+    if (!pick && this.BATAM_STREAM_DEFAULT) {
+      const all = this.getPlayableCandidates(lat, lng, Infinity);
+      pick = all.find(c => c.hls && /matanya\.batam\.go\.id/i.test(c.hls)) || all[0] || null;
+    }
+    if (!pick) {
+      pick = this.getPlayableCandidates(lat, lng, Infinity)[0] || null;
+    }
+    if (!pick) return null;
+    if (pick.distance != null && pick.distance > 50000) pick.remote = true;
+    this._prepareStream(pick, fleet, { force: true });
+    return pick;
+  },
+
   /* Diagnostic — test semua URL dan laporkan (akurat via proxy /probe, paralel, ber-timeout) */
   async diagnoseCCTV() {
     const fleet = global.CGO_Fleet;
@@ -1288,7 +1572,10 @@ const CCTVEngine = {
     const proxyOk = proxy ? await this.checkProxy(true) : false;
     const testUrls = [
       ...this.REAL_PUBLIC_CAMS.map(c => ({ name: c.name, type: c.hls ? "HLS" : (c.noProxy ? "YouTube" : "BaliTower"), url: c.hls || this._hlsFromEmbed(c.embed) || c.embed, noProxy: !!c.noProxy })),
-      ...this.PUBLIC_STREAMS.map((u, i) => ({ name: `HLS-${i + 1}`, type: "HLS", url: u })),
+      ...this.PUBLIC_STREAMS.map((s, i) => {
+        if (typeof s === "string") return { name: `HLS-${i + 1}`, type: "HLS", url: s };
+        return { name: s.name || `HLS-${i + 1}`, type: "HLS", url: s.hls };
+      }),
       ...this.REGION_PORTALS.map(p => ({ name: p.name, type: "Portal", url: p.url }))
     ];
 
@@ -1655,6 +1942,7 @@ global.CGO_Debug = {
   scanMulti: (lat, lng, regions) => CCTVEngine.scanMultiRegion(lat, lng, regions),
   getLastScan: () => CCTVEngine.getLastScan(),
   setStreamUrls: (urls) => CCTVEngine.setStreamUrls(urls),
+  getStreamUrls: () => CCTVEngine.getStreamUrls(),
   detectIP: () => IPScanner.detectIP(),
   rotateMirror: () => IPScanner.nextMirror(),
   getIPStatus: () => IPScanner.getStatus(),
@@ -1663,9 +1951,13 @@ global.CGO_Debug = {
   diagnoseCCTV: () => CCTVEngine.diagnoseCCTV(),
   setProxyUrl: (url) => CCTVEngine.setProxyUrl(url),
   getProxyUrl: () => CCTVEngine.getProxyUrl(),
-  checkProxy: (force) => CCTVEngine.checkProxy(force)
+  checkProxy: (force) => CCTVEngine.checkProxy(force),
+  /* [C2] uji manual autoStream */
+  autoStream: (lat, lng) => CCTVEngine.autoStream(lat, lng),
+  /* [C1] kandidat live terurut playability */
+  getPlayableCandidates: (lat, lng, maxKm) => CCTVEngine.getPlayableCandidates(lat, lng, maxKm)
 };
 
-console.info(`[CGO Fleet] v${VERSION} — Multi Access Profiles + GPS + Proxy + Diagnostic`);
+console.info(`[CGO Fleet] v${VERSION} — Multi Auto-Access CCTV (GPS-first) + Proxy + Diagnostic`);
 
 })(typeof window !== "undefined" ? window : globalThis);
