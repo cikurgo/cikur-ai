@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.12.0</title>
+<title>BCGO — FLEET COMMAND CENTER v6.14.0</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -200,7 +200,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.12.0</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.14.0</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -929,26 +929,14 @@ function pickPublicHls() {
   } catch (_) { return null; }
 }
 async function playPublicFallback(cctvInfo, token, reason, retry) {
-  const u = pickPublicHls();
-  if (!u || token !== playToken) return false;
-  const E = CGO_Fleet.CCTV;
-  const proxy = E.getProxyUrl();
+  /* Jangan pernah mengganti kamera di lokasi GPS dengan feed kota lain. */
+  if (token !== playToken) return false;
   const origName = (cctvInfo && cctvInfo.name) || "Kamera";
-  CGO_Fleet.logGlobal(`⚠️ [STREAM] ${origName}: ${reason} — memutar HLS publik Batam sebagai pengganti`, "WARNING");
-  toast(`⚠️ ${origName} tidak bisa dibuka — memutar HLS publik Batam sebagai pengganti`, "warning", 4000);
-  setRec("● LOADING", "var(--neon-yellow)", "HLS BATAM");
-  await playStream(u, { name: "HLS Publik Batam", distance: null }, {
-    substitute: true,
-    hlsProxy: proxy ? E.proxify(u) : null
-  });
-  const mine = playToken;
-  if (retry && retry.embedUrl) {
-    /* Kamera asli bisa dicoba lagi lewat tombol COBA LAGI; alasan kegagalan tampil jelas */
-    currentEmbed = { direct: retry.embedUrl, cctv: cctvInfo, opts: retry.opts };
-    showFallbackBar(origName + " gagal: " + reason + ". Menampilkan HLS Batam sebagai pengganti.");
-    setTimeout(() => { if (playToken === mine) hideFallbackBar(); }, 9000);
-  }
-  return true;
+  const message = `${origName} gagal diputar (${reason || "feed tidak merespons"}). Feed publik dari kota lain tidak dipakai sebagai pengganti lokasi ini.`;
+  CGO_Fleet.logGlobal(`⚠️ [STREAM] ${message}`, "WARNING");
+  showFallbackBar(message + " Pilih kamera publik lain dari hasil scan atau coba lagi.");
+  toast("⚠️ Feed kamera ini gagal; tidak mengganti dengan lokasi lain", "warning", 4000);
+  return false;
 }
 
 async function playEmbed(embedUrl, cctvInfo, opts) {
@@ -1170,28 +1158,31 @@ async function playStream(url, cctvInfo, d) {
 }
 
 function startSimulatedCCTV(cctvInfo) {
+  /* Nama fungsi dipertahankan untuk kompatibilitas pemanggil lama, tetapi tidak
+     menggambar simulasi yang bisa disalahartikan sebagai CCTV live. */
   ++playToken;
   hideFallbackBar();
   if (cctvEmbed) cctvEmbed.onload = null;
   if (hls) { hls.destroy(); hls = null; }
-  cctvVideo.style.display = "none";
+  cctvVideo.pause();
   cctvVideo.removeAttribute("src");
+  cctvVideo.load();
+  cctvVideo.style.display = "none";
   if (cctvEmbed) { cctvEmbed.style.display = "none"; cctvEmbed.removeAttribute("src"); }
   clearIframeTimer();
-  cctvCanvas.style.display = "block";
-  CctvRenderer.setCam(cctvInfo?.name || "CCTV-SIM",
-    cctvInfo?.lat ?? -6.2088, cctvInfo?.lng ?? 106.8456);
-  CctvRenderer.start();
-  statusOverlay.classList.add("hidden");
-  scanlinesEl.classList.remove("hidden");
-  $("cctvRec").innerText = "● CANVAS"; $("cctvRec").style.color = "var(--neon-yellow)";
-  $("cctvModeLabel").innerText = cctvInfo?.synthetic ? "SYNTHETIC PIN" : "NO STREAM URL";
+  CctvRenderer.stop();
+  cctvCanvas.style.display = "none";
+  statusOverlay.classList.remove("hidden");
+  statusOverlay.textContent = "Tidak ada tayangan live yang dapat diverifikasi untuk titik ini. Pilih kamera lain yang memiliki feed publik.";
+  scanlinesEl.classList.add("hidden");
+  $("cctvRec").innerText = "● NO FEED"; $("cctvRec").style.color = "var(--neon-yellow)";
+  $("cctvModeLabel").innerText = "TIDAK TERSEDIA";
   $("cctvModeLabel").style.color = "var(--neon-yellow)";
   if (cctvInfo) {
     $("camIdLabel").innerText = "CAM: " + (cctvInfo.name || cctvInfo.id);
-    $("camDistLabel").innerText = "DIST: " + cctvInfo.distance + "m";
+    $("camDistLabel").innerText = "DIST: " + (cctvInfo.distance != null ? cctvInfo.distance + "m" : "—");
   }
-  toast(`🎥 Canvas fallback (${cctvInfo?.synthetic ? "synthetic pin" : "no stream url"})`, "warning");
+  toast("Tidak ada feed CCTV live untuk titik ini", "warning", 3500);
 }
 
 function stopCCTV() {
@@ -1365,6 +1356,13 @@ async function runDiagnostic() {
 
 /* ============= Map ============= */
 function initMap() {
+  if (typeof L === "undefined") {
+    /* CDN Leaflet gagal (offline/diblokir) — jangan biarkan crash menghentikan boot UI.
+       Semua pemakaian map di bawah sudah guarded dengan if (map / if (map && ...)). */
+    const el = $("map");
+    if (el) el.innerHTML = '<div style="padding:10px;font-size:9px;color:var(--neon-yellow);line-height:1.5">🗺️ Peta nonaktif — Leaflet tidak termuat.<br>Perlu internet saat pertama kali membuka halaman.</div>';
+    return;
+  }
   map = L.map("map", { zoomControl: true }).setView([-6.2088, 106.8456], 12);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19, attribution: "© OSM"
@@ -1400,7 +1398,7 @@ function renderCCTVMarkers(cctvs, nearest) {
     const isNearest = c === nearest;
     const isSynth = !!c.synthetic;
     const isPortal = !!c.isPortal;
-    const isReal = !!(c.realPublic || c.embed);
+    const isReal = !!(c.embed || c.hls || c.hlsAuto);
     const color = isPortal ? "#a855f7" : (isReal ? "#ff3366" : (isSynth ? "#ffcc00" : (isNearest ? "#00ff88" : "#00ccff")));
     const radius = (isReal || isPortal) ? 9 : (isNearest ? 8 : (isSynth ? 5 : 6));
     const marker = L.circleMarker([c.lat, c.lng], {
@@ -1432,7 +1430,7 @@ let tourOn = false, tourTimer = null, tourSec = 12, tourElapsed = 0;
 
 function camKind(c) {
   if (c.isPortal) return "portal";
-  return (c.realPublic || c.embed || c.hls) ? "live" : "pin";
+  return (c.embed || c.hls || c.hlsAuto) ? "live" : "pin";
 }
 function camColor(c) {
   const k = camKind(c);
@@ -1746,8 +1744,12 @@ $("autoScanBtn").onclick = () => {
 };
 
 /* ============= GPS ============= */
+let gpsScanInProgress = false;
 $("gpsBtn").onclick = () => {
+  if (gpsScanInProgress) { toast("GPS sedang memproses lokasi sebelumnya", "warning", 1800); return; }
   if (!navigator.geolocation) { toast("GPS tidak didukung", "danger"); return; }
+  gpsScanInProgress = true;
+  $("gpsBtn").disabled = true;
   $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-refresh"/></svg> MENCARI...';
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
@@ -1775,14 +1777,29 @@ $("gpsBtn").onclick = () => {
       toast("📍 GPS OK — scan CCTV di sekitar Anda...", "success", 2500);
       CGO_Fleet.logGlobal(`📍 [GPS] ${lat.toFixed(5)}, ${lng.toFixed(5)} — scan nearby`, "SUCCESS");
       try {
+        /* Hentikan feed sebelumnya agar tayangan lama tidak terlihat seolah berasal
+           dari koordinat GPS yang baru. Scan memilih feed terkonfigurasi berlokasi dekat. */
+        stopCCTV();
         statusOverlay.classList.remove("hidden");
-        statusOverlay.textContent = "📡 Scan CCTV di lokasi GPS...";
-        await CGO_Fleet.CCTV.scanNearby(lat, lng, 5000);
+        statusOverlay.textContent = "📡 Memindai feed terkonfigurasi (public/private/VPN) dalam radius 5 km...";
+        const result = await CGO_Fleet.CCTV.scanNearby(lat, lng, 5000);
+        if (result && !result.bestPlay) {
+          statusOverlay.classList.remove("hidden");
+          statusOverlay.textContent = "GPS terbaca, tetapi tidak ada feed terkonfigurasi yang dapat diputar dalam radius 5 km. Periksa cameras.json, koneksi LAN/VPN, dan format feed.";
+        }
       } catch (e) {
+        statusOverlay.classList.remove("hidden");
+        statusOverlay.textContent = "Scan GPS gagal: " + (e.message || e);
         toast("Scan GPS gagal: " + (e.message || e), "danger");
+      } finally {
+        gpsScanInProgress = false;
+        $("gpsBtn").disabled = false;
+        $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
       }
     },
     (err) => {
+      gpsScanInProgress = false;
+      $("gpsBtn").disabled = false;
       toast("Gagal akses GPS: " + err.message, "danger");
       $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
     },
@@ -2059,14 +2076,18 @@ CGO_Fleet.onEvent((data) => {
     }
 
     const synthCount = cctvs.filter(c => c.synthetic).length;
-    if (total > 0) {
-      const msg = synthCount > 0
-        ? `📡 ${total} CCTV (${synthCount} synthetic)`
-        : `📡 ${total} CCTV ditemukan`;
-      toast(msg, "success");
-      statusOverlay.textContent = "Menghubungkan ke feed terdekat...";
+    if (total > 0 && liveN > 0) {
+      toast(`📡 ${total} titik kamera · ${liveN} feed publik tersedia${synthCount ? ` · ${synthCount} pin simulasi` : ""}`, "success");
+      statusOverlay.classList.remove("hidden");
+      statusOverlay.textContent = "Feed publik ditemukan. Sistem mencoba memutar feed yang terhubung ke kamera berkoordinat dekat.";
+    } else if (total > 0) {
+      toast(`📍 ${total} titik terpetakan, tetapi belum ada feed live publik yang terverifikasi`, "warning", 4000);
+      statusOverlay.classList.remove("hidden");
+      statusOverlay.textContent = "Titik peta ditemukan, tetapi tidak ada feed live publik terverifikasi di hasil ini. Pin bukan tayangan video.";
     } else {
-      toast("Tidak ada CCTV — spawn synthetic", "warning");
+      toast("Tidak ada data CCTV publik di radius pencarian", "warning");
+      statusOverlay.classList.remove("hidden");
+      statusOverlay.textContent = "Tidak ada data CCTV publik yang ditemukan di radius pencarian.";
     }
   }
 
@@ -2076,6 +2097,15 @@ CGO_Fleet.onEvent((data) => {
     statusOverlay.classList.remove("hidden");
     statusOverlay.textContent = "Scan gagal: " + data.data.error;
     toast("CCTV scan error", "danger");
+  }
+
+  if (ev === "CCTV_STREAM_UNAVAILABLE") {
+    const d = data.data || {};
+    statusOverlay.classList.remove("hidden");
+    statusOverlay.textContent = `${d.cctv?.name || "Titik kamera"}: ${d.reason || "Feed publik tidak tersedia."}`;
+    $("cctvRec").innerText = "● NO FEED"; $("cctvRec").style.color = "var(--neon-yellow)";
+    $("cctvModeLabel").innerText = "TIDAK TERSEDIA"; $("cctvModeLabel").style.color = "var(--neon-yellow)";
+    return;
   }
 
   if (ev === "CCTV_STREAM_READY") {
@@ -2182,7 +2212,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.12.0 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
+console.info("[BCGO UI] v6.14.0 ready · Real CCTV + Proxy + Diagnostic + Honest UI (Live-First)");
 })();
 </script>
 </body>
