@@ -234,6 +234,15 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       <option value="month" selected>Bulanan</option>
       <option value="year">Tahunan</option>
     </select>
+    <label style="margin-left:8px">Agregasi:</label>
+    <select id="tsAgg">
+      <option value="sum">Total</option>
+      <option value="avg">Rata-rata</option>
+      <option value="count">Jumlah</option>
+      <option value="min">Min</option>
+      <option value="max">Max</option>
+      <option value="median">Median</option>
+    </select>
   </div>
   <div class="chart"><canvas id="ts" aria-label="Tren waktu"></canvas></div>
   <p id="tsInfo" class="chartinfo">Pilih kolom tanggal di bagian 2 untuk melihat tren.</p>
@@ -340,7 +349,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
 </section>
 
 </div>
-<footer>Prototipe satu file HTML. Parser Excel/Word/PDF, Chart.js, dan jsPDF dimuat dari CDN saat online. Untuk lingkungan sepenuhnya offline, library harus disimpan lokal. PDF hasil scan memerlukan OCR yang belum diaktifkan. Verifikasi hasil sebelum digunakan sebagai laporan resmi.</footer>
+<footer>Internal Data Report Studio — analisis, filter, pivot, insight, grafik, dan ekspor multi-format. Parser Excel/Word/PDF, Chart.js, dan jsPDF dimuat dari CDN saat online. PDF scan memerlukan OCR terpisah. Selalu verifikasi hasil sebelum dipakai sebagai laporan resmi.</footer>
 </main>
 <script>
 "use strict";
@@ -429,11 +438,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   function num(v) {
     if (typeof v === "number" && Number.isFinite(v)) return v;
     if (v == null || String(v).trim() === "") return null;
-    let s = String(v).trim().replace(/\s/g, "");
+    // Normalize spaces (incl. NBSP / thin space) and common currency/percent symbols
+    let s = String(v).trim().replace(/[\s\u00A0\u202F\u2009]/g, "");
+    s = s.replace(/[Rp$€£¥%]/gi, "");
     if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, "").replace(",", ".");
     else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, "");
     else if (/^-?\d+,\d+$/.test(s)) s = s.replace(",", ".");
-    else s = s.replace(/[Rp$€£%]/g, "");
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
   }
@@ -604,6 +614,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     $("from").value = ""; $("to").value = "";
     $("agg").value = recommendAgg(defVal);
     S.agg = $("agg").value;
+    if ($("tsAgg")) $("tsAgg").value = S.agg;
     $("globalSearch").value = "";
 
     // Pivot defaults
@@ -858,19 +869,56 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     let empty = 0, dup = 0;
     const seen = new Set();
     const SEP = "\u241F";
+    const missingByCol = {};
+    S.headers.forEach(h => { missingByCol[h] = 0; });
     rows.forEach(r => {
-      if (S.headers.some(h => String(r[h] ?? "").trim() === "")) empty++;
+      let rowEmpty = false;
+      S.headers.forEach(h => {
+        if (String(r[h] ?? "").trim() === "") {
+          missingByCol[h]++;
+          rowEmpty = true;
+        }
+      });
+      if (rowEmpty) empty++;
       const k = S.headers.map(h => String(r[h] ?? "")).join(SEP);
       if (seen.has(k)) dup++; else seen.add(k);
     });
+    // Missing rate per column (top offenders)
+    const missList = S.headers
+      .map(h => ({ h, m: missingByCol[h], p: (missingByCol[h] / n) * 100 }))
+      .filter(x => x.m > 0)
+      .sort((a, b) => b.m - a.m)
+      .slice(0, 6);
+    const missInfo = missList.length
+      ? missList.map(x => `${x.h}: ${x.m} (${x.p.toFixed(1)}%)`).join("; ")
+      : "tidak ada";
+
+    // IQR outliers on current numeric value column (if available)
+    let outlierInfo = "—";
+    if (S.v) {
+      const nums = rows.map(r => num(r[S.v])).filter(x => x !== null).sort((a, b) => a - b);
+      if (nums.length >= 8) {
+        const q1 = nums[Math.floor((nums.length - 1) * 0.25)];
+        const q3 = nums[Math.floor((nums.length - 1) * 0.75)];
+        const iqr = q3 - q1;
+        const lo = q1 - 1.5 * iqr, hi = q3 + 1.5 * iqr;
+        const outN = nums.filter(v => v < lo || v > hi).length;
+        outlierInfo = `kolom "${S.v}": ${outN} dari ${nums.length} (${pct(outN, nums.length)}%) di luar IQR [${fmt(lo)} … ${fmt(hi)}]`;
+      } else if (nums.length) {
+        outlierInfo = `kolom "${S.v}": sampel terlalu kecil untuk IQR (${nums.length})`;
+      }
+    }
+
     const typeInfo = S.headers.map(h => `${h}: ${S.columnTypes[h] || "text"}`).join(", ");
     const msg =
       `Baris diperiksa: ${n}\n` +
       `Baris dengan sel kosong: ${empty} (${pct(empty, n)}%)\n` +
-      `Baris duplikat: ${dup} (${pct(dup, n)}%)\n` +
+      `Baris duplikat (exact): ${dup} (${pct(dup, n)}%)\n` +
+      `Missing per kolom (tertinggi): ${missInfo}\n` +
+      `Outlier (IQR): ${outlierInfo}\n` +
       `Kolom terdeteksi: ${typeInfo}\n` +
       `Catatan: data tidak dihapus atau diperbaiki otomatis.`;
-    status("quality", msg, empty || dup ? "warn" : "good");
+    status("quality", msg, empty || dup || (missList[0] && missList[0].p > 20) ? "warn" : "good");
   }
 
   // ---------- ANALYZE ----------
@@ -925,23 +973,47 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     $("sumK").textContent = fmt(sum);
     $("avgK").textContent = fmt(avg);
     $("minmaxK").textContent = fmt(min) + " / " + fmt(max);
+
+    // Auto insights
+    const totalSum = S.groups.reduce((a, g) => a + g.sum, 0);
+    let insightHtml = "";
+    if (S.groups.length) {
+      const top = S.groups[0];
+      const topShare = totalSum ? (top.sum / totalSum * 100) : 0;
+      const bottom = S.groups[S.groups.length - 1];
+      insightHtml =
+        `<div style="margin-top:8px;padding:10px;background:var(--input);border:1px solid var(--line);border-radius:8px;font-size:13px">` +
+        `<b>Insight otomatis:</b> Kelompok teratas <b>${esc(top.group)}</b> menyumbang <b>${fmt(top.sum)}</b> ` +
+        `(${topShare.toFixed(1)}% dari total). ` +
+        (S.groups.length > 1
+          ? `Kelompok terendah: <b>${esc(bottom.group)}</b> (${fmt(bottom.sum)}). `
+          : "") +
+        `Rentang nilai: ${fmt(min)} – ${fmt(max)}. ` +
+        (st.std > 0 && avg ? `Koefisien variasi ≈ ${((st.std / Math.abs(avg)) * 100).toFixed(1)}%.` : "") +
+        `</div>`;
+    }
+
     $("extra").innerHTML =
       `Nilai numerik valid: <b>${vals.length}</b> dari ${rows.length} baris · ` +
       `Kelompok: <b>${S.groups.length}</b><br>` +
       `Median: <b>${fmt(st.median)}</b> · Std dev: <b>${fmt(st.std)}</b> · P25/P75: <b>${fmt(st.p25)} / ${fmt(st.p75)}</b><br>` +
       `Kolom angka: <span class="pill">${esc(v)}</span> · ` +
       `Kelompok: <span class="pill">${esc(g)}</span> · ` +
-      `Agregasi: <span class="pill">${aggLabel(S.agg)}</span>`;
+      `Agregasi: <span class="pill">${aggLabel(S.agg)}</span>` +
+      insightHtml;
 
-    // Rekap with contribution %
-    const hs = ["Kelompok","Baris","Valid","Total","Rata-rata","Kontribusi %"];
-    const totalSum = S.groups.reduce((a, g) => a + g.sum, 0);
+    // Sync time-series agg with main agg (user can still change tsAgg independently)
+    if ($("tsAgg")) $("tsAgg").value = S.agg;
+
+    // Rekap: always show sum/avg + active aggregation value + contribution
+    const aggColLabel = aggLabel(S.agg);
+    const hs = ["Kelompok", "Baris", "Valid", "Total", "Rata-rata", aggColLabel, "Kontribusi %"];
     $("summary").innerHTML = '<table><thead><tr>' +
       hs.map(x => `<th>${x}</th>`).join("") +
       '</tr></thead><tbody>' +
       S.groups.map(x => {
-        const contrib = totalSum !== 0 ? (x.sum / totalSum * 100) : 0;
-        return `<tr><td>${esc(x.group)}</td><td>${x.count}</td><td>${x.valid}</td><td>${fmt(x.sum)}</td><td>${fmt(x.avg)}</td><td>${pct(x.sum, totalSum)}%</td></tr>`;
+        const aggVal = aggValueOf(x, S.agg);
+        return `<tr><td>${esc(x.group)}</td><td>${x.count}</td><td>${x.valid}</td><td>${fmt(x.sum)}</td><td>${fmt(x.avg)}</td><td>${fmt(aggVal)}</td><td>${pct(x.sum, totalSum)}%</td></tr>`;
       }).join("") +
       '</tbody></table>';
 
@@ -961,7 +1033,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     ["xlsx","report","csv","print","pdf","copy"].forEach(id => $(id).disabled = false);
     status("exportStatus", "Siap diunduh.", "good");
 
-    // Rebuild pivot if already exists
+    // Rebuild pivot if already configured (uses current filtered S.rows)
     if (S.pivot) buildPivot();
   }
 
@@ -1085,6 +1157,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const dateCol = $("date").value;
     const valCol = $("value").value;
     const gran = $("tsGran").value;
+    const tsAgg = ($("tsAgg") && $("tsAgg").value) || S.agg || "sum";
 
     if (!dateCol) {
       if (S.tsChartInstance) { try { S.tsChartInstance.destroy(); } catch {} S.tsChartInstance = null; }
@@ -1100,6 +1173,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       if (gran === "day") {
         key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
       } else if (gran === "week") {
+        // ISO-like week: Monday-start, week number relative to year of the Monday
         const tmp = new Date(d.getFullYear(), d.getMonth(), d.getDate());
         const day = tmp.getDay() || 7;
         tmp.setDate(tmp.getDate() - day + 1);
@@ -1122,9 +1196,10 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       info.textContent = "Tidak ada tanggal valid pada data hasil filter.";
       return;
     }
-    const data = sortedKeys.map(k => buckets.get(k).reduce((a, b) => a + b, 0));
+    const data = sortedKeys.map(k => aggregate(buckets.get(k), tsAgg));
     const counts = sortedKeys.map(k => buckets.get(k).length);
-    info.textContent = `${sortedKeys.length} titik data (${gran}) · total ${valCol} per periode.`;
+    const labelAgg = aggLabel(tsAgg);
+    info.textContent = `${sortedKeys.length} titik data (${gran}) · ${labelAgg} ${valCol} per periode.`;
 
     if (S.tsChartInstance) { try { S.tsChartInstance.destroy(); } catch {} }
     const ctx = $("ts").getContext("2d");
@@ -1133,7 +1208,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       data: {
         labels: sortedKeys,
         datasets: [{
-          label: `Total ${valCol}`,
+          label: `${labelAgg} ${valCol}`,
           data,
           borderColor: "#54d4c3",
           backgroundColor: "rgba(84,212,195,.15)",
@@ -1150,8 +1225,8 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
           legend: { display: true },
           tooltip: {
             callbacks: {
-              label: c => `Total: ${fmt(c.parsed.y)}`,
-              afterLabel: c => `Baris: ${counts[c.dataIndex]}`
+              label: c => `${labelAgg}: ${fmt(c.parsed.y)}`,
+              afterLabel: c => `Baris valid: ${counts[c.dataIndex]}`
             }
           }
         },
@@ -1231,17 +1306,27 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     cells.forEach(nums => allNums.push(...nums));
     const grand = aggregate(allNums, agg);
 
+    const showShare = agg === "sum" && grand && Number.isFinite(grand) && grand !== 0;
+    const cellTxt = (v) => {
+      if (v === null || v === undefined) return "—";
+      if (!showShare) return fmt(v);
+      const share = (v / grand) * 100;
+      return `${fmt(v)}<br><span style="font-size:11px;color:var(--muted)">${share.toFixed(1)}%</span>`;
+    };
     const header = `<tr><th>${esc(rowCol)} \\ ${colCol ? esc(colCol) : "Total"}</th>${colList.map(cv => `<th>${esc(cv)}</th>`).join("")}<th>Total</th></tr>`;
     const body = rowList.map(rv => {
       const cellsHtml = colList.map(cv => {
         const v = aggVals.get(rv + SEP + cv);
-        return `<td>${v !== null && v !== undefined ? fmt(v) : "—"}</td>`;
+        return `<td>${cellTxt(v)}</td>`;
       }).join("");
-      return `<tr><th>${esc(rv)}</th>${cellsHtml}<td style="font-weight:600">${fmt(rowTotals.get(rv))}</td></tr>`;
+      return `<tr><th>${esc(rv)}</th>${cellsHtml}<td style="font-weight:600">${cellTxt(rowTotals.get(rv))}</td></tr>`;
     }).join("");
-    const footer = `<tr><th>Total</th>${colList.map(cv => `<td style="font-weight:600">${fmt(colTotals.get(cv))}</td>`).join("")}<td>${fmt(grand)}</td></tr>`;
+    const footer = `<tr><th>Total</th>${colList.map(cv => `<td style="font-weight:600">${cellTxt(colTotals.get(cv))}</td>`).join("")}<td>${fmt(grand)}</td></tr>`;
 
-    $("pivot").innerHTML = `<table><thead>${header}</thead><tbody>${body}</tbody><tfoot>${footer}</tfoot></table>`;
+    const note = showShare
+      ? `<p class="muted" style="padding:6px 0 0;font-size:12px">Persentase = kontribusi terhadap grand total (${fmt(grand)}).</p>`
+      : "";
+    $("pivot").innerHTML = `<table><thead>${header}</thead><tbody>${body}</tbody><tfoot>${footer}</tfoot></table>${note}`;
     S.pivot = { rowCol, colCol, valCol, agg };
   }
 
@@ -1270,10 +1355,10 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const matrix = [S.headers, ...S.rows.map(r => S.headers.map(h => r[h] ?? ""))];
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(matrix), "Data_Hasil_Filter");
     XLSX.utils.book_append_sheet(wb,
-      XLSX.utils.aoa_to_sheet([["Kelompok","Jumlah baris","Nilai valid","Total","Rata-rata","Kontribusi %"],
+      XLSX.utils.aoa_to_sheet([["Kelompok", "Jumlah baris", "Nilai valid", "Total", "Rata-rata", aggLabel(S.agg), "Kontribusi %"],
         ...S.groups.map(g => {
           const totalSum = S.groups.reduce((a, x) => a + x.sum, 0);
-          return [g.group, g.count, g.valid, g.sum, g.avg, totalSum ? (g.sum / totalSum * 100).toFixed(2) : 0];
+          return [g.group, g.count, g.valid, g.sum, g.avg, aggValueOf(g, S.agg), totalSum ? (g.sum / totalSum * 100).toFixed(2) : 0];
         })]), "Rekapitulasi");
     const a = S.analysis;
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
@@ -1318,7 +1403,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const a = S.analysis;
     const totalSum = S.groups.reduce((x, g) => x + g.sum, 0);
     const groupsHtml = S.groups.map(g =>
-      `<tr><td>${esc(g.group)}</td><td>${g.count}</td><td>${g.valid}</td><td>${fmt(g.sum)}</td><td>${fmt(g.avg)}</td><td>${pct(g.sum, totalSum)}%</td></tr>`
+      `<tr><td>${esc(g.group)}</td><td>${g.count}</td><td>${g.valid}</td><td>${fmt(g.sum)}</td><td>${fmt(g.avg)}</td><td>${fmt(aggValueOf(g, S.agg))}</td><td>${pct(g.sum, totalSum)}%</td></tr>`
     ).join("");
     const LIMIT = 2000;
     const limitedRows = S.rows.slice(0, LIMIT);
@@ -1338,7 +1423,7 @@ td,th{border:1px solid #bbc9d7;padding:7px;text-align:left}th{background:#eaf1f7
 <p>Baris: ${a.rowCount} · Total: ${fmt(a.sum)} · Rata-rata: ${fmt(a.avg)} · Median: ${fmt(a.median)} · Std dev: ${fmt(a.std)} · Min: ${fmt(a.min)} · Maks: ${fmt(a.max)}</p>
 <p>Kolom angka: ${esc(S.v)}; kelompok: ${esc(S.g)}; agregasi: ${aggLabel(S.agg)}. Sel kosong/non-numerik diabaikan dalam kalkulasi.</p>
 <h2>Rekapitulasi</h2>
-<table><tr><th>Kelompok</th><th>Baris</th><th>Nilai valid</th><th>Total</th><th>Rata-rata</th><th>Kontribusi</th></tr>${groupsHtml}</table>
+<table><tr><th>Kelompok</th><th>Baris</th><th>Nilai valid</th><th>Total</th><th>Rata-rata</th><th>${esc(aggLabel(S.agg))}</th><th>Kontribusi</th></tr>${groupsHtml}</table>
 <h2>Kualitas data</h2>
 <pre>${esc($("quality").textContent)}</pre>
 <h2>Data hasil filter</h2>
@@ -1380,8 +1465,11 @@ ${note}
     if (doc.autoTable) {
       doc.autoTable({
         startY: y,
-        head: [["Kelompok","Baris","Valid","Total","Rata-rata"]],
-        body: S.groups.map(g => [String(g.group), String(g.count), String(g.valid), fmt(g.sum), fmt(g.avg)]),
+        head: [["Kelompok", "Baris", "Valid", "Total", "Rata-rata", aggLabel(S.agg)]],
+        body: S.groups.map(g => [
+          String(g.group), String(g.count), String(g.valid),
+          fmt(g.sum), fmt(g.avg), fmt(aggValueOf(g, S.agg))
+        ]),
         theme: "grid",
         headStyles: { fillColor: [27, 48, 73], textColor: [255, 255, 255] },
         styles: { fontSize: 8, cellPadding: 2 },
@@ -1390,24 +1478,50 @@ ${note}
       y = doc.lastAutoTable.finalY + 8;
     }
 
+    // Embed group chart if available
+    if (S.barChartInstance) {
+      try {
+        const img = S.barChartInstance.toBase64Image("image/png", 1);
+        if (y > 160) { doc.addPage(); y = 15; }
+        doc.setFontSize(11);
+        doc.text("Grafik per kelompok", 14, y); y += 4;
+        const imgW = 180, imgH = 70;
+        doc.addImage(img, "PNG", 14, y, imgW, imgH);
+        y += imgH + 8;
+      } catch (e) { /* chart embed optional */ }
+    }
+
+    // Quality notes
+    const qText = ($("quality") && $("quality").textContent) || "";
+    if (qText && qText !== "Belum diperiksa.") {
+      if (y > 250) { doc.addPage(); y = 15; }
+      doc.setFontSize(11);
+      doc.text("Kualitas data", 14, y); y += 5;
+      doc.setFontSize(8);
+      const lines = doc.splitTextToSize(qText.replace(/\n/g, " | "), 180);
+      lines.slice(0, 12).forEach(l => { doc.text(l, 14, y); y += 4; });
+      y += 4;
+    }
+
     if (doc.autoTable && S.rows.length) {
-      const LIMIT = 200;
+      const LIMIT = 250;
+      const maxCols = Math.min(S.headers.length, 10);
       if (y > 200) { doc.addPage(); y = 15; }
       doc.setFontSize(11);
-      doc.text(`Data Hasil Filter${S.rows.length > LIMIT ? ` (maks ${LIMIT} baris)` : ""}`, 14, y); y += 3;
+      doc.text(`Data Hasil Filter${S.rows.length > LIMIT ? ` (maks ${LIMIT} baris)` : ""} · ${maxCols} kolom pertama`, 14, y); y += 3;
       doc.autoTable({
         startY: y,
-        head: [S.headers.slice(0, 8)],
-        body: S.rows.slice(0, LIMIT).map(r => S.headers.slice(0, 8).map(h => String(r[h] ?? ""))),
+        head: [S.headers.slice(0, maxCols)],
+        body: S.rows.slice(0, LIMIT).map(r => S.headers.slice(0, maxCols).map(h => String(r[h] ?? "").slice(0, 40))),
         theme: "striped",
         headStyles: { fillColor: [27, 48, 73], textColor: [255, 255, 255] },
-        styles: { fontSize: 7, cellPadding: 1 },
+        styles: { fontSize: 6.5, cellPadding: 1 },
         margin: { left: 14, right: 14 }
       });
     }
 
     doc.save(`Laporan_${safe(S.name)}.pdf`);
-    status("exportStatus", "PDF dibuat.", "good");
+    status("exportStatus", "PDF dibuat (ringkasan + grafik + kualitas + data).", "good");
   }
 
   async function copyTable() {
@@ -1574,6 +1688,7 @@ ${note}
     }
   };
   $("tsGran").onchange = () => { if (S.analysis) buildTimeSeries(); };
+  if ($("tsAgg")) $("tsAgg").onchange = () => { if (S.analysis) buildTimeSeries(); };
   $("date").onchange = () => { if (S.analysis) buildTimeSeries(); };
   $("pivotRun").onclick = () => { buildPivot(); };
 
