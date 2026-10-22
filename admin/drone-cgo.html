@@ -440,6 +440,20 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
   </div>
 </div>
 
+<!-- ═════════════════════════════════════════════════════════════════════
+     POLYFILL — WAJIB ADA sebelum drone-cgo.js dimuat
+     Memperbaiki: AbortSignal.timeout (Safari <16, FF <100, Chrome <103)
+     ═════════════════════════════════════════════════════════════════════ -->
+<script>
+if (typeof AbortSignal !== "undefined" && !AbortSignal.timeout) {
+  AbortSignal.timeout = function (ms) {
+    var c = new AbortController();
+    setTimeout(function () { c.abort(); }, ms);
+    return c.signal;
+  };
+}
+</script>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
 <script src="drone-cgo.js"></script>
@@ -447,9 +461,73 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <script>
 (function () {
 "use strict";
+
+/* ── GRACEFUL BOOT — jangan bunuh UI jika drone-cgo.js gagal load ── */
 if (typeof CGO_Fleet === "undefined") {
-  document.body.innerHTML = '<div style="color:red;padding:20px;font-family:monospace">FATAL: drone-cgo.js tidak termuat.</div>';
-  return;
+  document.addEventListener("DOMContentLoaded", function () {
+    var banner = document.createElement("div");
+    banner.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:99999;padding:10px 12px;" +
+      "background:#4a0000;color:#ffcc00;border-bottom:2px solid #ff3366;" +
+      "font-family:monospace;font-size:11px;line-height:1.6";
+    banner.innerHTML = "⚠️ <b>drone-cgo.js tidak termuat.</b> UI dalam mode terbatas.<br>" +
+      "• Letakkan <code>drone-cgo.js</code> di folder yang sama.<br>" +
+      "• Buka via <code>http://</code> / <code>https://</code> (bukan <code>file://</code>).<br>" +
+      "• Cek Console (F12) untuk detail error.";
+    document.body.appendChild(banner);
+    document.body.style.paddingTop = "90px";
+  });
+  var noop = function () {};
+  var stubTelem = function () {
+    return { position:{x:0,y:0,z:0}, battery:0, solarInput:0, altitude:0, speed:0,
+      windSpeed:0, smokeLevel:0, lidarDistance:0, acousticAlert:false, networkStatus:"",
+      signalStrength:0, isJammed:false, isDaylight:true, sunAngle:0, currentTarget:null, uptime:0 };
+  };
+  var stubDrone = function (id) {
+    return { id:id, state:"OFFLINE", isDeployed:false, sector:{x:0,y:0},
+      telemetry:stubTelem(),
+      getHistory:function(){return {battery:[],signal:[]};},
+      toJSON:function(){return {id:id};} };
+  };
+  window.CGO_Fleet = {
+    version:"stub", drones:new Map([["CGO-0001",stubDrone("CGO-0001")]]),
+    getSelectedDrone:function(){return stubDrone("CGO-0001");},
+    getDrone:function(id){return stubDrone(id);},
+    selectDrone:function(){return true;},
+    generateFleet:noop, startSimulation:noop, stopSimulation:noop,
+    onEvent:noop, on:noop, once:noop, off:noop, emit:noop, logGlobal:noop,
+    deployAll:noop, returnAll:noop, reset:noop,
+    mute:noop, setVolume:noop, setFormation:function(){return false;},
+    setSimulationSpeed:noop, getSimulationSpeed:function(){return 1;},
+    getMissionElapsed:function(){return 0;},
+    getFleetStats:function(){return {active:0,emergency:0,offline:0,jammed:0,idle:0};},
+    triggerGlobalTsunami:noop, activateVoidPulseAll:noop, interactSelected:noop,
+    speak:noop, playSiren:noop,
+    exportState:function(){return "{}";}, importState:function(){return false;},
+    diagnoseCCTV:async function(){return [];},
+    scanCCTV:async function(){return null;}, scanMultiCCTV:async function(){return null;},
+    setProxyUrl:function(){return null;}, getProxyUrl:function(){return null;},
+    checkProxy:async function(){return false;},
+    CCTV:{
+      REGIONS:[], PUBLIC_STREAMS:[], REAL_PUBLIC_CAMS:[], REGION_PORTALS:[],
+      getProxyUrl:function(){return null;}, setProxyUrl:function(){return null;},
+      proxify:function(u){return u;}, checkProxy:async function(){return false;},
+      probe:async function(){return {ok:false};},
+      explainHls:async function(){return {code:"unavailable",cors:false,reachable:false,text:"Backend tidak aktif"};},
+      scanNearby:async function(){throw new Error("Backend tidak aktif — drone-cgo.js tidak termuat");},
+      scanMultiRegion:async function(){throw new Error("Backend tidak aktif — drone-cgo.js tidak termuat");},
+      autoStream:function(){return null;}, playCCTV:noop, clearStream:noop,
+      getLastScan:function(){return null;}, getActiveStream:function(){return null;},
+      diagnoseCCTV:async function(){return [];}
+    },
+    IP:{
+      MIRRORS:[], CORS_PROXIES:[],
+      isBusy:function(){return false;},
+      detectIP:async function(){throw new Error("Backend tidak aktif");},
+      nextMirror:function(){return {host:"—",country:"—",index:0,total:0};},
+      getCurrentMirror:function(){return null;},
+      getStatus:function(){return {};}
+    }
+  };
 }
 
 const $ = (id) => document.getElementById(id);
@@ -792,8 +870,8 @@ const CctvRenderer = {
 };
 
 /* ============= CCTV stream handlers ============= */
-let playToken = 0;      /* membatalkan proses play lama bila user pindah kamera */
-let currentEmbed = null; /* { direct, cctv } — untuk COBA LAGI / TAB BARU */
+let playToken = 0;
+let currentEmbed = null;
 
 function clearIframeTimer() {
   if (iframeLoadTimer) { clearTimeout(iframeLoadTimer); iframeLoadTimer = null; }
@@ -869,7 +947,6 @@ function hideFallbackBar() {
   if (bar) bar.style.display = "none";
 }
 
-/* HLS bawaan browser (Safari/iPhone, Chrome terbaru): <video src> tidak butuh izin CORS */
 function nativeHlsSupported() {
   try { return !!(cctvVideo.canPlayType && cctvVideo.canPlayType("application/vnd.apple.mpegurl")); }
   catch (_) { return false; }
@@ -901,7 +978,6 @@ function tryNativeHls(src, token) {
   });
 }
 
-/* Coba satu sumber HLS; sukses hanya bila segmen video pertama benar-benar termuat */
 function tryHlsSource(src, token) {
   return new Promise((resolve) => {
     if (typeof Hls === "undefined" || !Hls.isSupported()) return resolve(false);
@@ -937,7 +1013,6 @@ function pickPublicHls() {
   } catch (_) { return null; }
 }
 async function playPublicFallback(cctvInfo, token, reason, retry) {
-  /* Jangan pernah mengganti kamera di lokasi GPS dengan feed kota lain. */
   if (token !== playToken) return false;
   const origName = (cctvInfo && cctvInfo.name) || "Kamera";
   const message = `${origName} gagal diputar (${reason || "feed tidak merespons"}). Feed publik dari kota lain tidak dipakai sebagai pengganti lokasi ini.`;
@@ -968,16 +1043,14 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
   const E = CGO_Fleet.CCTV;
   let hlsWhy = "";
 
-  /* 1) Putar stream HLS-nya langsung di pemutar video (tanpa iframe → tidak kena blokir frame) */
   if (opts.hlsCandidate) {
     cctvEmbed.style.display = "none";
     cctvVideo.style.display = "block";
     cctvVideo.muted = true;
     setRec("● LOADING", "var(--neon-yellow)", "CEK STREAM");
-    /* Periksa dulu (cepat): apakah stream terjangkau & boleh dibaca langsung → tidak menunggu timeout percuma */
     const ex = await E.explainHls(opts.hlsCandidate, 5000).catch(() => null);
     if (token !== playToken) return;
-    const corsOk = !ex || ex.cors;            /* tak diketahui → tetap dicoba */
+    const corsOk = !ex || ex.cors;
     const reachable = !ex || ex.reachable;
     let hlsVia = "langsung";
     let okHls = false;
@@ -987,7 +1060,6 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
       if (token !== playToken) return;
     }
     if (!okHls && reachable) {
-      /* HLS bawaan browser (Safari/iPhone/Android): <video src> tidak butuh izin CORS */
       setRec("● LOADING", "var(--neon-yellow)", "HLS BAWAAN BROWSER");
       okHls = await tryNativeHls(opts.hlsCandidate, token);
       if (okHls) hlsVia = "native";
@@ -1009,7 +1081,6 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
     }
     hlsWhy = (ex && ex.text) ? ex.text : "";
     CGO_Fleet.logGlobal(`⚠️ [STREAM] HLS ${cctvInfo?.name || ""} gagal — ${hlsWhy || "alasan tidak diketahui"}`, "WARNING");
-    /* Tanpa proxy: iframe pasti diblokir → langsung pakai HLS publik pengganti (dengan alasan jelas) */
     if (!(E.getProxyUrl() && await E.checkProxy())) {
       if (token !== playToken) return;
       if (await playPublicFallback(cctvInfo, token, hlsWhy || "HLS tidak bisa dibuka", { embedUrl, opts })) return;
@@ -1024,7 +1095,6 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
     }
   }
 
-  /* Proxy dipakai jika tersedia — tanpa proxy, situs hampir pasti menolak di-iframe */
   let src = embedUrl, via = "direct";
   if (opts.noProxy) {
     via = "open";
@@ -1055,7 +1125,6 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
     if (token !== playToken) return;
     clearIframeTimer();
     if (via === "open") {
-      /* Embed resmi (mis. YouTube): dimuat langsung. Isi video tidak bisa diperiksa dari halaman */
       setRec("● EMBED", "var(--neon-green)", "RESMI · LANGSUNG");
       hideFallbackBar();
       toast("🎥 " + (cctvInfo?.name || "Kamera") + " (embed resmi)", "success");
@@ -1066,7 +1135,6 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
       toast("🎥 CCTV PUBLIK REAL: " + (cctvInfo?.name || "Live"), "success");
       CGO_Fleet.logGlobal(`🎥 [STREAM] REAL PUBLIC embed (proxy): ${cctvInfo?.name || embedUrl}`, "SUCCESS");
     } else {
-      /* Tanpa proxy event load tetap terpicu walau situs menolak frame — jangan klaim LIVE */
       setRec("● EMBED", "var(--neon-yellow)", "LANGSUNG · BISA DIBLOKIR");
       showFallbackBar((hlsWhy ? hlsWhy + " " : "") + (E.getProxyUrl()
         ? "Dimuat tanpa proxy. Jika layar kosong, situs memblokir iframe — aktifkan proxy atau buka tab baru."
@@ -1102,7 +1170,6 @@ async function playStream(url, cctvInfo, d) {
   setCamLabels(cctvInfo, d);
   setRec("● LOADING", "var(--neon-yellow)", "HLS");
 
-  /* Susun kandidat: direct dulu (CORS-ok seperti Batam), lalu proxy */
   const candidates = [];
   const seen = new Set();
   const push = (u, via) => {
@@ -1194,8 +1261,6 @@ async function playStream(url, cctvInfo, d) {
 }
 
 function startSimulatedCCTV(cctvInfo) {
-  /* Nama fungsi dipertahankan untuk kompatibilitas pemanggil lama, tetapi tidak
-     menggambar simulasi yang bisa disalahartikan sebagai CCTV live. */
   ++playToken;
   hideFallbackBar();
   if (cctvEmbed) cctvEmbed.onload = null;
@@ -1313,7 +1378,6 @@ function buildRegionChecks() {
   ).join("");
 }
 
-/* Laporan teks hasil diagnosa — bisa disalin & dikirim agar penyebab di jaringan HP sebenarnya terlihat */
 async function buildDiagReport(results) {
   const E = CGO_Fleet.CCTV;
   const L = [];
@@ -1396,8 +1460,6 @@ async function runDiagnostic() {
 /* ============= Map ============= */
 function initMap() {
   if (typeof L === "undefined") {
-    /* CDN Leaflet gagal (offline/diblokir) — jangan biarkan crash menghentikan boot UI.
-       Semua pemakaian map di bawah sudah guarded dengan if (map / if (map && ...)). */
     const el = $("map");
     if (el) el.innerHTML = '<div style="padding:10px;font-size:9px;color:var(--neon-yellow);line-height:1.5">🗺️ Peta nonaktif — Leaflet tidak termuat.<br>Perlu internet saat pertama kali membuka halaman.</div>';
     return;
@@ -1425,7 +1487,6 @@ function initMap() {
   });
 }
 
-/** Pindahkan drone + scan + paksa putar feed real terdekat (GPS / klik peta) */
 async function scanAtPoint(lat, lng, opts) {
   opts = opts || {};
   const radius = opts.radius || 5000;
@@ -1457,7 +1518,6 @@ async function scanAtPoint(lat, lng, opts) {
       statusOverlay.textContent = `🎥 Memutar: ${bp.name}${km != null ? " ≈ " + km + " km" : ""}${bp.remote ? " [remote]" : ""}`;
       return result;
     }
-    /* Tidak ada di radius lokal → autoStream progressive (Batam/katalog) */
     statusOverlay.textContent = "📡 Tidak ada feed lokal — mencari stream real terdekat di katalog…";
     const pick = CGO_Fleet.CCTV.autoStream(lat, lng);
     if (pick) {
@@ -1616,7 +1676,6 @@ function renderCCTVList(cctvs) {
   }
 }
 
-/* Putar kamera live berikutnya/sebelumnya tanpa menggeser peta atau menampilkan toast */
 function stepCam(dir, quiet) {
   const live = liveCams();
   if (!live.length) { if (!quiet) toast("Belum ada kamera live — jalankan scan dulu", "warning", 2500); return false; }
@@ -1734,13 +1793,11 @@ muteBtn.onclick = () => {
 };
 const cctvSoundBtnEl = $("cctvSoundBtn");
 if (cctvSoundBtnEl) {
-  /* Tombol ini mengatur SUARA VIDEO CCTV (video selalu mulai bisu agar autoplay diizinkan browser).
-     Dulu ia membalik status bisu global → ketukan pertama tidak membuka suara video. */
   cctvSoundBtnEl.onclick = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const wantSound = !!cctvVideo.muted;          /* video sedang bisu → nyalakan; sedang bunyi → bisukan */
-    if (wantSound && muted) {                     /* audio global bisu → ikut dinyalakan agar benar-benar terdengar */
+    const wantSound = !!cctvVideo.muted;
+    if (wantSound && muted) {
       muted = false;
       CGO_Fleet.mute(false);
       if (muteBtn) {
@@ -1751,10 +1808,8 @@ if (cctvSoundBtnEl) {
     applyCctvAudio(wantSound);
     toast(wantSound ? "Suara CCTV ON" : "Suara CCTV OFF", "info", 1200);
   };
-  /* Label tombol selalu mengikuti kondisi nyata video (stream baru selalu dimulai bisu) */
   try { cctvVideo.addEventListener("volumechange", () => applyCctvAudio(!cctvVideo.muted, true)); } catch (_) {}
 }
-
 
 /* ============= IP chip ============= */
 async function refreshIP() {
@@ -1938,7 +1993,6 @@ window.__playCam = (id) => {
   );
   CGO_Fleet.logGlobal(`📍 [MAP] Klik CCTV: ${c.name} @ ${c.lat.toFixed(4)},${c.lng.toFixed(4)}`, "INFO");
 
-  /* Portal → buka tab baru */
   if (c.isPortal && c.openInNewTab) {
     window.open(c.embed || c.url, "_blank", "noopener,noreferrer");
     toast(`🌐 ${c.name} dibuka di tab baru`, "info", 2500);
@@ -2135,7 +2189,6 @@ CGO_Fleet.onEvent((data) => {
   }
 
   if (ev === "CCTV_SCAN_PROGRESSIVE") {
-    /* Hasil bertahap: daftar & peta terisi saat scan masih berjalan */
     const pd = data.data;
     $("cctvCount").innerText = pd.total + " CCTV · " + pd.live + " LIVE";
     $("cctvCount").style.color = "var(--neon-yellow)";
@@ -2215,7 +2268,6 @@ CGO_Fleet.onEvent((data) => {
       }
       return;
     }
-    /* Auto buka tab CCTV saat stream siap */
     const cctvTab = document.querySelector('.video-tab[data-tab="cctv"]');
     if (cctvTab && !cctvTab.classList.contains("active")) cctvTab.click();
 
@@ -2235,7 +2287,6 @@ CGO_Fleet.onEvent((data) => {
     } else if (d.substitute && !embed) {
       toast("ℹ️ Memutar feed publik umum (bukan lokasi pin)", "info", 3500);
     }
-    /* Cascade: HLS pure → playStream (pakai streams[]); embed → playEmbed (HLS candidate dulu) */
     const hlsUrl = url || d.hls || (cctv && cctv.hls) || null;
     const emb = embed || (cctv && cctv.embed) || null;
     if (d.hlsLive || (hlsUrl && !emb)) {
@@ -2263,9 +2314,7 @@ CGO_Fleet.onEvent((data) => {
     }
   }
 
-  if (ev === "CCTV_DIAGNOSTIC_RESULT") {
-    /* Hasil diagnostic ditangani langsung di runDiagnostic() */
-  }
+  if (ev === "CCTV_DIAGNOSTIC_RESULT") { /* handled in runDiagnostic */ }
 
   if (ev === "MUTE_STATE_CHANGED") {
     muteBtn.classList.toggle("active", !data.data);
