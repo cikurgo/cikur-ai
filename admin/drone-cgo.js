@@ -1,7 +1,17 @@
 /* ============================================================================
  * CIKUR GO - DRONE CGO FLEET ENGINE
- * Version: 6.16.0
+ * Version: 6.17.0
  * ============================================================================
+ * Perubahan v6.17.0 (dari v6.16.0) — MULTI-SOURCE RADAR (Streetside + normalize):
+ *
+ *   [S1] Streetside API (streetside.mugnimaestra.dev) diintegrasikan ke katalog
+ *        realtime; HLS di-resolve on-demand saat play (sama pola playHls).
+ *   [S2] normalizeCoord: perbaiki koordinat integer / titik desimal hilang.
+ *   [S3] fetchSmart: direct → cascade proxy (corsproxy / allorigins / codetabs).
+ *   [S4] BaliTower list diperluas (GBK 4, Asia Afrika 2, dsb.) tanpa duplikasi.
+ *   [S5] Zero regresi: alur scanNearby / multi / progressive / proxy / UI cascade
+ *        tetap identik; Streetside hanya menambah sumber realPublic.
+ *
  * Perubahan v6.16.0 (dari v6.15.3) — MAX REAL ACCESS + GPS/MAP AUTO:
  *
  *   [M1] _pickProgressive(): hierarki radius 5→25→50→500→∞ km agar SELALU
@@ -27,7 +37,7 @@
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.16.0";
+const VERSION = "6.17.0";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -571,7 +581,9 @@ const CCTVEngine = {
     { name: "Menteng / Bundaran HI", lat: -6.1944, lng: 106.8229, embed: "https://cctv.balitower.co.id/Menteng-001-700123_1/embed.html", region: "Jakarta" },
     { name: "Senayan 1", lat: -6.2270, lng: 106.8000, embed: "https://cctv.balitower.co.id/Senayan-004-705087_1/embed.html", region: "Jakarta" },
     { name: "Senayan 2", lat: -6.2275, lng: 106.8005, embed: "https://cctv.balitower.co.id/Senayan-004-705087_2/embed.html", region: "Jakarta" },
-    { name: "Kemanggisan", lat: -6.1900, lng: 106.7850, embed: "https://cctv.balitower.co.id/Kemanggisan-038-792405_2/embed.html", region: "Jakarta" }
+    { name: "Kemanggisan", lat: -6.1900, lng: 106.7850, embed: "https://cctv.balitower.co.id/Kemanggisan-038-792405_2/embed.html", region: "Jakarta" },
+    { name: "GBK / Gelora 4", lat: -6.2185, lng: 106.8025, embed: "https://cctv.balitower.co.id/Gelora-017-700470_4/embed.html", region: "Jakarta" },
+    { name: "GBK Asia Afrika 2", lat: -6.2230, lng: 106.8045, embed: "https://cctv.balitower.co.id/GBKC1003/embed.html", region: "Jakarta" },
   ],
 
   REGION_PORTALS: [
@@ -589,6 +601,17 @@ const CCTVEngine = {
   PROXY_URL: null,
   _proxyOk: null,
   _proxyCheckedAt: 0,
+
+  // [S1] Streetside multi-source
+  STREETSIDE_BASE: "https://streetside.mugnimaestra.dev",
+  _streetsideLoaded: false,
+  _streetsideLoading: null,
+  _streetsideCount: 0,
+  FETCH_SMART_PROXIES: [
+    (u) => "https://corsproxy.io/?url=" + encodeURIComponent(u),
+    (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+    (u) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u)
+  ],
 
   _normProxy(u) {
     if (u == null) return null;
@@ -752,6 +775,120 @@ const CCTVEngine = {
     return cctvs;
   },
 
+
+  // [S2] Normalisasi koordinat (perbaiki serialisasi integer tanpa titik desimal)
+  normalizeCoord(v, isLat) {
+    let n = parseFloat(v);
+    if (!Number.isFinite(n)) return null;
+    const max = isLat ? 90 : 180;
+    if (Math.abs(n) <= max) return n;
+    if (Math.abs(n) > max * 100) {
+      for (const d of [1e9, 1e8, 1e7, 1e6, 1e5, 1e4, 1e3, 1e2, 1e1]) {
+        const cand = n / d;
+        if (Math.abs(cand) <= max) return cand;
+      }
+    }
+    return null;
+  },
+
+  // [S3] Fetch direct → cascade proxy (JSON/text)
+  async fetchSmart(url, expectJson = true, timeoutMs = 9000) {
+    const tryOne = async (u, ms) => {
+      const res = await fetch(u, { signal: AbortSignal.timeout(ms), cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const text = await res.text();
+      if (!text || /^<!doctype|^<html/i.test(text.trim())) throw new Error("Response HTML");
+      return expectJson ? JSON.parse(text) : text;
+    };
+    try {
+      return await tryOne(url, timeoutMs);
+    } catch (e1) {
+      const errs = [String(e1 && e1.message || e1)];
+      for (let i = 0; i < this.FETCH_SMART_PROXIES.length; i++) {
+        try {
+          return await tryOne(this.FETCH_SMART_PROXIES[i](url), 14000);
+        } catch (e) {
+          errs.push("P" + i + ":" + (e && e.message || e));
+        }
+      }
+      throw new Error("Semua proxy gagal (" + errs.slice(0, 3).join(", ") + ")");
+    }
+  },
+
+  // [S1] Muat katalog Streetside ke REAL_PUBLIC_CAMS (dedupe by name+coord)
+  async loadStreetsideCameras() {
+    if (this._streetsideLoaded) return this._streetsideCount;
+    if (this._streetsideLoading) return this._streetsideLoading;
+    this._streetsideLoading = (async () => {
+      let added = 0;
+      try {
+        const data = await this.fetchSmart(this.STREETSIDE_BASE + "/api/cameras");
+        const arr = Array.isArray(data) ? data : (data.cameras || data.data || []);
+        const dedupeKey = (n, la, lo) => String(n) + "|" + Number(la).toFixed(4) + "|" + Number(lo).toFixed(4);
+        const existing = new Set(this.REAL_PUBLIC_CAMS.map(c => dedupeKey(c.name, c.lat, c.lng)));
+        for (const c of arr) {
+          if (c.content_type && c.content_type !== "cctv") continue;
+          if (c.is_enabled === false) continue;
+          const lat = this.normalizeCoord(c.latitude ?? c.lat, true);
+          const lng = this.normalizeCoord(c.longitude ?? c.lng ?? c.lon, false);
+          if (lat == null || lng == null) continue;
+          const name = c.cctv_name || c.name || c.title || ("Streetside-" + c.id);
+          const key = dedupeKey(name, lat, lng);
+          if (existing.has(key)) continue;
+          existing.add(key);
+          this.REAL_PUBLIC_CAMS.push({
+            name: String(name),
+            lat, lng,
+            streetsideId: c.id,
+            region: c.city_name || c.address || "Streetside",
+            realPublic: true,
+            accessType: "hls",
+            surveillanceType: "streetside_live"
+          });
+          added++;
+        }
+        this._streetsideLoaded = true;
+        this._streetsideCount = added;
+        if (global.CGO_Fleet && added) {
+          global.CGO_Fleet.logGlobal("📡 [CCTV] Streetside: " + added + " kamera ditambahkan", "SUCCESS");
+        }
+      } catch (e) {
+        if (global.CGO_Fleet) {
+          global.CGO_Fleet.logGlobal("⚠️ [CCTV] Streetside gagal: " + (e && e.message), "WARNING");
+        }
+      } finally {
+        this._streetsideLoading = null;
+      }
+      return added;
+    })();
+    return this._streetsideLoading;
+  },
+
+  // [S1] Resolve HLS URL untuk kamera Streetside (on-demand)
+  async resolveStreetsideHls(cam) {
+    if (!cam || cam.hls) return cam && cam.hls;
+    const id = cam.streetsideId || (cam.id && String(cam.id).replace(/^SS-/, ""));
+    if (!id) return null;
+    const detail = await this.fetchSmart(this.STREETSIDE_BASE + "/api/cameras/" + id);
+    const raw = detail.hls || detail.stream_url || detail.url || detail.m3u8 ||
+      (detail.stream && detail.stream.hls) || (detail.streams && detail.streams.hls) ||
+      (detail.data && (detail.data.hls || detail.data.stream_url)) || "";
+    if (!raw) return null;
+    let resolved = String(raw);
+    if (!/^https?:\/\//i.test(resolved)) {
+      const base = this.STREETSIDE_BASE.replace(/\/$/, "");
+      if (resolved.startsWith("/")) resolved = base + resolved;
+      else if (resolved.startsWith("./")) resolved = base + "/" + resolved.slice(2);
+      else resolved = base + "/" + resolved;
+    }
+    try {
+      const u = new URL(resolved);
+      if (!/^https?:$/.test(u.protocol)) return null;
+    } catch (_) { return null; }
+    cam.hls = resolved;
+    return resolved;
+  },
+
   CATALOG_URL: "cameras.json",
   _catalogPromise: null,
   _catalogResult: null,
@@ -764,9 +901,16 @@ const CCTVEngine = {
       const canReuse = !this._catalogResult.error ||
         isLocalFile ||
         Date.now() - this._catalogFailedAt < this._catalogRetryMs;
-      if (canReuse) return Promise.resolve(this._catalogResult);
+      if (canReuse) {
+        // Streetside boleh di-refresh paralel tanpa memblokir cache katalog
+        this.loadStreetsideCameras().catch(() => {});
+        return Promise.resolve(this._catalogResult);
+      }
     }
-    this._catalogPromise = this.loadCatalog().then(r => {
+    this._catalogPromise = Promise.all([
+      this.loadCatalog(),
+      this.loadStreetsideCameras().catch(() => 0)
+    ]).then(([r]) => {
       this._catalogResult = r;
       this._catalogFailedAt = r && r.error ? Date.now() : 0;
       return r;
@@ -931,6 +1075,7 @@ const CCTVEngine = {
     else if (c.noProxy && c.embed) s = 80;
     else if (c.hls && /matanya\.batam\.go\.id/i.test(c.hls)) s = 90;
     else if (c.hls) s = 70;
+    else if (c.streetsideId) s = 65;
     else if (c.hlsAuto || (c.embed && /balitower/i.test(c.embed || ""))) s = 40;
     else if (c.embed) s = 30;
     else if (c.realPublic) s = 20;
@@ -946,7 +1091,7 @@ const CCTVEngine = {
       .filter(c => {
         if (!c) return false;
         if (c.isPortal) return includePortal;
-        if (!(c.hls || c.embed || c.hlsAuto)) return false;
+        if (!(c.hls || c.embed || c.hlsAuto || c.streetsideId)) return false;
         if (preferLat == null || preferLng == null) return true;
         if (c.lat == null || c.lng == null) return maxKm === Infinity;
         return this.calculateDistance(preferLat, preferLng, c.lat, c.lng) / 1000 <= maxKm;
@@ -995,18 +1140,19 @@ const CCTVEngine = {
 
   _camEntry(rc, dist) {
     const e = {
-      id: "REAL-" + rc.name.replace(/\s+/g, "-"),
+      id: rc.streetsideId != null ? ("SS-" + rc.streetsideId) : ("REAL-" + rc.name.replace(/\s+/g, "-")),
       lat: rc.lat, lng: rc.lng, distance: dist,
       name: rc.name, surveillanceType: rc.surveillanceType || (rc.configuredAccess ? "configured_live" : "public_live"),
       realPublic: rc.realPublic !== false, embed: rc.embed, region: rc.region,
       configuredAccess: !!rc.configuredAccess
     };
+    if (rc.streetsideId != null) e.streetsideId = rc.streetsideId;
     if (rc.hls) { e.hls = rc.hls; e.accessType = rc.accessType || "hls"; }
     else if (rc.accessType) e.accessType = rc.accessType;
     if (rc.noProxy) { e.noProxy = true; e.accessType = e.accessType || "youtube"; }
     const auto = rc.hls ? null : this._hlsFromEmbed(rc.embed);
     if (auto) e.hlsAuto = auto;
-    if (!e.accessType) e.accessType = auto ? "embed+hls" : (rc.embed ? "embed" : "unknown");
+    if (!e.accessType) e.accessType = auto ? "embed+hls" : (rc.embed ? "embed" : (rc.streetsideId != null ? "hls" : "unknown"));
     if (rc.accessType && rc.accessType !== "hls") e.accessType = rc.accessType;
     return e;
   },
@@ -1401,7 +1547,7 @@ const CCTVEngine = {
       let bestPlay = this._pickProgressive(unique, baseLat, baseLng);
       if (!bestPlay) {
         const cand = unique
-          .filter(c => !c.isPortal && (c.hls || c.embed || c.hlsAuto))
+          .filter(c => !c.isPortal && (c.hls || c.embed || c.hlsAuto || c.streetsideId))
           .sort((a, b) => this._playabilityScore(b) - this._playabilityScore(a))[0] || null;
         if (cand) bestPlay = { ...cand, remote: true };
       }
@@ -1452,6 +1598,29 @@ const CCTVEngine = {
     if (!cctv) return;
     const force = !!opts.force;
     const proxy = this.getProxyUrl();
+
+    // ---------- Streetside HLS on-demand [S1] ----------
+    if (cctv.streetsideId && !cctv.hls && !cctv.embed && !cctv.isPortal && !opts._streetsideResolved) {
+      fleet.logGlobal(`🔄 [CCTV] Resolve HLS Streetside -> ${cctv.name}...`, "INFO");
+      this.resolveStreetsideHls(cctv).then(url => {
+        if (!url) {
+          fleet.logGlobal(`⚠️ [CCTV] Streetside ${cctv.name}: HLS tidak ditemukan`, "WARNING");
+          fleet.emit("CCTV_STREAM_UNAVAILABLE", {
+            cctv, cctvId: cctv.id, distance: cctv.distance,
+            reason: "HLS Streetside tidak tersedia untuk kamera ini."
+          });
+          return;
+        }
+        this._prepareStream(cctv, fleet, Object.assign({}, opts, { force: true, _streetsideResolved: true }));
+      }).catch(e => {
+        fleet.logGlobal(`⚠️ [CCTV] Streetside resolve gagal: ${e && e.message}`, "WARNING");
+        fleet.emit("CCTV_STREAM_UNAVAILABLE", {
+          cctv, cctvId: cctv.id, distance: cctv.distance,
+          reason: "Gagal mengambil stream Streetside: " + (e && e.message)
+        });
+      });
+      return;
+    }
 
     // ---------- EMBED (BaliTower, dsb.) ----------
     if (cctv.realPublic && cctv.embed && !cctv.isPortal) {
@@ -1590,7 +1759,7 @@ const CCTVEngine = {
     const filtered = list.filter(c => {
       if (!c) return false;
       if (c.isPortal) return false;
-      if (!(c.hls || c.embed || c.hlsAuto)) return false;
+      if (!(c.hls || c.embed || c.hlsAuto || c.streetsideId)) return false;
       if (maxKm !== Infinity && c.distance != null && c.distance > maxKm * 1000) return false;
       return true;
     });
@@ -2017,6 +2186,6 @@ global.CGO_Debug = {
   isActiveRealStream: () => CCTVEngine._isActiveRealStream(CCTVEngine._activeStreams.get("default"))
 };
 
-console.info(`[CGO Fleet] v${VERSION} — Max Real Access + GPS/Map Auto`);
+console.info(`[CGO Fleet] v${VERSION} — Multi-Source Radar (Streetside) + Max Real Access`);
 
 })(typeof window !== "undefined" ? window : globalThis);
