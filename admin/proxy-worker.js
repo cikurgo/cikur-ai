@@ -24,8 +24,7 @@
 const PROXY_VERSION = "1.1.0";
 
 // Domain yang diizinkan lewat proxy (tambah sesuai kebutuhan)
-const ALLOWED_DOMAINS = [
-  "cctv.balitower.co.id",
+const ALLOWED_DOMAINS = ["cctv.balitower.co.id",
   "matanya.batam.go.id",
   "streetside.mugnimaestra.dev",
   "www.youtube.com",
@@ -39,7 +38,17 @@ const ALLOWED_DOMAINS = [
   "pelindung.bandung.go.id",
   "cctv.jogjakota.go.id",
   "pantausemar.semarangkota.go.id",
-  "atcs.denpasarkota.go.id"
+  "atcs.denpasarkota.go.id",
+  "atcsdishub.medan.go.id",
+  "dishub.bekasikota.go.id",
+  "bsw.kotabogor.go.id",
+  "socakaton.cirebonkab.go.id",
+  "cctv.malangkota.go.id",
+  "seribuwajah.bandarlampungkota.go.id",
+  "paralluta.makassarkota.go.id",
+  "atcs.banjarmasinkota.go.id",
+  "cctv.bandaacehkota.go.id",
+  "atcs-jakarta.com",
 ];
 
 // Header yang dibuang dari upstream agar iframe tidak diblokir

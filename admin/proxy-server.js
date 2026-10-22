@@ -38,8 +38,7 @@
 const PROXY_VERSION = "2.0.2";
 
 /* Whitelist domain yang diizinkan untuk diproksi */
-const ALLOWED_DOMAINS = [
-  "cctv.balitower.co.id",
+const ALLOWED_DOMAINS = ["cctv.balitower.co.id",
   "jakcctv.jakarta.go.id",
   "atcs-dishub.bandung.go.id",
   "pelindung.bandung.go.id",
@@ -50,7 +49,17 @@ const ALLOWED_DOMAINS = [
   "cctv.bantenprov.go.id",
   "cctv.serangkota.go.id",
   "matanya.batam.go.id",
-  "streetside.mugnimaestra.dev"   /* sumber Streetside di drone-cgo.js v6.17+ (API JSON + HLS) */
+  "streetside.mugnimaestra.dev"   /* sumber Streetside di drone-cgo.js v6.17+ (API JSON + HLS) */,
+  "atcsdishub.medan.go.id",
+  "dishub.bekasikota.go.id",
+  "bsw.kotabogor.go.id",
+  "socakaton.cirebonkab.go.id",
+  "cctv.malangkota.go.id",
+  "seribuwajah.bandarlampungkota.go.id",
+  "paralluta.makassarkota.go.id",
+  "atcs.banjarmasinkota.go.id",
+  "cctv.bandaacehkota.go.id",
+  "atcs-jakarta.com",
 ];
 
 /* Header yang harus dihapus agar bisa di-embed */

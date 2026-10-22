@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.18.0</title>
+<title>BCGO — FLEET COMMAND CENTER v6.19.1</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -200,7 +200,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.18.0</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.19.1</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -1224,6 +1224,15 @@ async function playStream(url, cctvInfo, d) {
   }
   if (d.hlsProxy) push(d.hlsProxy, "proxy");
   if (d.hlsCandidate && d.hlsCandidate !== url) push(d.hlsCandidate, "direct");
+  // Pastikan cascade proxy CGO selalu dicoba (ekstrak + generate URL proxy)
+  try {
+    const E = CGO_Fleet && CGO_Fleet.CCTV;
+    const px = E && E.getProxyUrl && E.getProxyUrl();
+    const base = url || d.hlsCandidate;
+    if (px && base && !/\/proxy\?url=/.test(base)) {
+      push(E.proxify(base), "proxy");
+    }
+  } catch (_) {}
 
   let candIdx = 0;
   let via = "direct";
@@ -2548,7 +2557,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.18.0 ready · Multi Auto Access (GPS/Peta) + Kaskade Kamera + Streetside + Zero Regresi");
+console.info("[BCGO UI] v6.19.1 ready · GPS Generik + Real HLS/Proxy + Multi-Kota · Zero Regresi");
 })();
 </script>
 </body>
