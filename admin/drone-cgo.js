@@ -1,7 +1,34 @@
 /* ============================================================================
  * CIKUR GO - DRONE CGO FLEET ENGINE
- * Version: 6.17.0
+ * Version: 6.18.0
  * ============================================================================
+ * Perubahan v6.18.0 (dari v6.17.0) — MULTI AUTO ACCESS (klik GPS / titik peta):
+ *
+ *   [A1] accessAround(lat,lng): satu perintah untuk seluruh alur titik GPS/peta:
+ *        kamera berfeed di sekitar titik dimuat LOKAL seketika (tanpa menunggu
+ *        Overpass), kamera terdekat langsung diputar, lalu pin OSM digabung.
+ *   [A2] Antrean akses (_accessQueue): bila satu kamera gagal tayang, UI memanggil
+ *        advanceAccess() → otomatis pindah ke kamera terdekat berikutnya
+ *        (maks. maxTries). Tanpa proxy, host yang terbukti diblokir CORS dilewati.
+ *   [A3] Hanya kamera <= localKm (default 50 km) yang masuk antrean — tidak pernah
+ *        melompat ke kota lain. Bila kosong, jalur lama autoStream (berlabel
+ *        remote) tetap dipakai seperti sebelumnya.
+ *   [A4] IPScanner.cancel(): scan Overpass lama yang basi bisa dibatalkan agar klik
+ *        terbaru tidak tertahan; hasil klik lama dibuang (anti balapan).
+ *   [A5] Event baru: CCTV_ACCESS_START / _DONE / _ADVANCE / _EXHAUSTED / _NOLOCAL.
+ *   [A6] Sadar-Streetside: kamera Streetside (HLS di-resolve saat diputar) ikut masuk
+ *        antrean akses, dihitung LIVE, dan kegagalan resolve memicu kaskade.
+ *   [A7] Sinkron dengan proxy yang berjalan: fetchSmart memakai proxy CGO milik
+ *        sendiri (worker/server) SEBELUM relay publik pihak ketiga; checkProxy membaca
+ *        versi/fitur proxy (worker v1.x = tanpa render HTML) -> getProxyInfo().
+ *   [A8] Perbaikan: ensureCatalog tidak lagi menunggu Streetside > 2,5 dtk (dulu bisa
+ *        menahan SEMUA scan hingga ~1 menit bila API Streetside lambat/mati); percobaan
+ *        ulang Streetside dibatasi 60 dtk; resolve Streetside yang basi tidak lagi
+ *        menimpa kamera yang dipilih belakangan.
+ *   [A9] normalizeCoord: koordinat tanpa titik desimal kini dipulihkan ke kotak Indonesia
+ *        (aturan lama memilih pembagi terbesar -> koordinat meleset ke dekat 0,0).
+ *   Semua API v6.17.0 TIDAK diubah (scanNearby, scanMultiRegion, autoStream, dst).
+ *
  * Perubahan v6.17.0 (dari v6.16.0) — MULTI-SOURCE RADAR (Streetside + normalize):
  *
  *   [S1] Streetside API (streetside.mugnimaestra.dev) diintegrasikan ke katalog
@@ -37,7 +64,7 @@
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.17.0";
+const VERSION = "6.18.0";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -290,9 +317,16 @@ const IPScanner = {
     return attempts;
   },
 
+  /* [A4] batalkan fetch Overpass yang sedang berjalan (mis. klik GPS/peta yang lebih baru) */
+  cancel() {
+    this._cancel = true;
+    try { if (this._ctrl) this._ctrl.abort(); } catch (_) {}
+  },
+
   async fetchOverpass(query, timeout = 25000) {
     if (this._busy) throw new Error("Scanner sedang sibuk");
     this._busy = true;
+    this._cancel = false;
     const startIdx = this._currentMirror;
     let lastErr = null;
     const deadline = Date.now() + this.TOTAL_BUDGET_MS;
@@ -302,6 +336,7 @@ const IPScanner = {
         const mirror = this.MIRRORS[idx];
         const attempts = this._buildAttempts(mirror.url, query);
         for (const att of attempts) {
+          if (this._cancel) { lastErr = new Error("dibatalkan oleh permintaan baru"); break; }
           if (Date.now() > deadline) { lastErr = lastErr || new Error("batas waktu scan terlampaui"); break; }
           try {
             if (global.CGO_Fleet) {
@@ -310,6 +345,7 @@ const IPScanner = {
               );
             }
             const ctrl = new AbortController();
+            this._ctrl = ctrl;
             const timer = setTimeout(() => ctrl.abort(), Math.min(timeout, 12000));
             const opts = { method: att.method, signal: ctrl.signal };
             if (att.method === "POST") {
@@ -330,7 +366,7 @@ const IPScanner = {
             return data;
           } catch (e) { lastErr = e; }
         }
-        if (Date.now() > deadline) break;
+        if (this._cancel || Date.now() > deadline) break;
         if (global.CGO_Fleet) {
           global.CGO_Fleet.logGlobal(
             `⚠️ [NET] Mirror ${mirror.host} gagal semua metode - rotasi...`, "WARNING"
@@ -338,7 +374,7 @@ const IPScanner = {
         }
       }
       throw new Error("Semua mirror/proxy gagal: " + (lastErr?.message || "unknown"));
-    } finally { this._busy = false; }
+    } finally { this._busy = false; this._ctrl = null; }
   },
 
   getStatus() {
@@ -600,6 +636,7 @@ const CCTVEngine = {
 
   PROXY_URL: null,
   _proxyOk: null,
+  _proxyInfo: null,
   _proxyCheckedAt: 0,
 
   // [S1] Streetside multi-source
@@ -685,10 +722,22 @@ const CCTVEngine = {
       clearTimeout(t);
       const j = res.ok ? await res.json() : null;
       ok = !!(j && j.status === "ok");
-    } catch (_) {}
+      this._proxyInfo = ok ? { version: String(j.version || ""), features: j.features || null,
+        allowedDomains: Array.isArray(j.allowedDomains) ? j.allowedDomains.map(d => String(d).toLowerCase()) : null } : null;
+    } catch (_) { this._proxyInfo = null; }
     this._proxyOk = ok; this._proxyCheckedAt = Date.now();
-    if (global.CGO_Fleet) global.CGO_Fleet.emit("PROXY_STATUS", { url: p, ok });
+    if (global.CGO_Fleet) global.CGO_Fleet.emit("PROXY_STATUS", { url: p, ok, version: ok && this._proxyInfo ? this._proxyInfo.version : null, htmlRewrite: this.proxyHasHtmlRewrite() });
     return ok;
+  },
+  getProxyInfo() { return this._proxyInfo ? { ...this._proxyInfo } : null; },
+  /* Worker v1.x hanya meneruskan byte (HLS/JSON); halaman embed TIDAK dirender ulang -> iframe via proxy bisa kosong.
+     Server >= 2.x (dan worker yang melaporkan features.htmlRewrite) merender ulang halaman. Tidak diketahui -> anggap bisa. */
+  proxyHasHtmlRewrite() {
+    const i = this._proxyInfo;
+    if (!i) return true;
+    if (i.features && typeof i.features.htmlRewrite === "boolean") return i.features.htmlRewrite;
+    const major = parseInt(String(i.version || "").split(".")[0], 10);
+    return Number.isFinite(major) ? major >= 2 : true;
   },
   async explainHls(url, timeoutMs = 6000) {
     const attempt = async (mode) => {
@@ -783,6 +832,13 @@ const CCTVEngine = {
     const max = isLat ? 90 : 180;
     if (Math.abs(n) <= max) return n;
     if (Math.abs(n) > max * 100) {
+      // [A9] Titik desimal hilang itu ambigu (mis. -62146000 bisa -62,146 atau -6,2146). Kamera di katalog ini
+      // berada di Indonesia -> pilih pembagi yang jatuh di dalam kotak Indonesia; baru bila tak ada pakai aturan lama.
+      const box = isLat ? [-11.5, 6.5] : [94.5, 141.5];
+      for (const d of [1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9]) {
+        const cand = n / d;
+        if (cand >= box[0] && cand <= box[1]) return cand;
+      }
       for (const d of [1e9, 1e8, 1e7, 1e6, 1e5, 1e4, 1e3, 1e2, 1e1]) {
         const cand = n / d;
         if (Math.abs(cand) <= max) return cand;
@@ -804,6 +860,19 @@ const CCTVEngine = {
       return await tryOne(url, timeoutMs);
     } catch (e1) {
       const errs = [String(e1 && e1.message || e1)];
+      // [A7] proxy CGO milik sendiri (worker/server yang sudah berjalan) lebih dulu — domain Streetside sudah di whitelist-nya
+      try {
+        if (this.getProxyUrl() && await this.checkProxy()) {
+          const info = this._proxyInfo, host = new URL(url).hostname.toLowerCase();
+          const known = info && info.allowedDomains;
+          if (known && !known.some(d => host === d || host.endsWith("." + d))) {
+            errs.push("CGO:domain belum di whitelist proxy");
+            if (global.CGO_Fleet) global.CGO_Fleet.logGlobal(`⚠️ [PROXY] ${host} belum ada di whitelist proxy — tambahkan lewat EXTRA_ALLOWED_DOMAINS atau perbarui proxy-server.js`, "WARNING");
+          } else {
+            return await tryOne(this.proxify(url), 14000);
+          }
+        }
+      } catch (e) { errs.push("CGO:" + (e && e.message || e)); }
       for (let i = 0; i < this.FETCH_SMART_PROXIES.length; i++) {
         try {
           return await tryOne(this.FETCH_SMART_PROXIES[i](url), 14000);
@@ -819,6 +888,7 @@ const CCTVEngine = {
   async loadStreetsideCameras() {
     if (this._streetsideLoaded) return this._streetsideCount;
     if (this._streetsideLoading) return this._streetsideLoading;
+    if (this._streetsideFailedAt && Date.now() - this._streetsideFailedAt < 60000) return 0;   // [A8]
     this._streetsideLoading = (async () => {
       let added = 0;
       try {
@@ -853,6 +923,7 @@ const CCTVEngine = {
           global.CGO_Fleet.logGlobal("📡 [CCTV] Streetside: " + added + " kamera ditambahkan", "SUCCESS");
         }
       } catch (e) {
+        this._streetsideFailedAt = Date.now();
         if (global.CGO_Fleet) {
           global.CGO_Fleet.logGlobal("⚠️ [CCTV] Streetside gagal: " + (e && e.message), "WARNING");
         }
@@ -869,6 +940,8 @@ const CCTVEngine = {
     if (!cam || cam.hls) return cam && cam.hls;
     const id = cam.streetsideId || (cam.id && String(cam.id).replace(/^SS-/, ""));
     if (!id) return null;
+    this._ssHls = this._ssHls || new Map();
+    if (this._ssHls.has(String(id))) { cam.hls = this._ssHls.get(String(id)); return cam.hls; }
     const detail = await this.fetchSmart(this.STREETSIDE_BASE + "/api/cameras/" + id);
     const raw = detail.hls || detail.stream_url || detail.url || detail.m3u8 ||
       (detail.stream && detail.stream.hls) || (detail.streams && detail.streams.hls) ||
@@ -886,6 +959,7 @@ const CCTVEngine = {
       if (!/^https?:$/.test(u.protocol)) return null;
     } catch (_) { return null; }
     cam.hls = resolved;
+    this._ssHls.set(String(id), resolved);
     return resolved;
   },
 
@@ -909,7 +983,8 @@ const CCTVEngine = {
     }
     this._catalogPromise = Promise.all([
       this.loadCatalog(),
-      this.loadStreetsideCameras().catch(() => 0)
+      // [A8] Streetside terus dimuat di latar belakang; scan tidak menunggu > 2,5 dtk
+      Promise.race([this.loadStreetsideCameras().catch(() => 0), new Promise(r => setTimeout(r, 2500))])
     ]).then(([r]) => {
       this._catalogResult = r;
       this._catalogFailedAt = r && r.error ? Date.now() : 0;
@@ -1596,13 +1671,16 @@ const CCTVEngine = {
   // [G3] SEMUA cabang kirim payload lengkap [C4]
   _prepareStream(cctv, fleet, opts = {}) {
     if (!cctv) return;
+    if (!opts._streetsideResolved) this._prepSeq = (this._prepSeq || 0) + 1;
     const force = !!opts.force;
     const proxy = this.getProxyUrl();
 
     // ---------- Streetside HLS on-demand [S1] ----------
     if (cctv.streetsideId && !cctv.hls && !cctv.embed && !cctv.isPortal && !opts._streetsideResolved) {
+      const prepSeq = this._prepSeq;   // [A8] resolve basi (kamera sudah diganti) dibuang
       fleet.logGlobal(`🔄 [CCTV] Resolve HLS Streetside -> ${cctv.name}...`, "INFO");
       this.resolveStreetsideHls(cctv).then(url => {
+        if (prepSeq !== this._prepSeq) return;
         if (!url) {
           fleet.logGlobal(`⚠️ [CCTV] Streetside ${cctv.name}: HLS tidak ditemukan`, "WARNING");
           fleet.emit("CCTV_STREAM_UNAVAILABLE", {
@@ -1613,6 +1691,7 @@ const CCTVEngine = {
         }
         this._prepareStream(cctv, fleet, Object.assign({}, opts, { force: true, _streetsideResolved: true }));
       }).catch(e => {
+        if (prepSeq !== this._prepSeq) return;
         fleet.logGlobal(`⚠️ [CCTV] Streetside resolve gagal: ${e && e.message}`, "WARNING");
         fleet.emit("CCTV_STREAM_UNAVAILABLE", {
           cctv, cctvId: cctv.id, distance: cctv.distance,
@@ -1744,10 +1823,20 @@ const CCTVEngine = {
     const fleet = global.CGO_Fleet;
     if (!fleet || !cctv) return;
     fleet.logGlobal(`🎥 [CCTV] Beralih -> ${cctv.name}`, "INFO");
+    /* [A2] pilihan manual/tour: bila kamera ada di antrean akses, kaskade lanjut dari sini */
+    const q = this._accessQueue;
+    if (q) {
+      const inQ = cctv.id != null && q.cams.has(String(cctv.id));
+      q.currentId = inQ ? String(cctv.id) : null;
+      if (inQ) q.attempts = 0;
+    }
     this._prepareStream(cctv, fleet, { force: true });
   },
 
-  clearStream() { this._activeStreams.clear(); },
+  clearStream() {
+    this._activeStreams.clear();
+    if (this._accessQueue) this._accessQueue.currentId = null;
+  },
   getLastScan() { return this._lastScan; },
   getActiveStream() {
     const s = this._activeStreams.get("default");
@@ -1768,6 +1857,213 @@ const CCTVEngine = {
       if (sb !== sa) return sb - sa;
       return distOf(a) - distOf(b);
     });
+  },
+
+
+  // ==========================================================================
+  // [A1–A5] MULTI AUTO ACCESS — klik GPS / titik peta
+  // ==========================================================================
+  ACCESS_DEFAULTS: { radius: 5000, localKm: 50, maxTries: 6 },
+  _accessSeq: 0,
+  _accessQueue: null,
+
+  _sleep(ms) { return new Promise(r => setTimeout(r, ms)); },
+  async _waitUntil(busyFn, maxMs, stepMs = 120) {
+    const t0 = Date.now();
+    while (busyFn()) {
+      if (Date.now() - t0 >= maxMs) return false;
+      await this._sleep(stepMs);
+    }
+    return true;
+  },
+  _camHost(c) {
+    try { return new URL(c.hlsAuto || c.hls || c.embed).hostname.toLowerCase(); } catch (_) { return ""; }
+  },
+
+  /* Antrean: terdekat dulu; jaringan privat/VPN (jarang bisa diputar dari luar LAN) paling akhir */
+  _buildAccessQueue(playable, maxTries) {
+    const sorted = playable.slice().sort((a, b) => distOf(a) - distOf(b));
+    const seenUrl = new Set(), pub = [], lan = [];
+    for (const c of sorted) {
+      const key = c.hls || c.hlsAuto || c.embed || (c.streetsideId != null ? "SS-" + c.streetsideId : null);
+      if (!key || seenUrl.has(key)) continue;
+      seenUrl.add(key);
+      (c.accessType === "private" || c.accessType === "vpn" ? lan : pub).push(c);
+    }
+    const list = pub.concat(lan).slice(0, 30);
+    const cams = new Map();
+    for (const c of list) cams.set(String(c.id), c);
+    return {
+      ids: list.map(c => String(c.id)), cams,
+      tried: new Set(), blockedHosts: new Set(),
+      currentId: null, maxTries, attempts: 0, skipped: 0
+    };
+  },
+
+  getAccessQueue() {
+    const q = this._accessQueue;
+    if (!q) return null;
+    return {
+      ids: q.ids.slice(), currentId: q.currentId, tried: Array.from(q.tried),
+      attempts: q.attempts, maxTries: q.maxTries, skipped: q.skipped,
+      blockedHosts: Array.from(q.blockedHosts),
+      cams: q.ids.map(id => q.cams.get(id))
+    };
+  },
+  cancelAccess() {
+    this._accessSeq++;
+    this._accessQueue = null;
+  },
+
+  /* Dipanggil UI saat kamera aktif gagal tayang → pindah ke kamera terdekat berikutnya */
+  advanceAccess(failed, reason) {
+    const fleet = global.CGO_Fleet, q = this._accessQueue;
+    if (!fleet || !q || !failed || failed.id == null || q.currentId == null) return null;
+    if (String(failed.id) !== String(q.currentId)) return null;
+    const why = String(reason || "gagal");
+    q.tried.add(String(failed.id));
+    if (!this.getProxyUrl() && /cors|diblokir|proxy/i.test(why)) {
+      const h = this._camHost(failed);
+      if (h) q.blockedHosts.add(h);
+    }
+    const exhaust = (msg) => {
+      q.currentId = null;
+      fleet.logGlobal(`⚠️ [AKSES] ${msg}`, "WARNING");
+      fleet.emit("CCTV_ACCESS_EXHAUSTED", {
+        tried: q.tried.size, total: q.ids.length, skipped: q.skipped,
+        blockedHosts: Array.from(q.blockedHosts), reason: why, proxy: !!this.getProxyUrl()
+      });
+      return null;
+    };
+    if (q.attempts >= q.maxTries) return exhaust(`Batas ${q.maxTries} percobaan tercapai`);
+    let next = null;
+    for (const id of q.ids) {
+      if (q.tried.has(id)) continue;
+      const c = q.cams.get(id);
+      if (q.blockedHosts.size && q.blockedHosts.has(this._camHost(c))) {
+        q.tried.add(id); q.skipped++;
+        continue;
+      }
+      next = c; break;
+    }
+    if (!next) return exhaust(`Tidak ada kamera lain di sekitar titik (${q.tried.size - q.skipped} dicoba, ${q.skipped} dilewati)`);
+    q.currentId = String(next.id);
+    q.attempts++;
+    fleet.logGlobal(
+      `🔁 [AKSES] ${failed.name || failed.id} gagal (${why}) -> mencoba ${next.name} (${next.distance}m) [${q.attempts}/${q.maxTries}]`,
+      "WARNING");
+    fleet.emit("CCTV_ACCESS_ADVANCE", {
+      from: failed, to: next, reason: why, attempt: q.attempts, max: q.maxTries, skipped: q.skipped
+    });
+    this._prepareStream(next, fleet, { force: true });
+    return next;
+  },
+
+  async accessAround(lat, lng, options = {}) {
+    const fleet = global.CGO_Fleet;
+    if (!fleet) return null;
+    lat = Number(lat); lng = Number(lng);
+    if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      fleet.logGlobal("❌ [AKSES] Koordinat tidak valid", "DANGER");
+      return null;
+    }
+    const D = this.ACCESS_DEFAULTS;
+    const radius = U.clamp(Number(options.radius) || D.radius, 500, 25000);
+    const localKm = U.clamp(Number(options.localKm) || D.localKm, 1, 500);
+    const maxTries = U.clamp(Math.floor(Number(options.maxTries) || D.maxTries), 1, 20);
+    const source = String(options.source || "titik");
+    const seq = ++this._accessSeq;
+    const alive = () => seq === this._accessSeq;
+    const t0 = Date.now();
+
+    fleet.emit("CCTV_ACCESS_START", { lat, lng, radius, localKm, source, seq });
+    fleet.logGlobal(`🛰️ [AKSES] ${source.toUpperCase()} ${lat.toFixed(5)}, ${lng.toFixed(5)} · r=${radius}m · kamera <= ${localKm} km`, "INFO");
+
+    try { await Promise.race([this.ensureCatalog(), this._sleep(1500)]); } catch (_) {}
+    if (!alive()) return null;
+
+    /* 1) Kamera berfeed di sekitar titik — murni lokal, tampil & diputar SEKETIKA */
+    const local = this._liveEntries(lat, lng, {
+      realMax: localKm * 1000, portalMax: 60000, streamMax: localKm * 1000
+    });
+    const playable = local.filter(c => !c.isPortal && (c.hls || c.embed || c.hlsAuto || c.streetsideId) && c.distance != null);
+    const queue = this._buildAccessQueue(playable, maxTries);
+    this._accessQueue = queue;
+    fleet.emit("CCTV_SCAN_PROGRESSIVE", {
+      cctvs: local, total: local.length, live: playable.length,
+      current: 0, regions: 1, access: true, queryLat: lat, queryLng: lng
+    });
+
+    let started = null;
+    if (queue.ids.length) {
+      started = queue.cams.get(queue.ids[0]);
+      queue.currentId = queue.ids[0];
+      queue.attempts = 1;
+      fleet.logGlobal(`🎥 [AKSES] Terdekat: ${started.name} (${started.distance}m) · ${queue.ids.length} kandidat feed di sekitar titik`, "SUCCESS");
+      this._prepareStream(started, fleet, { force: true });
+    } else {
+      fleet.logGlobal(`ℹ️ [AKSES] Tidak ada kamera berfeed dalam ${localKm} km — mencari feed terdekat di katalog (berlabel remote)`, "WARNING");
+      fleet.emit("CCTV_ACCESS_NOLOCAL", { lat, lng, localKm });
+      started = this.autoStream(lat, lng);
+    }
+
+    /* 2) Pin OSM: tunggu scanner bebas; scan lama yang basi dibatalkan, klik terbaru diutamakan */
+    const busy = () => this._scanInProgress || IPScanner.isBusy();
+    if (busy()) {
+      let free = await this._waitUntil(busy, 3000);
+      if (!free && alive()) { IPScanner.cancel(); free = await this._waitUntil(busy, 5000); }
+    }
+    if (!alive()) return null;
+
+    let pins = null, pinsError = null;
+    if (busy()) {
+      pinsError = "scanner sibuk";
+      fleet.logGlobal("⚠️ [AKSES] Scanner OSM sibuk — hanya kamera katalog yang ditampilkan (klik lagi untuk pin OSM)", "WARNING");
+    } else {
+      this._scanInProgress = true;
+      try {
+        const res = await this.scanNearby(lat, lng, radius, { allowConcurrent: true, silent: true, skipStream: true });
+        if (res && res.cctvs) pins = res.cctvs; else pinsError = "Overpass gagal";
+      } catch (e) {
+        pinsError = (e && e.message) || "Overpass gagal";
+      } finally { this._scanInProgress = false; }
+    }
+    if (!alive()) return null;
+
+    /* 3) Gabung (kamera katalog + pin OSM), urut jarak */
+    const merged = new Map();
+    for (const c of local) merged.set(String(c.id), c);
+    for (const c of (pins || [])) {
+      if (c.synthetic) continue;
+      const k = String(c.id);
+      if (!merged.has(k)) merged.set(k, c);
+    }
+    let cctvs = Array.from(merged.values());
+    if (cctvs.length === 0) {
+      fleet.logGlobal("[AKSES] Tidak ada kamera di sekitar titik -> spawn 6 synthetic pin", "WARNING");
+      cctvs = this._spawnSyntheticCCTV(lat, lng, 6, 2);
+    }
+    cctvs.sort((a, b) => distOf(a) - distOf(b));
+    const nearest = cctvs[0] || null;
+    const bestPlay = started || this._pickProgressive(cctvs, lat, lng) || null;
+    const liveN = cctvs.filter(c => c.realPublic && !c.isPortal && (c.embed || c.hls || c.hlsAuto || c.streetsideId)).length;
+    this._lastScan = { queryLat: lat, queryLng: lng, radius, cctvs, nearest, bestPlay, access: true, timestamp: U.iso() };
+
+    fleet.emit("CCTV_SCAN_SUCCESS", {
+      cctvs, nearest, bestPlay, total: cctvs.length, live: liveN,
+      queryLat: lat, queryLng: lng, radius, access: true, localKm,
+      candidates: queue.ids.length, pinsError, source,
+      bestPlayRemote: !!(bestPlay && bestPlay.remote)
+    });
+    const ms = Date.now() - t0;
+    fleet.emit("CCTV_ACCESS_DONE", {
+      total: cctvs.length, live: liveN, candidates: queue.ids.length,
+      pinsOk: !pinsError, pinsError, ms, source
+    });
+    fleet.logGlobal(
+      `✅ [AKSES] ${cctvs.length} titik · ${queue.ids.length} kandidat feed · ${pinsError ? "pin OSM: " + pinsError : "pin OSM OK"} · ${ms}ms`,
+      "SUCCESS");
+    return { cctvs, nearest, bestPlay, queryLat: lat, queryLng: lng, radius, queue: queue.ids.slice(), pinsError };
   },
 
   // [G10]+[M1] progressive pick; Batam/remote fallback terakhir
@@ -2013,6 +2309,9 @@ const FleetManager = {
   scanMultiCCTV(lat, lng, regions) {
     return CCTVEngine.scanMultiRegion(lat, lng, regions);
   },
+  accessCCTV(lat, lng, opts) { return CCTVEngine.accessAround(lat, lng, opts); },
+  advanceAccess(cam, reason) { return CCTVEngine.advanceAccess(cam, reason); },
+  getAccessQueue() { return CCTVEngine.getAccessQueue(); },
   diagnoseCCTV() {
     return CCTVEngine.diagnoseCCTV();
   },
@@ -2142,6 +2441,7 @@ const FleetManager = {
     this._fleetStats = { active: 0, emergency: 0, offline: 0, jammed: 0, idle: 0 };
     this._missionStartTime = null;
     this._tickCount = 0;
+    CCTVEngine.cancelAccess();
     this.logGlobal("Sistem di-reset.", "WARNING");
   },
 
@@ -2177,6 +2477,10 @@ global.CGO_Debug = {
   getProxyUrl: () => CCTVEngine.getProxyUrl(),
   checkProxy: (force) => CCTVEngine.checkProxy(force),
   autoStream: (lat, lng) => CCTVEngine.autoStream(lat, lng),
+  accessAround: (lat, lng, opts) => CCTVEngine.accessAround(lat, lng, opts),
+  advanceAccess: (cam, reason) => CCTVEngine.advanceAccess(cam, reason),
+  getAccessQueue: () => CCTVEngine.getAccessQueue(),
+  getProxyInfo: () => CCTVEngine.getProxyInfo(),
   getPlayableCandidates: (lat, lng, maxKm) => CCTVEngine.getPlayableCandidates(lat, lng, maxKm),
   // bonus debug helper
   getActiveStream: () => {
@@ -2186,6 +2490,6 @@ global.CGO_Debug = {
   isActiveRealStream: () => CCTVEngine._isActiveRealStream(CCTVEngine._activeStreams.get("default"))
 };
 
-console.info(`[CGO Fleet] v${VERSION} — Multi-Source Radar (Streetside) + Max Real Access`);
+console.info(`[CGO Fleet] v${VERSION} — Multi Auto Access (GPS/Peta) + Multi-Source Radar (Streetside) + Max Real Access`);
 
 })(typeof window !== "undefined" ? window : globalThis);

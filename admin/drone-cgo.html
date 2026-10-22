@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BCGO — FLEET COMMAND CENTER v6.17.0</title>
+<title>BCGO — FLEET COMMAND CENTER v6.18.0</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 :root {
@@ -200,7 +200,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
 <!-- ================= HEADER ================= -->
 <div class="header">
   <h1><svg class="icon big" style="color:var(--neon-blue)"><use href="#i-scan"/></svg>
-    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.17.0</span></h1>
+    BCGO // COMMAND <span style="font-size:8px;color:#6b7280">v6.18.0</span></h1>
   <div class="header-controls">
     <div class="chip ip" id="ipChip" title="Klik untuk refresh IP">
       <svg class="icon"><use href="#i-globe"/></svg>
@@ -319,10 +319,19 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
     </div>
     <div id="map"></div>
     <div class="map-controls">
-      <div class="map-coords" id="mapCoordsDisplay">Klik peta untuk koordinat presisi</div>
-      <button id="gpsBtn" class="btn small"
-        style="width:auto;margin:0;border-color:var(--neon-blue);color:var(--neon-blue)">
-        <svg class="icon"><use href="#i-gps"/></svg> GPS Saya</button>
+      <div class="map-coords" id="mapCoordsDisplay">Klik peta / GPS = akses semua CCTV di sekitar titik</div>
+      <span style="display:flex;gap:3px;align-items:center">
+        <select id="accessRadius" title="Radius pencarian pin CCTV saat klik GPS / peta"
+          style="background:#1f2937;color:var(--neon-blue);border:1px solid #374151;border-radius:4px;font-size:9px;padding:3px 2px;font-family:var(--font-mono)">
+          <option value="2000">2 km</option>
+          <option value="5000" selected>5 km</option>
+          <option value="10000">10 km</option>
+          <option value="25000">25 km</option>
+        </select>
+        <button id="gpsBtn" class="btn small"
+          style="width:auto;margin:0;border-color:var(--neon-blue);color:var(--neon-blue)">
+          <svg class="icon"><use href="#i-gps"/></svg> GPS Saya</button>
+      </span>
     </div>
     <div id="cctvListWrap" style="margin-top:6px">
       <div class="panel-title" style="display:flex;justify-content:space-between;align-items:center;gap:4px">
@@ -557,6 +566,7 @@ let cctvLayerGroup = null;
 let scanRadiusCircle = null;
 let droneMarker = null;
 let userGpsMarker = null;
+let pickMarker = null;
 let lastScanCenter = null;
 let cctvCamStore = new Map();
 let autoScanInterval = null;
@@ -879,6 +889,14 @@ function clearIframeTimer() {
 function escHtml(v) {
   return String(v == null ? "" : v).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+/* Overlay status hanya boleh tampil bila TIDAK ada tayangan; jangan menggelapkan video yang sedang jalan */
+function setStatusOverlay(text) {
+  const visible = (cctvVideo && cctvVideo.style.display === "block") ||
+                  (cctvEmbed && cctvEmbed.style.display === "block");
+  if (visible) { statusOverlay.classList.add("hidden"); return; }
+  statusOverlay.classList.remove("hidden");
+  statusOverlay.textContent = text;
+}
 function setRec(rec, recColor, mode, modeColor) {
   $("cctvRec").innerText = rec; $("cctvRec").style.color = recColor;
   $("cctvModeLabel").innerText = mode; $("cctvModeLabel").style.color = modeColor || recColor;
@@ -1014,6 +1032,10 @@ function pickPublicHls() {
 }
 async function playPublicFallback(cctvInfo, token, reason, retry) {
   if (token !== playToken) return false;
+  /* Multi Auto Akses: kamera gagal → otomatis pindah ke kamera terdekat berikutnya di sekitar titik */
+  try {
+    if (typeof CGO_Fleet.advanceAccess === "function" && CGO_Fleet.advanceAccess(cctvInfo, reason)) return true;
+  } catch (_) {}
   const origName = (cctvInfo && cctvInfo.name) || "Kamera";
   const message = `${origName} gagal diputar (${reason || "feed tidak merespons"}). Feed publik dari kota lain tidak dipakai sebagai pengganti lokasi ini.`;
   CGO_Fleet.logGlobal(`⚠️ [STREAM] ${message}`, "WARNING");
@@ -1081,6 +1103,16 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
     }
     hlsWhy = (ex && ex.text) ? ex.text : "";
     CGO_Fleet.logGlobal(`⚠️ [STREAM] HLS ${cctvInfo?.name || ""} gagal — ${hlsWhy || "alasan tidak diketahui"}`, "WARNING");
+    /* Proxy dasar (worker v1.x) hanya meneruskan byte: halaman embed tidak dirender ulang, jadi iframe-nya
+       akan kosong dan memakai HLS yang sama yang barusan gagal. Jangan buang waktu — langsung kaskade. */
+    if (E.getProxyUrl() && await E.checkProxy() && !E.proxyHasHtmlRewrite()) {
+      if (token !== playToken) return;
+      const why = (hlsWhy || "HLS tidak bisa dibuka") + " (proxy dasar tidak merender halaman embed)";
+      if (await playPublicFallback(cctvInfo, token, why, { embedUrl, opts })) return;
+      setRec("● ERROR", "var(--neon-red)", "HLS GAGAL");
+      showFallbackBar(why + ". Pakai proxy-server.js / worker terbaru, atau pilih kamera lain.");
+      return;
+    }
     if (!(E.getProxyUrl() && await E.checkProxy())) {
       if (token !== playToken) return;
       if (await playPublicFallback(cctvInfo, token, hlsWhy || "HLS tidak bisa dibuka", { embedUrl, opts })) return;
@@ -1129,6 +1161,10 @@ async function playEmbed(embedUrl, cctvInfo, opts) {
       hideFallbackBar();
       toast("🎥 " + (cctvInfo?.name || "Kamera") + " (embed resmi)", "success");
       CGO_Fleet.logGlobal(`🎥 [STREAM] Embed resmi: ${cctvInfo?.name || embedUrl}`, "SUCCESS");
+    } else if (via === "proxy" && !E.proxyHasHtmlRewrite()) {
+      /* proxy dasar: halaman termuat tetapi isinya tidak bisa diverifikasi — jangan klaim LIVE */
+      setRec("● EMBED", "var(--neon-yellow)", "PROXY DASAR · BISA KOSONG");
+      showFallbackBar("Proxy dasar (worker v1.x) tidak merender halaman embed. Jika layar kosong, pakai proxy-server.js / worker terbaru atau pilih kamera lain.");
     } else if (via === "proxy") {
       setRec("● LIVE", "var(--neon-green)", "REAL PUBLIC · PROXY");
       hideFallbackBar();
@@ -1204,6 +1240,9 @@ async function playStream(url, cctvInfo, d) {
       return;
     }
     CGO_Fleet.logGlobal(`❌ [HLS] semua kandidat gagal (${why})`, "WARNING");
+    try {
+      if (typeof CGO_Fleet.advanceAccess === "function" && CGO_Fleet.advanceAccess(cctvInfo, why)) return;
+    } catch (_) {}
     startSimulatedCCTV(cctvInfo);
   };
 
@@ -1482,12 +1521,87 @@ function initMap() {
     L.popup().setLatLng(e.latlng).setContent(
       `Koordinat Presisi:<br><b>${latS}, ${lngS}</b><br><span style="color:#00ff88">📡 Auto-scan CCTV…</span>`
     ).openOn(map);
-    toast(`📍 Scan CCTV @ ${latS}, ${lngS}`, "success", 2000);
-    await scanAtPoint(lat, lng, { source: "map", radius: 5000 });
+    toast(`📍 Akses CCTV sekitar ${latS}, ${lngS}`, "success", 2000);
+    await scanAtPoint(lat, lng, { source: "map" });
   });
 }
 
+let accessRun = 0;
+function currentAccessRadius() {
+  const el = $("accessRadius");
+  const v = el ? Number(el.value) : 5000;
+  return v > 0 ? v : 5000;
+}
+function setPickMarker(lat, lng) {
+  if (!map || typeof L === "undefined") return;
+  try {
+    if (pickMarker) map.removeLayer(pickMarker);
+    pickMarker = L.circleMarker([lat, lng], {
+      radius: 7, color: "#ffcc00", fillColor: "#ffcc00", fillOpacity: .7, weight: 2, interactive: false
+    }).addTo(map);
+  } catch (_) {}
+}
+/* Setelah akses titik: tampilkan titik + kamera berfeed terdekat dalam satu pandangan */
+function fitAccessView(lat, lng, cctvs, radius) {
+  if (!map || typeof L === "undefined") return;
+  const lim = Math.max(radius || 5000, 8000);
+  const pts = [[lat, lng]];
+  (cctvs || []).filter(c => c && c.realPublic && !c.isPortal && (c.embed || c.hls || c.hlsAuto || c.streetsideId) &&
+      Number.isFinite(Number(c.lat)) && Number.isFinite(Number(c.lng)) && c.distance != null && c.distance <= lim)
+    .slice(0, 5).forEach(c => pts.push([Number(c.lat), Number(c.lng)]));
+  try {
+    if (pts.length > 1) map.fitBounds(L.latLngBounds(pts), { padding: [24, 24], maxZoom: 16 });
+    else map.setView([lat, lng], 14);
+  } catch (_) {}
+}
+
+/** Klik GPS / titik peta: pindahkan drone, lalu Multi Auto Akses seluruh CCTV di sekitar titik */
 async function scanAtPoint(lat, lng, opts) {
+  opts = opts || {};
+  const radius = opts.radius || currentAccessRadius();
+  const source = opts.source || "scan";
+  try {
+    const drone = CGO_Fleet.getSelectedDrone();
+    if (drone && drone.telemetry && drone.telemetry.position) {
+      const baseLat = -6.2088, baseLng = 106.8456;
+      drone.telemetry.position.x = (lat - baseLat) / 0.0001;
+      drone.telemetry.position.y = (lng - baseLng) / 0.0001;
+      if (typeof updateDroneMarker === "function") updateDroneMarker(drone);
+    }
+  } catch (_) {}
+  if (typeof CGO_Fleet.accessCCTV !== "function") return scanAtPointLegacy(lat, lng, { source, radius });
+
+  const run = ++accessRun;
+  stopCCTV();
+  if (source === "map") setPickMarker(lat, lng);
+  statusOverlay.classList.remove("hidden");
+  statusOverlay.textContent = `📡 Mengakses semua CCTV di sekitar titik (${source})…`;
+  $("progressBarWrap").style.display = "block";
+  $("progressBarFill").style.width = "30%";
+  try {
+    const result = await CGO_Fleet.accessCCTV(lat, lng, { radius, source });
+    if (run !== accessRun) return result;          /* klik yang lebih baru sudah mengambil alih */
+    const tab = document.querySelector('.video-tab[data-tab="cctv"]');
+    if (tab && !tab.classList.contains("active")) tab.click();
+    $("progressBarFill").style.width = "100%";
+    setTimeout(() => { if (run === accessRun) { $("progressBarWrap").style.display = "none"; $("progressBarFill").style.width = "0%"; } }, 800);
+    if (result && result.queue && result.queue.length === 0) {
+      setStatusOverlay("Tidak ada kamera berfeed di sekitar titik ini (radius 50 km). Pin hanyalah titik di peta, bukan tayangan video.");
+    }
+    return result;
+  } catch (e) {
+    if (run === accessRun) {
+      $("progressBarWrap").style.display = "none";
+      statusOverlay.classList.remove("hidden");
+      statusOverlay.textContent = "Akses CCTV gagal: " + (e.message || e);
+      toast("Akses CCTV gagal: " + (e.message || e), "danger");
+    }
+    return null;
+  }
+}
+
+/** Jalur lama (v6.16.0) — hanya dipakai bila engine tidak punya accessCCTV */
+async function scanAtPointLegacy(lat, lng, opts) {
   opts = opts || {};
   const radius = opts.radius || 5000;
   const source = opts.source || "scan";
@@ -1555,11 +1669,12 @@ function renderCCTVMarkers(cctvs, nearest) {
     const isNearest = c === nearest;
     const isSynth = !!c.synthetic;
     const isPortal = !!c.isPortal;
-    const isReal = !!(c.embed || c.hls || c.hlsAuto);
+    const isReal = !!(c.embed || c.hls || c.hlsAuto || c.streetsideId);
     const color = isPortal ? "#a855f7" : (isReal ? "#ff3366" : (isSynth ? "#ffcc00" : (isNearest ? "#00ff88" : "#00ccff")));
     const radius = (isReal || isPortal) ? 9 : (isNearest ? 8 : (isSynth ? 5 : 6));
     const marker = L.circleMarker([c.lat, c.lng], {
-      radius, color, fillColor: color, fillOpacity: .9, weight: 2
+      radius, color, fillColor: color, fillOpacity: .9, weight: 2,
+      bubblingMouseEvents: false   /* klik marker tidak boleh ikut memicu klik peta (scan ulang) */
     });
     const access = c.accessType || (c.hls || c.hlsAuto ? "hls" : (c.noProxy ? "youtube" : (isPortal ? "portal" : (isReal ? "embed" : "pin"))));
     const label = isPortal ? "PORTAL RESMI" : (isReal ? ("LIVE · " + String(access).toUpperCase()) : (isSynth ? "SIM" : (c.surveillanceType || "?")));
@@ -1605,7 +1720,7 @@ let tourOn = false, tourTimer = null, tourSec = 12, tourElapsed = 0;
 
 function camKind(c) {
   if (c.isPortal) return "portal";
-  return (c.embed || c.hls || c.hlsAuto) ? "live" : "pin";
+  return (c.embed || c.hls || c.hlsAuto || c.streetsideId) ? "live" : "pin";
 }
 function camColor(c) {
   const k = camKind(c);
@@ -1690,10 +1805,16 @@ function stepCam(dir, quiet) {
   if (row && row.scrollIntoView) { try { row.scrollIntoView({ block: "nearest" }); } catch (_) {} }
   return true;
 }
+let tourLoadTicks = 0;
+let tourUserOff = false;
+try { tourUserOff = localStorage.getItem("cgo_tour_auto_off") === "1"; } catch (_) {}
 function tourTick() {
   if (!tourOn) return;
-  tourElapsed++;
   const st = $("cctvRec").innerText || "";
+  /* Jangan memotong kamera yang masih memuat (BaliTower butuh beberapa detik) — maksimal 25 dtk */
+  if (/LOADING/.test(st) && tourLoadTicks < 25) { tourLoadTicks++; return; }
+  tourLoadTicks = 0;
+  tourElapsed++;
   const bad = /ERROR|TIMEOUT|CANVAS/.test(st);
   if (tourElapsed >= tourSec || (bad && tourElapsed >= 4)) stepCam(1, true);
 }
@@ -1710,10 +1831,14 @@ $("camNextBtn").onclick = () => stepCam(1, false);
 $("camTourBtn").onclick = () => {
   if (!tourOn) {
     if (!liveCams().length) { toast("Belum ada kamera live — jalankan scan dulu", "warning", 2500); return; }
+    tourUserOff = false;
+    try { localStorage.removeItem("cgo_tour_auto_off"); } catch (_) {}
     setTour(true);
     toast(`▶ Auto Tour: ganti kamera tiap ${tourSec} detik`, "success", 2500);
     stepCam(1, true);
   } else {
+    tourUserOff = true;   /* pilihan pengguna: Auto Tour tidak dinyalakan otomatis lagi */
+    try { localStorage.setItem("cgo_tour_auto_off", "1"); } catch (_) {}
     setTour(false);
     toast("⏸ Auto Tour dimatikan", "warning", 1800);
   }
@@ -1839,7 +1964,7 @@ $("ipChip").onclick = refreshIP;
 /* ============= CCTV buttons ============= */
 $("scanCCTVBtn").onclick = scanNearbyOnly;
 $("multiScanBtn").onclick = scanMultiRegion;
-$("clearStreamBtn").onclick = stopCCTV;
+$("clearStreamBtn").onclick = () => { if (tourOn) setTour(false); stopCCTV(); };
 $("diagnosticBtn").onclick = runDiagnostic;
 $("closeDiagBtn").onclick = () => $("diagOverlay").classList.remove("active");
 $("diagOverlay").onclick = (e) => {
@@ -1914,6 +2039,14 @@ $("autoScanBtn").onclick = () => {
 };
 
 /* ============= GPS ============= */
+try {
+  const sv = localStorage.getItem("cgo_access_radius");
+  if (sv && $("accessRadius") && Array.from($("accessRadius").options).some(o => o.value === sv)) $("accessRadius").value = sv;
+} catch (_) {}
+if ($("accessRadius")) $("accessRadius").addEventListener("change", () => {
+  try { localStorage.setItem("cgo_access_radius", $("accessRadius").value); } catch (_) {}
+  toast("Radius akses CCTV: " + (Number($("accessRadius").value) / 1000) + " km (berlaku pada klik GPS/peta berikutnya)", "info", 2000);
+});
 let gpsScanInProgress = false;
 $("gpsBtn").onclick = () => {
   if (gpsScanInProgress) { toast("GPS sedang memproses lokasi sebelumnya", "warning", 1800); return; }
@@ -1921,35 +2054,50 @@ $("gpsBtn").onclick = () => {
   gpsScanInProgress = true;
   $("gpsBtn").disabled = true;
   $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-refresh"/></svg> MENCARI...';
-  navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      const lat = pos.coords.latitude, lng = pos.coords.longitude;
-      if (map) {
-        map.setView([lat, lng], 15);
-        if (userGpsMarker) map.removeLayer(userGpsMarker);
-        userGpsMarker = L.circleMarker([lat, lng], {
-          radius: 8, color: "#00ff88", fillColor: "#00ff88", fillOpacity: .8
-        }).addTo(map).bindPopup("Lokasi GPS Anda").openPopup();
-        $("mapCoordsDisplay").textContent = `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-      }
-      $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
-      toast("📍 GPS OK — scan & putar CCTV real…", "success", 2500);
-      try {
-        await scanAtPoint(lat, lng, { source: "gps", radius: 5000 });
-      } finally {
-        gpsScanInProgress = false;
-        $("gpsBtn").disabled = false;
-        $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
-      }
-    },
-    (err) => {
-      gpsScanInProgress = false;
-      $("gpsBtn").disabled = false;
-      toast("Gagal akses GPS: " + err.message, "danger");
-      $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
-    },
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 }
-  );
+  const resetBtn = () => {
+    gpsScanInProgress = false;
+    $("gpsBtn").disabled = false;
+    $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
+  };
+  const onFix = async (pos) => {
+    const lat = pos.coords.latitude, lng = pos.coords.longitude;
+    if (map) {
+      map.setView([lat, lng], 15);
+      if (userGpsMarker) map.removeLayer(userGpsMarker);
+      userGpsMarker = L.circleMarker([lat, lng], {
+        radius: 8, color: "#00ff88", fillColor: "#00ff88", fillOpacity: .8, bubblingMouseEvents: false
+      }).addTo(map).bindPopup("Lokasi GPS Anda" + (Number.isFinite(pos.coords.accuracy) ? " (±" + Math.round(pos.coords.accuracy) + " m)" : "")).openPopup();
+      $("mapCoordsDisplay").textContent = `📍 ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+    }
+    $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-gps"/></svg> GPS SAYA';
+    const acc = Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null;
+    toast("📍 GPS OK" + (acc != null ? " (±" + (acc >= 1000 ? (acc / 1000).toFixed(1) + " km" : acc + " m") + ")" : "") + " — mengakses CCTV sekitar…", "success", 2500);
+    if (acc != null && acc > 5000) toast("⚠️ Lokasi kasar (±" + (acc / 1000).toFixed(1) + " km) — hidupkan GPS perangkat agar presisi", "warning", 5000);
+    try {
+      await scanAtPoint(lat, lng, { source: "gps" });
+    } finally {
+      resetBtn();
+    }
+  };
+  const onErr = (err, retried) => {
+    /* Timeout / posisi tak tersedia pada mode presisi tinggi → coba sekali lagi dengan mode hemat (jaringan/Wi-Fi) */
+    if (!retried && err && (err.code === 2 || err.code === 3)) {
+      toast("📡 GPS presisi tinggi belum dapat — mencoba mode jaringan/Wi-Fi…", "warning", 3000);
+      navigator.geolocation.getCurrentPosition(onFix, (e2) => onErr(e2, true),
+        { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+      return;
+    }
+    resetBtn();
+    let why = (err && err.message) || "tidak diketahui";
+    if (err && err.code === 1) why = "izin lokasi ditolak — izinkan lokasi untuk situs ini di pengaturan browser, lalu coba lagi";
+    else if (err && err.code === 2) why = "lokasi tidak tersedia — aktifkan GPS/lokasi perangkat";
+    else if (err && err.code === 3) why = "waktu habis — coba di tempat terbuka atau aktifkan Wi-Fi";
+    if (window.isSecureContext === false) why += " (halaman harus dibuka lewat https://)";
+    toast("Gagal akses GPS: " + why, "danger", 6500);
+    CGO_Fleet.logGlobal("❌ [GPS] " + why, "WARNING");
+  };
+  navigator.geolocation.getCurrentPosition(onFix, (e) => onErr(e, false),
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
 };
 
 /* ============= Global helpers ============= */
@@ -2212,31 +2360,33 @@ CGO_Fleet.onEvent((data) => {
     renderCCTVMarkers(cctvs, nearest);
     renderCCTVList(cctvs);
 
+    const scanRadius = Number(data.data.radius) > 0 ? Number(data.data.radius) : 5000;
     if (map && scanRadiusCircle) map.removeLayer(scanRadiusCircle);
     if (map) {
       scanRadiusCircle = L.circle([queryLat, queryLng], {
-        radius: 5000, color: "#00ccff", fillColor: "#00ccff",
-        fillOpacity: .03, weight: 1, dashArray: "4 4"
+        radius: scanRadius, color: "#00ccff", fillColor: "#00ccff",
+        fillOpacity: .03, weight: 1, dashArray: "4 4", interactive: false
       }).addTo(map);
     }
 
-    if (nearest && map) {
+    if (data.data.access) {
+      /* Klik GPS/peta: tetap di titik yang diklik + kamera berfeed terdekat */
+      fitAccessView(queryLat, queryLng, cctvs, scanRadius);
+    } else if (nearest && map && (nearest.distance == null || nearest.distance <= 100000)) {
+      /* (dulu peta bisa terbang ke kamera di kota lain saat Overpass gagal) */
       map.setView([nearest.lat, nearest.lng], 14);
     }
 
     const synthCount = cctvs.filter(c => c.synthetic).length;
     if (total > 0 && liveN > 0) {
       toast(`📡 ${total} titik kamera · ${liveN} feed publik tersedia${synthCount ? ` · ${synthCount} pin simulasi` : ""}`, "success");
-      statusOverlay.classList.remove("hidden");
-      statusOverlay.textContent = "Feed publik ditemukan. Sistem mencoba memutar feed yang terhubung ke kamera berkoordinat dekat.";
+      setStatusOverlay("Feed publik ditemukan. Sistem mencoba memutar feed yang terhubung ke kamera berkoordinat dekat.");
     } else if (total > 0) {
       toast(`📍 ${total} titik terpetakan, tetapi belum ada feed live publik yang terverifikasi`, "warning", 4000);
-      statusOverlay.classList.remove("hidden");
-      statusOverlay.textContent = "Titik peta ditemukan, tetapi tidak ada feed live publik terverifikasi di hasil ini. Pin bukan tayangan video.";
+      setStatusOverlay("Titik peta ditemukan, tetapi tidak ada feed live publik terverifikasi di hasil ini. Pin bukan tayangan video.");
     } else {
       toast("Tidak ada data CCTV publik di radius pencarian", "warning");
-      statusOverlay.classList.remove("hidden");
-      statusOverlay.textContent = "Tidak ada data CCTV publik yang ditemukan di radius pencarian.";
+      setStatusOverlay("Tidak ada data CCTV publik yang ditemukan di radius pencarian.");
     }
   }
 
@@ -2248,8 +2398,45 @@ CGO_Fleet.onEvent((data) => {
     toast("CCTV scan error", "danger");
   }
 
+  if (ev === "CCTV_ACCESS_START") {
+    $("cctvCount").innerText = "mengakses...";
+    $("cctvCount").style.color = "var(--neon-yellow)";
+  }
+
+  if (ev === "CCTV_ACCESS_NOLOCAL") {
+    const n = data.data;
+    toast(`ℹ️ Tidak ada kamera berfeed dalam ${n.localKm} km dari titik — memutar feed katalog terdekat (berlabel remote)`, "warning", 5000);
+  }
+
+  if (ev === "CCTV_ACCESS_ADVANCE") {
+    const a = data.data;
+    tourElapsed = 0;   /* jangan sampai Auto Tour ikut memotong kamera yang baru dicoba */
+    toast(`🔁 ${String((a.from && a.from.name) || "Kamera")} gagal → mencoba ${String((a.to && a.to.name) || "kamera berikutnya")} (${a.attempt}/${a.max})`, "warning", 3500);
+  }
+
+  if (ev === "CCTV_ACCESS_EXHAUSTED") {
+    const x = data.data;
+    toast(x.proxy
+      ? "⚠️ Semua kamera terdekat gagal tayang — pilih kamera lain dari daftar"
+      : "⚠️ Kamera sekitar butuh proxy agar tayang — pasang Worker lalu SET alamatnya di panel CCTV Proxy", "warning", 6000);
+  }
+
+  if (ev === "CCTV_ACCESS_DONE") {
+    const d = data.data;
+    $("scanProgress").textContent = `✅ Akses titik: ${d.total} titik · ${d.candidates} kamera berfeed${d.pinsOk ? "" : " · pin OSM: " + d.pinsError}`;
+    setTimeout(() => { $("scanProgress").textContent = ""; }, 6000);
+    /* Multi Auto Akses: bila ada >= 2 kamera berfeed di sekitar, putar bergantian otomatis (bisa dimatikan) */
+    if (!tourOn && !tourUserOff && d.candidates >= 2) {
+      setTour(true);
+      toast("▶ Auto Tour aktif — bergantian antar kamera sekitar titik (matikan lewat tombol AUTO TOUR)", "success", 3500);
+    }
+  }
+
   if (ev === "CCTV_STREAM_UNAVAILABLE") {
     const d = data.data || {};
+    try {
+      if (typeof CGO_Fleet.advanceAccess === "function" && d.cctv && CGO_Fleet.advanceAccess(d.cctv, d.reason || "feed tidak tersedia")) return;
+    } catch (_) {}
     statusOverlay.classList.remove("hidden");
     statusOverlay.textContent = `${d.cctv?.name || "Titik kamera"}: ${d.reason || "Feed publik tidak tersedia."}`;
     $("cctvRec").innerText = "● NO FEED"; $("cctvRec").style.color = "var(--neon-yellow)";
@@ -2306,10 +2493,10 @@ CGO_Fleet.onEvent((data) => {
   }
 
   if (ev === "PROXY_STATUS") {
-    const { url: pu, ok: pok } = data.data;
+    const { url: pu, ok: pok, version: pver, htmlRewrite: phtml } = data.data;
     const el = $("proxyStatus");
     if (el) {
-      el.textContent = pok ? "✅ Proxy aktif: " + pu : "❌ Proxy tidak merespons: " + pu;
+      el.textContent = pok ? "✅ Proxy aktif: " + pu + (pver ? " · v" + pver + (phtml ? "" : " (dasar: HLS/JSON saja)") : "") : "❌ Proxy tidak merespons: " + pu;
       el.style.color = pok ? "var(--neon-green)" : "var(--neon-red)";
     }
   }
@@ -2335,7 +2522,7 @@ $("proxyUrlInput").value = CGO_Fleet.CCTV.getProxyUrl() || "";
 refreshProxyIdle();
 if (CGO_Fleet.CCTV.getProxyUrl()) CGO_Fleet.CCTV.checkProxy(true);
 refreshIP();
-setTimeout(() => { scanNearbyOnly(); }, 2000);
+setTimeout(() => { if (accessRun === 0) scanNearbyOnly(); }, 2000);   /* jangan menimpa hasil klik GPS/peta yang lebih dulu */
 
 let resizeTimer;
 window.addEventListener("resize", () => {
@@ -2361,7 +2548,7 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.17.0 ready · Multi-Source Radar (Streetside) + Max Real Access + Stream Cascade");
+console.info("[BCGO UI] v6.18.0 ready · Multi Auto Access (GPS/Peta) + Kaskade Kamera + Streetside + Zero Regresi");
 })();
 </script>
 </body>
