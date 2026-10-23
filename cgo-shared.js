@@ -127,28 +127,7 @@
   }
 
   // ---------- Pasang ----------
-  // Merge helpers UI — jangan menimpa API Customer; aman meski CGO frozen
-  (function mergeCgoHelpers() {
-    var helpers = {
-      ic3: ic3,
-      ico: ico,
-      hydrate3d: hydrate3d,
-      esc: esc,
-      addBaseMap: addBaseMap,
-      icon3dSrc: icon3dSrc,
-      uiVersion: "1"
-    };
-    if (!window.CGO) {
-      window.CGO = helpers;
-      return;
-    }
-    try {
-      Object.assign(window.CGO, helpers);
-    } catch (_) {
-      // target frozen (mis. CGOMachineABC) — bungkus ulang tanpa hilangkan API lama
-      window.CGO = Object.assign({}, helpers, window.CGO);
-    }
-  })();
+  window.CGO = { ic3: ic3, ico: ico, hydrate3d: hydrate3d, esc: esc, addBaseMap: addBaseMap, icon3dSrc: icon3dSrc, version: "1" };
   window.ic3 = ic3; window.ic3Fail = ic3Fail; window.hydrate3d = hydrate3d; window.addBaseMap = addBaseMap; window.icon3dSrc = icon3dSrc;
 
   loadFont();
