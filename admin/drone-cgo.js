@@ -1,18 +1,27 @@
 /* ============================================================================
  * CIKUR GO - DRONE CGO FLEET ENGINE
- * Version: 6.19.1
- * ===========================================================================
- * Perubahan v6.19.1 — GPS GENERIK + REAL PLAY + PROXY CASCADE (zero regresi API):
- *   [G20] accessAround: Overpass pin OSM PARALEL dengan katalog (bukan hanya Jakarta/Batam).
- *   [G21] Query OSM diperluas (camera:mount, monitoring_station, traffic cameras).
- *   [G22] REGION_PORTALS multi-kota (Medan, Surabaya, Malang, Bekasi, Bogor, dll.).
- *   [G23] autoStream: Batam hanya jika GPS ~80 km dari Batam (bukan fallback global).
- *   [G24] ACCESS_DEFAULTS localKm=80, radius=8000, maxTries=8.
- *   [P1] Embed BaliTower: hlsAuto (index.m3u8) → jalur HLS + cascade proxy.
- *   [P2] streams[]: direct → proxy untuk setiap kandidat.
- *   [P3] _hlsFromEmbed pola embed lebih luas.
- *   [P4] Skor playability: HLS pure & hlsAuto di atas embed mentah.
- *   API v6.18 (scanNearby, accessAround, advanceAccess, autoStream, events) tetap.
+ * Version: 6.21.0
+ * ============================================================================
+ * Perubahan v6.21.0 — KALIBRASI TITIK TEMU NYATA (probe + host-block + stream OK):
+ *   [CAL1] Probe cepat sebelum putar (proxy /probe atau fetch) → skip host mati.
+ *   [CAL2] _hostFail: setelah timeout balitower, skip host sama 10 menit (antrean tidak macet).
+ *   [CAL3] PUBLIC_STREAMS: hanya stream yang terbukti OK via proxy (Batam + sekupang).
+ *   [CAL4] Default proxy cikurgo.workers.dev bila host GitHub Pages cikurgo.
+ *   [CAL5] Timeout HLS manifest dipersingkat; advanceAccess lebih cepat ke kandidat hidup.
+ *   [CAL6] REAL_PUBLIC baliTower ditandai preferHls + softFail (jangan blok antrean).
+ *
+ * Perubahan v6.20.0 — GPS GENERIK SEBAGAI ACUAN UTAMA (bukan mode Batam/Bali):
+ *
+ *   [GEN1] accessAround: OSM pin di radius GPS = lapisan utama; katalog hardcode
+ *         HANYA masuk bila jarak ≤ localKm (default 40 km). Tidak memaksakan
+ *         Batam/Bali saat GPS di kota lain.
+ *   [GEN2] autoStream: progressive lokal dulu; Batam HANYA jika GPS ≤80 km dari Batam.
+ *   [GEN3] _linkNearbyLiveFeeds: pin OSM ≤450 m dari feed katalog → status LIVE.
+ *   [GEN4] Overpass: CGO-proxy dulu, query surveillance diperluas, id OSM stabil.
+ *   [GEN5] Substitute pin tanpa feed: maks 12 km (bukan ∞).
+ *   [GEN6] HLS-EXTRACT BaliTower (index.m3u8) + cascade proxy bila GPS dekat Jakarta.
+ *   [GEN7] ACCESS_DEFAULTS: radius pin 10 km, localKm 40, maxTries 8.
+ *   Hardcode PUBLIC_STREAMS / REAL_PUBLIC_CAMS = sumber opsional berjarak, BUKAN produk.
  *
  * Perubahan v6.18.0 (dari v6.17.0) — MULTI AUTO ACCESS (klik GPS / titik peta):
  *
@@ -76,7 +85,7 @@
 // ==========================================================================
 // 0. KONSTANTA
 // ==========================================================================
-const VERSION = "6.19.1";
+const VERSION = "6.21.0";
 const TICK_MS = 1000;
 const DRONE_MAX_LOG = 100;
 const FLEET_MAX_LOG = 200;
@@ -251,8 +260,9 @@ const IPScanner = {
     { url: "https://overpass.openstreetmap.fr/api/interpreter", country: "FR", host: "overpass.openstreetmap.fr" }
   ],
   CORS_PROXIES: [
-    "https://corsproxy.io/?",
-    "https://api.allorigins.win/raw?url="
+    "https://corsproxy.io/?url=",
+    "https://api.allorigins.win/raw?url=",
+    "https://api.codetabs.com/v1/proxy?quest="
   ],
   IP_ENDPOINTS: [
     "https://api.ipify.org?format=json",
@@ -318,9 +328,18 @@ const IPScanner = {
     const dataParam = "data=" + encodeURIComponent(query);
     const getUrl = mirrorUrl + (mirrorUrl.includes("?") ? "&" : "?") + dataParam;
     const attempts = [
-      { url: mirrorUrl, method: "POST", body: dataParam, label: "POST direct" },
-      { url: getUrl, method: "GET", body: null, label: "GET direct" }
+      { url: getUrl, method: "GET", body: null, label: "GET direct" },
+      { url: mirrorUrl, method: "POST", body: dataParam, label: "POST direct" }
     ];
+    try {
+      const cgo = global.CGO_Fleet && global.CGO_Fleet.CCTV && global.CGO_Fleet.CCTV.getProxyUrl && global.CGO_Fleet.CCTV.getProxyUrl();
+      if (cgo) {
+        attempts.unshift({
+          url: cgo + "/proxy?url=" + encodeURIComponent(getUrl),
+          method: "GET", body: null, label: "GET cgo-proxy"
+        });
+      }
+    } catch (_) {}
     for (const p of this.CORS_PROXIES) {
       if (!p) continue;
       const proxied = p.includes("?") ? p + encodeURIComponent(getUrl) : p + getUrl;
@@ -589,7 +608,7 @@ const CCTVEngine = {
   _lastScan: null,
   _scanInProgress: false,
 
-  BATAM_STREAM_DEFAULT: true,
+  BATAM_STREAM_DEFAULT: false,  /* v6.20: jangan fallback global ke Batam */
 
   REGIONS: [
     { name: "Jakarta Pusat",   lat: -6.1751, lng: 106.8272, radius: 4000 },
@@ -606,55 +625,46 @@ const CCTVEngine = {
   ],
 
   PUBLIC_STREAMS: [
-    { name: "Batu Aji (Batam)",     lat: 1.1300, lng: 104.0300, hls: "https://matanya.batam.go.id/cctv/batuaji/stream.m3u8",   region: "Batam", accessType: "hls", realPublic: true, noProxy: true },
-    { name: "Atap (Batam)",         lat: 1.1300, lng: 104.0500, hls: "https://matanya.batam.go.id/cctv/atap/stream.m3u8",      region: "Batam", accessType: "hls", realPublic: true, noProxy: true },
-    { name: "Simpang Kuda (Batam)", lat: 1.1250, lng: 104.0450, hls: "https://matanya.batam.go.id/cctv/simpkuda2/stream.m3u8", region: "Batam", accessType: "hls", realPublic: true, noProxy: true },
-    { name: "Danganom (Batam)",     lat: 1.1200, lng: 104.0400, hls: "https://matanya.batam.go.id/cctv/danganom2/stream.m3u8", region: "Batam", accessType: "hls", realPublic: true, noProxy: true }
+    /* Terbukti OK lewat https://cgo-proxy.cikurgo.workers.dev/probe (2026-10-23) */
+    { name: "Batu Aji (Batam)",     lat: 1.1300, lng: 104.0300, hls: "https://matanya.batam.go.id/cctv/batuaji/stream.m3u8",   region: "Batam", accessType: "hls", realPublic: true, noProxy: true, verified: true },
+    { name: "Atap (Batam)",         lat: 1.1450, lng: 104.0200, hls: "https://matanya.batam.go.id/cctv/atap/stream.m3u8",      region: "Batam", accessType: "hls", realPublic: true, noProxy: true, verified: true },
+    { name: "Simpang Kuda (Batam)", lat: 1.1250, lng: 104.0450, hls: "https://matanya.batam.go.id/cctv/simpkuda2/stream.m3u8", region: "Batam", accessType: "hls", realPublic: true, noProxy: true, verified: true },
+    { name: "Danganom (Batam)",     lat: 1.1200, lng: 104.0400, hls: "https://matanya.batam.go.id/cctv/danganom2/stream.m3u8", region: "Batam", accessType: "hls", realPublic: true, noProxy: true, verified: true },
+    { name: "Sekupang (Batam)",     lat: 1.1160, lng: 103.9630, hls: "https://matanya.batam.go.id/cctv/sekupang/stream.m3u8", region: "Batam", accessType: "hls", realPublic: true, noProxy: true, verified: true }
   ],
 
   REAL_PUBLIC_CAMS: [
-    { name: "Bendungan Hilir 1", lat: -6.2146, lng: 106.8081, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_1/embed.html", region: "Jakarta" },
-    { name: "Bendungan Hilir 2", lat: -6.2148, lng: 106.8085, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_2/embed.html", region: "Jakarta" },
-    { name: "Bendungan Hilir 3", lat: -6.2150, lng: 106.8078, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_3/embed.html", region: "Jakarta" },
-    { name: "Bendungan Hilir 4", lat: -6.2144, lng: 106.8090, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_4/embed.html", region: "Jakarta" },
-    { name: "GBK / Gelora 2", lat: -6.2186, lng: 106.8021, embed: "https://cctv.balitower.co.id/Gelora-017-700470_2/embed.html", region: "Jakarta" },
-    { name: "GBK / Gelora 3", lat: -6.2188, lng: 106.8025, embed: "https://cctv.balitower.co.id/Gelora-017-700470_3/embed.html", region: "Jakarta" },
-    { name: "GBK Asia Afrika", lat: -6.2240, lng: 106.8025, embed: "https://cctv.balitower.co.id/GBKC1002/embed.html", region: "Jakarta" },
-    { name: "Manggarai Pintu Air 1", lat: -6.2100, lng: 106.8480, embed: "https://cctv.balitower.co.id/Manggarai-Pintu-Air_1/embed.html?proto=hls", region: "Jakarta" },
-    { name: "Manggarai Pintu Air 2", lat: -6.2105, lng: 106.8485, embed: "https://cctv.balitower.co.id/Manggarai-Pintu-Air_2/embed.html?proto=hls", region: "Jakarta" },
-    { name: "Tanjung Duren", lat: -6.1780, lng: 106.7900, embed: "https://cctv.balitower.co.id/Tanjung-Duren-Utara-005-702471_2/embed.html", region: "Jakarta" },
-    { name: "Tomang", lat: -6.1720, lng: 106.7970, embed: "https://cctv.balitower.co.id/Tomang-004-702108_2/embed.html", region: "Jakarta" },
-    { name: "Jati Pulo", lat: -6.1800, lng: 106.8000, embed: "https://cctv.balitower.co.id/Jati-Pulo-001-702017_2/embed.html", region: "Jakarta" },
-    { name: "Cengkareng Barat", lat: -6.1450, lng: 106.7300, embed: "https://cctv.balitower.co.id/Cengkareng-Barat-013-702131_2/embed.html", region: "Jakarta" },
-    { name: "Menteng / Bundaran HI", lat: -6.1944, lng: 106.8229, embed: "https://cctv.balitower.co.id/Menteng-001-700123_1/embed.html", region: "Jakarta" },
-    { name: "Senayan 1", lat: -6.2270, lng: 106.8000, embed: "https://cctv.balitower.co.id/Senayan-004-705087_1/embed.html", region: "Jakarta" },
-    { name: "Senayan 2", lat: -6.2275, lng: 106.8005, embed: "https://cctv.balitower.co.id/Senayan-004-705087_2/embed.html", region: "Jakarta" },
-    { name: "Kemanggisan", lat: -6.1900, lng: 106.7850, embed: "https://cctv.balitower.co.id/Kemanggisan-038-792405_2/embed.html", region: "Jakarta" },
-    { name: "GBK / Gelora 4", lat: -6.2185, lng: 106.8025, embed: "https://cctv.balitower.co.id/Gelora-017-700470_4/embed.html", region: "Jakarta" },
-    { name: "GBK Asia Afrika 2", lat: -6.2230, lng: 106.8045, embed: "https://cctv.balitower.co.id/GBKC1003/embed.html", region: "Jakarta" },
+    { name: "Bendungan Hilir 1", lat: -6.2146, lng: 106.8081, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_1/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Bendungan Hilir 2", lat: -6.2148, lng: 106.8085, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Bendungan Hilir 3", lat: -6.2150, lng: 106.8078, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_3/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Bendungan Hilir 4", lat: -6.2144, lng: 106.8090, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_4/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "GBK / Gelora 2", lat: -6.2186, lng: 106.8021, embed: "https://cctv.balitower.co.id/Gelora-017-700470_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "GBK / Gelora 3", lat: -6.2188, lng: 106.8025, embed: "https://cctv.balitower.co.id/Gelora-017-700470_3/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "GBK Asia Afrika", lat: -6.2240, lng: 106.8025, embed: "https://cctv.balitower.co.id/GBKC1002/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Manggarai Pintu Air 1", lat: -6.2100, lng: 106.8480, embed: "https://cctv.balitower.co.id/Manggarai-Pintu-Air_1/embed.html?proto=hls", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Manggarai Pintu Air 2", lat: -6.2105, lng: 106.8485, embed: "https://cctv.balitower.co.id/Manggarai-Pintu-Air_2/embed.html?proto=hls", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Tanjung Duren", lat: -6.1780, lng: 106.7900, embed: "https://cctv.balitower.co.id/Tanjung-Duren-Utara-005-702471_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Tomang", lat: -6.1720, lng: 106.7970, embed: "https://cctv.balitower.co.id/Tomang-004-702108_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Jati Pulo", lat: -6.1800, lng: 106.8000, embed: "https://cctv.balitower.co.id/Jati-Pulo-001-702017_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Cengkareng Barat", lat: -6.1450, lng: 106.7300, embed: "https://cctv.balitower.co.id/Cengkareng-Barat-013-702131_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Menteng / Bundaran HI", lat: -6.1944, lng: 106.8229, embed: "https://cctv.balitower.co.id/Menteng-001-700123_1/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Senayan 1", lat: -6.2270, lng: 106.8000, embed: "https://cctv.balitower.co.id/Senayan-004-705087_1/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Senayan 2", lat: -6.2275, lng: 106.8005, embed: "https://cctv.balitower.co.id/Senayan-004-705087_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "Kemanggisan", lat: -6.1900, lng: 106.7850, embed: "https://cctv.balitower.co.id/Kemanggisan-038-792405_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "GBK / Gelora 4", lat: -6.2185, lng: 106.8025, embed: "https://cctv.balitower.co.id/Gelora-017-700470_4/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
+    { name: "GBK Asia Afrika 2", lat: -6.2230, lng: 106.8045, embed: "https://cctv.balitower.co.id/GBKC1003/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
   ],
 
   REGION_PORTALS: [
-    { name: "Portal CCTV Jakarta Publik", lat: -6.1751, lng: 106.8272, url: "https://jakcctv.jakarta.go.id/publik", region: "Jakarta", openInNewTab: true },
     { name: "Portal ATCS Tangerang Kab", lat: -6.1783, lng: 106.6319, url: "https://cctv-dishub.tangerangkab.go.id/cctv", region: "Banten", openInNewTab: true },
     { name: "Portal CCTV Banten Prov", lat: -6.1200, lng: 106.1503, url: "https://cctv.bantenprov.go.id/home", region: "Banten", openInNewTab: true },
     { name: "Portal CCTV Serang", lat: -6.1200, lng: 106.1503, url: "https://cctv.serangkota.go.id/", region: "Banten", openInNewTab: true },
-    { name: "Portal CCTV Bekasi", lat: -6.2383, lng: 106.9756, url: "https://dishub.bekasikota.go.id/id/cctv", region: "Bekasi", openInNewTab: true },
-    { name: "Portal CCTV Bogor", lat: -6.5971, lng: 106.8060, url: "https://bsw.kotabogor.go.id/cctv", region: "Bogor", openInNewTab: true },
     { name: "Portal ATCS Bandung", lat: -6.9175, lng: 107.6191, url: "https://atcs-dishub.bandung.go.id/", region: "Bandung", openInNewTab: true },
     { name: "Portal Pelindung Bandung", lat: -6.9175, lng: 107.6191, url: "https://pelindung.bandung.go.id/", region: "Bandung", openInNewTab: true },
-    { name: "Portal CCTV Cirebon", lat: -6.7320, lng: 108.5523, url: "https://socakaton.cirebonkab.go.id/", region: "Cirebon", openInNewTab: true },
     { name: "Portal CCTV Jogja", lat: -7.7956, lng: 110.3695, url: "https://cctv.jogjakota.go.id/", region: "Yogyakarta", openInNewTab: true },
     { name: "Portal CCTV Semarang", lat: -6.9932, lng: 110.4203, url: "https://pantausemar.semarangkota.go.id/", region: "Semarang", openInNewTab: true },
-    { name: "Portal CCTV Surabaya / Jatim", lat: -7.2575, lng: 112.7521, url: "http://cctv.malangkota.go.id/cameras_dua", region: "Jatim", openInNewTab: true },
-    { name: "Portal CCTV Malang", lat: -7.9797, lng: 112.6304, url: "http://cctv.malangkota.go.id/cameras_dua", region: "Malang", openInNewTab: true },
-    { name: "Portal ATCS Medan", lat: 3.5952, lng: 98.6722, url: "https://atcsdishub.medan.go.id/", region: "Medan", openInNewTab: true },
     { name: "Portal CCTV Denpasar", lat: -8.6500, lng: 115.2167, url: "https://atcs.denpasarkota.go.id/", region: "Denpasar", openInNewTab: true },
-    { name: "Portal CCTV Bandar Lampung", lat: -5.3971, lng: 105.2668, url: "https://seribuwajah.bandarlampungkota.go.id/", region: "Lampung", openInNewTab: true },
-    { name: "Portal CCTV Makassar", lat: -5.1477, lng: 119.4327, url: "https://paralluta.makassarkota.go.id/traffic/", region: "Makassar", openInNewTab: true },
-    { name: "Portal CCTV Banjarmasin", lat: -3.3186, lng: 114.5944, url: "https://atcs.banjarmasinkota.go.id/", region: "Banjarmasin", openInNewTab: true },
-    { name: "Portal CCTV Banda Aceh", lat: 5.5483, lng: 95.3238, url: "https://cctv.bandaacehkota.go.id/", region: "Aceh", openInNewTab: true },
-    { name: "Portal CCTV Batam", lat: 1.1300, lng: 104.0300, url: "https://matanya.batam.go.id/", region: "Batam", openInNewTab: true }
+    { name: "Portal CCTV Jakarta Publik", lat: -6.1751, lng: 106.8272, url: "https://jakcctv.jakarta.go.id/publik", region: "Jakarta", openInNewTab: true }
   ],
 
   PROXY_URL: null,
@@ -723,6 +733,9 @@ const CCTVEngine = {
     } catch (_) {}
     try {
       const loc = global.location;
+      if (loc && /cikurgo\.(github\.io|workers\.dev)/i.test(String(loc.hostname || ""))) {
+        return "https://cgo-proxy.cikurgo.workers.dev";
+      }
       if (loc && (loc.hostname === "localhost" || loc.hostname === "127.0.0.1" || loc.protocol === "file:")) {
         return "http://localhost:3001";
       }
@@ -732,6 +745,54 @@ const CCTVEngine = {
   proxify(url) {
     const p = this.getProxyUrl();
     return (p && url) ? p + "/proxy?url=" + encodeURIComponent(url) : url;
+  },
+
+  /* Host yang baru gagal (timeout/network) — jangan diantre 10 menit */
+  _hostFail: Object.create(null),
+  _hostKeyFromUrl(url) {
+    try { return new URL(url).hostname.toLowerCase(); } catch (_) { return ""; }
+  },
+  markHostFail(urlOrHost, ms = 600000) {
+    const h = String(urlOrHost || "").includes("://") ? this._hostKeyFromUrl(urlOrHost) : String(urlOrHost || "").toLowerCase();
+    if (!h) return;
+    this._hostFail[h] = Date.now() + ms;
+    if (global.CGO_Fleet) global.CGO_Fleet.logGlobal("⛔ [CCTV] Host ditunda 10 mnt: " + h, "WARNING");
+  },
+  isHostFailed(urlOrHost) {
+    const h = String(urlOrHost || "").includes("://") ? this._hostKeyFromUrl(urlOrHost) : String(urlOrHost || "").toLowerCase();
+    if (!h) return false;
+    const until = this._hostFail[h];
+    if (!until) return false;
+    if (Date.now() > until) { delete this._hostFail[h]; return false; }
+    return true;
+  },
+  async probePlayable(url, timeoutMs = 5000) {
+    if (!url) return false;
+    if (this.isHostFailed(url)) return false;
+    const p = this.getProxyUrl();
+    try {
+      if (p) {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+          const res = await fetch(p + "/probe?url=" + encodeURIComponent(url), { signal: ctrl.signal });
+          const j = await res.json().catch(() => null);
+          if (j && j.ok) return true;
+          if (j && /timeout/i.test(String(j.error || ""))) this.markHostFail(url);
+          return false;
+        } finally { clearTimeout(t); }
+      }
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), Math.min(timeoutMs, 4000));
+      try {
+        const res = await fetch(url, { method: "GET", mode: "cors", signal: ctrl.signal });
+        try { if (res.body && res.body.cancel) res.body.cancel(); } catch (_) {}
+        return !!res.ok;
+      } finally { clearTimeout(t); }
+    } catch (e) {
+      if (e && e.name === "AbortError") this.markHostFail(url);
+      return false;
+    }
   },
   async checkProxy(force = false) {
     const p = this.getProxyUrl();
@@ -986,7 +1047,42 @@ const CCTVEngine = {
     return resolved;
   },
 
+  _linkNearbyLiveFeeds(pins, feeds, linkM = 450) {
+    if (!pins || !pins.length || !feeds || !feeds.length) return pins || [];
+    const sources = feeds.filter(f =>
+      f && !f.isPortal && !f.synthetic &&
+      (f.hls || f.embed || f.hlsAuto || f.streetsideId) &&
+      f.lat != null && f.lng != null
+    );
+    if (!sources.length) return pins;
+    for (const pin of pins) {
+      if (!pin || pin.lat == null || pin.lng == null) continue;
+      if (pin.hls || pin.embed || pin.hlsAuto || pin.streetsideId) continue;
+      let best = null, bestD = linkM + 1;
+      for (const f of sources) {
+        const d = this.calculateDistance(pin.lat, pin.lng, f.lat, f.lng);
+        if (d < bestD) { bestD = d; best = f; }
+      }
+      if (!best) continue;
+      pin.linkedFrom = best.id || best.name;
+      pin.linkedDistance = Math.round(bestD);
+      if (best.hls) pin.hls = best.hls;
+      if (best.hlsAuto) pin.hlsAuto = best.hlsAuto;
+      if (best.embed) pin.embed = best.embed;
+      if (best.streetsideId != null) pin.streetsideId = best.streetsideId;
+      if (best.noProxy) pin.noProxy = true;
+      pin.realPublic = true;
+      pin.accessType = best.accessType || (best.hls || best.hlsAuto ? "hls" : "embed");
+      pin.surveillanceType = pin.surveillanceType || "osm_linked_live";
+      if (!pin.name || /^CCTV/i.test(String(pin.name))) {
+        pin.name = (best.name || pin.name) + " · pin";
+      }
+    }
+    return pins;
+  },
+
   CATALOG_URL: "cameras.json",
+
   _catalogPromise: null,
   _catalogResult: null,
   _catalogFailedAt: 0,
@@ -1170,17 +1266,20 @@ const CCTVEngine = {
     if (!c) return -1;
     let s;
     if (c.isPortal) s = 1;
-    else if (c.hls && /matanya\.batam\.go\.id/i.test(c.hls)) s = 92;   // CORS-ok, pure HLS
-    else if (c.noProxy && c.hls) s = 88;
-    else if (c.noProxy && c.embed) s = 80;
-    else if (c.hls) s = 75;
-    else if (c.hlsAuto) s = 68;   // BaliTower index.m3u8 — putar via hls.js + proxy
+    else if (c.verified && c.hls) s = 95;           /* terbukti LIVE via proxy */
+    else if (c.hls && c.noProxy) s = 90;
+    else if (c.hls) s = 80;
+    else if (c.hlsAuto && !c.softFail) s = 72;
+    else if (c.hlsAuto && c.softFail) s = 35;       /* BaliTower: rendah sampai probe OK */
     else if (c.streetsideId) s = 65;
-    else if (c.embed && /balitower/i.test(c.embed || "")) s = 50;
-    else if (c.embed) s = 30;
+    else if (c.noProxy && c.embed) s = 60;
+    else if (c.embed && c.softFail) s = 25;
+    else if (c.embed) s = 45;
     else if (c.realPublic) s = 20;
     else s = 0;
     if (c.accessType === "private" || c.accessType === "vpn") s = Math.floor(s * 0.5);
+    const hk = c.hostKey || this._hostKeyFromUrl(c.hls || c.hlsAuto || c.embed || "");
+    if (hk && this.isHostFailed(hk)) s = -1;
     return s;
   },
   // [G2] filter posisi: null-lat hanya lolos jika maxKm = Infinity
@@ -1211,7 +1310,7 @@ const CCTVEngine = {
   // [M1] progressive radius: prioritaskan dekat, perluas sampai ada stream real
   _pickProgressive(list, lat, lng, opts = {}) {
     if (!list || !list.length) return null;
-    const steps = [5, 25, 50, 500, Infinity];
+    const steps = [2, 5, 15, 40, 80, 200, Infinity];  /* generik: dekat dulu */
     const finalize = (pick) => {
       if (!pick) return null;
       // Hitung ulang jarak thd titik query (bukan jarak cache scan sebelumnya)
@@ -1250,6 +1349,9 @@ const CCTVEngine = {
     if (rc.hls) { e.hls = rc.hls; e.accessType = rc.accessType || "hls"; }
     else if (rc.accessType) e.accessType = rc.accessType;
     if (rc.noProxy) { e.noProxy = true; e.accessType = e.accessType || "youtube"; }
+    if (rc.verified) e.verified = true;
+    if (rc.softFail) e.softFail = true;
+    if (rc.hostKey) e.hostKey = rc.hostKey;
     const auto = rc.hls ? null : this._hlsFromEmbed(rc.embed);
     if (auto) e.hlsAuto = auto;
     if (!e.accessType) e.accessType = auto ? "embed+hls" : (rc.embed ? "embed" : (rc.streetsideId != null ? "hls" : "unknown"));
@@ -1258,12 +1360,8 @@ const CCTVEngine = {
   },
   _hlsFromEmbed(embed) {
     const s = String(embed || "");
-    // BaliTower: .../Nama-Cam/embed.html(?proto=hls) → .../Nama-Cam/index.m3u8
     let m = s.match(/^https?:\/\/(cctv\.balitower\.co\.id)\/([^/?#]+)\/embed\.html/i);
     if (m) return "https://" + m[1] + "/" + m[2] + "/index.m3u8";
-    m = s.match(/^https?:\/\/(cctv\.balitower\.co\.id)\/([^/?#]+)\/(?:live|stream)\.m3u8/i);
-    if (m) return s.split("?")[0];
-    // Generik: embed.html di path yang sama sering punya index.m3u8 sibling
     m = s.match(/^(https?:\/\/[^/?#]+\/[^?#]*?)\/embed\.html(?:\?|$)/i);
     if (m && /cctv|atcs|stream/i.test(m[1])) return m[1] + "/index.m3u8";
     return null;
@@ -1276,7 +1374,6 @@ const CCTVEngine = {
   // Direct dulu karena banyak feed publik (Batam) sudah CORS-ok; proxy cadangan.
   _buildEmbedStreams(cctv, proxy) {
     const streams = [];
-    // HLS hasil ekstraksi (BaliTower index.m3u8) dulu — paling andal di-player
     if (cctv.hlsAuto) {
       streams.push({ type: "hls", url: cctv.hlsAuto, proxied: null });
       if (proxy) streams.push({ type: "hls", url: cctv.hlsAuto, proxied: this.proxify(cctv.hlsAuto) });
@@ -1291,7 +1388,6 @@ const CCTVEngine = {
   },
 
   _buildHlsStreams(streamUrl, proxy, noProxy) {
-    // direct dulu (Batam CORS-ok); proxy selalu cadangan bila proxy CGO aktif
     const streams = [{ type: "hls", url: streamUrl, proxied: null }];
     if (proxy) streams.push({ type: "hls", url: streamUrl, proxied: this.proxify(streamUrl) });
     return streams;
@@ -1455,7 +1551,6 @@ const CCTVEngine = {
         node["highway"="traffic_signals"]["surveillance"](around:${radius},${lat},${lng});
         node["highway"="traffic_signals"]["camera:type"](around:${radius},${lat},${lng});
         node["man_made"="monitoring_station"](around:${radius},${lat},${lng});
-        node["traffic_calming"]["surveillance"](around:${radius},${lat},${lng});
       );
       out center tags;
     `;
@@ -1485,6 +1580,8 @@ const CCTVEngine = {
         cctvs.push(entry);
       }
 
+      /* Pin OSM ↔ feed katalog ≤450 m → LIVE generik di titik GPS */
+      this._linkNearbyLiveFeeds(cctvs, live, 450);
       cctvs.push(...live);
 
       if (cctvs.length === 0) {
@@ -1716,6 +1813,38 @@ const CCTVEngine = {
     const force = !!opts.force;
     const proxy = this.getProxyUrl();
 
+    /* Skip host yang baru timeout (titik temu: antrean tidak macet di BaliTower mati) */
+    const probeUrl = cctv.hls || cctv.hlsAuto || cctv.embed || "";
+    const hostKey = cctv.hostKey || this._hostKeyFromUrl(probeUrl);
+    if (hostKey && this.isHostFailed(hostKey) && !opts._ignoreHostFail) {
+      fleet.logGlobal(`⏭️ [CCTV] Lewati ${cctv.name} — host ${hostKey} baru gagal`, "WARNING");
+      fleet.emit("CCTV_STREAM_UNAVAILABLE", {
+        cctv, cctvId: cctv.id, distance: cctv.distance,
+        reason: "Host stream sedang tidak merespons (ditunda sementara)."
+      });
+      return;
+    }
+
+    /* softFail (BaliTower dsb): probe dulu; gagal → mark host + unavailable (kaskade cepat) */
+    if (cctv.softFail && !opts._probed && (cctv.hls || cctv.hlsAuto || cctv.embed)) {
+      const u = cctv.hls || cctv.hlsAuto || this._hlsFromEmbed(cctv.embed) || cctv.embed;
+      const prepSeq = this._prepSeq;
+      fleet.logGlobal(`🔎 [CCTV] Probe cepat: ${cctv.name}…`, "INFO");
+      this.probePlayable(u, 4500).then(ok => {
+        if (prepSeq !== this._prepSeq) return;
+        if (!ok) {
+          this.markHostFail(hostKey || u);
+          fleet.emit("CCTV_STREAM_UNAVAILABLE", {
+            cctv, cctvId: cctv.id, distance: cctv.distance,
+            reason: "Probe gagal / timeout — mencoba kamera lain."
+          });
+          return;
+        }
+        this._prepareStream(cctv, fleet, Object.assign({}, opts, { force: true, _probed: true }));
+      });
+      return;
+    }
+
     // ---------- Streetside HLS on-demand [S1] ----------
     if (cctv.streetsideId && !cctv.hls && !cctv.embed && !cctv.isPortal && !opts._streetsideResolved) {
       const prepSeq = this._prepSeq;   // [A8] resolve basi (kamera sudah diganti) dibuang
@@ -1742,15 +1871,13 @@ const CCTVEngine = {
       return;
     }
 
-    // ---------- EMBED (BaliTower, dsb.) — bila ada hlsAuto, prioritaskan jalur HLS pure ----------
+    // ---------- EMBED dengan hlsAuto → prioritaskan HLS (generik putar real) ----------
     if (cctv.realPublic && cctv.embed && !cctv.isPortal && cctv.hlsAuto && !opts._embedOnly) {
-      // Jalur HLS (index.m3u8) + cascade proxy — lebih andal daripada iframe X-Frame
       const streamUrl = cctv.hlsAuto;
       const streams = this._buildHlsStreams(streamUrl, proxy, !!cctv.noProxy);
-      // sisipkan embed sebagai fallback di ujung
       if (proxy && !cctv.noProxy) streams.push({ type: "embed", url: cctv.embed, proxied: this.proxify(cctv.embed) });
       streams.push({ type: "embed", url: cctv.embed, proxied: null });
-      const hlsProxy = streams.find(s => s.type === "hls" && s.proxied)?.proxied || null;
+      const hlsProxy = (streams.find(s => s.type === "hls" && s.proxied) || {}).proxied || null;
       const current = this._activeStreams.get("default");
       if (!force && current && current.url === streamUrl && !current.simulate) {
         current.cctv = cctv;
@@ -1784,7 +1911,7 @@ const CCTVEngine = {
       return;
     }
 
-    // ---------- EMBED murni (tanpa hlsAuto) ----------
+    // ---------- EMBED murni ----------
     if (cctv.realPublic && cctv.embed && !cctv.isPortal) {
       const current = this._activeStreams.get("default");
       const embedProxy = (proxy && !cctv.noProxy) ? this.proxify(cctv.embed) : null;
@@ -1862,15 +1989,15 @@ const CCTVEngine = {
       return;
     }
 
-    // ---------- pengganti pin [M3] progressive ----------
-    if (!cctv.isPortal && !cctv.embed && !cctv.hls && !cctv.hlsAuto && !opts.noSubstitute) {
+    // ---------- pengganti pin: hanya ≤12 km (generik lokal, bukan loncat kota) ----------
+    if (!cctv.isPortal && !cctv.embed && !cctv.hls && !cctv.hlsAuto && !cctv.streetsideId && !opts.noSubstitute) {
       const nearList = this._liveEntries(cctv.lat, cctv.lng, {
-        realMax: Infinity, portalMax: 0, streamMax: Infinity
+        realMax: 12000, portalMax: 0, streamMax: 12000
       });
       const near = this._pickProgressive(nearList, cctv.lat, cctv.lng);
-      if (near) {
+      if (near && near.distance != null && near.distance <= 12000) {
         fleet.logGlobal(
-          `🎥 [CCTV] ${cctv.name} tidak punya feed publik -> pengganti: ${near.name}${near.distance != null ? " (" + near.distance + "m)" : ""}`, "INFO");
+          `🎥 [CCTV] ${cctv.name} pin tanpa feed → LIVE lokal: ${near.name} (${near.distance}m)`, "INFO");
         this._prepareStream(near, fleet, { force, substitute: true, requested: cctv });
         return;
       }
@@ -1946,7 +2073,7 @@ const CCTVEngine = {
   // ==========================================================================
   // [A1–A5] MULTI AUTO ACCESS — klik GPS / titik peta
   // ==========================================================================
-  ACCESS_DEFAULTS: { radius: 8000, localKm: 80, maxTries: 8 },
+  ACCESS_DEFAULTS: { radius: 10000, localKm: 40, maxTries: 8 },
   _accessSeq: 0,
   _accessQueue: null,
 
@@ -2060,9 +2187,12 @@ const CCTVEngine = {
     const t0 = Date.now();
 
     fleet.emit("CCTV_ACCESS_START", { lat, lng, radius, localKm, source, seq });
-    fleet.logGlobal(`🛰️ [AKSES] ${source.toUpperCase()} ${lat.toFixed(5)}, ${lng.toFixed(5)} · r=${radius}m · kamera <= ${localKm} km`, "INFO");
+    fleet.logGlobal(
+      `🛰️ [AKSES·GENERIK] ${source.toUpperCase()} ${lat.toFixed(5)}, ${lng.toFixed(5)} · pin r=${radius}m · feed ≤ ${localKm} km`,
+      "INFO"
+    );
 
-    /* Katalog + Overpass PARALEL — pin OSM di mana pun di Indonesia */
+    /* OSM + katalog paralel — PIN di sekitar GPS adalah lapisan utama */
     const catalogP = Promise.race([this.ensureCatalog(), this._sleep(2000)]).catch(() => null);
 
     const startOsm = async () => {
@@ -2090,13 +2220,18 @@ const CCTVEngine = {
     try { await catalogP; } catch (_) {}
     if (!alive()) return null;
 
-    /* Kamera berfeed lokal (katalog + Streetside) — seketika */
+    /* Feed hardcode/katalog HANYA dalam localKm — bukan loncat ke Batam/Bali jauh */
     const local = this._liveEntries(lat, lng, {
-      realMax: localKm * 1000, portalMax: Math.max(localKm * 1000, 80000), streamMax: localKm * 1000
+      realMax: localKm * 1000,
+      portalMax: Math.min(localKm * 1000, 60000),
+      streamMax: localKm * 1000
     });
-    const playable = local.filter(c => !c.isPortal && (c.hls || c.embed || c.hlsAuto || c.streetsideId) && c.distance != null);
+    const playable = local.filter(c =>
+      !c.isPortal && (c.hls || c.embed || c.hlsAuto || c.streetsideId) && c.distance != null
+    );
     const queue = this._buildAccessQueue(playable, maxTries);
     this._accessQueue = queue;
+
     fleet.emit("CCTV_SCAN_PROGRESSIVE", {
       cctvs: local, total: local.length, live: playable.length,
       current: 0, regions: 1, access: true, queryLat: lat, queryLng: lng
@@ -2107,75 +2242,129 @@ const CCTVEngine = {
       started = queue.cams.get(queue.ids[0]);
       queue.currentId = queue.ids[0];
       queue.attempts = 1;
-      fleet.logGlobal(`🎥 [AKSES] Terdekat: ${started.name} (${started.distance}m) · ${queue.ids.length} kandidat feed`, "SUCCESS");
+      fleet.logGlobal(
+        `🎥 [AKSES] LIVE lokal: ${started.name} (${started.distance}m) · ${queue.ids.length} kandidat ≤ ${localKm} km`,
+        "SUCCESS"
+      );
       this._prepareStream(started, fleet, { force: true });
     } else {
-      fleet.logGlobal(`ℹ️ [AKSES] Tidak ada kamera berfeed dalam ${localKm} km — mencari feed/portal terdekat (remote)`, "WARNING");
+      fleet.logGlobal(
+        `ℹ️ [AKSES] Belum ada feed LIVE ≤ ${localKm} km — menunggu pin OSM di radius ${radius}m (tanpa memaksa Batam/Bali)`,
+        "WARNING"
+      );
       fleet.emit("CCTV_ACCESS_NOLOCAL", { lat, lng, localKm });
-      started = this.autoStream(lat, lng);
+      /* Jangan autoStream ke kota jauh di sini; biarkan pin OSM dulu */
     }
 
     const osm = await pinsPromise;
     if (!alive()) return null;
-    const pins = osm && osm.pins;
+    let pins = (osm && osm.pins) || null;
     const pinsError = osm && osm.pinsError;
 
+    if (pins && pins.length) {
+      this._linkNearbyLiveFeeds(pins, local, 450);
+    }
+
     const merged = new Map();
-    for (const c of local) merged.set(String(c.id), c);
+    /* Urutan: pin OSM dulu (generik), lalu katalog lokal */
     for (const c of (pins || [])) {
       if (c.synthetic) continue;
+      merged.set(String(c.id), c);
+    }
+    for (const c of local) {
       const k = String(c.id);
       if (!merged.has(k)) merged.set(k, c);
       else {
         const prev = merged.get(k);
-        for (const key of Object.keys(c)) {
-          if ((prev[key] == null || prev[key] === "") && c[key] != null && c[key] !== "") prev[key] = c[key];
+        for (const key of ["hls", "hlsAuto", "embed", "streetsideId", "realPublic", "accessType", "noProxy"]) {
+          if (c[key] != null && c[key] !== "" && (prev[key] == null || prev[key] === "")) prev[key] = c[key];
         }
       }
     }
+
     let cctvs = Array.from(merged.values());
     if (cctvs.length === 0) {
-      fleet.logGlobal("[AKSES] Tidak ada kamera di sekitar titik -> spawn 6 synthetic pin", "WARNING");
+      fleet.logGlobal("[AKSES] Radius kosong → 6 pin simulasi (bukan feed kota lain)", "WARNING");
       cctvs = this._spawnSyntheticCCTV(lat, lng, 6, 2);
     }
     cctvs.sort((a, b) => distOf(a) - distOf(b));
+
+    /* Mulai putar bila belum: LIVE tertaut di pin, atau progressive murni lokal */
+    if (!started) {
+      const linked = cctvs.filter(c =>
+        !c.isPortal && (c.hls || c.embed || c.hlsAuto || c.streetsideId) &&
+        c.distance != null && c.distance <= localKm * 1000
+      );
+      if (linked.length) {
+        const q2 = this._buildAccessQueue(linked, maxTries);
+        this._accessQueue = q2;
+        started = q2.cams.get(q2.ids[0]);
+        q2.currentId = q2.ids[0];
+        q2.attempts = 1;
+        fleet.logGlobal(
+          `🎥 [AKSES] LIVE dari pin/tautan lokal: ${started.name} (${started.distance}m)`,
+          "SUCCESS"
+        );
+        this._prepareStream(started, fleet, { force: true });
+      }
+    }
+
     const nearest = cctvs[0] || null;
-    const bestPlay = started || this._pickProgressive(cctvs, lat, lng) || null;
-    const liveN = cctvs.filter(c => c.realPublic && !c.isPortal && (c.embed || c.hls || c.hlsAuto || c.streetsideId)).length;
+    const bestPlay = started || this._pickProgressive(
+      cctvs.filter(c => c.distance == null || c.distance <= localKm * 1000),
+      lat, lng
+    ) || null;
+    const liveN = cctvs.filter(c =>
+      c.realPublic && !c.isPortal && (c.embed || c.hls || c.hlsAuto || c.streetsideId)
+    ).length;
     const osmN = cctvs.filter(c => c.fromOSM || (c.id && String(c.id).indexOf("OSM-") === 0)).length;
-    this._lastScan = { queryLat: lat, queryLng: lng, radius, cctvs, nearest, bestPlay, access: true, timestamp: U.iso() };
+    const qIds = (this._accessQueue && this._accessQueue.ids) ? this._accessQueue.ids.slice() : [];
+
+    this._lastScan = {
+      queryLat: lat, queryLng: lng, radius, cctvs, nearest, bestPlay,
+      access: true, generic: true, timestamp: U.iso()
+    };
 
     fleet.emit("CCTV_SCAN_SUCCESS", {
       cctvs, nearest, bestPlay, total: cctvs.length, live: liveN,
       queryLat: lat, queryLng: lng, radius, access: true, localKm,
-      candidates: queue.ids.length, pinsError, source, osmPins: osmN,
-      bestPlayRemote: !!(bestPlay && bestPlay.remote)
+      candidates: qIds.length, pinsError, source, osmPins: osmN,
+      bestPlayRemote: !!(bestPlay && bestPlay.remote),
+      generic: true
     });
     const ms = Date.now() - t0;
     fleet.emit("CCTV_ACCESS_DONE", {
-      total: cctvs.length, live: liveN, candidates: queue.ids.length,
-      pinsOk: !pinsError, pinsError, ms, source, osmPins: osmN
+      total: cctvs.length, live: liveN, candidates: qIds.length,
+      pinsOk: !pinsError, pinsError, ms, source, osmPins: osmN, generic: true
     });
     fleet.logGlobal(
-      `✅ [AKSES] ${cctvs.length} titik · ${queue.ids.length} kandidat feed · OSM ${osmN}${pinsError ? " (" + pinsError + ")" : ""} · ${ms}ms`,
-      "SUCCESS");
-    return { cctvs, nearest, bestPlay, queryLat: lat, queryLng: lng, radius, queue: queue.ids.slice(), pinsError, osmPins: osmN };
+      `✅ [AKSES·GENERIK] ${cctvs.length} titik · ${liveN} LIVE · OSM ${osmN}` +
+      (pinsError ? " · pin: " + pinsError : "") + ` · ${ms}ms`,
+      "SUCCESS"
+    );
+    return {
+      cctvs, nearest, bestPlay, queryLat: lat, queryLng: lng, radius,
+      queue: qIds, pinsError, osmPins: osmN, generic: true
+    };
   },
 
-  // [G10]+[M1] progressive pick; Batam/remote fallback terakhir
+
   autoStream(lat, lng) {
     const fleet = global.CGO_Fleet;
     if (!fleet) return null;
-    const all = this._liveEntries(lat, lng, { realMax: Infinity, portalMax: Infinity, streamMax: Infinity });
-
-    // Progressive lokal → regional. Batam hanya jika GPS dekat Batam (~80 km).
+    /* Progressive generik: hanya perluas bertahap; Batam hanya jika GPS dekat Batam */
+    const all = this._liveEntries(lat, lng, {
+      realMax: Infinity, portalMax: Infinity, streamMax: Infinity
+    });
     let pick = this._pickProgressive(all, lat, lng);
-    if (!pick) {
-      const nearPortal = all.filter(c => c.isPortal && c.distance != null && c.distance <= 120000)
+    if (pick && pick.distance != null && pick.distance > 80000) {
+      /* terlalu jauh — coba portal regional ≤120 km dulu */
+      const portal = all
+        .filter(c => c.isPortal && c.distance != null && c.distance <= 120000)
         .sort((a, b) => distOf(a) - distOf(b))[0];
-      if (nearPortal) pick = nearPortal;
+      if (portal) pick = portal;
     }
-    if (!pick && this.BATAM_STREAM_DEFAULT) {
+    if ((!pick || (pick.distance != null && pick.distance > 80000)) && this.BATAM_STREAM_DEFAULT) {
       const dBatam = this.calculateDistance(lat, lng, 1.13, 104.03);
       if (dBatam <= 80000) {
         const batam = this.getPlayableCandidates(lat, lng, 80)
@@ -2184,7 +2373,7 @@ const CCTVEngine = {
       }
     }
     if (!pick) {
-      const cand = this.getPlayableCandidates(lat, lng, Infinity)[0] || null;
+      const cand = this.getPlayableCandidates(lat, lng, 40)[0] || null;
       if (cand) pick = cand;
     }
     if (!pick) return null;
@@ -2192,6 +2381,7 @@ const CCTVEngine = {
     this._prepareStream(pick, fleet, { force: true });
     return pick;
   },
+
 
   async diagnoseCCTV() {
     const fleet = global.CGO_Fleet;
@@ -2595,6 +2785,6 @@ global.CGO_Debug = {
   isActiveRealStream: () => CCTVEngine._isActiveRealStream(CCTVEngine._activeStreams.get("default"))
 };
 
-console.info(`[CGO Fleet] v${VERSION} — GPS Generik + Real HLS/Proxy Cascade + Multi-Kota · Zero Regresi API`);
+console.info(`[CGO Fleet] v${VERSION} — Kalibrasi nyata: probe+host-block · stream terverifikasi · GPS generik`);
 
 })(typeof window !== "undefined" ? window : globalThis);
