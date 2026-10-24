@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyber Lab v3.1: Advanced Network Interceptor</title>
+<title>Cyber Lab v3.2: Real-World Network Interceptor</title>
 <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -477,7 +477,6 @@ const NATIVE = {
    1. UTILITAS
    ============================================================ */
 const $     = (id) => document.getElementById(id);
-const rnd   = (a, b) => a + Math.random() * (b - a);
 const trunc = (s, n = 110) => { s = String(s); return s.length > n ? s.slice(0, n) + '…' : s; };
 const now   = () => new Date().toLocaleTimeString('id-ID', { hour12: false });
 
@@ -486,7 +485,7 @@ const stats  = { req: 0, leak: 0 };
 const vaultEntries = [];
 const vaultSet = new Set();
 
-/* ---------- SVG PATH HELPER (untuk elemen dinamis) ---------- */
+/* ---------- SVG PATH HELPER ---------- */
 const SVG_PATHS = {
     copy:  '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>',
     check: '<polyline points="20 6 9 17 4 12"/>'
@@ -496,9 +495,9 @@ function svgHTML(name, size = 11) {
 }
 
 /* ============================================================
-   2. LOGGING TERMINAL (dengan dukungan filter)
+   2. LOGGING TERMINAL (dengan filter)
    ============================================================ */
-let currentFilter = 'all';  // 'all' | 'leak'
+let currentFilter = 'all';
 
 function log(msg, type = 'sys', isLeak = false) {
     const row = document.createElement('div');
@@ -542,7 +541,7 @@ function refreshStats() {
 }
 
 /* ============================================================
-   3. VAULT (dengan tipe & counter)
+   3. VAULT
    ============================================================ */
 function updateVaultCount() {
     $('vaultCount').textContent = `(${vaultEntries.length})`;
@@ -595,17 +594,9 @@ const PATTERNS = [
     { name: 'JWT Token',    re: /(eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]+)/g },
     { name: 'HLS Stream',   re: /(https?:\/\/[^\s"'<>\\]+\.m3u8[^\s"'<>\\]*)/gi },
     { name: 'RTSP Cam',     re: /(rtsp:\/\/[^\s"'<>\\]+)/gi },
-    { name: 'Secret Field', re: /"[a-zA-Z_]*(?:pin|password|secret|token)[a-zA-Z_]*"\s*:\s*"([^"]+)"/gi },
+    { name: 'Secret Field', re: /"[a-zA-Z_]*(?:pin|password|passwd|secret|token|ssn|apiKey|api_key|apikey)[a-zA-Z_]*"\s*:\s*"([^"]+)"/gi },
     { name: 'API Key',      re: /\b(sk_live_[A-Za-z0-9_-]{8,})/g }
 ];
-
-/* ---------- FILTER IP: skip alamat non-rahasia ---------- */
-function isInterestingIP(ip) {
-    if (ip.startsWith('127.'))   return false;
-    if (ip.startsWith('0.'))     return false;
-    if (ip === '255.255.255.255') return false;
-    return true;
-}
 
 function scanPayload(payload, source, verbose = false) {
     if (payload === undefined || payload === null) return 0;
@@ -621,7 +612,6 @@ function scanPayload(payload, source, verbose = false) {
         while ((match = pattern.re.exec(text)) !== null) {
             const value = match[1];
             if (!value) continue;
-            if (pattern.name === 'IP Address' && !isInterestingIP(value)) continue;
 
             if (addVault(pattern.name, value)) {
                 found++;
@@ -648,40 +638,10 @@ function withTimeout(promise, ms) {
 }
 
 /* ============================================================
-   6. MOCK SELECTIVE (HANYA untuk URL demo internal)
-   ============================================================ */
-const MOCK_FETCH_PAYLOAD = () => ({
-    camera_id:  'CAM-01-PRESIDEN',
-    stream_url: 'https://cdn.cctv-portal.go.id/live/cam01.m3u8?token=SECRET',
-    admin_pin:  '8899',
-    rtsp_url:   'rtsp://admin:Pass123@10.0.0.1/live'
-});
-
-const MOCK_XHR_PAYLOAD = () => ({
-    status: 'success',
-    user:   'admin',
-    token:  'eyJhbGciOiJIUzI1NiJ9.U0VDUkVULVRPS0VOLTEyMw.abc'
-});
-
-const MOCK_WS_PAYLOAD = (cmd) => JSON.stringify({
-    type:      'STREAM_CONFIG',
-    command:   cmd,
-    url:       'https://cdn.cctv-portal.go.id/live/drone-07.m3u8?token=DRONE',
-    rtsp_url:  'rtsp://admin:Dr0n3P4ss@10.10.4.7:554/live/drone07',
-    lat:       -6.175392,
-    lng:       106.827153
-});
-
-const MOCK_SSE_PAYLOADS = [
-    JSON.stringify({ pin: '1357', stream_url: 'https://cdn.cctv-portal.go.id/live/sse-cam.m3u8?token=SSE' }),
-    JSON.stringify({ event: 'heartbeat', ts: Date.now() })
-];
-
-/* ============================================================
-   7. HOOK DEFINITIONS
+   6. HOOK DEFINITIONS — PASS-THROUGH SNIFFER (NO MOCK)
    ============================================================ */
 
-/* ---------- 7A. FETCH (Pass-Through Sniffer) ---------- */
+/* ---------- 6A. FETCH ---------- */
 async function hookedFetch(input, init) {
     const url = (typeof input === 'string') ? input : (input && input.url) || String(input);
     const method = (init && init.method) || 'GET';
@@ -690,45 +650,19 @@ async function hookedFetch(input, init) {
     log(`[FETCH] ${method} ${trunc(url, 82)}`, 'info');
     if (init && init.body) log(`[FETCH] body → ${trunc(init.body, 60)}`, 'warn');
 
-    /* --- Selective mock: hanya untuk API CCTV demo --- */
-    if (url.includes('api.cctv-portal.go.id')) {
-        const payload = MOCK_FETCH_PAYLOAD();
-        const body = JSON.stringify(payload);
-        const response = new Response(body, {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-        });
-        response.clone().text().then(t => scanPayload(t, 'FETCH')).catch(() => {});
-        return response;
-    }
-
-    /* --- Pass-through ke server ASLI --- */
     try {
-        const response = await withTimeout(NATIVE.fetch.call(this, input, init), 8000);
+        const response = await withTimeout(NATIVE.fetch.call(this, input, init), 15000);
         response.clone().text()
             .then(text => scanPayload(text, 'FETCH', true))
             .catch(() => {});
         return response;
     } catch (err) {
-        /* Fallback OFFLINE untuk demo button JSONPlaceholder */
-        if (url.includes('jsonplaceholder.typicode.com')) {
-            log(`[FETCH] ⚠ Native gagal (${err.message}) — fallback demo offline`, 'warn');
-            const mock = JSON.stringify({
-                userId: 1, id: 1,
-                title: 'delectus aut autem (offline fallback)',
-                completed: false
-            });
-            return new Response(mock, {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' }
-            });
-        }
         log(`[FETCH] ✖ ${err.message}`, 'danger');
         throw err;
     }
 }
 
-/* ---------- 7B. XHR (Pass-Through Sniffer) ---------- */
+/* ---------- 6B. XHR ---------- */
 function hookedXHROpen(method, url) {
     this.__meta = { method: String(method || 'GET').toUpperCase(), url: String(url) };
     return NATIVE.XHRopen.apply(this, arguments);
@@ -740,110 +674,27 @@ function hookedXHRSend(body) {
     log(`[XHR] ${meta.method || 'GET'} ${trunc(meta.url || '?', 82)}`, 'info');
     if (body) log(`[XHR] body → ${trunc(body, 60)}`, 'warn');
 
-    /* --- Selective mock: hanya untuk API CCTV demo --- */
-    if (meta.url && meta.url.includes('api.cctv-portal.go.id')) {
-        const self = this;
-        const payload = MOCK_XHR_PAYLOAD();
-        const bodyStr = JSON.stringify(payload);
-
-        setTimeout(() => {
-            const props = {
-                readyState: 4,
-                status: 200,
-                statusText: 'OK',
-                responseText: bodyStr,
-                response: bodyStr,
-                responseURL: meta.url
-            };
-            for (const [k, v] of Object.entries(props)) {
-                try {
-                    Object.defineProperty(self, k, { value: v, configurable: true, writable: true });
-                } catch (e) {
-                    try { self[k] = v; } catch (e2) {}
-                }
-            }
-            fireXHREvent(self, 'readystatechange');
-            fireXHREvent(self, 'load');
-            fireXHREvent(self, 'loadend');
-            scanPayload(bodyStr, 'XHR');
-        }, 400);
-        return;
-    }
-
-    /* --- Pass-through: sniff response lewat listener 'load' --- */
     this.addEventListener('load', function () {
         try {
+            let text = null;
             if (this.responseType === '' || this.responseType === 'text') {
-                scanPayload(this.responseText, 'XHR', true);
+                text = this.responseText;
             } else if (this.responseType === 'json') {
-                scanPayload(this.response, 'XHR', true);
+                text = this.response ? JSON.stringify(this.response) : null;
             }
+            if (text) scanPayload(text, 'XHR', true);
         } catch (e) {}
     });
 
     return NATIVE.XHRsend.apply(this, arguments);
 }
 
-function fireXHREvent(xhr, type) {
-    try { xhr.dispatchEvent(new Event(type)); } catch (e) {}
-    const handler = xhr['on' + type];
-    if (typeof handler === 'function') {
-        try { handler.call(xhr, new Event(type)); } catch (e) {}
-    }
-}
-
-/* ---------- 7C. WEBSOCKET (Pass-Through Sniffer) ---------- */
-class MockWS extends EventTarget {
-    constructor(url) {
-        super();
-        this.url = String(url);
-        this.protocol = '';
-        this.readyState = 0;
-        this.bufferedAmount = 0;
-        this.binaryType = 'blob';
-        setTimeout(() => {
-            if (this.readyState !== 0) return;
-            this.readyState = 1;
-            this.dispatchEvent(new Event('open'));
-            if (typeof this.onopen === 'function') {
-                try { this.onopen(new Event('open')); } catch (e) {}
-            }
-        }, 300);
-    }
-    send(data) {
-        log(`[WS] → ${trunc(data, 60)}`, 'warn');
-        let cmd = 'UNKNOWN';
-        try { cmd = JSON.parse(data).command || cmd; } catch (e) {}
-        const reply = MOCK_WS_PAYLOAD(cmd);
-        setTimeout(() => {
-            const ev = new MessageEvent('message', { data: reply });
-            this.dispatchEvent(ev);
-            if (typeof this.onmessage === 'function') {
-                try { this.onmessage(ev); } catch (e) {}
-            }
-            scanPayload(reply, 'WEBSOCKET');
-        }, 600);
-    }
-    close() {
-        this.readyState = 3;
-        this.dispatchEvent(new Event('close'));
-        if (typeof this.onclose === 'function') {
-            try { this.onclose(new Event('close')); } catch (e) {}
-        }
-    }
-}
-
+/* ---------- 6C. WEBSOCKET (murni passthrough) ---------- */
 function HookedWS(url, protocols) {
     const urlStr = String(url);
     stats.req++; refreshStats();
     log(`[WS] handshake → ${trunc(urlStr, 82)}`, 'info');
 
-    /* --- Selective mock: hanya untuk drone CCTV demo --- */
-    if (urlStr.includes('drone.cctv-portal.go.id')) {
-        return new MockWS(urlStr);
-    }
-
-    /* --- Pass-through ke server ASLI --- */
     const ws = (protocols !== undefined)
         ? new NATIVE.WS(url, protocols)
         : new NATIVE.WS(url);
@@ -872,14 +723,14 @@ HookedWS.OPEN = 1;
 HookedWS.CLOSING = 2;
 HookedWS.CLOSED = 3;
 
-/* ---------- 7D. STORAGE ---------- */
+/* ---------- 6D. STORAGE ---------- */
 function hookedSetItem(key, value) {
     log(`[STORAGE] Menyimpan "${key}" (${String(value).length} byte)`, 'info');
     scanPayload(value, 'STORAGE');
     return NATIVE.StorageSet.call(this, key, value);
 }
 
-/* ---------- 7E. RTCPeerConnection ---------- */
+/* ---------- 6E. RTCPeerConnection ---------- */
 function HookedRTC(config) {
     stats.req++; refreshStats();
     log('[RTC] PeerConnection dibuat', 'info');
@@ -923,7 +774,7 @@ function HookedRTC(config) {
 }
 HookedRTC.prototype = NATIVE.RTC.prototype;
 
-/* ---------- 7F. navigator.sendBeacon ---------- */
+/* ---------- 6F. navigator.sendBeacon ---------- */
 function hookedSendBeacon(url, data) {
     stats.req++; refreshStats();
     log(`[BEACON] → ${trunc(url, 82)}`, 'info');
@@ -950,54 +801,12 @@ function hookedSendBeacon(url, data) {
     }
 }
 
-/* ---------- 7G. EventSource ---------- */
-class MockEventSource extends EventTarget {
-    constructor(url) {
-        super();
-        this.url = String(url);
-        this.readyState = 0;
-        this.withCredentials = false;
-        setTimeout(() => {
-            if (this.readyState !== 0) return;
-            this.readyState = 1;
-            this.dispatchEvent(new Event('open'));
-            if (typeof this.onopen === 'function') {
-                try { this.onopen(new Event('open')); } catch (e) {}
-            }
-            MOCK_SSE_PAYLOADS.forEach((payload, i) => {
-                setTimeout(() => {
-                    if (this.readyState !== 1) return;
-                    const ev = new MessageEvent('message', { data: payload });
-                    this.dispatchEvent(ev);
-                    if (typeof this.onmessage === 'function') {
-                        try { this.onmessage(ev); } catch (e) {}
-                    }
-                    log(`[SSE] ← data ${payload.length} byte`, 'info');
-                    scanPayload(payload, 'SSE');
-                }, (i + 1) * 600);
-            });
-        }, 300);
-    }
-    close() {
-        this.readyState = 2;
-        this.dispatchEvent(new Event('close'));
-        if (typeof this.onclose === 'function') {
-            try { this.onclose(new Event('close')); } catch (e) {}
-        }
-    }
-}
-
+/* ---------- 6G. EventSource (murni passthrough) ---------- */
 function HookedES(url, config) {
     const urlStr = String(url);
     stats.req++; refreshStats();
     log(`[SSE] koneksi → ${trunc(urlStr, 82)}`, 'info');
 
-    /* --- Selective mock: hanya untuk SSE CCTV demo --- */
-    if (urlStr.includes('api.cctv-portal.go.id')) {
-        return new MockEventSource(urlStr);
-    }
-
-    /* --- Pass-through ke server ASLI --- */
     const es = new NATIVE.ES(url, config);
 
     es.addEventListener('open', () => log('[SSE] terbuka', 'success'));
@@ -1015,7 +824,7 @@ HookedES.OPEN = 1;
 HookedES.CLOSED = 2;
 
 /* ============================================================
-   8. PASANG / LEPAS HOOKS (Idempotent)
+   7. PASANG / LEPAS HOOKS
    ============================================================ */
 let hooksActive = false;
 
@@ -1073,7 +882,6 @@ function removeHooks() {
     }
     if (NATIVE.ES) window.EventSource = NATIVE.ES;
 
-    /* Restore Object.freeze/seal bila di-patch oleh stealth */
     if (window.__stealthBackup) {
         Object.freeze = window.__stealthBackup.freeze;
         Object.seal = window.__stealthBackup.seal;
@@ -1089,7 +897,7 @@ function removeHooks() {
 }
 
 /* ============================================================
-   9. STEALTH MODE (toString + freeze protection)
+   8. STEALTH MODE
    ============================================================ */
 let stealthOn = false;
 
@@ -1110,14 +918,12 @@ function setStealth(on) {
     ];
 
     if (on) {
-        /* 1) Palsukan toString */
         for (const [fn, name] of hookTargets) {
             if (typeof fn === 'function') {
                 try { fn.toString = () => fakeNative(name); } catch (e) {}
             }
         }
 
-        /* 2) Lindungi hook dari Object.freeze / seal / preventExtensions */
         if (!window.__stealthBackup) {
             window.__stealthBackup = {
                 freeze:           Object.freeze,
@@ -1151,13 +957,11 @@ function setStealth(on) {
 
         log('[SYS] Stealth AKTIF — hook disamarkan & dilindungi dari freeze/seal', 'success');
     } else {
-        /* 1) Pulihkan toString */
         for (const [fn] of hookTargets) {
             if (typeof fn === 'function') {
                 try { delete fn.toString; } catch (e) {}
             }
         }
-        /* 2) Pulihkan Object.* */
         if (window.__stealthBackup) {
             Object.freeze = window.__stealthBackup.freeze;
             Object.seal = window.__stealthBackup.seal;
@@ -1172,7 +976,7 @@ function setStealth(on) {
 }
 
 /* ============================================================
-   10. SISI KORBAN — ACTIONS
+   9. SISI KORBAN — ACTIONS (REAL-WORLD ENDPOINTS)
    ============================================================ */
 function tlog(msg, cls = '') {
     const box = $('targetScreen');
@@ -1195,7 +999,7 @@ function setFeed(url) {
     `;
 }
 
-/* ---------- 10A. REAL FETCH ---------- */
+/* ---------- 9A. REAL FETCH (JSONPlaceholder) ---------- */
 async function targetRealFetch() {
     tlog('Mengambil data dari JSONPlaceholder (Internet Asli)...');
     try {
@@ -1207,28 +1011,28 @@ async function targetRealFetch() {
     }
 }
 
-/* ---------- 10B. MOCK FETCH CCTV ---------- */
+/* ---------- 9B. REAL FETCH (dummyjson user - demo API nyata) ---------- */
 function targetMockFetch() {
-    tlog('Meminta API CCTV Rahasia...');
-    fetch('https://api.cctv-portal.go.id/v1/streams/live')
+    tlog('Menembak API user publik (dummyjson.com)...');
+    fetch('https://dummyjson.com/users/1')
         .then((res) => res.json())
         .then((data) => {
-            tlog(`Berhasil! Kamera: ${data.camera_id}`, 'ok');
-            setFeed(data.stream_url);
+            tlog(`Data diterima: ${data.firstName} ${data.lastName}`, 'ok');
+            if (data.image) setFeed(data.image);
         })
         .catch((e) => tlog(`✖ ${e.message}`, 'err'));
 }
 
-/* ---------- 10C. XHR CCTV ---------- */
+/* ---------- 9C. REAL XHR (JSONPlaceholder) ---------- */
 function targetXHR() {
-    tlog('Menghubungi server via XHR...');
+    tlog('Menghubungi JSONPlaceholder via XHR...');
     const xhr = new XMLHttpRequest();
-    xhr.open('GET', 'https://api.cctv-portal.go.id/v1/users/admin');
+    xhr.open('GET', 'https://jsonplaceholder.typicode.com/users/1');
     xhr.onload = function () {
         if (xhr.status === 200) {
             try {
                 const data = JSON.parse(xhr.responseText);
-                tlog(`200 OK — user: ${data.user}`, 'ok');
+                tlog(`200 OK — user: ${data.name}`, 'ok');
             } catch (e) {
                 tlog('200 OK — respons tidak valid', 'err');
             }
@@ -1240,35 +1044,37 @@ function targetXHR() {
     xhr.send();
 }
 
-/* ---------- 10D. WEBSOCKET DRONE ---------- */
+/* ---------- 9D. REAL WebSocket (postman-echo) ---------- */
 function targetWS() {
-    tlog('Membuka WebSocket Drone...');
-    const ws = new WebSocket('wss://drone.cctv-portal.go.id/live');
+    tlog('Membuka WebSocket ke echo server publik...');
+    try {
+        const ws = new WebSocket('wss://ws.postman-echo.com/raw');
 
-    ws.onopen = () => {
-        tlog('Terhubung. Meminta STREAM_URL...', 'ok');
-        ws.send(JSON.stringify({ command: 'STREAM_URL' }));
-    };
-    ws.onmessage = (e) => {
-        try {
-            const data = JSON.parse(e.data);
-            tlog(`Diterima! URL: ${trunc(data.url, 40)}`, 'ok');
-            setFeed(data.url);
-        } catch (err) {
-            tlog('✖ Frame tidak valid', 'err');
-        }
-    };
-    ws.onerror = () => tlog('✖ websocket error', 'err');
+        ws.onopen = () => {
+            tlog('Terhubung. Mengirim perintah STREAM_URL...', 'ok');
+            ws.send(JSON.stringify({ command: 'STREAM_URL', token: 'eyJhbGciOiJIUzI1NiJ9.RFJPTkUtVE9LRU4.demo' }));
+        };
+        ws.onmessage = (e) => {
+            tlog(`Echo diterima (${String(e.data).length} byte)`, 'ok');
+            if (String(e.data).length < 200) {
+                tlog(`Payload: ${trunc(e.data, 60)}`, 'ok');
+            }
+        };
+        ws.onerror = () => tlog('✖ websocket error', 'err');
+        ws.onclose = () => tlog('WebSocket ditutup.', '');
+    } catch (e) {
+        tlog(`✖ ${e.message}`, 'err');
+    }
 }
 
-/* ---------- 10E. STORAGE ---------- */
+/* ---------- 9E. STORAGE ---------- */
 function targetStorage() {
     tlog('Menyimpan Session Token...');
     localStorage.setItem('auth_token', 'eyJhbGciOiJIUzI1NiJ9.USER-ADMIN-1.SECRET-KEY');
     tlog('Token berhasil disimpan.', 'ok');
 }
 
-/* ---------- 10F. INTEGRITY CHECK ---------- */
+/* ---------- 9F. INTEGRITY CHECK ---------- */
 function targetDetect() {
     tlog('Menjalankan Integrity Check...');
 
@@ -1296,9 +1102,9 @@ function targetDetect() {
     }, 400);
 }
 
-/* ---------- 10G. NEW: WebRTC test ---------- */
+/* ---------- 9G. REAL WebRTC (public STUN) ---------- */
 async function targetRTC() {
-    tlog('Membuat RTCPeerConnection...');
+    tlog('Membuat RTCPeerConnection ke STUN publik...');
     try {
         const pc = new RTCPeerConnection({
             iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -1309,58 +1115,54 @@ async function targetRTC() {
         await pc.setLocalDescription(offer);
         tlog('SDP offer dibuat & setLocalDescription dipanggil.', 'ok');
 
-        setTimeout(() => { try { pc.close(); } catch (e) {} }, 800);
+        setTimeout(() => { try { pc.close(); } catch (e) {} }, 1500);
     } catch (e) {
         tlog(`✖ RTC error: ${e.message}`, 'err');
     }
 }
 
-/* ---------- 10H. NEW: sendBeacon test ---------- */
+/* ---------- 9H. REAL sendBeacon (JSONPlaceholder POST) ---------- */
 function targetBeacon() {
-    tlog('Mengirim beacon background...');
+    tlog('Mengirim beacon background ke endpoint publik...');
     const payload = JSON.stringify({
         event: 'pageview',
         pin: '7766',
         token: 'eyJhbGciOiJIUzI1NiJ9.QkVBR09OLVNFQ1JFVC.xyz'
     });
-    const ok = navigator.sendBeacon('https://api.cctv-portal.go.id/beacon/track', payload);
-    tlog(ok ? 'Beacon terkirim (queued).' : 'Beacon gagal dikirim.', ok ? 'ok' : 'err');
+    try {
+        const ok = navigator.sendBeacon(
+            'https://jsonplaceholder.typicode.com/posts',
+            new Blob([payload], { type: 'text/plain;charset=UTF-8' })
+        );
+        tlog(ok ? 'Beacon terkirim (queued).' : 'Beacon gagal dikirim.', ok ? 'ok' : 'err');
+    } catch (e) {
+        tlog(`✖ Beacon error: ${e.message}`, 'err');
+    }
 }
 
-/* ---------- 10I. NEW: EventSource test ---------- */
+/* ---------- 9I. REAL EventSource (SSE publik) ---------- */
 function targetEventSource() {
-    tlog('Membuka EventSource (SSE)...');
+    tlog('Membuka EventSource (SSE publik)...');
     try {
-        const es = new EventSource('https://api.cctv-portal.go.id/sse/live');
+        const es = new EventSource('https://sse.dev/test');
         es.onopen = () => tlog('SSE terbuka.', 'ok');
         es.onmessage = (e) => {
-            try {
-                const d = JSON.parse(e.data);
-                if (d.stream_url) {
-                    tlog(`SSE data: ${trunc(d.stream_url, 40)}`, 'ok');
-                    setFeed(d.stream_url);
-                } else {
-                    tlog(`SSE data: ${trunc(e.data, 40)}`, 'ok');
-                }
-            } catch (err) {
-                tlog(`SSE data: ${trunc(e.data, 40)}`, 'ok');
-            }
+            tlog(`SSE data: ${trunc(e.data, 60)}`, 'ok');
         };
-        es.onerror = () => tlog('SSE error / ditutup.', 'err');
-        setTimeout(() => { try { es.close(); } catch (e) {} }, 3000);
+        es.onerror = () => tlog('SSE error / ditutup (endpoint publik mungkin tidak dapat diakses).', 'err');
+        setTimeout(() => { try { es.close(); } catch (e) {} }, 4000);
     } catch (e) {
         tlog(`✖ SSE error: ${e.message}`, 'err');
     }
 }
 
 /* ============================================================
-   11. URL / IFRAME LOADER
+   10. URL / IFRAME LOADER
    ============================================================ */
 function openUrl() {
     let url = $('urlInput').value.trim();
     if (!url) return;
 
-    /* Auto-prepend scheme jika perlu */
     if (!/^https?:\/\//i.test(url) && !/^(about|data):/i.test(url)) {
         if (/^[\w.-]+\.[a-z]{2,}/i.test(url)) url = 'https://' + url;
         else { tlog('URL tidak valid.', 'err'); return; }
@@ -1392,7 +1194,7 @@ function closeUrl() {
 }
 
 /* ============================================================
-   12. EXPORT VAULT (JSON)
+   11. EXPORT VAULT (JSON)
    ============================================================ */
 function exportVault() {
     if (vaultEntries.length === 0) {
@@ -1422,7 +1224,7 @@ function exportVault() {
 }
 
 /* ============================================================
-   13. EVENT BINDING
+   12. EVENT BINDING
    ============================================================ */
 $('clearBtn').addEventListener('click', () => {
     termEl.textContent = '';
@@ -1452,15 +1254,16 @@ $('urlInput').addEventListener('keydown', (e) => {
 });
 
 /* ============================================================
-   14. INISIALISASI
+   13. INISIALISASI
    ============================================================ */
 applyHooks();
 
 log('════════════════════════════════════════════', 'sys');
-log(' ADVANCED INTERCEPTOR v3.1 — CYBER LAB', 'success');
+log(' ADVANCED INTERCEPTOR v3.2 — CYBER LAB', 'success');
+log(' REAL-WORLD PASS-THROUGH SNIFFER MODE', 'success');
 log('════════════════════════════════════════════', 'sys');
 log('[SYS] Hook: fetch, XHR, WebSocket, Storage, Beacon, RTC, EventSource', 'info');
-log('[SYS] Mode: PASS-THROUGH SNIFFER (mock hanya untuk demo CCTV)', 'info');
+log('[SYS] Semua request diteruskan ke server ASLI, hanya di-sniff datanya.', 'info');
 log('[SYS] Menunggu trafik dari target...', 'sys');
 refreshStats();
 updateVaultCount();
