@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyber Lab v3.3: CGO Client Sniff Mode</title>
+<title>Cyber Lab v3.3: Real Interceptor + CGO Multi-Cam Data</title>
 <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -273,18 +273,18 @@
         </div>
 
         <p class="desc">
-            Panel kiri = klien CGO (health → probe → unduh m3u8 → config).
-            Panel kanan = penyadap alur yang sama diproses drone-cgo.
+            Demo interceptor (alur asli tetap). Data CCTV dari katalog CGO Fleet
+            multi-kota — bukan satu Batam. Terminal kanan menyadap request nyata.
         </p>
 
         <!-- URL BAR BARU -->
         <div class="urlbar">
-            <input type="text" id="urlInput" placeholder="https://cgo-proxy.cikurgo.workers.dev/health" spellcheck="false" autocomplete="off">
+            <input type="text" id="urlInput" placeholder="https://jsonplaceholder.typicode.com/todos/1" spellcheck="false" autocomplete="off">
             <button id="openUrlBtn">BUKA</button>
             <button id="closeUrlBtn" class="close-btn" title="Tutup iframe">✕</button>
         </div>
 
-        <div class="group-label">Alur klien CGO (disadap terminal)</div>
+        <div class="group-label">Demo Core (Hooked) · data CGO multi-cam</div>
 
         <div class="btn-group">
             <button class="btn" onclick="targetRealFetch()">
@@ -293,7 +293,7 @@
                     <polyline points="7 10 12 15 17 10"/>
                     <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                <span class="lbl">1. CGO Client → Proxy /health</span>
+                <span class="lbl">Fetch Internet publik (JSONPlaceholder)</span>
             </button>
 
             <button class="btn" onclick="targetMockFetch()">
@@ -301,7 +301,7 @@
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                     <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                 </svg>
-                <span class="lbl">2. CGO Client → Probe + ambil .m3u8</span>
+                <span class="lbl">Scan multi-CCTV CGO (fetch katalog)</span>
             </button>
 
             <button class="btn" onclick="targetXHR()">
@@ -310,7 +310,7 @@
                     <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
                     <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
                 </svg>
-                <span class="lbl">3. CGO Client → XHR pipeline Sekupang</span>
+                <span class="lbl">XHR multi-CCTV + portal daerah</span>
             </button>
 
             <button class="btn ws" onclick="targetWS()">
@@ -318,7 +318,7 @@
                     <circle cx="12" cy="12" r="2"/>
                     <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>
                 </svg>
-                <span class="lbl">4. WebSocket echo (sniff payload)</span>
+                <span class="lbl">WebSocket + katalog multi-cam CGO</span>
             </button>
 
             <button class="btn" onclick="targetStorage()">
@@ -327,7 +327,7 @@
                     <polyline points="17 21 17 13 7 13 7 21"/>
                     <polyline points="7 3 7 8 15 8"/>
                 </svg>
-                <span class="lbl">5. Tulis konfig CGO (sniff Storage)</span>
+                <span class="lbl">Simpan konfig scan CGO (LocalStorage)</span>
             </button>
 
             <button class="btn detect" onclick="targetDetect()">
@@ -976,33 +976,53 @@ function setStealth(on) {
 }
 
 /* ============================================================
-   9. SISI KORBAN — peran = klien CGO (bukan player video)
-   Terminal kanan menyadap health → probe → m3u8 → config
-   (alur yang sama dilakukan drone-cgo.js).
-   Zero regresi: hook di atas tidak disentuh.
+   9. SISI KORBAN — ACTIONS
+   Alur demo ASLI dipertahankan (banyak tombol, banyak jenis trafik).
+   Dummy JWT/rahasia diganti data katalog CGO multi-kota (Batam +
+   Jakarta + portal daerah) — sama sumber drone-cgo.js v6.21.
+   Hook di atas: ZERO REGRESI (tidak diubah).
    ============================================================ */
 
 const CGO_LAB = {
     proxy: 'https://cgo-proxy.cikurgo.workers.dev',
     version: '6.21.0',
+    /* PUBLIC_STREAMS terverifikasi (drone-cgo) */
     streams: [
-        { name: 'Batu Aji (Batam)', hls: 'https://matanya.batam.go.id/cctv/batuaji/stream.m3u8', lat: 1.1300, lng: 104.0300 },
-        { name: 'Atap (Batam)', hls: 'https://matanya.batam.go.id/cctv/atap/stream.m3u8', lat: 1.1450, lng: 104.0200 },
-        { name: 'Simpang Kuda (Batam)', hls: 'https://matanya.batam.go.id/cctv/simpkuda2/stream.m3u8', lat: 1.1250, lng: 104.0450 },
-        { name: 'Danganom (Batam)', hls: 'https://matanya.batam.go.id/cctv/danganom2/stream.m3u8', lat: 1.1200, lng: 104.0400 },
-        { name: 'Sekupang (Batam)', hls: 'https://matanya.batam.go.id/cctv/sekupang/stream.m3u8', lat: 1.1160, lng: 103.9630 }
+        { name: 'Batu Aji (Batam)', region: 'Batam', hls: 'https://matanya.batam.go.id/cctv/batuaji/stream.m3u8', lat: 1.1300, lng: 104.0300 },
+        { name: 'Atap (Batam)', region: 'Batam', hls: 'https://matanya.batam.go.id/cctv/atap/stream.m3u8', lat: 1.1450, lng: 104.0200 },
+        { name: 'Simpang Kuda (Batam)', region: 'Batam', hls: 'https://matanya.batam.go.id/cctv/simpkuda2/stream.m3u8', lat: 1.1250, lng: 104.0450 },
+        { name: 'Danganom (Batam)', region: 'Batam', hls: 'https://matanya.batam.go.id/cctv/danganom2/stream.m3u8', lat: 1.1200, lng: 104.0400 },
+        { name: 'Sekupang (Batam)', region: 'Batam', hls: 'https://matanya.batam.go.id/cctv/sekupang/stream.m3u8', lat: 1.1160, lng: 103.9630 }
+    ],
+    /* REAL_PUBLIC_CAMS Jakarta (embed → hlsAuto index.m3u8) */
+    jakarta: [
+        { name: 'Bendungan Hilir 1', region: 'Jakarta', embed: 'https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_1/embed.html', hls: 'https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_1/index.m3u8', lat: -6.2146, lng: 106.8081 },
+        { name: 'GBK / Gelora 3', region: 'Jakarta', embed: 'https://cctv.balitower.co.id/Gelora-017-700470_3/embed.html', hls: 'https://cctv.balitower.co.id/Gelora-017-700470_3/index.m3u8', lat: -6.2188, lng: 106.8025 },
+        { name: 'Jati Pulo', region: 'Jakarta', embed: 'https://cctv.balitower.co.id/Jati-Pulo-001-702017_2/embed.html', hls: 'https://cctv.balitower.co.id/Jati-Pulo-001-702017_2/index.m3u8', lat: -6.1800, lng: 106.8000 },
+        { name: 'Menteng / Bundaran HI', region: 'Jakarta', embed: 'https://cctv.balitower.co.id/Menteng-001-700123_1/embed.html', hls: 'https://cctv.balitower.co.id/Menteng-001-700123_1/index.m3u8', lat: -6.1944, lng: 106.8229 },
+        { name: 'Senayan 1', region: 'Jakarta', embed: 'https://cctv.balitower.co.id/Senayan-004-705087_1/embed.html', hls: 'https://cctv.balitower.co.id/Senayan-004-705087_1/index.m3u8', lat: -6.2270, lng: 106.8000 }
+    ],
+    /* REGION_PORTALS */
+    portals: [
+        { name: 'Portal ATCS Tangerang Kab', region: 'Tangerang', url: 'https://cctv-dishub.tangerangkab.go.id/' },
+        { name: 'Portal CCTV Banten Prov', region: 'Banten', url: 'https://cctv.bantenprov.go.id/' },
+        { name: 'Portal ATCS Bandung', region: 'Bandung', url: 'https://atcs-dishub.bandung.go.id/' },
+        { name: 'Portal CCTV Jogja', region: 'Yogyakarta', url: 'https://cctv.jogjakota.go.id/' },
+        { name: 'Portal CCTV Semarang', region: 'Semarang', url: 'https://pantausemar.semarangkota.go.id/' },
+        { name: 'Portal CCTV Denpasar', region: 'Denpasar', url: 'https://atcs.denpasarkota.go.id/' }
     ]
 };
 
-const CGO_BRIDGE = {
-    channel: (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('cgo-lab-bridge') : null,
-    emit: function (type, detail) {
-        const msg = { type: type, detail: detail || {}, at: Date.now(), from: 'cyber-lab' };
-        try { localStorage.setItem('cgo_lab_last_event', JSON.stringify(msg)); } catch (e) {}
-        try { if (this.channel) this.channel.postMessage(msg); } catch (e) {}
-        log('[BRIDGE] ' + type, 'sys');
-    }
-};
+function cgoAllCams() {
+    return CGO_LAB.streams.concat(CGO_LAB.jakarta);
+}
+
+function cgoProbeUrl(u) {
+    return CGO_LAB.proxy + '/probe?url=' + encodeURIComponent(u);
+}
+function cgoProxyUrl(u) {
+    return CGO_LAB.proxy + '/proxy?url=' + encodeURIComponent(u);
+}
 
 function tlog(msg, cls) {
     cls = cls || '';
@@ -1011,7 +1031,7 @@ function tlog(msg, cls) {
     line.className = 'tline ' + cls;
     line.textContent = '> ' + msg;
     box.prepend(line);
-    while (box.childElementCount > 60) box.removeChild(box.lastElementChild);
+    while (box.childElementCount > 80) box.removeChild(box.lastElementChild);
 }
 
 function setFeed(url, label) {
@@ -1020,130 +1040,143 @@ function setFeed(url, label) {
     feed.innerHTML =
         '<svg class="live-dot" width="10" height="10" viewBox="0 0 10 10">' +
         '<circle cx="5" cy="5" r="4" fill="currentColor"/></svg>' +
-        '<span class="cam">' + (label || 'CAPTURED') + '</span>' +
+        '<span class="cam">' + (label || 'SCAN') + '</span>' +
         '<span class="url">' + trunc(url, 70) + '</span>';
 }
 
-function cgoProbeUrl(target) {
-    return CGO_LAB.proxy + '/probe?url=' + encodeURIComponent(target);
-}
-function cgoProxyUrl(target) {
-    return CGO_LAB.proxy + '/proxy?url=' + encodeURIComponent(target);
-}
-
-/** Pipeline klien CGO: probe → unduh playlist → vault URL (bukan putar video) */
-async function cgoCapturePipeline(cam, viaXhr) {
-    tlog('[' + cam.name + '] 1/3 probe…');
-    CGO_BRIDGE.emit('cgo_probe_start', { name: cam.name, hls: cam.hls });
-
-    let probeJson = null;
-    if (viaXhr) {
-        probeJson = await new Promise(function (resolve, reject) {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', cgoProbeUrl(cam.hls));
-            xhr.onload = function () {
-                try { resolve(JSON.parse(xhr.responseText)); }
-                catch (e) { reject(e); }
-            };
-            xhr.onerror = function () { reject(new Error('network')); };
-            xhr.send();
-        });
-    } else {
-        const res = await fetch(cgoProbeUrl(cam.hls));
-        probeJson = await res.json();
-    }
-
-    if (!probeJson || !probeJson.ok) {
-        const why = (probeJson && probeJson.error) || 'probe gagal';
-        tlog('Probe gagal: ' + why, 'err');
-        CGO_BRIDGE.emit('cgo_probe_fail', { name: cam.name, error: why });
-        return null;
-    }
-
-    tlog('Probe OK · ' + (probeJson.contentType || 'm3u8') + ' · ' + (probeJson.ms || '?') + 'ms', 'ok');
-    tlog('[' + cam.name + '] 2/3 unduh playlist .m3u8 lewat proxy…');
-
-    const plRes = await fetch(cgoProxyUrl(cam.hls));
-    const playlist = await plRes.text();
-    if (!plRes.ok || playlist.length < 8) {
-        tlog('Playlist gagal HTTP ' + plRes.status, 'err');
-        CGO_BRIDGE.emit('cgo_playlist_fail', { name: cam.name, status: plRes.status });
-        return null;
-    }
-
-    const segs = playlist.split('\n').filter(function (l) {
-        return l && l.charAt(0) !== '#';
-    }).slice(0, 3);
-    tlog('Playlist ' + playlist.length + ' byte · segmen: ' + trunc(segs[0] || '(none)', 48), 'ok');
-
-    scanPayload(cam.hls, 'CGO-HLS-URL');
-    scanPayload(playlist, 'CGO-PLAYLIST');
-
-    tlog('[' + cam.name + '] 3/3 jejak konfig localStorage…');
-    const snap = {
-        name: cam.name,
-        hls: cam.hls,
-        proxied: cgoProxyUrl(cam.hls),
-        probedAt: new Date().toISOString(),
-        playlistBytes: playlist.length
-    };
-    localStorage.setItem('cgo_last_capture', JSON.stringify(snap));
-    setFeed(cam.hls, 'PLAYLIST · ' + cam.name);
-    CGO_BRIDGE.emit('cgo_capture_ok', snap);
-    tlog('Selesai — terminal + vault menangkap URL. Pemutar video = drone-cgo.', 'ok');
-    return snap;
-}
-
-async function targetRealFetch() {
-    const url = CGO_LAB.proxy + '/health';
-    tlog('Klien CGO: cek proxy ' + url);
-    try {
-        const res = await fetch(url);
-        const text = await res.text();
-        let data = null;
-        try { data = JSON.parse(text); } catch (e) {}
-        if (data && (data.status === 'ok' || data.version)) {
-            tlog('Proxy siap · v' + (data.version || '?') +
-                (Array.isArray(data.allowedDomains) ? ' · ' + data.allowedDomains.length + ' domain' : ''), 'ok');
-            setFeed(url, 'PROXY · READY');
-            CGO_BRIDGE.emit('cgo_proxy_health', { version: data.version });
-        } else {
-            tlog('HTTP ' + res.status + ' · ' + trunc(text, 80), res.ok ? 'ok' : 'err');
+/**
+ * Multi-cam scan seperti drone-cgo accessAround (sebagian katalog):
+ * probe beberapa stream lintas kota; yang OK → unduh cuplikan playlist.
+ * Terminal menyadap SETIAP request (hook fetch).
+ */
+async function cgoMultiScan(list, limit) {
+    limit = limit || list.length;
+    const picks = list.slice(0, limit);
+    tlog('Mulai scan ' + picks.length + ' kamera (katalog CGO ' + CGO_LAB.version + ')…');
+    let okN = 0, failN = 0;
+    for (let i = 0; i < picks.length; i++) {
+        const cam = picks[i];
+        const target = cam.hls || cam.url || cam.embed;
+        if (!target) continue;
+        tlog('[' + (i + 1) + '/' + picks.length + '] ' + cam.region + ' · ' + cam.name);
+        try {
+            const res = await fetch(cgoProbeUrl(target));
+            const j = await res.json().catch(function () { return null; });
+            if (j && j.ok) {
+                okN++;
+                tlog('  probe OK · ' + (j.contentType || '') + ' · ' + (j.ms || '?') + 'ms', 'ok');
+                scanPayload(target, 'CGO-SCAN');
+                /* Ambil playlist hanya untuk HLS yang jelas .m3u8 */
+                if (/\.m3u8(\?|$)/i.test(target)) {
+                    try {
+                        const pr = await fetch(cgoProxyUrl(target));
+                        const body = await pr.text();
+                        if (pr.ok && body.length > 10) {
+                            scanPayload(body, 'CGO-PLAYLIST');
+                            tlog('  playlist ' + body.length + ' byte', 'ok');
+                            setFeed(target, cam.region + ' · ' + cam.name);
+                        }
+                    } catch (e2) {
+                        tlog('  playlist skip: ' + e2.message, 'err');
+                    }
+                }
+            } else {
+                failN++;
+                tlog('  probe gagal: ' + ((j && j.error) || res.status), 'err');
+            }
+        } catch (e) {
+            failN++;
+            tlog('  error: ' + e.message, 'err');
         }
+    }
+    tlog('Scan selesai · OK ' + okN + ' · gagal ' + failN + ' / ' + picks.length, okN ? 'ok' : 'err');
+    return { okN: okN, failN: failN };
+}
+
+/* ---------- 9A. Internet publik (alur demo asli) ---------- */
+async function targetRealFetch() {
+    tlog('Mengambil data dari JSONPlaceholder (Internet Asli)...');
+    try {
+        const res = await fetch('https://jsonplaceholder.typicode.com/todos/1');
+        const data = await res.json();
+        tlog('Data diterima: "' + trunc(data.title, 40) + '"', 'ok');
     } catch (err) {
-        tlog('✖ ' + err.message, 'err');
+        tlog('✖ Gagal: ' + err.message, 'err');
     }
 }
 
+/* ---------- 9B. Multi-scan fetch (Batam + Jakarta katalog CGO) ---------- */
 function targetMockFetch() {
-    cgoCapturePipeline(CGO_LAB.streams[0], false).catch(function (e) {
+    tlog('Scan multi-CCTV CGO (stream Batam + Jakarta)…');
+    cgoMultiScan(cgoAllCams(), 8).catch(function (e) {
         tlog('✖ ' + e.message, 'err');
     });
 }
 
+/* ---------- 9C. XHR: probe 1 stream + HEAD-ish portal daerah ---------- */
 function targetXHR() {
-    cgoCapturePipeline(CGO_LAB.streams[4] || CGO_LAB.streams[0], true).catch(function (e) {
-        tlog('✖ ' + e.message, 'err');
-    });
+    tlog('XHR multi-target: Sekupang + portal daerah…');
+    const cam = CGO_LAB.streams[4] || CGO_LAB.streams[0];
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', cgoProbeUrl(cam.hls));
+    xhr.onload = function () {
+        try {
+            const j = JSON.parse(xhr.responseText);
+            if (j.ok) {
+                tlog('XHR probe OK · ' + cam.name, 'ok');
+                scanPayload(cam.hls, 'XHR-CGO');
+                setFeed(cam.hls, cam.name);
+            } else {
+                tlog('XHR probe: ' + (j.error || xhr.status), 'err');
+            }
+        } catch (e) {
+            tlog('XHR JSON invalid', 'err');
+        }
+        /* Lanjut portal — request ikut tersadap */
+        let pi = 0;
+        function nextPortal() {
+            if (pi >= CGO_LAB.portals.length) {
+                tlog('XHR rangkaian selesai (' + CGO_LAB.portals.length + ' portal dicoba).', 'ok');
+                return;
+            }
+            const p = CGO_LAB.portals[pi++];
+            const x2 = new XMLHttpRequest();
+            x2.open('GET', cgoProbeUrl(p.url));
+            x2.onload = function () {
+                tlog('Portal ' + p.region + ' · HTTP ' + x2.status, x2.status >= 200 && x2.status < 400 ? 'ok' : 'err');
+                nextPortal();
+            };
+            x2.onerror = function () {
+                tlog('Portal ' + p.region + ' · network error', 'err');
+                nextPortal();
+            };
+            x2.send();
+        }
+        nextPortal();
+    };
+    xhr.onerror = function () { tlog('✖ XHR network error', 'err'); };
+    xhr.send();
 }
 
+/* ---------- 9D. WebSocket + payload multi-cam ---------- */
 function targetWS() {
-    tlog('WebSocket — kirim katalog URL CGO (disadap HookedWS)…');
+    tlog('WebSocket echo — kirim katalog multi-cam CGO…');
     try {
         const ws = new WebSocket('wss://ws.postman-echo.com/raw');
         const payload = {
             source: 'cyber-lab-v3.3',
-            role: 'cgo-client-sim',
             fleet: CGO_LAB.version,
             proxy: CGO_LAB.proxy,
-            streams: CGO_LAB.streams.map(function (s) { return { name: s.name, hls: s.hls }; })
+            batam: CGO_LAB.streams.map(function (s) { return { name: s.name, hls: s.hls, region: s.region }; }),
+            jakarta: CGO_LAB.jakarta.map(function (s) { return { name: s.name, hls: s.hls, region: s.region }; }),
+            portals: CGO_LAB.portals.map(function (p) { return { name: p.name, url: p.url, region: p.region }; })
         };
         ws.onopen = function () {
-            tlog('WS open — send katalog', 'ok');
+            tlog('Terhubung. Mengirim katalog ' + (payload.batam.length + payload.jakarta.length) + ' cam + portal…', 'ok');
             ws.send(JSON.stringify(payload));
         };
         ws.onmessage = function (e) {
-            tlog('WS echo ' + String(e.data).length + ' byte', 'ok');
+            tlog('Echo ' + String(e.data).length + ' byte', 'ok');
             scanPayload(e.data, 'WS-ECHO');
         };
         ws.onerror = function () { tlog('✖ websocket error', 'err'); };
@@ -1153,22 +1186,26 @@ function targetWS() {
     }
 }
 
+/* ---------- 9E. Storage konfig scan (kunci fleet) ---------- */
 function targetStorage() {
-    tlog('Tulis kunci yang dibaca drone-cgo…');
-    localStorage.setItem('cgo_proxy_url', CGO_LAB.proxy);
-    localStorage.setItem('cgo_lab_config', JSON.stringify({
+    tlog('Menyimpan konfig scan CGO multi-cam…');
+    const cfg = {
         proxy: CGO_LAB.proxy,
         fleet: CGO_LAB.version,
-        preferredCam: CGO_LAB.streams[0].name,
-        preferredHls: CGO_LAB.streams[0].hls,
+        streamCount: CGO_LAB.streams.length,
+        jakartaCount: CGO_LAB.jakarta.length,
+        portalCount: CGO_LAB.portals.length,
+        preferred: CGO_LAB.streams[0],
         savedAt: new Date().toISOString()
-    }));
-    tlog('cgo_proxy_url + cgo_lab_config (lihat log [STORAGE])', 'ok');
-    CGO_BRIDGE.emit('cgo_config_written', { proxy: CGO_LAB.proxy });
+    };
+    localStorage.setItem('cgo_proxy_url', CGO_LAB.proxy);
+    localStorage.setItem('cgo_lab_config', JSON.stringify(cfg));
+    tlog('cgo_proxy_url + cgo_lab_config (' + (cfg.streamCount + cfg.jakartaCount) + ' cam katalog)', 'ok');
 }
 
+/* ---------- 9F. Integrity (asli) ---------- */
 function targetDetect() {
-    tlog('Integrity Check…');
+    tlog('Menjalankan Integrity Check...');
     setTimeout(function () {
         const checks = [
             ['window.fetch', window.fetch],
@@ -1183,52 +1220,63 @@ function targetDetect() {
         const dirty = checks
             .filter(function (pair) { return !/\[native code\]/.test(String(pair[1])); })
             .map(function (pair) { return pair[0]; });
-        if (dirty.length) tlog('⚠ ANOMALI: ' + dirty.join(', '), 'err');
-        else tlog('✔ Native (stealth OFF / hook dilepas).', 'ok');
+        if (dirty.length) tlog('⚠ ANOMALI pada: ' + dirty.join(', '), 'err');
+        else tlog('✔ Lingkungan bersih. Tidak ada hook terdeteksi.', 'ok');
     }, 400);
 }
 
+/* ---------- 9G. WebRTC (asli) ---------- */
 async function targetRTC() {
-    tlog('RTCPeerConnection STUN…');
+    tlog('Membuat RTCPeerConnection ke STUN publik...');
     try {
-        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-        pc.createDataChannel('cgo-lab');
+        const pc = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+        pc.createDataChannel('test-channel');
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        tlog('SDP set', 'ok');
+        tlog('SDP offer dibuat & setLocalDescription dipanggil.', 'ok');
         setTimeout(function () { try { pc.close(); } catch (e) {} }, 1500);
     } catch (e) {
-        tlog('✖ RTC: ' + e.message, 'err');
+        tlog('✖ RTC error: ' + e.message, 'err');
     }
 }
 
+/* ---------- 9H. Beacon (tanpa pin/token palsu) ---------- */
 function targetBeacon() {
-    tlog('Beacon telemetry…');
+    tlog('Mengirim beacon telemetry lab…');
     const payload = JSON.stringify({
-        event: 'cgo_lab_ping', lab: '3.3', fleet: CGO_LAB.version,
-        proxy: CGO_LAB.proxy, streams: CGO_LAB.streams.length, ts: Date.now()
+        event: 'cgo_lab_ping',
+        lab: '3.3',
+        fleet: CGO_LAB.version,
+        cams: cgoAllCams().length,
+        portals: CGO_LAB.portals.length,
+        ts: Date.now()
     });
     try {
         const ok = navigator.sendBeacon(
             'https://jsonplaceholder.typicode.com/posts',
             new Blob([payload], { type: 'application/json' })
         );
-        tlog(ok ? 'Beacon queued' : 'Beacon gagal', ok ? 'ok' : 'err');
+        tlog(ok ? 'Beacon terkirim (queued).' : 'Beacon gagal dikirim.', ok ? 'ok' : 'err');
     } catch (e) {
-        tlog('✖ ' + e.message, 'err');
+        tlog('✖ Beacon error: ' + e.message, 'err');
     }
 }
 
+/* ---------- 9I. EventSource (asli) ---------- */
 function targetEventSource() {
-    tlog('EventSource SSE…');
+    tlog('Membuka EventSource (SSE publik)...');
     try {
         const es = new EventSource('https://sse.dev/test');
-        es.onopen = function () { tlog('SSE open', 'ok'); };
-        es.onmessage = function (e) { tlog('SSE: ' + trunc(e.data, 60), 'ok'); };
-        es.onerror = function () { tlog('SSE error/putus', 'err'); };
+        es.onopen = function () { tlog('SSE terbuka.', 'ok'); };
+        es.onmessage = function (e) { tlog('SSE data: ' + trunc(e.data, 60), 'ok'); };
+        es.onerror = function () {
+            tlog('SSE error / ditutup (endpoint publik mungkin tidak dapat diakses).', 'err');
+        };
         setTimeout(function () { try { es.close(); } catch (e) {} }, 4000);
     } catch (e) {
-        tlog('✖ ' + e.message, 'err');
+        tlog('✖ SSE error: ' + e.message, 'err');
     }
 }
 
@@ -1335,13 +1383,12 @@ $('urlInput').addEventListener('keydown', (e) => {
 applyHooks();
 
 log('════════════════════════════════════════════', 'sys');
-log(' ADVANCED INTERCEPTOR v3.3 — CGO CLIENT SNIFF', 'success');
-log(' Simulasi klien CGO; terminal sadap health→probe→m3u8', 'success');
+log(' ADVANCED INTERCEPTOR v3.3 — CYBER LAB + CGO MULTI-CAM', 'success');
+log(' REAL-WORLD PASS-THROUGH SNIFFER MODE', 'success');
 log('════════════════════════════════════════════', 'sys');
 log('[SYS] Hook: fetch, XHR, WebSocket, Storage, Beacon, RTC, EventSource', 'info');
-log('[SYS] Bukan pemutar CCTV (itu drone-cgo). Lab = sadap alur klien.', 'info');
 log('[SYS] Semua request diteruskan ke server ASLI, hanya di-sniff datanya.', 'info');
-log('[SYS] Fixture CGO ' + CGO_LAB.version + ' · ' + CGO_LAB.proxy, 'info');
+log('[SYS] Katalog CGO: ' + cgoAllCams().length + ' cam · ' + CGO_LAB.portals.length + ' portal · proxy ' + CGO_LAB.proxy, 'info');
 log('[SYS] Menunggu trafik dari target...', 'sys');
 refreshStats();
 updateVaultCount();
