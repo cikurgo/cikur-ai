@@ -113,6 +113,18 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
 .quality-score.warn{background:rgba(255,184,77,.15);color:#ffb84d}
 .quality-score.bad{background:rgba(255,128,128,.15);color:#ff8080}
 @media(max-width:600px){.adv-row{grid-template-columns:1fr}}
+button:focus-visible,.theme-toggle:focus-visible,summary:focus-visible{outline:2px solid var(--accent2);outline-offset:3px}
+#pivot{max-width:100%;overflow:auto;border-radius:9px}
+#pivot table{min-width:max-content}
+@media(max-width:600px){
+  header{padding:16px 12px}
+  main{padding:12px 8px}
+  .actions button{flex:1 1 auto;min-width:110px}
+  .pager{gap:6px}
+  .pager .spacer{flex-basis:100%}
+  .chart{height:240px}
+  .status{font-size:13px}
+}
 
 @media(max-width:800px){
   .half{grid-column:span 12}
@@ -176,7 +188,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     </button>
   </div>
   <div id="loadStatus" class="status">Belum ada file. File asli tidak diubah.</div>
-  <p class="muted" style="margin-top:8px">Sistem dilengkapi mesin streaming parser untuk file CSV besar. Data tidak dikirim ke server manapun (100% Client-side).</p>
+  <p class="muted" style="margin-top:8px">CSV diproses di worker latar belakang bila didukung browser. File besar tetap membutuhkan memori perangkat. Data tidak dikirim ke server manapun (100% Client-side).</p>
 </section>
 
 <section class="card no-print" id="fileMonitorCard">
@@ -454,18 +466,16 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     barChartInstance: null, histChartInstance: null, tsChartInstance: null,
     pivot: null,
     pendingFile: null,
-    // --- Tier upgrades ---
-    advFilters: [],          // [{col, op, value}]
-    advFilterLogic: "and",   // and | or
-    undoStack: [],           // snapshots of raw/headers/types
-    calcCols: [],            // [{name, expr}]
-    pivotShare: "none"       // none | grand | row | col
+    advFilters: [],
+    advFilterLogic: "and",
+    undoStack: [],
+    calcCols: [],
+    pivotShare: "none"
   };
 
   const MAX_UNDO = 8;
   const LARGE_ROW_WARN = 30000;
 
-  // Register Chart.js Datalabels plugin globally (optional)
   try {
     if (window.Chart && window.ChartDataLabels) Chart.register(ChartDataLabels);
   } catch (e) { /* plugin optional */ }
@@ -489,14 +499,26 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const n = s.length;
     return n % 2 ? s[(n - 1) >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2;
   };
+  const minOf = arr => {
+    if (!arr || !arr.length) return null;
+    let value = Infinity;
+    for (let i = 0; i < arr.length; i++) if (arr[i] < value) value = arr[i];
+    return Number.isFinite(value) ? value : null;
+  };
+  const maxOf = arr => {
+    if (!arr || !arr.length) return null;
+    let value = -Infinity;
+    for (let i = 0; i < arr.length; i++) if (arr[i] > value) value = arr[i];
+    return Number.isFinite(value) ? value : null;
+  };
   const aggregate = (nums, fn) => {
     if (!nums.length) return null;
     switch (fn) {
       case "sum": return nums.reduce((a, b) => a + b, 0);
       case "avg": return nums.reduce((a, b) => a + b, 0) / nums.length;
       case "count": return nums.length;
-      case "min": return Math.min(...nums);
-      case "max": return Math.max(...nums);
+      case "min": return minOf(nums);
+      case "max": return maxOf(nums);
       case "median": return medianOf(nums);
       default: return null;
     }
@@ -506,8 +528,8 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     if (agg === "sum") return g.sum;
     if (agg === "avg") return g.avg;
     if (agg === "count") return g.valid;
-    if (agg === "min") return g.nums && g.nums.length ? Math.min(...g.nums) : null;
-    if (agg === "max") return g.nums && g.nums.length ? Math.max(...g.nums) : null;
+    if (agg === "min") return g.nums && g.nums.length ? minOf(g.nums) : null;
+    if (agg === "max") return g.nums && g.nums.length ? maxOf(g.nums) : null;
     if (agg === "median") return g.nums && g.nums.length ? medianOf(g.nums) : null;
     return g.sum;
   };
@@ -528,40 +550,70 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   }
   function busyStatus(id, txt) {
     const e = $(id);
+    if(!e) return;
     e.className = "status loading";
     e.textContent = txt;
   }
 
-  // ---------- DATE FORMATTING (FIX FOR RAW DATE OBJECTS) ----------
   function formatDisplayDate(val) {
     if (val instanceof Date) {
       if (isNaN(val)) return "";
-      const y = val.getFullYear();
-      const m = String(val.getMonth() + 1).padStart(2, '0');
       const d = String(val.getDate()).padStart(2, '0');
-      const h = String(val.getHours()).padStart(2, '0');
-      const min = String(val.getMinutes()).padStart(2, '0');
-      const s = String(val.getSeconds()).padStart(2, '0');
-      if (h === '00' && min === '00' && s === '00') return `${y}-${m}-${d}`;
-      return `${y}-${m}-${d} ${h}:${min}:${s}`;
+      const m = String(val.getMonth() + 1).padStart(2, '0');
+      const y = String(val.getFullYear()).padStart(4, '0');
+      return `${d}/${m}/${y}`;
+    }
+    const raw = String(val ?? "").trim();
+    const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T\s])/);
+    if (iso) {
+      const d = dateVal(`${iso[1]}-${iso[2]}-${iso[3]}`);
+      if (d) return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getFullYear()).padStart(4, '0')}`;
+    }
+    const local = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    const englishMonth = /^(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4})$/i.test(raw);
+    if (local || englishMonth) {
+      const d = dateVal(raw);
+      if (d) return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getFullYear()).padStart(4, '0')}`;
     }
     return String(val ?? "");
   }
 
-  // ---------- NUMBER PARSER ----------
   function num(v) {
     if (typeof v === "number" && Number.isFinite(v)) return v;
     if (v == null || String(v).trim() === "") return null;
-    let s = String(v).trim().replace(/[\s\u00A0\u202F\u2009]/g, "");
-    s = s.replace(/[Rp$€£¥%]/gi, "");
-    if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, "").replace(",", ".");
-    else if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s = s.replace(/,/g, "");
-    else if (/^-?\d+,\d+$/.test(s)) s = s.replace(",", ".");
+    let s = String(v).trim();
+    let negative = false;
+    if (/^\(.*\)$/.test(s)) { negative = true; s = s.slice(1, -1).trim(); }
+    s = s.replace(/[\s\u00A0\u202F\u2009\u2007']/g, "");
+    s = s.replace(/[Rp$€£¥₹%]/gi, "");
+    if (!s || !/^[+-]?(?:\d[\d.,]*|[.,]\d+)$/.test(s)) return null;
+    const sign = s.startsWith("-") ? -1 : 1;
+    s = s.replace(/^[+-]/, "");
+    const lastDot = s.lastIndexOf(".");
+    const lastComma = s.lastIndexOf(",");
+    if (lastDot >= 0 && lastComma >= 0) {
+      const decimal = lastDot > lastComma ? "." : ",";
+      const grouping = decimal === "." ? /,/g : /\./g;
+      const parts = s.split(decimal);
+      if (parts.length !== 2 || !/^\d{1,}$/.test(parts[1]) || !/^(?:\d+|\d{1,3}(?:[.,]\d{3})+)$/.test(parts[0])) return null;
+      s = parts[0].replace(grouping, "") + "." + parts[1];
+    } else if (lastDot >= 0 || lastComma >= 0) {
+      const sep = lastDot >= 0 ? "." : ",";
+      const parts = s.split(sep);
+      if (parts.length > 2) {
+        if (!parts.every((part, i) => i === 0 ? /^\d{1,3}$/.test(part) : /^\d{3}$/.test(part))) return null;
+        s = parts.join("");
+      } else if (parts.length === 2) {
+        if (!parts[0] || !parts[1]) return null;
+        if (parts[1].length === 3 && parts[0].length >= 1 && parts[0].length <= 3) s = parts.join("");
+        else s = parts[0] + "." + parts[1];
+      }
+    }
     const n = Number(s);
-    return Number.isFinite(n) ? n : null;
+    if (!Number.isFinite(n)) return null;
+    return n === 0 ? 0 : n * sign * (negative ? -1 : 1);
   }
 
-  // ---------- DATE PARSER ----------
   function dateVal(v) {
     if (v instanceof Date && !isNaN(v)) return v;
     if (typeof v === "number" && window.XLSX) {
@@ -570,20 +622,33 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     }
     if (v == null || String(v).trim() === "") return null;
     const s = String(v).trim();
-    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
-    m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    const validDate = (year, month, day) => {
+      if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+      if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+      const d = new Date(year, month - 1, day);
+      return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day ? d : null;
+    };
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T\s])/);
     if (m) {
-      const a = +m[1], b = +m[2];
-      if (a > 12) return new Date(+m[3], b - 1, a);
-      if (b > 12) return new Date(+m[3], a - 1, b);
-      return new Date(+m[3], b - 1, a);
+      const d = validDate(+m[1], +m[2], +m[3]);
+      if (!d) return null;
+      if (s.length > m[0].length - (m[0].endsWith("T") || m[0].endsWith(" ") ? 1 : 0)) {
+        const parsed = new Date(s);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+      return d;
+    }
+    m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (m) {
+      const a = +m[1], b = +m[2], year = +m[3];
+      if (a > 12) return validDate(year, b, a);
+      if (b > 12) return validDate(year, a, b);
+      return validDate(year, b, a);
     }
     const d = new Date(s);
-    return isNaN(d) ? null : d;
+    return Number.isNaN(d.getTime()) ? null : d;
   }
 
-  // ---------- TYPE DETECTION ----------
   function detectTypes(rows, headers) {
     const t = {};
     headers.forEach(h => {
@@ -604,7 +669,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     return t;
   }
 
-  // ---------- STATS ----------
   function stats(vals) {
     const n = vals.length;
     if (!n) return { median: 0, std: 0, p25: 0, p75: 0 };
@@ -617,7 +681,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     return { median, std: Math.sqrt(varr), p25, p75 };
   }
 
-  // ---------- CHART HELPERS ----------
   function destroyCharts() {
     ["barChartInstance","histChartInstance","tsChartInstance"].forEach(k => {
       if (S[k]) { try { S[k].destroy(); } catch {} S[k] = null; }
@@ -639,27 +702,27 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     S.rows = S.raw.slice();
     S.groups = [];
     S.v = null; S.g = null;
-    ["rowsK","sumK","avgK","minmaxK"].forEach(id => $(id).textContent = "—");
-    $("extra").textContent = "Indikator tambahan akan muncul setelah analisis.";
-    $("summary").innerHTML = '<p class="muted" style="padding:10px">Belum ada hasil.</p>';
-    $("barInfo").textContent = ""; $("histInfo").textContent = "";
-    $("tsInfo").textContent = "Pilih kolom tanggal di bagian 2 untuk melihat tren.";
-    ["xlsx","report","csv","print","pdf","copy","shareBtn","emailBtn"].forEach(id => $(id).disabled = true);
+    ["rowsK","sumK","avgK","minmaxK"].forEach(id => { const el = $(id); if(el) el.textContent = "—"; });
+    const ex = $("extra"); if(ex) ex.textContent = "Indikator tambahan akan muncul setelah analisis.";
+    const sum = $("summary"); if(sum) sum.innerHTML = '<p class="muted" style="padding:10px">Belum ada hasil.</p>';
+    const bi = $("barInfo"); if(bi) bi.textContent = "";
+    const hi = $("histInfo"); if(hi) hi.textContent = "";
+    const ti = $("tsInfo"); if(ti) ti.textContent = "Pilih kolom tanggal di bagian 2 untuk melihat tren.";
+    ["xlsx","report","csv","print","pdf","copy","shareBtn","emailBtn"].forEach(id => { const el = $(id); if(el) el.disabled = true; });
     status("exportStatus", "Jalankan analisis sebelum ekspor.");
   }
 
   function invalidateResults() {
     S.ready = false;
     clearAnalysisUI();
-    ["analyze","clear","cleanDup","cleanEmpty"].forEach(id => $(id).disabled = true);
+    ["analyze","clear","cleanDup","cleanEmpty"].forEach(id => { const el = $(id); if(el) el.disabled = true; });
     status("analysisStatus", "Dataset berubah; jalankan analisis kembali.");
   }
 
-  // ---------- PARSE MATRIX ----------
   function parseRows(matrix) {
     const m = matrix.filter(r => Array.isArray(r) && r.some(v => String(v ?? "").trim() !== ""));
     if (!m.length) return { headers: [], rows: [] };
-    const maxCols = Math.max(...m.map(r => r.length));
+    const maxCols = m.reduce((max, row) => Math.max(max, row.length), 0);
     const headRow = m[0];
     const seen = {};
     const headers = [];
@@ -681,7 +744,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       const o = {};
       for (let i = 0; i < finalHeaders.length; i++) {
         let v = r[i] ?? "";
-        // Format Date Objects to clean string (YYYY-MM-DD HH:mm:ss)
         if (v instanceof Date) {
           v = formatDisplayDate(v);
         }
@@ -692,7 +754,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     return { headers: finalHeaders, rows };
   }
 
-  // ---------- LOAD TABLE ----------
   function loadTable(name, matrix) {
     invalidateResults();
     const p = parseRows(matrix);
@@ -729,30 +790,32 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const defGroup = groupCols[0] || S.headers[0];
     const defDate = dateCols[0] || "";
 
-    $("value").value = defVal;
-    $("group").value = defGroup;
-    $("date").value = defDate;
-    $("filter").value = ""; $("needle").value = "";
-    $("from").value = ""; $("to").value = "";
-    $("agg").value = recommendAgg(defVal);
-    S.agg = $("agg").value;
+    if ($("value")) $("value").value = defVal;
+    if ($("group")) $("group").value = defGroup;
+    if ($("date")) $("date").value = defDate;
+    if ($("filter")) $("filter").value = ""; 
+    if ($("needle")) $("needle").value = "";
+    if ($("from")) $("from").value = ""; 
+    if ($("to")) $("to").value = "";
+    if ($("agg")) $("agg").value = recommendAgg(defVal);
+    S.agg = $("agg") ? $("agg").value : "sum";
     if ($("tsAgg")) $("tsAgg").value = S.agg;
-    $("globalSearch").value = "";
+    if ($("globalSearch")) $("globalSearch").value = "";
 
-    $("pivotRow").value = defGroup;
-    $("pivotCol").value = "";
-    $("pivotValue").value = defVal;
-    $("pivotAgg").value = "sum";
-    $("pivotLimit").value = "100";
+    if ($("pivotRow")) $("pivotRow").value = defGroup;
+    if ($("pivotCol")) $("pivotCol").value = "";
+    if ($("pivotValue")) $("pivotValue").value = defVal;
+    if ($("pivotAgg")) $("pivotAgg").value = "sum";
+    if ($("pivotLimit")) $("pivotLimit").value = "100";
 
     ["group","value","agg","date","filter","needle","from","to","analyze","clear","globalSearch",
      "pivotRow","pivotCol","pivotValue","pivotAgg","pivotRun","pivotLimit","pivotShare","cleanDup","cleanEmpty",
-     "advLogic","advAdd","calcName","calcExpr","calcAdd"].forEach(x => { if ($(x)) $(x).disabled = false; });
+     "advLogic","advAdd","calcName","calcExpr","calcAdd"].forEach(x => { const el = $(x); if (el) el.disabled = false; });
 
     S.advFilters = [];
     S.calcCols = [];
     S.undoStack = [];
-    if ($("undoBtn")) $("undoBtn").disabled = true;
+    if ($("undoBtn")) $("undoBtn").disabled = !S.undoStack.length;
     if ($("advLogic")) $("advLogic").value = "and";
     renderAdvFilters();
     renderCalcList();
@@ -768,13 +831,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     }
     status("loadStatus", loadMsg, S.raw.length >= LARGE_ROW_WARN ? "warn" : "good");
     status("analysisStatus", "Dataset siap; analisis belum dijalankan.");
-    $("pivot").innerHTML = '<p class="muted" style="padding:10px">Pilih baris, kolom, dan nilai, lalu klik Bangun Pivot.</p>';
+    const pivotEl = $("pivot"); if (pivotEl) pivotEl.innerHTML = '<p class="muted" style="padding:10px">Pilih baris, kolom, dan nilai, lalu klik Bangun Pivot.</p>';
 
-    $("progContainer").style.display = "none";
-    $("progFill").style.width = "0%";
+    const pc = $("progContainer"); if (pc) pc.style.display = "none";
+    const pf = $("progFill"); if (pf) pf.style.width = "0%";
   }
 
-  // ---------- INLINE FILE MONITOR (bukan popup) ----------
   function showMonitorStandby() {
     const st = $("monitorStandby");
     const ac = $("monitorActive");
@@ -793,13 +855,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   async function handleFileSelect(file) {
     if (!file) return;
     S.pendingFile = file;
-    $("modalFileName").textContent = file.name;
-    $("modalTableWrap").innerHTML = '<p class="muted" style="padding:10px">Membaca pratinjau data (maks 500 baris)…</p>';
-    $("modalRowCount").textContent = "…";
-    $("monitorHint").textContent = "";
+    const mfn = $("modalFileName"); if (mfn) mfn.textContent = file.name;
+    const mtw = $("modalTableWrap"); if (mtw) mtw.innerHTML = '<p class="muted" style="padding:10px">Membaca pratinjau data (maks 500 baris)…</p>';
+    const mrc = $("modalRowCount"); if (mrc) mrc.textContent = "…";
+    const mh = $("monitorHint"); if (mh) mh.textContent = "";
     showMonitorActive();
-    // Scroll monitor into view so user sees it (bukan popup)
-    try { $("fileMonitorCard").scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch {}
+    try { const fmc = $("fileMonitorCard"); if(fmc) fmc.scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch {}
 
     try {
       const ext = file.name.split(".").pop().toLowerCase();
@@ -811,30 +872,30 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         const wb = XLSX.read(buffer, { type: "array", sheetRows: 500, cellDates: true });
         const firstSheet = wb.SheetNames[0];
         matrix = XLSX.utils.sheet_to_json(wb.Sheets[firstSheet], { header: 1, defval: "", raw: true });
-        $("monitorHint").textContent = wb.SheetNames.length > 1
+        if(mh) mh.textContent = wb.SheetNames.length > 1
           ? `Sheet preview: ${firstSheet} (${wb.SheetNames.length} sheet tersedia setelah proses)`
           : `Sheet: ${firstSheet}`;
       } else if (ext === "csv") {
         if (!window.Papa) throw new Error("Library PapaParse belum termuat.");
         const text = await file.slice(0, 1024 * 1024).text();
         matrix = Papa.parse(text, { skipEmptyLines: true, preview: 500 }).data;
-        $("monitorHint").textContent = "CSV · preview 500 baris pertama";
+        if(mh) mh.textContent = "CSV · preview 500 baris pertama";
       } else if (["docx", "pdf", "txt"].includes(ext)) {
-        $("modalTableWrap").innerHTML =
+        if(mtw) mtw.innerHTML =
           '<p class="muted" style="padding:12px">Pratinjau tabel tidak tersedia untuk dokumen teks/PDF/Word. Klik <b>Proses Seluruh Data</b> untuk mengekstrak teks ke panel bawah.</p>';
-        $("modalRowCount").textContent = "0";
-        $("monitorHint").textContent = "Mode ekstraksi teks";
+        if(mrc) mrc.textContent = "0";
+        if(mh) mh.textContent = "Mode ekstraksi teks";
         status("loadStatus", `File ${file.name} siap diproses. Konfirmasi di panel Monitor.`, "warn");
         return;
       } else {
-        $("modalTableWrap").innerHTML = '<p class="bad" style="padding:12px">Format tidak didukung.</p>';
-        $("modalRowCount").textContent = "0";
+        if(mtw) mtw.innerHTML = '<p class="bad" style="padding:12px">Format tidak didukung.</p>';
+        if(mrc) mrc.textContent = "0";
         return;
       }
 
       if (matrix.length > 0) {
         const p = parseRows(matrix);
-        $("modalRowCount").textContent = String(p.rows.length);
+        if(mrc) mrc.textContent = String(p.rows.length);
         const maxPreview = Math.min(p.rows.length, 100);
         let html = "<table><thead><tr>" + p.headers.map(h => `<th>${esc(h)}</th>`).join("") + "</tr></thead><tbody>";
         for (let i = 0; i < maxPreview; i++) {
@@ -845,19 +906,20 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         if (p.rows.length > maxPreview) {
           html += `<p class="muted" style="padding:8px">Menampilkan ${maxPreview} dari ${p.rows.length} baris preview.</p>`;
         }
-        $("modalTableWrap").innerHTML = html;
+        if(mtw) mtw.innerHTML = html;
         status("loadStatus", `Preview siap: ${file.name}. Periksa Monitor lalu klik Proses Seluruh Data.`, "good");
       } else {
-        $("modalTableWrap").innerHTML = '<p class="muted" style="padding:12px">Data kosong atau tidak terbaca.</p>';
-        $("modalRowCount").textContent = "0";
+        if(mtw) mtw.innerHTML = '<p class="muted" style="padding:12px">Data kosong atau tidak terbaca.</p>';
+        if(mrc) mrc.textContent = "0";
       }
     } catch (e) {
-      $("modalTableWrap").innerHTML = `<p class="bad" style="padding:12px">Gagal membaca pratinjau: ${esc(e.message)}</p>`;
+      if(mtw) mtw.innerHTML = `<p class="bad" style="padding:12px">Gagal membaca pratinjau: ${esc(e.message)}</p>`;
       status("loadStatus", "Gagal preview: " + e.message, "bad");
     }
   }
 
-  $("confirmProcessBtn").onclick = () => {
+  const cpBtn = $("confirmProcessBtn");
+  if(cpBtn) cpBtn.onclick = () => {
     if (S.pendingFile) {
       const f = S.pendingFile;
       showMonitorStandby();
@@ -866,16 +928,20 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       status("loadStatus", "Tidak ada file yang menunggu konfirmasi.", "warn");
     }
   };
-  $("cancelPreviewBtn").onclick = () => {
+
+  const cnBtn = $("cancelPreviewBtn");
+  if(cnBtn) cnBtn.onclick = () => {
     showMonitorStandby();
-    $("file").value = "";
+    const fIn = $("file"); if(fIn) fIn.value = "";
     status("loadStatus", "Preview dibatalkan. Belum ada file.", "warn");
   };
 
-  // ---------- FILE READ (ACTUAL PROCESSING) ----------
   function finishLoadUI(ok) {
-    $("progFill").style.width = "100%";
-    setTimeout(() => { $("progContainer").style.display = "none"; $("progFill").style.width = "0%"; }, 400);
+    const pf = $("progFill"); if(pf) pf.style.width = "100%";
+    setTimeout(() => { 
+      const pc = $("progContainer"); if(pc) pc.style.display = "none"; 
+      if(pf) pf.style.width = "0%"; 
+    }, 400);
     const loadBtn = $("load");
     if (loadBtn) loadBtn.disabled = false;
     S.busy = false;
@@ -888,8 +954,8 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const loadBtn = $("load");
     if (loadBtn) loadBtn.disabled = true;
 
-    $("progContainer").style.display = "block";
-    $("progFill").style.width = "10%";
+    const pc = $("progContainer"); if(pc) pc.style.display = "block";
+    const pf = $("progFill"); if(pf) pf.style.width = "10%";
     busyStatus("loadStatus", "Memproses keseluruhan file…");
 
     try {
@@ -897,33 +963,33 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
 
       if (["xlsx", "xls"].includes(ext)) {
         if (!window.XLSX) throw new Error("Library Excel belum termuat; periksa internet.");
-        $("progFill").style.width = "30%";
+        if(pf) pf.style.width = "30%";
         await new Promise(r => setTimeout(r, 30));
         S.wb = XLSX.read(await f.arrayBuffer(), { type: "array", cellDates: true });
         S.sheets = S.wb.SheetNames;
         options("sheet", S.sheets);
-        $("sheet").disabled = false;
+        const sh = $("sheet"); if(sh) sh.disabled = false;
         const choose = () => {
           busyStatus("loadStatus", "Mengekstrak sheet…");
-          $("progFill").style.width = "70%";
+          if(pf) pf.style.width = "70%";
           const sheetName = $("sheet").value;
           const matrix = XLSX.utils.sheet_to_json(S.wb.Sheets[sheetName], { header: 1, defval: "", raw: true });
           loadTable(f.name + " / " + sheetName, matrix);
           finishLoadUI(true);
         };
-        $("sheet").onchange = choose;
+        if(sh) sh.onchange = choose;
         choose();
-        return; // finishLoadUI called from choose
+        return;
 
       } else if (ext === "csv") {
         resetSheetUI();
         if (!window.Papa) throw new Error("Library PapaParse belum termuat.");
-        busyStatus("loadStatus", "Memproses CSV (streaming)…");
+        busyStatus("loadStatus", "Memproses CSV di worker latar belakang…");
         Papa.parse(f, {
           worker: true,
           skipEmptyLines: true,
           complete: function (results) {
-            $("progFill").style.width = "90%";
+            if(pf) pf.style.width = "90%";
             try {
               loadTable(f.name, results.data);
             } catch (err) {
@@ -936,21 +1002,21 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
             finishLoadUI(false);
           }
         });
-        return; // finishLoadUI in callbacks
+        return;
 
       } else if (ext === "txt") {
         resetSheetUI();
-        $("progFill").style.width = "50%";
-        $("docText").value = await f.text();
+        if(pf) pf.style.width = "50%";
+        const dt = $("docText"); if(dt) dt.value = await f.text();
         S.name = f.name;
-        status("loadStatus", `Teks berhasil dibaca (${$("docText").value.length.toLocaleString("id-ID")} karakter). Tidak ada dataset terstruktur otomatis.`, "good");
+        status("loadStatus", `Teks berhasil dibaca (${(dt ? dt.value.length : 0).toLocaleString("id-ID")} karakter). Tidak ada dataset terstruktur otomatis.`, "good");
 
       } else if (ext === "docx") {
         resetSheetUI();
         if (!window.mammoth) throw new Error("Library Word belum termuat.");
-        $("progFill").style.width = "50%";
+        if(pf) pf.style.width = "50%";
         const r = await mammoth.extractRawText({ arrayBuffer: await f.arrayBuffer() });
-        $("docText").value = r.value;
+        const dt = $("docText"); if(dt) dt.value = r.value;
         S.name = f.name;
         status("loadStatus", `Teks Word diekstrak (${r.value.length.toLocaleString("id-ID")} karakter).`, "good");
 
@@ -961,12 +1027,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         const pdf = await pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise;
         let txt = "";
         for (let i = 1; i <= pdf.numPages; i++) {
-          $("progFill").style.width = `${10 + (i / pdf.numPages) * 80}%`;
+          if(pf) pf.style.width = `${10 + (i / pdf.numPages) * 80}%`;
           const p = await pdf.getPage(i);
           const c = await p.getTextContent();
           txt += `\n--- Halaman ${i} ---\n` + c.items.map(x => x.str).join(" ") + "\n";
         }
-        $("docText").value = txt;
+        const dt = $("docText"); if(dt) dt.value = txt;
         S.name = f.name;
         status("loadStatus", `PDF dibaca: ${pdf.numPages} halaman.`, "good");
       } else {
@@ -980,7 +1046,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     }
   }
 
-  // ---------- UNDO STACK ----------
   function pushUndo(label) {
     try {
       S.undoStack.push({
@@ -991,8 +1056,8 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         calcCols: S.calcCols.map(c => ({ ...c }))
       });
       if (S.undoStack.length > MAX_UNDO) S.undoStack.shift();
-      if ($("undoBtn")) $("undoBtn").disabled = !S.undoStack.length;
-    } catch (e) { /* ignore quota */ }
+      const ub = $("undoBtn"); if(ub) ub.disabled = !S.undoStack.length;
+    } catch (e) { /* ignore */ }
   }
 
   function undoLast() {
@@ -1017,13 +1082,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     renderColumnToggles();
     renderCalcList();
     renderAdvFilters();
-    if ($("undoBtn")) $("undoBtn").disabled = !S.undoStack.length;
+    const ub = $("undoBtn"); if(ub) ub.disabled = !S.undoStack.length;
     status("analysisStatus", `Undo: ${snap.label}. Menjalankan ulang analisis…`, "good");
     if (S.analysis) analyze();
     else { renderPreview(); quality(S.raw); }
   }
 
-  // ---------- ADVANCED FILTER UI ----------
   const ADV_OPS = [
     { v: "contains", t: "mengandung" },
     { v: "equals", t: "sama dengan" },
@@ -1106,40 +1170,128 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     }
   }
 
-  // ---------- CALCULATED COLUMNS ----------
   function safeEvalExpr(expr, row) {
-    // Allow only: numbers, operators + - * / ( ), and known column names
-    let e = String(expr || "").trim();
-    if (!e) return null;
-    // Replace column names (longest first) with numeric values
+    let source = String(expr || "").trim();
+    if (!source) return null;
     const cols = [...S.headers].sort((a, b) => b.length - a.length);
-    for (const h of cols) {
-      const re = new RegExp(h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
-      e = e.replace(re, () => {
-        const n = num(row[h]);
-        return n === null ? "0" : String(n);
-      });
+    let out = "";
+    for (let i = 0; i < source.length;) {
+      const ch = source[i];
+      let matched = null;
+      for (const h of cols) {
+        if (!h || !source.startsWith(h, i)) continue;
+        const before = i > 0 ? source[i - 1] : "";
+        const after = source[i + h.length] || "";
+        const wordChar = c => !!c && /[\p{L}\p{N}_]/u.test(c);
+        if ((wordChar(h[0]) && wordChar(before)) || (wordChar(h[h.length - 1]) && wordChar(after))) continue;
+        matched = h; break;
+      }
+      if (matched) {
+        const value = num(row[matched]);
+        out += value === null ? "0" : String(value);
+        i += matched.length; continue;
+      }
+      if (/\d/.test(ch) || ch === ".") {
+        const m = source.slice(i).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+        if (!m) return null;
+        out += m[0]; i += m[0].length; continue;
+      }
+      if (/\s/.test(ch)) { out += ch; i++; continue; }
+      if (/[+\-*/()]/.test(ch)) { out += ch; i++; continue; }
+      return null;
     }
-    // Strip anything unsafe
-    if (!/^[\d\s+\-*/().]+$/.test(e)) return null;
+    if (!/^[\d\s+\-*/().eE]+$/.test(out)) return null;
     try {
-      // eslint-disable-next-line no-new-func
-      const v = Function(`"use strict"; return (${e});`)();
-      return Number.isFinite(v) ? v : null;
+      const value = Function(`"use strict"; return (${out});`)();
+      return Number.isFinite(value) ? value : null;
     } catch {
       return null;
     }
   }
 
+  function expressionReferences(expr, headers) {
+    const source = String(expr || "");
+    const cols = [...headers].sort((a, b) => b.length - a.length);
+    const refs = new Set();
+    for (let i = 0; i < source.length;) {
+      const ch = source[i];
+      let matched = null;
+      for (const h of cols) {
+        if (!h || !source.startsWith(h, i)) continue;
+        const before = i > 0 ? source[i - 1] : "";
+        const after = source[i + h.length] || "";
+        const wordChar = c => !!c && /[\p{L}\p{N}_]/u.test(c);
+        if ((wordChar(h[0]) && wordChar(before)) || (wordChar(h[h.length - 1]) && wordChar(after))) continue;
+        matched = h; break;
+      }
+      if (matched) { refs.add(matched); i += matched.length; continue; }
+      if (/\s/.test(ch) || /[+\-*/()]/.test(ch)) { i++; continue; }
+      const numeric = source.slice(i).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+      if (numeric) { i += numeric[0].length; continue; }
+      i++;
+    }
+    return refs;
+  }
+
+  function wouldCreateCalcCycle(name, expr) {
+    const headers = S.headers.slice();
+    const formulas = new Map(S.calcCols.map(c => [c.name, c.expr]));
+    formulas.set(name, expr);
+    const visit = (current, path) => {
+      if (path.has(current)) return true;
+      const formula = formulas.get(current);
+      if (formula == null) return false;
+      const nextPath = new Set(path); nextPath.add(current);
+      const refs = expressionReferences(formula, headers);
+      for (const ref of refs) {
+        if (ref === name && current !== name) return true;
+        if (formulas.has(ref) && visit(ref, nextPath)) return true;
+      }
+      return false;
+    };
+    const refs = expressionReferences(expr, headers);
+    for (const ref of refs) {
+      if (ref === name || (formulas.has(ref) && visit(ref, new Set([name])))) return true;
+    }
+    return false;
+  }
+
   function applyCalcToRaw() {
     S.calcCols.forEach(c => {
-      if (!S.headers.includes(c.name)) {
-        S.headers.push(c.name);
-        S.columnTypes[c.name] = "number";
+      if (!S.headers.includes(c.name)) S.headers.push(c.name);
+      S.columnTypes[c.name] = "number";
+    });
+
+    const byName = new Map(S.calcCols.map(c => [c.name, c]));
+    const visited = new Set();
+    const visiting = new Set();
+    const ordered = [];
+    const cyclic = new Set();
+    const visit = (name, path) => {
+      if (visited.has(name)) return;
+      if (visiting.has(name)) {
+        path.forEach(item => cyclic.add(item));
+        cyclic.add(name);
+        return;
       }
-      S.raw.forEach(r => {
-        r[c.name] = safeEvalExpr(c.expr, r);
-      });
+      const col = byName.get(name);
+      if (!col) return;
+      visiting.add(name);
+      path.add(name);
+      for (const ref of expressionReferences(col.expr, S.headers)) {
+        if (byName.has(ref)) visit(ref, path);
+      }
+      path.delete(name);
+      visiting.delete(name);
+      visited.add(name);
+      ordered.push(col);
+    };
+    S.calcCols.forEach(c => visit(c.name, new Set()));
+
+    cyclic.forEach(name => S.raw.forEach(row => { row[name] = null; }));
+    ordered.forEach(c => {
+      if (cyclic.has(c.name)) return;
+      S.raw.forEach(row => { row[c.name] = safeEvalExpr(c.expr, row); });
     });
   }
 
@@ -1174,8 +1326,9 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
 
   function addCalculatedColumn() {
     if (!S.ready) return;
-    const name = ($("calcName").value || "").trim();
-    const expr = ($("calcExpr").value || "").trim();
+    const cn = $("calcName"); const ce = $("calcExpr");
+    const name = (cn ? cn.value : "").trim();
+    const expr = (ce ? ce.value : "").trim();
     if (!name || !expr) {
       status("analysisStatus", "Isi nama kolom dan ekspresi.", "warn");
       return;
@@ -1184,14 +1337,21 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       status("analysisStatus", `Kolom "${name}" sudah ada.`, "warn");
       return;
     }
-    // Validate expression with first row
-    const test = S.raw[0] ? safeEvalExpr(expr, S.raw[0]) : 0;
-    if (S.raw.length && test === null && !/^[\d\s+\-*/().A-Za-z_\u00C0-\u024F]+$/.test(expr)) {
-      status("analysisStatus", "Ekspresi tidak valid. Gunakan nama kolom dan operator + − * / ( ).", "bad");
+    const existing = S.calcCols.findIndex(c => c.name === name);
+    if (wouldCreateCalcCycle(name, expr)) {
+      status("analysisStatus", "Rumus ditolak karena membentuk siklus dependensi antarkolom hitung.", "bad");
+      return;
+    }
+    const priorHeaders = S.headers.slice();
+    if (existing >= 0) S.headers = S.headers.filter(h => h !== name);
+    const validationRow = Object.fromEntries(priorHeaders.filter(h => h !== name).map(h => [h, 1]));
+    const invalid = !expr || !S.raw.length || safeEvalExpr(expr, validationRow) === null;
+    S.headers = priorHeaders;
+    if (invalid) {
+      status("analysisStatus", "Rumus tidak valid atau menghasilkan nilai non-finite pada data sampel. Periksa nama kolom, operator, dan pembagian dengan nol.", "bad");
       return;
     }
     pushUndo("tambah kolom hitung");
-    const existing = S.calcCols.findIndex(c => c.name === name);
     if (existing >= 0) S.calcCols[existing].expr = expr;
     else S.calcCols.push({ name, expr });
     applyCalcToRaw();
@@ -1202,17 +1362,16 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     options("pivotValue", S.headers);
     options("pivotRow", S.headers);
     options("pivotCol", S.headers, true);
-    $("value").value = name;
+    if($("value")) $("value").value = name;
     renderColumnToggles();
     renderCalcList();
-    $("calcName").value = "";
-    $("calcExpr").value = "";
+    if(cn) cn.value = "";
+    if(ce) ce.value = "";
     status("analysisStatus", `Kolom hitung "${name}" ditambahkan.`, "good");
     if (S.analysis) analyze();
     else { S.rows = S.raw.slice(); renderPreview(); quality(S.raw); }
   }
 
-  // ---------- FILTER ----------
   function filtered() {
     let a = S.raw.slice();
     S.filterSkip = 0;
@@ -1220,7 +1379,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       const gs = S.globalSearch.toLowerCase();
       a = a.filter(r => S.headers.some(h => String(r[h] ?? "").toLowerCase().includes(gs)));
     }
-    // Legacy quick filter
     const f = $("filter") ? $("filter").value : "";
     const n = $("needle") ? $("needle").value.trim().toLowerCase() : "";
     if (f && n) {
@@ -1232,7 +1390,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         });
       }
     }
-    // Advanced multi-filter
     if (S.advFilters.length) {
       const logic = ($("advLogic") && $("advLogic").value) || S.advFilterLogic || "and";
       S.advFilterLogic = logic;
@@ -1257,7 +1414,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     return a;
   }
 
-  // ---------- OPTIONS ----------
   function options(id, arr, optional = false) {
     const e = $(id);
     if (!e) return;
@@ -1267,9 +1423,9 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     e.disabled = !(arr && arr.length);
   }
 
-  // ---------- COLUMN TOGGLES ----------
   function renderColumnToggles() {
     const c = $("colList");
+    if(!c) return;
     if (!S.headers.length) { c.innerHTML = '<span class="muted">Belum ada kolom.</span>'; return; }
     c.innerHTML = S.headers.map(h => {
       const t = S.columnTypes[h] || "text";
@@ -1284,7 +1440,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     });
   }
 
-  // ---------- PREVIEW ----------
   function renderPreview() {
     let data = S.rows.slice();
     if (S.sort.col) {
@@ -1327,6 +1482,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const slice = size === 0 ? data : data.slice(start, start + size);
 
     const e = $("preview");
+    if(!e) return;
     const visHeads = S.headers.filter(h => !S.hiddenCols.has(h));
     
     if (!total) {
@@ -1349,13 +1505,13 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       });
     }
 
-    $("pageInfo").textContent = total === 0
+    const pi = $("pageInfo"); if(pi) pi.textContent = total === 0
       ? "—"
       : (size === 0
         ? `Semua ${total.toLocaleString('id-ID')} baris`
         : `Hal ${S.page} dari ${pages} · ${total.toLocaleString('id-ID')} baris`);
-    $("prevPage").disabled = size === 0 || S.page <= 1;
-    $("nextPage").disabled = size === 0 || S.page >= pages;
+    const pp = $("prevPage"); if(pp) pp.disabled = size === 0 || S.page <= 1;
+    const np = $("nextPage"); if(np) np.disabled = size === 0 || S.page >= pages;
   }
 
   function sortPreview(col) {
@@ -1367,13 +1523,11 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     renderPreview();
   }
 
-  // ---------- QUALITY ----------
   function quality(rows) {
     const n = rows.length;
     if (!n) { status("quality", "Tidak ada data untuk diperiksa."); return; }
     let empty = 0, dup = 0;
     const seen = new Set();
-    const SEP = "\u241F";
     const missingByCol = {};
     S.headers.forEach(h => { missingByCol[h] = 0; });
     rows.forEach(r => {
@@ -1385,7 +1539,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         }
       });
       if (rowEmpty) empty++;
-      const k = S.headers.map(h => String(r[h] ?? "")).join(SEP);
+      const k = JSON.stringify(S.headers.map(h => String(r[h] ?? "")));
       if (seen.has(k)) dup++; else seen.add(k);
     });
     const missList = S.headers
@@ -1413,7 +1567,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     }
 
     const typeInfo = S.headers.map(h => `${h}: ${S.columnTypes[h] || "text"}`).join(", ");
-    // Quality score 0–100
     let score = 100;
     score -= Math.min(40, (empty / n) * 50);
     score -= Math.min(25, (dup / n) * 40);
@@ -1433,14 +1586,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     status("quality", msg, scoreKind);
   }
 
-  // ---------- DATA CLEANING ----------
   function cleanDuplicates() {
     if (!S.raw.length) return;
     const seen = new Set();
-    const SEP = "\u241F";
     const before = S.raw.length;
     const next = S.raw.filter(r => {
-      const k = S.headers.map(h => String(r[h] ?? "")).join(SEP);
+      const k = JSON.stringify(S.headers.map(h => String(r[h] ?? "")));
       if (seen.has(k)) return false;
       seen.add(k);
       return true;
@@ -1471,28 +1622,30 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     }
   }
 
-  // ---------- ANALYZE ----------
   function analyze() {
     if (!S.ready || S.busy) {
       if (!S.ready) status("analysisStatus", "Muat dataset terlebih dahulu.", "warn");
       return;
     }
     clearAnalysisUI();
-    S.agg = $("agg").value || "sum";
+    const aggSel = $("agg");
+    S.agg = aggSel ? aggSel.value : "sum";
     const rows = filtered();
-    const v = $("value").value, g = $("group").value;
+    const valEl = $("value"), grpEl = $("group");
+    const v = valEl ? valEl.value : "";
+    const g = grpEl ? grpEl.value : "";
     const vals = rows.map(r => num(r[v])).filter(x => x !== null);
     if (!vals.length) {
       status("analysisStatus", `Tidak ada nilai numerik valid pada "${v}". Periksa kolom atau format data.`, "warn");
-      $("quality").textContent = "Tidak ada data numerik valid pada kolom ini.";
+      const q = $("quality"); if(q) q.textContent = "Tidak ada data numerik valid pada kolom ini.";
       S.rows = rows;
       renderPreview();
       return;
     }
     const sum = vals.reduce((a, b) => a + b, 0);
     const avg = sum / vals.length;
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
+    const min = minOf(vals);
+    const max = maxOf(vals);
     const st = stats(vals);
 
     const map = new Map();
@@ -1518,12 +1671,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     S.analysis = { sum, avg, min, max, valid: vals.length, rowCount: rows.length, median: st.median, std: st.std, p25: st.p25, p75: st.p75 };
     S.v = v; S.g = g;
 
-    $("rowsK").textContent = fmt(rows.length);
-    $("sumK").textContent = fmt(sum);
-    $("avgK").textContent = fmt(avg);
-    $("minmaxK").textContent = fmt(min) + " / " + fmt(max);
+    const rk = $("rowsK"); if(rk) rk.textContent = fmt(rows.length);
+    const sk = $("sumK"); if(sk) sk.textContent = fmt(sum);
+    const ak = $("avgK"); if(ak) ak.textContent = fmt(avg);
+    const mk = $("minmaxK"); if(mk) mk.textContent = fmt(min) + " / " + fmt(max);
 
-    const totalSum = S.groups.reduce((a, g) => a + g.sum, 0);
+    const totalSum = S.groups.reduce((a, gr) => a + gr.sum, 0);
     let insightHtml = "";
     if (S.groups.length) {
       const top = S.groups[0];
@@ -1541,7 +1694,8 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         `</div>`;
     }
 
-    $("extra").innerHTML =
+    const ex = $("extra");
+    if(ex) ex.innerHTML =
       `Nilai numerik valid: <b>${vals.length.toLocaleString('id-ID')}</b> dari ${rows.length.toLocaleString('id-ID')} baris · ` +
       `Kelompok: <b>${S.groups.length}</b><br>` +
       `Median: <b>${fmt(st.median)}</b> · Std dev: <b>${fmt(st.std)}</b> · P25/P75: <b>${fmt(st.p25)} / ${fmt(st.p75)}</b><br>` +
@@ -1550,11 +1704,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       `Agregasi: <span class="pill">${aggLabel(S.agg)}</span>` +
       insightHtml;
 
-    if ($("tsAgg")) $("tsAgg").value = S.agg;
+    const tsa = $("tsAgg"); if(tsa) tsa.value = S.agg;
 
     const aggColLabel = aggLabel(S.agg);
     const hs = ["Kelompok", "Baris", "Valid", "Total", "Rata-rata", aggColLabel, "Kontribusi %"];
-    $("summary").innerHTML = '<table><thead><tr>' +
+    const sumEl = $("summary");
+    if(sumEl) sumEl.innerHTML = '<table><thead><tr>' +
       hs.map(x => `<th>${x}</th>`).join("") +
       '</tr></thead><tbody>' +
       S.groups.map(x => {
@@ -1575,13 +1730,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     if (S.globalSearch) msg += `\nPencarian global aktif: "${S.globalSearch}".`;
     status("analysisStatus", msg, "good");
 
-    ["xlsx","report","csv","print","pdf","copy","shareBtn","emailBtn"].forEach(id => $(id).disabled = false);
+    ["xlsx","report","csv","print","pdf","copy","shareBtn","emailBtn"].forEach(id => { const el = $(id); if(el) el.disabled = false; });
     status("exportStatus", "Siap diunduh.", "good");
 
     if (S.pivot) buildPivot();
   }
 
-  // ---------- CHARTS (Chart.js) ----------
   const COLORS = ["#54d4c3","#709df0","#e4b363","#e87ea1","#8bd450","#c98ee8","#70c8e0","#f4a26b","#b0b0f0","#7de0b0","#f0a0a0","#a0e0c0"];
 
   function barChart(groups) {
@@ -1589,14 +1743,13 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const wrap = $("barWrap");
     if (!groups.length) {
       if (S.barChartInstance) { try { S.barChartInstance.destroy(); } catch {} S.barChartInstance = null; }
-      info.textContent = "";
-      wrap.classList.remove('has-data');
+      if(info) info.textContent = "";
+      if(wrap) wrap.classList.remove('has-data');
       return;
     }
-    wrap.classList.add('has-data');
+    if(wrap) wrap.classList.add('has-data');
     
     const isPie = S.chartType === "pie" || S.chartType === "doughnut";
-    // LIMIT CHART DATA TO PREVENT CHROME FREEZE
     const showN = isPie ? 10 : 15; 
     
     let labels = [];
@@ -1610,20 +1763,21 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         labels = shown.map(g => g.group);
         data = shown.map(g => aggValueOf(g, S.agg));
         
-        // Hanya gabungkan "Lainnya" untuk Pie/Doughnut
         if (isPie) {
             labels.push("Lainnya");
             data.push(restSum);
         }
-        info.textContent = `Menampilkan Top ${showN} dari ${groups.length} kelompok.`;
+        if(info) info.textContent = `Menampilkan Top ${showN} dari ${groups.length} kelompok.`;
     } else {
         labels = groups.map(g => g.group);
         data = groups.map(g => aggValueOf(g, S.agg));
-        info.textContent = `${groups.length} kelompok · ${aggLabel(S.agg)}.`;
+        if(info) info.textContent = `${groups.length} kelompok · ${aggLabel(S.agg)}.`;
     }
 
     if (S.barChartInstance) { try { S.barChartInstance.destroy(); } catch {} }
-    const ctx = $("bar").getContext("2d");
+    const canvas = $("bar");
+    if(!canvas) return;
+    const ctx = canvas.getContext("2d");
     const isLine = S.chartType === "line";
     const isHorizontal = S.chartType === "bar_h";
     const chartType = isHorizontal ? "bar" : S.chartType;
@@ -1687,13 +1841,13 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const wrap = $("histWrap");
     if (!vals.length) {
       if (S.histChartInstance) { try { S.histChartInstance.destroy(); } catch {} S.histChartInstance = null; }
-      info.textContent = "";
-      wrap.classList.remove('has-data');
+      if(info) info.textContent = "";
+      if(wrap) wrap.classList.remove('has-data');
       return;
     }
-    wrap.classList.add('has-data');
+    if(wrap) wrap.classList.add('has-data');
     const bins = Math.min(10, Math.max(4, Math.ceil(Math.sqrt(vals.length))));
-    const min = Math.min(...vals), max = Math.max(...vals);
+    const min = minOf(vals), max = maxOf(vals);
     const span = max - min || 1;
     const counts = Array(bins).fill(0);
     vals.forEach(v => counts[Math.min(bins - 1, Math.floor((v - min) / span * bins))]++);
@@ -1702,10 +1856,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       const hi = min + ((i + 1) / bins) * span;
       return `${fmtShort(lo)}–${fmtShort(hi)}`;
     });
-    info.textContent = `${vals.length.toLocaleString('id-ID')} nilai dibagi ke ${bins} bin (${fmt(min)} – ${fmt(max)}).`;
+    if(info) info.textContent = `${vals.length.toLocaleString('id-ID')} nilai dibagi ke ${bins} bin (${fmt(min)} – ${fmt(max)}).`;
 
     if (S.histChartInstance) { try { S.histChartInstance.destroy(); } catch {} }
-    const ctx = $("hist").getContext("2d");
+    const canvas = $("hist");
+    if(!canvas) return;
+    const ctx = canvas.getContext("2d");
     S.histChartInstance = new Chart(ctx, {
       type: "bar",
       data: {
@@ -1738,16 +1894,17 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   function buildTimeSeries() {
     const info = $("tsInfo");
     const wrap = $("tsWrap");
-    if (!S.analysis) { info.textContent = "Jalankan analisis dulu."; return; }
-    const dateCol = $("date").value;
-    const valCol = $("value").value;
-    const gran = $("tsGran").value;
-    const tsAgg = ($("tsAgg") && $("tsAgg").value) || S.agg || "sum";
+    if (!S.analysis) { if(info) info.textContent = "Jalankan analisis dulu."; return; }
+    const dateColEl = $("date"), valColEl = $("value"), granEl = $("tsGran"), tsAggEl = $("tsAgg");
+    const dateCol = dateColEl ? dateColEl.value : "";
+    const valCol = valColEl ? valColEl.value : "";
+    const gran = granEl ? granEl.value : "month";
+    const tsAgg = (tsAggEl && tsAggEl.value) || S.agg || "sum";
 
     if (!dateCol) {
       if (S.tsChartInstance) { try { S.tsChartInstance.destroy(); } catch {} S.tsChartInstance = null; }
-      info.textContent = "Pilih kolom tanggal di bagian 2 untuk melihat tren.";
-      wrap.classList.remove('has-data');
+      if(info) info.textContent = "Pilih kolom tanggal di bagian 2 untuk melihat tren.";
+      if(wrap) wrap.classList.remove('has-data');
       return;
     }
 
@@ -1778,19 +1935,21 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const sortedKeys = [...buckets.keys()].sort();
     if (!sortedKeys.length) {
       if (S.tsChartInstance) { try { S.tsChartInstance.destroy(); } catch {} S.tsChartInstance = null; }
-      info.textContent = "Tidak ada tanggal valid pada data hasil filter.";
-      wrap.classList.remove('has-data');
+      if(info) info.textContent = "Tidak ada tanggal valid pada data hasil filter.";
+      if(wrap) wrap.classList.remove('has-data');
       return;
     }
-    wrap.classList.add('has-data');
+    if(wrap) wrap.classList.add('has-data');
     
     const data = sortedKeys.map(k => aggregate(buckets.get(k), tsAgg));
     const counts = sortedKeys.map(k => buckets.get(k).length);
     const labelAgg = aggLabel(tsAgg);
-    info.textContent = `${sortedKeys.length} titik data (${gran}) · ${labelAgg} ${valCol} per periode.`;
+    if(info) info.textContent = `${sortedKeys.length} titik data (${gran}) · ${labelAgg} ${valCol} per periode.`;
 
     if (S.tsChartInstance) { try { S.tsChartInstance.destroy(); } catch {} }
-    const ctx = $("ts").getContext("2d");
+    const canvas = $("ts");
+    if(!canvas) return;
+    const ctx = canvas.getContext("2d");
     S.tsChartInstance = new Chart(ctx, {
       type: "line",
       data: {
@@ -1828,35 +1987,36 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     });
   }
 
-  // ---------- PIVOT (UPGRADED WITH LIMIT) ----------
   function buildPivot() {
+    const pivotEl = $("pivot");
     if (!S.analysis) {
-      $("pivot").innerHTML = '<p class="muted" style="padding:10px">Jalankan analisis dulu.</p>';
+      if(pivotEl) pivotEl.innerHTML = '<p class="muted" style="padding:10px">Jalankan analisis dulu.</p>';
       return;
     }
-    const rowCol = $("pivotRow").value;
-    const colCol = $("pivotCol").value;
-    const valCol = $("pivotValue").value;
-    const agg = $("pivotAgg").value;
-    const limitOpt = $("pivotLimit").value;
+    const prEl = $("pivotRow"), pcEl = $("pivotCol"), pvEl = $("pivotValue"), paEl = $("pivotAgg"), plEl = $("pivotLimit"), psEl = $("pivotShare");
+    const rowCol = prEl ? prEl.value : "";
+    const colCol = pcEl ? pcEl.value : "";
+    const valCol = pvEl ? pvEl.value : "";
+    const agg = paEl ? paEl.value : "sum";
+    const limitOpt = plEl ? plEl.value : "100";
     const limit = limitOpt === "all" ? Infinity : parseInt(limitOpt);
 
     if (!rowCol || !valCol) {
-      $("pivot").innerHTML = '<p class="muted" style="padding:10px">Pilih kolom baris dan nilai.</p>';
+      if(pivotEl) pivotEl.innerHTML = '<p class="muted" style="padding:10px">Pilih kolom baris dan nilai.</p>';
       return;
     }
 
     const rowVals = new Set();
     const colVals = new Set();
     const cells = new Map();
-    const SEP = "\u241F";
+    const pivotKey = (rowValue, colValue) => JSON.stringify([rowValue, colValue]);
 
     S.rows.forEach(r => {
       const rv = String(r[rowCol] ?? "(kosong)") || "(kosong)";
       const cv = colCol ? (String(r[colCol] ?? "(kosong)") || "(kosong)") : "Total";
       rowVals.add(rv);
       colVals.add(cv);
-      const key = rv + SEP + cv;
+      const key = pivotKey(rv, cv);
       if (!cells.has(key)) cells.set(key, []);
       const n = num(r[valCol]);
       if (n !== null) cells.get(key).push(n);
@@ -1865,19 +2025,24 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     let rowList = [...rowVals];
     const colList = [...colVals].sort();
 
-    // Sort rows by aggregated total (descending)
-    rowList.sort((a, b) => {
-      let sumA = 0, sumB = 0;
+    const rowSortValues = new Map();
+    rowList.forEach(rv => {
+      const all = [];
       colList.forEach(cv => {
-        const vA = aggregate(cells.get(a + SEP + cv), agg);
-        const vB = aggregate(cells.get(b + SEP + cv), agg);
-        if (vA !== null) sumA += vA;
-        if (vB !== null) sumB += vB;
+        const values = cells.get(pivotKey(rv, cv));
+        if (values) for (let i = 0; i < values.length; i++) all.push(values[i]);
       });
-      return sumB - sumA;
+      rowSortValues.set(rv, aggregate(all, agg));
+    });
+    rowList.sort((a, b) => {
+      const va = rowSortValues.get(a), vb = rowSortValues.get(b);
+      if (va === null && vb === null) return String(a).localeCompare(String(b));
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return vb - va || String(a).localeCompare(String(b));
     });
 
-    // Apply limit
+    const allRowList = rowList.slice();
     const totalRowsCount = rowList.length;
     const isLimited = totalRowsCount > limit;
     if (isLimited) {
@@ -1885,7 +2050,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     }
 
     if (colList.length > 50) {
-      $("pivot").innerHTML = `<p class="muted" style="padding:10px">Terlalu banyak kolom (${colList.length}). Pilih kolom dengan nilai unik lebih sedikit.</p>`;
+      if(pivotEl) pivotEl.innerHTML = `<p class="muted" style="padding:10px">Terlalu banyak kolom (${colList.length}). Pilih kolom dengan nilai unik lebih sedikit.</p>`;
       return;
     }
 
@@ -1896,25 +2061,25 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     rowList.forEach(rv => {
       const all = [];
       colList.forEach(cv => {
-        const key = rv + SEP + cv;
-        if (cells.has(key)) all.push(...cells.get(key));
+        const key = pivotKey(rv, cv);
+        if (cells.has(key)) { const values = cells.get(key); for (let i = 0; i < values.length; i++) all.push(values[i]); }
       });
       rowTotals.set(rv, aggregate(all, agg));
     });
     const colTotals = new Map();
     colList.forEach(cv => {
       const all = [];
-      rowList.forEach(rv => {
-        const key = rv + SEP + cv;
-        if (cells.has(key)) all.push(...cells.get(key));
+      allRowList.forEach(rv => {
+        const key = pivotKey(rv, cv);
+        if (cells.has(key)) { const values = cells.get(key); for (let i = 0; i < values.length; i++) all.push(values[i]); }
       });
       colTotals.set(cv, aggregate(all, agg));
     });
     const allNums = [];
-    cells.forEach(nums => allNums.push(...nums));
+    cells.forEach(nums => { for (let i = 0; i < nums.length; i++) allNums.push(nums[i]); });
     const grand = aggregate(allNums, agg);
 
-    const shareMode = ($("pivotShare") && $("pivotShare").value) || S.pivotShare || "none";
+    const shareMode = (psEl && psEl.value) || S.pivotShare || "none";
     S.pivotShare = shareMode;
     const cellTxt = (v, base) => {
       if (v === null || v === undefined) return "—";
@@ -1925,7 +2090,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const header = `<tr><th>${esc(rowCol)} \\ ${colCol ? esc(colCol) : "Total"}</th>${colList.map(cv => `<th>${esc(cv)}</th>`).join("")}<th>Total</th></tr>`;
     const body = rowList.map(rv => {
       const cellsHtml = colList.map(cv => {
-        const v = aggVals.get(rv + SEP + cv);
+        const v = aggVals.get(pivotKey(rv, cv));
         let base = grand;
         if (shareMode === "row") base = rowTotals.get(rv);
         else if (shareMode === "col") base = colTotals.get(cv);
@@ -1945,11 +2110,10 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       ? `<p class="muted" style="padding:6px 0 0;font-size:12px">${shareLabels[shareMode]} Grand total: ${fmt(grand)}.</p>`
       : "";
 
-    $("pivot").innerHTML = `<table><thead>${header}</thead><tbody>${body}</tbody><tfoot>${footer}</tfoot></table>${note}${noteShare}`;
+    if(pivotEl) pivotEl.innerHTML = `<table><thead>${header}</thead><tbody>${body}</tbody><tfoot>${footer}</tfoot></table>${note}${noteShare}`;
     S.pivot = { rowCol, colCol, valCol, agg, shareMode };
   }
 
-  // ---------- EXPORT ----------
   function safe(s) {
     return String(s || "data").replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "_").slice(0, 60) || "data";
   }
@@ -1999,14 +2163,15 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       ["Minimum", a.min],
       ["Maksimum", a.max],
       ["Pencarian global", S.globalSearch || "—"],
-      ["Filter kolom", $("filter").value || "—"],
-      ["Filter teks", $("needle").value || "—"],
-      ["Tanggal mulai", $("from").value || "—"],
-      ["Tanggal akhir", $("to").value || "—"],
+      ["Filter kolom", ($("filter") ? $("filter").value : "") || "—"],
+      ["Filter teks", ($("needle") ? $("needle").value : "") || "—"],
+      ["Tanggal mulai", ($("from") ? $("from").value : "") || "—"],
+      ["Tanggal akhir", ($("to") ? $("to").value : "") || "—"],
       ["Metode", "Nilai kosong/non-numerik diabaikan."]
     ]), "Ringkasan");
+    const qEl = $("quality");
     XLSX.utils.book_append_sheet(wb,
-      XLSX.utils.aoa_to_sheet([["Pemeriksaan"], ...$("quality").textContent.split("\n").map(x => [x])]), "Validasi");
+      XLSX.utils.aoa_to_sheet([["Pemeriksaan"], ...(qEl ? qEl.textContent.split("\n").map(x => [x]) : [])]), "Validasi");
     if (S.calcCols.length) {
       XLSX.utils.book_append_sheet(wb,
         XLSX.utils.aoa_to_sheet([["Nama kolom", "Ekspresi"], ...S.calcCols.map(c => [c.name, c.expr])]), "Kolom_Hitung");
@@ -2018,9 +2183,16 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   function exportCsv() {
     if (!S.analysis) return;
     const rows = [S.headers, ...S.rows.map(r => S.headers.map(h => r[h] ?? ""))];
-    const txt = rows.map(r => r.map(v => '"' + String(v).replace(/"/g, '""') + '"').join(",")).join("\r\n");
+    const csvCell = value => {
+      let textValue = String(value ?? "");
+      if (/^[\t\r\n ]*[=+@]/.test(textValue) || /^[\t\r\n ]*-(?!\d+(?:[.,]\d+)?(?:[eE][+-]?\d+)?$)/.test(textValue)) {
+        textValue = "'" + textValue;
+      }
+      return '"' + textValue.replace(/"/g, '""') + '"';
+    };
+    const txt = rows.map(r => r.map(csvCell).join(",")).join("\r\n");
     download(new Blob(["\ufeff", txt], { type: "text/csv;charset=utf-8" }), `Data_Hasil_${safe(S.name)}.csv`);
-    status("exportStatus", "CSV dibuat.", "good");
+    status("exportStatus", "CSV dibuat dengan perlindungan formula spreadsheet.", "good");
   }
 
   function exportReport() {
@@ -2038,6 +2210,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const note = S.rows.length > LIMIT
       ? `<p><em>Pratinjau data dibatasi ${LIMIT} baris pertama dari ${S.rows.length.toLocaleString('id-ID')} baris. Untuk dataset lengkap, gunakan ekspor Excel/CSV.</em></p>`
       : "";
+    const qEl = $("quality");
     const html = `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Laporan Analisis</title>
 <style>body{font:14px Arial;margin:30px;color:#172334}table{border-collapse:collapse;width:100%;margin:12px 0 24px}
 td,th{border:1px solid #bbc9d7;padding:7px;text-align:left}th{background:#eaf1f7}h1,h2{color:#173c5a}pre{background:#f5f8fb;padding:10px;border-radius:6px}</style>
@@ -2050,7 +2223,7 @@ td,th{border:1px solid #bbc9d7;padding:7px;text-align:left}th{background:#eaf1f7
 <h2>Rekapitulasi</h2>
 <table><tr><th>Kelompok</th><th>Baris</th><th>Nilai valid</th><th>Total</th><th>Rata-rata</th><th>${esc(aggLabel(S.agg))}</th><th>Kontribusi</th></tr>${groupsHtml}</table>
 <h2>Kualitas data</h2>
-<pre>${esc($("quality").textContent)}</pre>
+<pre>${esc(qEl ? qEl.textContent : "")}</pre>
 <h2>Data hasil filter</h2>
 ${note}
 <table><tr>${S.headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr>${dataRows}</table>
@@ -2066,7 +2239,6 @@ ${note}
     
     const isWide = S.headers.length > 6;
     const doc = new jsPDF({ orientation: isWide ? "landscape" : "portrait", unit: "mm", format: "a4" });
-    const pageWidth = doc.internal.pageSize.getWidth();
     const a = S.analysis;
     let y = 15;
 
@@ -2117,7 +2289,8 @@ ${note}
       } catch (e) { }
     }
 
-    const qText = ($("quality") && $("quality").textContent) || "";
+    const qEl = $("quality");
+    const qText = (qEl && qEl.textContent) || "";
     if (qText && qText !== "Belum diperiksa.") {
       if (y > (isWide ? 180 : 250)) { doc.addPage(); y = 15; }
       doc.setFontSize(11);
@@ -2218,7 +2391,6 @@ ${note}
     status("exportStatus", "Grafik PNG diunduh.", "good");
   }
 
-  // ---------- SAMPLE ----------
   function sample() {
     loadTable("Contoh_Data.csv", [
       ["Tanggal","Wilayah","Produk","Jumlah","Pendapatan","Status"],
@@ -2231,14 +2403,14 @@ ${note}
       ["2026-03-02","Surabaya","Produk B",9,720000,"Selesai"],
       ["2026-03-12","Bandung","Produk C",6,780000,"Proses"]
     ]);
-    $("date").value = "Tanggal";
-    $("group").value = "Wilayah";
-    $("value").value = "Pendapatan";
-    $("agg").value = "sum";
+    const dEl = $("date"), gEl = $("group"), vEl = $("value"), aEl = $("agg");
+    if(dEl) dEl.value = "Tanggal";
+    if(gEl) gEl.value = "Wilayah";
+    if(vEl) vEl.value = "Pendapatan";
+    if(aEl) aEl.value = "sum";
     analyze();
   }
 
-  // ---------- RESET ----------
   function reset() {
     destroyCharts();
     S.wb = null; S.sheets = []; S.headers = []; S.raw = []; S.rows = []; S.groups = [];
@@ -2247,43 +2419,42 @@ ${note}
     S.sort = { col: null, dir: 1 }; S.page = 1; S.hiddenCols.clear();
     S.globalSearch = "";
     S.advFilters = []; S.calcCols = []; S.undoStack = []; S.pivotShare = "none";
-    $("file").value = ""; $("docText").value = "";
+    const fileEl = $("file"), docEl = $("docText"), gsEl = $("globalSearch");
+    if(fileEl) fileEl.value = ""; 
+    if(docEl) docEl.value = "";
     ["sheet","group","value","agg","date","filter","needle","from","to","analyze","clear",
      "xlsx","report","csv","print","pdf","copy","globalSearch","shareBtn","emailBtn",
      "pivotRow","pivotCol","pivotValue","pivotAgg","pivotLimit","pivotShare","pivotRun","cleanDup","cleanEmpty",
-     "advLogic","advAdd","calcName","calcExpr","calcAdd","undoBtn"].forEach(id => { if ($(id)) $(id).disabled = true; });
+     "advLogic","advAdd","calcName","calcExpr","calcAdd","undoBtn"].forEach(id => { const el = $(id); if (el) el.disabled = true; });
     resetSheetUI();
-    ["rowsK","sumK","avgK","minmaxK"].forEach(id => $(id).textContent = "—");
-    $("extra").textContent = "Indikator tambahan akan muncul setelah analisis.";
-    $("summary").innerHTML = '<p class="muted" style="padding:10px">Belum ada hasil.</p>';
-    $("preview").innerHTML = '<p class="muted" style="padding:10px">Belum ada data.</p>';
-    $("pivot").innerHTML = '<p class="muted" style="padding:10px">Pilih baris, kolom, dan nilai, lalu klik Bangun Pivot.</p>';
-    $("colList").innerHTML = "";
-    if ($("advFilterList")) $("advFilterList").innerHTML = "";
-    if ($("calcList")) $("calcList").textContent = "";
-    $("pageInfo").textContent = "—";
-    $("prevPage").disabled = true; $("nextPage").disabled = true;
-    $("barInfo").textContent = ""; $("histInfo").textContent = "";
-    $("tsInfo").textContent = "Pilih kolom tanggal di bagian 2 untuk melihat tren.";
-    $("globalSearch").value = "";
+    ["rowsK","sumK","avgK","minmaxK"].forEach(id => { const el = $(id); if(el) el.textContent = "—"; });
+    const ex = $("extra"); if(ex) ex.textContent = "Indikator tambahan akan muncul setelah analisis.";
+    const sumEl = $("summary"); if(sumEl) sumEl.innerHTML = '<p class="muted" style="padding:10px">Belum ada hasil.</p>';
+    const prevEl = $("preview"); if(prevEl) prevEl.innerHTML = '<p class="muted" style="padding:10px">Belum ada data.</p>';
+    const pivEl = $("pivot"); if(pivEl) pivEl.innerHTML = '<p class="muted" style="padding:10px">Pilih baris, kolom, dan nilai, lalu klik Bangun Pivot.</p>';
+    const colList = $("colList"); if(colList) colList.innerHTML = "";
+    const afl = $("advFilterList"); if (afl) afl.innerHTML = "";
+    const cl = $("calcList"); if (cl) cl.textContent = "";
+    const pi = $("pageInfo"); if(pi) pi.textContent = "—";
+    const pp = $("prevPage"), np = $("nextPage");
+    if(pp) pp.disabled = true; if(np) np.disabled = true;
+    const bi = $("barInfo"); if(bi) bi.textContent = "";
+    const hi = $("histInfo"); if(hi) hi.textContent = "";
+    const ti = $("tsInfo"); if(ti) ti.textContent = "Pilih kolom tanggal di bagian 2 untuk melihat tren.";
+    if(gsEl) gsEl.value = "";
     status("loadStatus", "Belum ada file.");
     status("analysisStatus", "Unggah dataset untuk memulai.");
     status("quality", "Belum diperiksa.");
     status("exportStatus", "Jalankan analisis sebelum ekspor.");
-    $("progContainer").style.display = "none";
-    $("progFill").style.width = "0%";
-    if (typeof showMonitorStandby === "function") showMonitorStandby();
-    else {
-      const st = $("monitorStandby"); const ac = $("monitorActive");
-      if (st) st.style.display = "block";
-      if (ac) ac.classList.remove("show");
-    }
+    const pc = $("progContainer"), pf = $("progFill");
+    if(pc) pc.style.display = "none";
+    if(pf) pf.style.width = "0%";
+    showMonitorStandby();
   }
 
-  // ---------- THEME ----------
   function applyTheme(t) {
     document.documentElement.dataset.theme = t;
-    $("themeLabel").textContent = t === "dark" ? "Terang" : "Gelap";
+    const tl = $("themeLabel"); if(tl) tl.textContent = t === "dark" ? "Terang" : "Gelap";
     try { localStorage.setItem("drs-theme", t); } catch {}
     if (S.analysis) {
       barChart(S.groups);
@@ -2295,103 +2466,103 @@ ${note}
     let t = "dark";
     try { t = localStorage.getItem("drs-theme") || "dark"; } catch {}
     document.documentElement.dataset.theme = t;
-    $("themeLabel").textContent = t === "dark" ? "Terang" : "Gelap";
+    const tl = $("themeLabel"); if(tl) tl.textContent = t === "dark" ? "Terang" : "Gelap";
   }
 
-  // ---------- PREFERENCES ----------
   function initPrefs() {
     try {
       const ps = localStorage.getItem("drs-pageSize");
-      if (ps !== null && $("pageSize")) {
-        const opt = $("pageSize").querySelector(`option[value="${ps}"]`);
-        if (opt) { $("pageSize").value = ps; S.pageSize = Number(ps); }
+      const psEl = $("pageSize");
+      if (ps !== null && psEl) {
+        const opt = psEl.querySelector(`option[value="${ps}"]`);
+        if (opt) { psEl.value = ps; S.pageSize = Number(ps); }
       }
     } catch {}
   }
 
-  // ---------- WIRE EVENTS ----------
-  $("load").onclick = () => {
-    if(!$("file").files[0]) {
+  const loadBtn = $("load"); if(loadBtn) loadBtn.onclick = () => {
+    const fIn = $("file");
+    if(!fIn || !fIn.files[0]) {
       status("loadStatus", "Pilih file terlebih dahulu.", "warn");
       return;
     }
-    handleFileSelect($("file").files[0]);
+    handleFileSelect(fIn.files[0]);
   };
-  $("file").onchange = () => { if ($("file").files[0]) handleFileSelect($("file").files[0]); };
-  $("sample").onclick = sample;
-  $("reset").onclick = reset;
-  $("analyze").onclick = analyze;
-  $("cleanDup").onclick = cleanDuplicates;
-  $("cleanEmpty").onclick = cleanEmptyRows;
+  const fIn = $("file"); if(fIn) fIn.onchange = () => { if (fIn.files[0]) handleFileSelect(fIn.files[0]); };
+  const sampleBtn = $("sample"); if(sampleBtn) sampleBtn.onclick = sample;
+  const resetBtn = $("reset"); if(resetBtn) resetBtn.onclick = reset;
+  const analyzeBtn = $("analyze"); if(analyzeBtn) analyzeBtn.onclick = analyze;
+  const cleanDupBtn = $("cleanDup"); if(cleanDupBtn) cleanDupBtn.onclick = cleanDuplicates;
+  const cleanEmptyBtn = $("cleanEmpty"); if(cleanEmptyBtn) cleanEmptyBtn.onclick = cleanEmptyRows;
   
-  $("clear").onclick = () => {
+  const clearBtn = $("clear"); if(clearBtn) clearBtn.onclick = () => {
     if (!S.ready) { status("analysisStatus", "Muat dataset terlebih dahulu.", "warn"); return; }
-    if ($("filter")) $("filter").value = "";
-    if ($("needle")) $("needle").value = "";
-    if ($("from")) $("from").value = "";
-    if ($("to")) $("to").value = "";
-    if ($("globalSearch")) $("globalSearch").value = "";
+    const f = $("filter"), n = $("needle"), from = $("from"), to = $("to"), gs = $("globalSearch");
+    if (f) f.value = "";
+    if (n) n.value = "";
+    if (from) from.value = "";
+    if (to) to.value = "";
+    if (gs) gs.value = "";
     S.globalSearch = "";
     S.advFilters = [];
     renderAdvFilters();
     analyze();
   };
 
-  if ($("undoBtn")) $("undoBtn").onclick = undoLast;
-  if ($("advAdd")) $("advAdd").onclick = addAdvFilter;
-  if ($("advLogic")) $("advLogic").onchange = () => {
-    S.advFilterLogic = $("advLogic").value;
+  const undoBtn = $("undoBtn"); if (undoBtn) undoBtn.onclick = undoLast;
+  const advAdd = $("advAdd"); if (advAdd) advAdd.onclick = addAdvFilter;
+  const advLogic = $("advLogic"); if (advLogic) advLogic.onchange = () => {
+    S.advFilterLogic = advLogic.value;
   };
-  if ($("calcAdd")) $("calcAdd").onclick = addCalculatedColumn;
+  const calcAdd = $("calcAdd"); if (calcAdd) calcAdd.onclick = addCalculatedColumn;
 
-  $("xlsx").onclick = () => { try { exportXlsx(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
-  $("csv").onclick = () => { try { exportCsv(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
-  $("report").onclick = () => { try { exportReport(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
-  $("pdf").onclick = () => { try { exportPdf(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
-  $("print").onclick = () => { window.print(); };
-  $("copy").onclick = () => { copyTable(); };
-  $("shareBtn").onclick = () => { shareData(); };
-  $("emailBtn").onclick = () => { emailData(); };
-  $("dlBar").onclick = () => { downloadBarChart(); };
-  $("themeBtn").onclick = () => {
+  const xlsxBtn = $("xlsx"); if(xlsxBtn) xlsxBtn.onclick = () => { try { exportXlsx(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
+  const csvBtn = $("csv"); if(csvBtn) csvBtn.onclick = () => { try { exportCsv(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
+  const reportBtn = $("report"); if(reportBtn) reportBtn.onclick = () => { try { exportReport(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
+  const pdfBtn = $("pdf"); if(pdfBtn) pdfBtn.onclick = () => { try { exportPdf(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
+  const printBtn = $("print"); if(printBtn) printBtn.onclick = () => { window.print(); };
+  const copyBtn = $("copy"); if(copyBtn) copyBtn.onclick = () => { copyTable(); };
+  const shareBtn = $("shareBtn"); if(shareBtn) shareBtn.onclick = () => { shareData(); };
+  const emailBtn = $("emailBtn"); if(emailBtn) emailBtn.onclick = () => { emailData(); };
+  const dlBar = $("dlBar"); if(dlBar) dlBar.onclick = () => { downloadBarChart(); };
+  const themeBtn = $("themeBtn"); if(themeBtn) themeBtn.onclick = () => {
     const cur = document.documentElement.dataset.theme || "dark";
     applyTheme(cur === "dark" ? "light" : "dark");
   };
-  $("prevPage").onclick = () => { if (S.page > 1) { S.page--; renderPreview(); } };
-  $("nextPage").onclick = () => { S.page++; renderPreview(); };
-  $("pageSize").onchange = () => {
-    S.pageSize = Number($("pageSize").value);
+  const prevPage = $("prevPage"); if(prevPage) prevPage.onclick = () => { if (S.page > 1) { S.page--; renderPreview(); } };
+  const nextPage = $("nextPage"); if(nextPage) nextPage.onclick = () => { S.page++; renderPreview(); };
+  const pageSize = $("pageSize"); if(pageSize) pageSize.onchange = () => {
+    S.pageSize = Number(pageSize.value);
     S.page = 1;
     try { localStorage.setItem("drs-pageSize", String(S.pageSize)); } catch {}
     renderPreview();
   };
-  $("chartType").onchange = () => {
-    S.chartType = $("chartType").value;
+  const chartType = $("chartType"); if(chartType) chartType.onchange = () => {
+    S.chartType = chartType.value;
     if (S.analysis) barChart(S.groups);
   };
-  $("agg").onchange = () => {
-    S.agg = $("agg").value;
+  const agg = $("agg"); if(agg) agg.onchange = () => {
+    S.agg = agg.value;
     if (S.ready && S.analysis) analyze();
   };
-  $("highlightEx").onchange = () => {
-    S.highlightExtremes = $("highlightEx").checked;
+  const highlightEx = $("highlightEx"); if(highlightEx) highlightEx.onchange = () => {
+    S.highlightExtremes = highlightEx.checked;
     renderPreview();
   };
   let searchTimer = null;
-  $("globalSearch").oninput = () => {
-    S.globalSearch = $("globalSearch").value.trim();
+  const globalSearch = $("globalSearch"); if(globalSearch) globalSearch.oninput = () => {
+    S.globalSearch = globalSearch.value.trim();
     if (S.ready && S.analysis) {
       clearTimeout(searchTimer);
       searchTimer = setTimeout(() => { analyze(); }, 400);
     }
   };
-  $("tsGran").onchange = () => { if (S.analysis) buildTimeSeries(); };
-  if ($("tsAgg")) $("tsAgg").onchange = () => { if (S.analysis) buildTimeSeries(); };
-  $("date").onchange = () => { if (S.analysis) buildTimeSeries(); };
-  $("pivotRun").onclick = () => { buildPivot(); };
-  if ($("pivotShare")) $("pivotShare").onchange = () => { if (S.pivot) buildPivot(); };
+  const tsGran = $("tsGran"); if(tsGran) tsGran.onchange = () => { if (S.analysis) buildTimeSeries(); };
+  const tsAgg = $("tsAgg"); if (tsAgg) tsAgg.onchange = () => { if (S.analysis) buildTimeSeries(); };
+  const dateEl = $("date"); if(dateEl) dateEl.onchange = () => { if (S.analysis) buildTimeSeries(); };
+  const pivotRun = $("pivotRun"); if(pivotRun) pivotRun.onclick = () => { buildPivot(); };
+  const pivotShare = $("pivotShare"); if (pivotShare) pivotShare.onchange = () => { if (S.pivot) buildPivot(); };
 
-  // Keyboard shortcuts
   document.addEventListener("keydown", (ev) => {
     const tag = (ev.target && ev.target.tagName) || "";
     const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
@@ -2409,15 +2580,14 @@ ${note}
     }
   });
 
-  // File size warning on select
-  $("file").addEventListener("change", () => {
-    const f = $("file").files[0];
+  const fileInputEl = $("file");
+  if(fileInputEl) fileInputEl.addEventListener("change", () => {
+    const f = fileInputEl.files[0];
     if (f && f.size > 40 * 1024 * 1024) {
       status("loadStatus", `File besar (${(f.size / 1024 / 1024).toFixed(1)} MB). Preview & proses bisa lambat di browser.`, "warn");
     }
   });
 
-  // ---------- INIT ----------
   initTheme();
   initPrefs();
   renderAdvFilters();
@@ -2426,4 +2596,4 @@ ${note}
 })();
 </script>
 </body>
-  </html>
+</html>
