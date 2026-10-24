@@ -101,13 +101,14 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
 /* MODAL STYLES */
 .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:var(--modal-bg);backdrop-filter:blur(4px);display:none;z-index:9999;align-items:center;justify-content:center;padding:20px;opacity:0;transition:opacity 0.3s ease}
 .modal-overlay.active{display:flex;opacity:1}
-.modal-content{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:100%;max-width:1000px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);transform:scale(0.95);transition:transform 0.3s ease}
+.modal-content{background:var(--panel);border:1px solid var(--line);border-radius:16px;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);transform:scale(0.95);transition:transform 0.3s ease}
 .modal-overlay.active .modal-content{transform:scale(1)}
+.modal-content.fullscreen{width:95vw;max-width:1400px;height:92vh;max-height:900px}
 .modal-header{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
 .modal-header h3{margin:0;font-size:20px}
-.modal-body{padding:20px;overflow:auto;flex:1}
+.modal-body{padding:20px;overflow:hidden;flex:1;display:flex;flex-direction:column;min-height:0}
 .modal-footer{padding:16px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px;background:var(--panel2);border-radius:0 0 16px 16px}
-.close-btn{background:transparent;border:none;color:var(--muted);font-size:24px;cursor:pointer;padding:0;line-height:1}
+.close-btn{background:transparent;border:none;color:var(--muted);font-size:28px;cursor:pointer;padding:0;line-height:1}
 .close-btn:hover{color:var(--txt)}
 
 @media(max-width:800px){
@@ -130,7 +131,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   .chart{height:280px;page-break-inside:avoid;border:none}
 }
 </style>
-<!-- Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -153,10 +153,9 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
 </header>
 <main><div class="grid">
 
-<!-- Section 1: Upload -->
 <section class="card half no-print">
   <h2>1. Unggah Sumber Data</h2>
-  <label>Excel, CSV, Word, PDF, atau TXT (Maks. rekomendasi: 100MB per file)</label>
+  <label>Excel, CSV, Word, PDF, atau TXT (Maks. rekomendasi: 100MB)</label>
   <input id="file" type="file" accept=".xlsx,.xls,.csv,.docx,.pdf,.txt">
   <div class="progress-container" id="progContainer"><div class="progress-fill" id="progFill"></div></div>
   <div class="actions">
@@ -177,7 +176,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   <p class="muted" style="margin-top:8px">Sistem dilengkapi mesin streaming parser untuk file CSV besar. Data tidak dikirim ke server manapun (100% Client-side).</p>
 </section>
 
-<!-- Section 2: Analysis Settings -->
 <section class="card half no-print">
   <h2>2. Pilihan Analisis & Filter</h2>
   <div class="fields">
@@ -220,7 +218,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   <div id="analysisStatus" class="status">Unggah dataset untuk memulai.</div>
 </section>
 
-<!-- Section 3: KPIs -->
 <section class="card">
   <h2>3. Ringkasan Indikator</h2>
   <div class="kpis">
@@ -232,7 +229,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   <div id="extra" class="muted" style="margin-top:10px">Indikator tambahan akan muncul setelah analisis.</div>
 </section>
 
-<!-- Section 4: Charts -->
 <section class="card half">
   <h2>4. Grafik per Kelompok</h2>
   <div class="rowbar">
@@ -258,7 +254,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   <p id="histInfo" class="chartinfo"></p>
 </section>
 
-<!-- Section 6: Time Series -->
 <section class="card half">
   <h2>6. Tren Waktu</h2>
   <div class="rowbar">
@@ -283,13 +278,11 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   <p id="tsInfo" class="chartinfo">Pilih kolom tanggal di bagian 2 untuk melihat tren.</p>
 </section>
 
-<!-- Section 7: Summary -->
 <section class="card">
   <h2>7. Rekapitulasi Kelompok</h2>
   <div id="summary" class="tablewrap"><p class="muted" style="padding:10px">Belum ada hasil.</p></div>
 </section>
 
-<!-- Section 8: Pivot -->
 <section class="card">
   <h2>8. Pivot Table (Cross-tab)</h2>
   <div class="fields" style="margin-bottom:10px">
@@ -304,6 +297,13 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       <option value="max">Max</option>
       <option value="median">Median</option>
     </select></div>
+    <div><label>Batas Baris (Top N)</label><select id="pivotLimit" disabled>
+      <option value="50">Top 50</option>
+      <option value="100" selected>Top 100</option>
+      <option value="200">Top 200</option>
+      <option value="500">Top 500</option>
+      <option value="all">Semua (Hati-hati Freeze)</option>
+    </select></div>
   </div>
   <div class="actions">
     <button id="pivotRun" disabled>
@@ -314,7 +314,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   <div id="pivot" class="tablewrap" style="margin-top:10px"><p class="muted" style="padding:10px">Pilih baris, kolom, dan nilai, lalu klik Bangun Pivot.</p></div>
 </section>
 
-<!-- Section 9: Data Preview -->
 <section class="card">
   <h2>9. Pratinjau Data Hasil Filter</h2>
   <div class="preview-toolbar">
@@ -340,7 +339,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
   <div id="preview" class="tablewrap"><p class="muted" style="padding:10px">Belum ada data.</p></div>
 </section>
 
-<!-- Section 10 & 11: Quality & Export -->
 <section class="card half no-print">
   <h2>10. Kualitas Data</h2>
   <div id="quality" class="status">Belum diperiksa.</div>
@@ -371,22 +369,22 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
 <footer>Enterprise Data Report Studio — Zero Regression, High-Performance Client-Side Data Processing.</footer>
 </main>
 
-<!-- MODAL PREVIEW FILE -->
+<!-- MODAL PREVIEW FULLSCREEN -->
 <div id="previewModal" class="modal-overlay">
-  <div class="modal-content">
+  <div class="modal-content fullscreen">
     <div class="modal-header">
-      <h3>🔍 Pratinjau File: <span id="modalFileName" style="color:var(--accent)"></span></h3>
+      <h3>🔍 Pratinjau Data Asli: <span id="modalFileName" style="color:var(--accent)"></span></h3>
       <button class="close-btn" onclick="document.getElementById('previewModal').classList.remove('active')">×</button>
     </div>
     <div class="modal-body">
-      <p class="muted">Menampilkan maksimal 50 baris pertama. Pastikan header dan tipe data sudah sesuai.</p>
-      <div id="modalTableWrap" class="tablewrap" style="max-height:400px;">
+      <p class="muted" style="margin-top:0;margin-bottom:10px;">Menampilkan <b id="modalRowCount">0</b> baris pertama dari file. Pastikan header dan tipe data sudah sesuai.</p>
+      <div id="modalTableWrap" class="tablewrap" style="flex:1;max-height:none;min-height:300px;">
         <!-- Table will be injected here -->
       </div>
     </div>
     <div class="modal-footer">
       <button class="secondary" onclick="document.getElementById('previewModal').classList.remove('active')">Batal</button>
-      <button id="confirmProcessBtn">✓ Proses Data Ini</button>
+      <button id="confirmProcessBtn">✓ Proses Seluruh Data Ini</button>
     </div>
   </div>
 </div>
@@ -412,8 +410,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     highlightExtremes: false,
     barChartInstance: null, histChartInstance: null, tsChartInstance: null,
     pivot: null,
-    pendingFile: null, // For modal preview
-    pendingMatrix: null
+    pendingFile: null
   };
 
   // Register Chart.js Datalabels plugin globally
@@ -453,12 +450,13 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     }
   };
   const aggValueOf = (g, agg) => {
+    if (!g) return null;
     if (agg === "sum") return g.sum;
     if (agg === "avg") return g.avg;
     if (agg === "count") return g.valid;
-    if (agg === "min") return g.nums.length ? Math.min(...g.nums) : null;
-    if (agg === "max") return g.nums.length ? Math.max(...g.nums) : null;
-    if (agg === "median") return medianOf(g.nums);
+    if (agg === "min") return g.nums && g.nums.length ? Math.min(...g.nums) : null;
+    if (agg === "max") return g.nums && g.nums.length ? Math.max(...g.nums) : null;
+    if (agg === "median") return g.nums && g.nums.length ? medianOf(g.nums) : null;
     return g.sum;
   };
   const recommendAgg = colName => {
@@ -480,6 +478,22 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const e = $(id);
     e.className = "status loading";
     e.textContent = txt;
+  }
+
+  // ---------- DATE FORMATTING (FIX FOR RAW DATE OBJECTS) ----------
+  function formatDisplayDate(val) {
+    if (val instanceof Date) {
+      if (isNaN(val)) return "";
+      const y = val.getFullYear();
+      const m = String(val.getMonth() + 1).padStart(2, '0');
+      const d = String(val.getDate()).padStart(2, '0');
+      const h = String(val.getHours()).padStart(2, '0');
+      const min = String(val.getMinutes()).padStart(2, '0');
+      const s = String(val.getSeconds()).padStart(2, '0');
+      if (h === '00' && min === '00' && s === '00') return `${y}-${m}-${d}`;
+      return `${y}-${m}-${d} ${h}:${min}:${s}`;
+    }
+    return String(val ?? "");
   }
 
   // ---------- NUMBER PARSER ----------
@@ -613,7 +627,14 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     });
     const rows = m.slice(1).map(r => {
       const o = {};
-      for (let i = 0; i < finalHeaders.length; i++) o[finalHeaders[i]] = r[i] ?? "";
+      for (let i = 0; i < finalHeaders.length; i++) {
+        let v = r[i] ?? "";
+        // Format Date Objects to clean string (YYYY-MM-DD HH:mm:ss)
+        if (v instanceof Date) {
+          v = formatDisplayDate(v);
+        }
+        o[finalHeaders[i]] = v;
+      }
       return o;
     });
     return { headers: finalHeaders, rows };
@@ -670,9 +691,10 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     $("pivotCol").value = "";
     $("pivotValue").value = defVal;
     $("pivotAgg").value = "sum";
+    $("pivotLimit").value = "100";
 
     ["group","value","agg","date","filter","needle","from","to","analyze","clear","globalSearch",
-     "pivotRow","pivotCol","pivotValue","pivotAgg","pivotRun","cleanDup","cleanEmpty"].forEach(x => { if($(x)) $(x).disabled = false; });
+     "pivotRow","pivotCol","pivotValue","pivotAgg","pivotRun","pivotLimit","cleanDup","cleanEmpty"].forEach(x => { if($(x)) $(x).disabled = false; });
 
     renderColumnToggles();
     renderPreview();
@@ -685,7 +707,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     status("analysisStatus", "Dataset siap; analisis belum dijalankan.");
     $("pivot").innerHTML = '<p class="muted" style="padding:10px">Pilih baris, kolom, dan nilai, lalu klik Bangun Pivot.</p>';
     
-    // Reset progress
     $("progContainer").style.display = "none";
     $("progFill").style.width = "0%";
   }
@@ -695,7 +716,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     if (!file) return;
     S.pendingFile = file;
     $("modalFileName").textContent = file.name;
-    $("modalTableWrap").innerHTML = '<p class="muted">Membaca pratinjau...</p>';
+    $("modalTableWrap").innerHTML = '<p class="muted">Membaca pratinjau data (maks 500 baris)...</p>';
     $("previewModal").classList.add("active");
 
     try {
@@ -705,21 +726,25 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       if (["xlsx","xls"].includes(ext)) {
         if (!window.XLSX) throw new Error("Library Excel belum termuat.");
         const buffer = await file.arrayBuffer();
-        const wb = XLSX.read(buffer, { type: "array", sheetRows: 50 }); // Read only first 50 rows for preview
+        // Read only first 500 rows for preview to avoid freeze
+        const wb = XLSX.read(buffer, { type: "array", sheetRows: 500 }); 
         const firstSheet = wb.SheetNames[0];
         matrix = XLSX.utils.sheet_to_json(wb.Sheets[firstSheet], { header: 1, defval: "", raw: true });
       } else if (ext === "csv") {
-        const text = await file.slice(0, 1024 * 500).text(); // Read first 500KB only
-        matrix = Papa.parse(text, { skipEmptyLines: true }).data;
-        matrix = matrix.slice(0, 50); // Ensure max 50 rows
+        // Use PapaParse streaming to get first 500 rows safely
+        const text = await file.slice(0, 1024 * 1024).text(); // Read first 1MB
+        matrix = Papa.parse(text, { skipEmptyLines: true, preview: 500 }).data;
       } else {
-        $("modalTableWrap").innerHTML = '<p class="muted" style="color:var(--warn)">Pratinjau tabel hanya tersedia untuk file Excel dan CSV. Untuk file dokumen (Word/PDF/TXT), klik "Proses Data Ini" untuk membaca teks.</p>';
+        $("modalTableWrap").innerHTML = '<p class="muted" style="color:var(--warn)">Pratinjau tabel hanya tersedia untuk file Excel dan CSV. Untuk dokumen (Word/PDF/TXT), klik "Proses Seluruh Data Ini" untuk mengekstrak teks.</p>';
+        $("modalRowCount").textContent = "0";
         return;
       }
 
-      // Render preview table
+      // Format parsed matrix to standard rows
       if (matrix.length > 0) {
         const p = parseRows(matrix);
+        $("modalRowCount").textContent = p.rows.length;
+        
         let html = '<table><thead><tr>' + p.headers.map(h => `<th>${esc(h)}</th>`).join('') + '</tr></thead><tbody>';
         p.rows.forEach(r => {
           html += '<tr>' + p.headers.map(h => `<td>${esc(r[h])}</td>`).join('') + '</tr>';
@@ -728,6 +753,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         $("modalTableWrap").innerHTML = html;
       } else {
          $("modalTableWrap").innerHTML = '<p class="muted">Data kosong atau tidak terbaca.</p>';
+         $("modalRowCount").textContent = "0";
       }
 
     } catch (e) {
@@ -749,7 +775,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     
     $("progContainer").style.display = "block";
     $("progFill").style.width = "10%";
-    busyStatus("loadStatus", "Memproses file...");
+    busyStatus("loadStatus", "Memproses keseluruhan file...");
 
     try {
       const ext = f.name.split(".").pop().toLowerCase();
@@ -758,7 +784,6 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         if (!window.XLSX) throw new Error("Library Excel belum termuat; periksa internet.");
         $("progFill").style.width = "30%";
         
-        // Use setTimeout to allow UI to paint before heavy processing
         await new Promise(r => setTimeout(r, 50));
         
         S.wb = XLSX.read(await f.arrayBuffer(), { type: "array", cellDates: true });
@@ -780,13 +805,11 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
         resetSheetUI();
         busyStatus("loadStatus", "Memproses CSV dengan Streaming Parser (Big Data Engine)...");
         
-        // Use PapaParse Web Worker for large CSVs
         Papa.parse(f, {
           worker: true,
           skipEmptyLines: true,
           complete: function(results) {
             $("progFill").style.width = "90%";
-            // PapaParse returns array of arrays if no header option
             loadTable(f.name, results.data);
           },
           error: function(err) {
@@ -796,7 +819,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
             loadBtn.disabled = false;
           }
         });
-        return; // Exit early, loadTable will be called in complete()
+        return;
         
       } else if (ext === "txt") {
         resetSheetUI();
@@ -1204,14 +1227,31 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     wrap.classList.add('has-data');
     
     const isPie = S.chartType === "pie" || S.chartType === "doughnut";
-    const showN = isPie ? 10 : 15;
-    const shown = groups.slice(0, showN);
-    info.textContent = groups.length > showN
-      ? `Menampilkan ${showN} dari ${groups.length} kelompok (${aggLabel(S.agg)}).`
-      : `${groups.length} kelompok · ${aggLabel(S.agg)}.`;
+    // LIMIT CHART DATA TO PREVENT CHROME FREEZE
+    const showN = isPie ? 10 : 15; 
+    
+    let labels = [];
+    let data = [];
 
-    const labels = shown.map(g => g.group);
-    const data = shown.map(g => aggValueOf(g, S.agg));
+    if (groups.length > showN) {
+        const shown = groups.slice(0, showN);
+        const rest = groups.slice(showN);
+        const restSum = rest.reduce((a, b) => a + (aggValueOf(b, S.agg) || 0), 0);
+        
+        labels = shown.map(g => g.group);
+        data = shown.map(g => aggValueOf(g, S.agg));
+        
+        // Hanya gabungkan "Lainnya" untuk Pie/Doughnut
+        if (isPie) {
+            labels.push("Lainnya");
+            data.push(restSum);
+        }
+        info.textContent = `Menampilkan Top ${showN} dari ${groups.length} kelompok.`;
+    } else {
+        labels = groups.map(g => g.group);
+        data = groups.map(g => aggValueOf(g, S.agg));
+        info.textContent = `${groups.length} kelompok · ${aggLabel(S.agg)}.`;
+    }
 
     if (S.barChartInstance) { try { S.barChartInstance.destroy(); } catch {} }
     const ctx = $("bar").getContext("2d");
@@ -1236,10 +1276,11 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false, // Prevent UI freeze
         plugins: {
           legend: { display: isPie, position: "right", labels:{color: getComputedStyle(document.documentElement).getPropertyValue('--txt')} },
           datalabels: {
-            display: shown.length <= 12, // Only show if not too crowded
+            display: data.length <= 12, 
             color: isPie ? '#fff' : '#2a7e73',
             font: { weight: 'bold', size: 10 },
             formatter: (val) => fmtShort(val)
@@ -1248,9 +1289,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
             callbacks: {
               label: c => {
                 const v = c.parsed.y ?? c.parsed;
-                const total = isPie
-                  ? c.dataset.data.reduce((a, b) => a + (b || 0), 0)
-                  : data.reduce((a, b) => a + (b || 0), 0);
+                const total = data.reduce((a, b) => a + (b || 0), 0);
                 const perc = total ? (v / total * 100).toFixed(1) : "0";
                 return `${c.dataset.label}: ${fmt(v)} (${perc}%)`;
               }
@@ -1304,9 +1343,10 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
         plugins: {
           legend: { display: false },
-          datalabels: { display: false }, // Hide datalabels for histogram to reduce clutter
+          datalabels: { display: false }, 
           tooltip: { callbacks: { label: c => `Frekuensi: ${c.parsed.y}` } }
         },
         scales: {
@@ -1391,9 +1431,10 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
         plugins: {
           legend: { display: true, labels:{color: getComputedStyle(document.documentElement).getPropertyValue('--txt')} },
-          datalabels: { display: false }, // Hide datalabels for line charts to keep it clean
+          datalabels: { display: false }, 
           tooltip: {
             callbacks: {
               label: c => `${labelAgg}: ${fmt(c.parsed.y)}`,
@@ -1409,7 +1450,7 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     });
   }
 
-  // ---------- PIVOT ----------
+  // ---------- PIVOT (UPGRADED WITH LIMIT) ----------
   function buildPivot() {
     if (!S.analysis) {
       $("pivot").innerHTML = '<p class="muted" style="padding:10px">Jalankan analisis dulu.</p>';
@@ -1419,6 +1460,8 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     const colCol = $("pivotCol").value;
     const valCol = $("pivotValue").value;
     const agg = $("pivotAgg").value;
+    const limitOpt = $("pivotLimit").value;
+    const limit = limitOpt === "all" ? Infinity : parseInt(limitOpt);
 
     if (!rowCol || !valCol) {
       $("pivot").innerHTML = '<p class="muted" style="padding:10px">Pilih kolom baris dan nilai.</p>';
@@ -1441,11 +1484,30 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
       if (n !== null) cells.get(key).push(n);
     });
 
-    const rowList = [...rowVals].sort();
+    let rowList = [...rowVals];
     const colList = [...colVals].sort();
 
-    if (rowList.length > 100 || colList.length > 50) {
-      $("pivot").innerHTML = `<p class="muted" style="padding:10px">Terlalu banyak kombinasi (${rowList.length} baris × ${colList.length} kolom). Pilih kolom dengan nilai unik lebih sedikit.</p>`;
+    // Sort rows by aggregated total (descending)
+    rowList.sort((a, b) => {
+      let sumA = 0, sumB = 0;
+      colList.forEach(cv => {
+        const vA = aggregate(cells.get(a + SEP + cv), agg);
+        const vB = aggregate(cells.get(b + SEP + cv), agg);
+        if (vA !== null) sumA += vA;
+        if (vB !== null) sumB += vB;
+      });
+      return sumB - sumA;
+    });
+
+    // Apply limit
+    const totalRowsCount = rowList.length;
+    const isLimited = totalRowsCount > limit;
+    if (isLimited) {
+      rowList = rowList.slice(0, limit);
+    }
+
+    if (colList.length > 50) {
+      $("pivot").innerHTML = `<p class="muted" style="padding:10px">Terlalu banyak kolom (${colList.length}). Pilih kolom dengan nilai unik lebih sedikit.</p>`;
       return;
     }
 
@@ -1491,10 +1553,12 @@ footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
     }).join("");
     const footer = `<tr><th>Total</th>${colList.map(cv => `<td style="font-weight:600">${cellTxt(colTotals.get(cv))}</td>`).join("")}<td>${fmt(grand)}</td></tr>`;
 
-    const note = showShare
+    const note = isLimited ? `<p class="warn" style="padding:6px 0 0;font-size:12px;font-weight:bold;">⚠️ Menampilkan Top ${limit} baris dari total ${totalRowsCount} baris unik. Untuk melihat sisanya, ubah batas baris di atas.</p>` : "";
+    const noteShare = showShare
       ? `<p class="muted" style="padding:6px 0 0;font-size:12px">Persentase = kontribusi terhadap grand total (${fmt(grand)}).</p>`
       : "";
-    $("pivot").innerHTML = `<table><thead>${header}</thead><tbody>${body}</tbody><tfoot>${footer}</tfoot></table>${note}`;
+      
+    $("pivot").innerHTML = `<table><thead>${header}</thead><tbody>${body}</tbody><tfoot>${footer}</tfoot></table>${note}${noteShare}`;
     S.pivot = { rowCol, colCol, valCol, agg };
   }
 
@@ -1609,7 +1673,6 @@ ${note}
     if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("Library PDF belum termuat.");
     const { jsPDF } = window.jspdf;
     
-    // Auto landscape if many columns
     const isWide = S.headers.length > 6;
     const doc = new jsPDF({ orientation: isWide ? "landscape" : "portrait", unit: "mm", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -1795,7 +1858,7 @@ ${note}
     $("file").value = ""; $("docText").value = "";
     ["sheet","group","value","agg","date","filter","needle","from","to","analyze","clear",
      "xlsx","report","csv","print","pdf","copy","globalSearch","shareBtn","emailBtn",
-     "pivotRow","pivotCol","pivotValue","pivotAgg","pivotRun","cleanDup","cleanEmpty"].forEach(id => { if ($(id)) $(id).disabled = true; });
+     "pivotRow","pivotCol","pivotValue","pivotAgg","pivotLimit","pivotRun","cleanDup","cleanEmpty"].forEach(id => { if ($(id)) $(id).disabled = true; });
     resetSheetUI();
     ["rowsK","sumK","avgK","minmaxK"].forEach(id => $(id).textContent = "—");
     $("extra").textContent = "Indikator tambahan akan muncul setelah analisis.";
@@ -1922,4 +1985,4 @@ ${note}
 })();
 </script>
 </body>
-</html>
+  </html>
