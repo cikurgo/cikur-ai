@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyber Lab v3: Advanced Network Interceptor</title>
+<title>Cyber Lab v3.1: Advanced Network Interceptor</title>
 <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -22,7 +22,7 @@
 
     .panel {
         flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column;
-        gap: 12px; padding: 16px 18px;
+        gap: 10px; padding: 14px 16px;
     }
     .panel.target {
         border-right: 1px solid var(--line);
@@ -58,18 +58,39 @@
         background: rgba(255,59,107,.1);
     }
 
-    .desc { margin: 0; font-size: 11px; line-height: 1.55; color: var(--muted); }
+    .desc { margin: 0; font-size: 10.5px; line-height: 1.5; color: var(--muted); }
+
+    /* ---------- URL BAR ---------- */
+    .urlbar { display: flex; gap: 6px; }
+    .urlbar input {
+        flex: 1; background: #000; border: 1px solid var(--line);
+        color: var(--text); padding: 7px 10px; font: inherit;
+        font-size: 11px; border-radius: 3px; outline: none;
+    }
+    .urlbar input:focus { border-color: var(--cyan); }
+    .urlbar button {
+        padding: 7px 14px; background: transparent; border: 1px solid var(--cyan);
+        color: var(--cyan); font: inherit; font-size: 11px; font-weight: bold;
+        cursor: pointer; border-radius: 3px; transition: .15s;
+    }
+    .urlbar button:hover { background: rgba(34,211,238,.1); }
+    .urlbar button.close-btn {
+        border-color: var(--muted); color: var(--muted);
+        padding: 7px 10px; display: none;
+    }
+    .urlbar button.close-btn.visible { display: inline-block; }
+    .urlbar button.close-btn:hover { border-color: var(--red); color: var(--red); background: rgba(255,59,107,.1); }
 
     /* ---------- BUTTONS ---------- */
-    .btn-group { display: flex; flex-direction: column; gap: 8px; }
+    .btn-group { display: flex; flex-direction: column; gap: 6px; }
 
     .btn {
-        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        display: flex; align-items: center; gap: 10px; padding: 7px 12px;
         background: transparent; border: 1px solid var(--cyan); color: var(--cyan);
-        font: inherit; font-size: 11px; font-weight: bold; text-align: left;
+        font: inherit; font-size: 10.5px; font-weight: bold; text-align: left;
         cursor: pointer; transition: all .18s;
     }
-    .btn svg { flex: 0 0 auto; width: 15px; height: 15px; }
+    .btn svg { flex: 0 0 auto; width: 14px; height: 14px; }
     .btn .lbl { flex: 1; }
     .btn:hover {
         background: rgba(34,211,238,.1); box-shadow: 0 0 14px rgba(34,211,238,.22);
@@ -80,12 +101,26 @@
     .btn.ws:hover { background: rgba(176,38,255,.1); box-shadow: 0 0 14px rgba(176,38,255,.28); }
     .btn.detect { border-color: var(--amber); color: var(--amber); }
     .btn.detect:hover { background: rgba(255,200,87,.1); box-shadow: 0 0 14px rgba(255,200,87,.25); }
+    .btn.mini {
+        border-color: #2b4c56; color: #6fa8b3;
+        font-size: 10px; padding: 6px 10px;
+    }
+    .btn.mini:hover { border-color: #3d6b78; color: #8cd4e0; background: rgba(34,211,238,.05); transform: translateX(2px); }
 
-    /* ---------- TARGET SCREEN ---------- */
+    .group-label {
+        font-size: 9px; letter-spacing: 1.4px; text-transform: uppercase;
+        color: #3d4f63; margin: 2px 0 -2px;
+    }
+
+    /* ---------- SCREEN & IFRAME ---------- */
+    .screen-wrap {
+        flex: 1 1 auto; min-height: 100px;
+        display: flex; position: relative;
+    }
     .screen {
-        flex: 1 1 auto; min-height: 110px; overflow-y: auto; background: #000;
-        border: 1px solid var(--line); padding: 10px 12px;
-        font-size: 11px; line-height: 1.7;
+        flex: 1; overflow-y: auto; background: #000;
+        border: 1px solid var(--line); padding: 8px 10px;
+        font-size: 10.5px; line-height: 1.65;
     }
     .screen::-webkit-scrollbar { width: 6px; }
     .screen::-webkit-scrollbar-thumb { background: #1f3247; }
@@ -93,12 +128,17 @@
     .tline.ok { color: var(--green); }
     .tline.err { color: var(--red); }
 
+    #targetFrame {
+        flex: 1; width: 100%; height: 100%; border: 1px solid var(--line);
+        background: #fff; display: none;
+    }
+
     /* ---------- FEED ---------- */
     .feed {
-        height: 88px; flex: 0 0 auto; border: 1px solid var(--line);
+        height: 70px; flex: 0 0 auto; border: 1px solid var(--line);
         background: repeating-linear-gradient(0deg, #04070a, #04070a 2px, #060b10 2px, #060b10 4px);
         display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 4px; font-size: 10px; letter-spacing: 1px; color: #26364a;
+        gap: 3px; font-size: 10px; letter-spacing: 1px; color: #26364a;
         position: relative; overflow: hidden; transition: .3s;
     }
     .feed.live { border-color: rgba(0,255,156,.35); color: var(--green); }
@@ -110,17 +150,33 @@
     @keyframes sweep { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
     .feed .live-dot { animation: blink 1.1s steps(2) infinite; }
     @keyframes blink { 50% { opacity: .25; } }
-    .feed .cam { font-size: 15px; letter-spacing: 4px; color: var(--green); }
+    .feed .cam { font-size: 13px; letter-spacing: 4px; color: var(--green); }
     .feed .url {
-        font-size: 9.5px; color: #4d7a63; max-width: 92%;
+        font-size: 9px; color: #4d7a63; max-width: 92%;
         overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
 
     /* ---------- TERMINAL ---------- */
+    .filter-bar { display: flex; gap: 6px; }
+    .filter-bar button {
+        padding: 5px 12px; background: transparent; border: 1px solid var(--line);
+        color: var(--muted); font: inherit; font-size: 9.5px; letter-spacing: 1px;
+        cursor: pointer; transition: .15s; border-radius: 3px;
+    }
+    .filter-bar button:hover { color: var(--text); border-color: #2f4055; }
+    .filter-bar button.on {
+        color: var(--cyan); border-color: rgba(34,211,238,.5);
+        background: rgba(34,211,238,.08);
+    }
+    .filter-bar button[data-filter="leak"].on {
+        color: var(--red); border-color: rgba(255,59,107,.5);
+        background: rgba(255,59,107,.08);
+    }
+
     .terminal {
-        flex: 1 1 auto; min-height: 140px; overflow-y: auto; background: #000;
-        border: 1px solid var(--line); padding: 10px 12px;
-        font-size: 11px; line-height: 1.65;
+        flex: 1 1 auto; min-height: 120px; overflow-y: auto; background: #000;
+        border: 1px solid var(--line); padding: 8px 10px;
+        font-size: 10.5px; line-height: 1.6;
     }
     .terminal::-webkit-scrollbar { width: 7px; }
     .terminal::-webkit-scrollbar-thumb { background: #14372a; border-radius: 4px; }
@@ -135,20 +191,20 @@
 
     /* ---------- VAULT ---------- */
     .vault {
-        flex: 0 0 auto; max-height: 120px; overflow-y: auto;
-        background: #080d13; border: 1px solid var(--line); padding: 8px 10px;
+        flex: 0 0 auto; max-height: 110px; overflow-y: auto;
+        background: #080d13; border: 1px solid var(--line); padding: 7px 10px;
     }
     .vault h3 {
-        margin: 0 0 6px; font-size: 10px; letter-spacing: 1.2px;
+        margin: 0 0 5px; font-size: 10px; letter-spacing: 1.2px;
         text-transform: uppercase; color: var(--purple);
         display: flex; align-items: center; gap: 6px;
     }
     .vault h3 svg { width: 12px; height: 12px; }
     .vault h3 .count { color: var(--muted); font-weight: normal; }
-    .vault ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+    .vault ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
     .vault li {
-        display: flex; align-items: center; gap: 7px; font-size: 10.5px;
-        padding: 4px 7px; background: #0c141d; border-left: 2px solid var(--purple);
+        display: flex; align-items: center; gap: 6px; font-size: 10px;
+        padding: 3px 6px; background: #0c141d; border-left: 2px solid var(--purple);
     }
     .vtag { flex: 0 0 auto; color: var(--purple); }
     .vault code {
@@ -157,7 +213,7 @@
     }
     .copy {
         flex: 0 0 auto; background: none; border: 1px solid var(--line);
-        color: var(--muted); font-size: 10px; padding: 1px 5px; cursor: pointer;
+        color: var(--muted); font-size: 10px; padding: 0 4px; cursor: pointer;
         border-radius: 2px; transition: .15s; display: flex; align-items: center;
     }
     .copy svg { width: 11px; height: 11px; }
@@ -165,14 +221,16 @@
     .copy.done { color: var(--green); border-color: var(--green); }
 
     /* ---------- ACTIONS ---------- */
-    .actions { display: flex; gap: 8px; }
+    .actions { display: flex; gap: 5px; flex-wrap: wrap; }
     .actions button {
-        flex: 1; padding: 8px 6px; background: transparent; border: 1px solid var(--line);
-        color: var(--muted); font: inherit; font-size: 10px; letter-spacing: .5px;
+        flex: 1 1 calc(50% - 3px); min-width: 0; padding: 7px 6px;
+        background: transparent; border: 1px solid var(--line);
+        color: var(--muted); font: inherit; font-size: 9.5px; letter-spacing: .3px;
         cursor: pointer; transition: .15s;
-        display: flex; align-items: center; justify-content: center; gap: 6px;
+        display: flex; align-items: center; justify-content: center; gap: 5px;
+        white-space: nowrap; overflow: hidden;
     }
-    .actions button svg { width: 12px; height: 12px; flex: 0 0 auto; }
+    .actions button svg { width: 11px; height: 11px; flex: 0 0 auto; }
     .actions button:hover { color: var(--text); border-color: #2f4055; }
     .actions button.on {
         color: var(--green); border-color: rgba(0,255,156,.45);
@@ -191,9 +249,10 @@
         body { flex-direction: column; overflow-y: auto; height: auto; }
         .panel { flex: 0 0 auto; }
         .panel.target { border-right: none; border-bottom: 1px solid var(--line); }
-        .terminal { min-height: 260px; }
-        .screen { min-height: 130px; }
-        .feed { height: 84px; }
+        .terminal { min-height: 240px; }
+        .screen-wrap { min-height: 130px; }
+        .feed { height: 80px; }
+        .actions button { flex: 1 1 calc(50% - 3px); }
     }
 </style>
 </head>
@@ -215,8 +274,17 @@
 
         <p class="desc">
             Simulasi website. Klik tombol untuk memicu request. Terminal kanan
-            akan menyadap semua data secara real-time.
+            menyadap semua data secara real-time.
         </p>
+
+        <!-- URL BAR BARU -->
+        <div class="urlbar">
+            <input type="text" id="urlInput" placeholder="https://example.com" spellcheck="false" autocomplete="off">
+            <button id="openUrlBtn">BUKA</button>
+            <button id="closeUrlBtn" class="close-btn" title="Tutup iframe">✕</button>
+        </div>
+
+        <div class="group-label">Demo Core (Hooked)</div>
 
         <div class="btn-group">
             <button class="btn" onclick="targetRealFetch()">
@@ -271,8 +339,45 @@
             </button>
         </div>
 
-        <div class="screen" id="targetScreen">
-            <div class="tline">Menunggu interaksi...</div>
+        <div class="group-label">New Hooks (Pass-Through Sniffer)</div>
+
+        <div class="btn-group">
+            <button class="btn mini" onclick="targetRTC()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M15 10l4.55-2.27A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.89L15 14"/>
+                    <rect x="3" y="6" width="12" height="12" rx="2" ry="2"/>
+                </svg>
+                <span class="lbl">Test WebRTC PeerConnection</span>
+            </button>
+
+            <button class="btn mini" onclick="targetBeacon()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/>
+                    <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/>
+                    <circle cx="12" cy="12" r="2"/>
+                    <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/>
+                    <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>
+                </svg>
+                <span class="lbl">Test navigator.sendBeacon</span>
+            </button>
+
+            <button class="btn mini" onclick="targetEventSource()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 12a8 8 0 0 1 8-8"/>
+                    <path d="M20 12a8 8 0 0 1-8 8"/>
+                    <path d="M12 4a8 8 0 0 1 8 8"/>
+                    <path d="M12 20a8 8 0 0 1-8-8"/>
+                    <circle cx="12" cy="12" r="2"/>
+                </svg>
+                <span class="lbl">Test EventSource (SSE)</span>
+            </button>
+        </div>
+
+        <div class="screen-wrap">
+            <div class="screen" id="targetScreen">
+                <div class="tline">Menunggu interaksi...</div>
+            </div>
+            <iframe id="targetFrame" referrerpolicy="no-referrer"></iframe>
         </div>
 
         <div class="feed" id="feed"><span>TIDAK ADA SINYAL</span></div>
@@ -296,6 +401,11 @@
             </div>
         </div>
 
+        <div class="filter-bar">
+            <button id="filterAll" class="on" data-filter="all">SEMUA LOG</button>
+            <button id="filterLeak" data-filter="leak">HANYA LEAK</button>
+        </div>
+
         <div class="terminal" id="terminal"></div>
 
         <div class="vault">
@@ -316,7 +426,7 @@
                     <polyline points="3 6 5 6 21 6"/>
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                 </svg>
-                CLEAR LOG
+                <span>CLEAR</span>
             </button>
             <button id="stealthBtn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -331,7 +441,15 @@
                     <polyline points="1 20 1 14 7 14"/>
                     <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                 </svg>
-                <span id="restoreLbl">RESTORE HOOKS</span>
+                <span id="restoreLbl">RESTORE</span>
+            </button>
+            <button id="exportBtn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>EXPORT</span>
             </button>
         </div>
     </section>
@@ -341,12 +459,18 @@
    0. SIMPAN REFERENSI FUNGSI ASLI (NATIVE)
    ============================================================ */
 const NATIVE = {
-    fetch: window.fetch,
-    XHR: window.XMLHttpRequest,
-    XHRopen: window.XMLHttpRequest.prototype.open,
-    XHRsend: window.XMLHttpRequest.prototype.send,
-    WS: window.WebSocket,
-    StorageSet: Storage.prototype.setItem
+    fetch:            window.fetch,
+    XHR:              window.XMLHttpRequest,
+    XHRopen:          window.XMLHttpRequest.prototype.open,
+    XHRsend:          window.XMLHttpRequest.prototype.send,
+    WS:               window.WebSocket,
+    StorageSet:       Storage.prototype.setItem,
+    sendBeacon:       navigator.sendBeacon,
+    RTC:              window.RTCPeerConnection,
+    ES:               window.EventSource,
+    freeze:           Object.freeze,
+    seal:             Object.seal,
+    preventExtensions: Object.preventExtensions
 };
 
 /* ============================================================
@@ -359,25 +483,27 @@ const now   = () => new Date().toLocaleTimeString('id-ID', { hour12: false });
 
 const termEl = $('terminal');
 const stats  = { req: 0, leak: 0 };
-const vaultMap = new Map();
+const vaultEntries = [];
+const vaultSet = new Set();
 
-/* ---------- SVG ICON HELPER (untuk elemen dinamis) ---------- */
+/* ---------- SVG PATH HELPER (untuk elemen dinamis) ---------- */
 const SVG_PATHS = {
-    copy:    '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>',
-    check:   '<polyline points="20 6 9 17 4 12"/>',
-    dot:     '<circle cx="5" cy="5" r="4" fill="currentColor" stroke="none"/>'
+    copy:  '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>',
+    check: '<polyline points="20 6 9 17 4 12"/>'
 };
-
-function svgHTML(name, size = 12) {
+function svgHTML(name, size = 11) {
     return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SVG_PATHS[name] || ''}</svg>`;
 }
 
 /* ============================================================
-   2. LOGGING TERMINAL
+   2. LOGGING TERMINAL (dengan dukungan filter)
    ============================================================ */
-function log(msg, type = 'sys') {
+let currentFilter = 'all';  // 'all' | 'leak'
+
+function log(msg, type = 'sys', isLeak = false) {
     const row = document.createElement('div');
     row.className = `log log-${type}`;
+    if (isLeak) row.dataset.leak = '1';
 
     const stamp = document.createElement('span');
     stamp.className = 'ts';
@@ -385,11 +511,28 @@ function log(msg, type = 'sys') {
     row.appendChild(stamp);
     row.appendChild(document.createTextNode(msg));
 
+    if (currentFilter === 'leak' && !isLeak) {
+        row.style.display = 'none';
+    }
+
     termEl.appendChild(row);
     termEl.scrollTop = termEl.scrollHeight;
 
-    // Jaga DOM tetap ringan
     while (termEl.childElementCount > 400) termEl.removeChild(termEl.firstElementChild);
+}
+
+function applyFilter(f) {
+    currentFilter = f;
+    $('filterAll').classList.toggle('on', f === 'all');
+    $('filterLeak').classList.toggle('on', f === 'leak');
+
+    for (const el of termEl.children) {
+        if (f === 'leak') {
+            el.style.display = (el.dataset.leak === '1') ? '' : 'none';
+        } else {
+            el.style.display = '';
+        }
+    }
 }
 
 function refreshStats() {
@@ -399,24 +542,24 @@ function refreshStats() {
 }
 
 /* ============================================================
-   3. VAULT & SCANNER
+   3. VAULT (dengan tipe & counter)
    ============================================================ */
 function updateVaultCount() {
-    $('vaultCount').textContent = `(${vaultMap.size})`;
+    $('vaultCount').textContent = `(${vaultEntries.length})`;
 }
 
 function addVault(name, value) {
-    if (!value || vaultMap.has(value)) return false;
-    vaultMap.set(value, true);
+    if (!value || vaultSet.has(value)) return false;
+    vaultSet.add(value);
+    vaultEntries.push({ name, value });
 
     const li = document.createElement('li');
-
     const tag = document.createElement('span');
     tag.className = 'vtag';
     tag.textContent = name;
 
     const code = document.createElement('code');
-    code.textContent = trunc(value, 62);
+    code.textContent = trunc(value, 56);
     code.title = value;
 
     const btn = document.createElement('button');
@@ -445,13 +588,24 @@ function addVault(name, value) {
     return true;
 }
 
-/* ---------- POLA SENSITIF ---------- */
+/* ============================================================
+   4. POLA SENSITIF (Capture Group = hanya nilai rahasia)
+   ============================================================ */
 const PATTERNS = [
     { name: 'JWT Token',    re: /(eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]+)/g },
     { name: 'HLS Stream',   re: /(https?:\/\/[^\s"'<>\\]+\.m3u8[^\s"'<>\\]*)/gi },
     { name: 'RTSP Cam',     re: /(rtsp:\/\/[^\s"'<>\\]+)/gi },
-    { name: 'Secret Field', re: /"[a-zA-Z_]*(?:pin|password|secret)[a-zA-Z_]*"\s*:\s*"([^"]+)"/gi }
+    { name: 'Secret Field', re: /"[a-zA-Z_]*(?:pin|password|secret|token)[a-zA-Z_]*"\s*:\s*"([^"]+)"/gi },
+    { name: 'API Key',      re: /\b(sk_live_[A-Za-z0-9_-]{8,})/g }
 ];
+
+/* ---------- FILTER IP: skip alamat non-rahasia ---------- */
+function isInterestingIP(ip) {
+    if (ip.startsWith('127.'))   return false;
+    if (ip.startsWith('0.'))     return false;
+    if (ip === '255.255.255.255') return false;
+    return true;
+}
 
 function scanPayload(payload, source, verbose = false) {
     if (payload === undefined || payload === null) return 0;
@@ -462,12 +616,16 @@ function scanPayload(payload, source, verbose = false) {
     let found = 0;
 
     for (const pattern of PATTERNS) {
-        const matches = [...text.matchAll(pattern.re)];
-        for (const match of matches) {
+        pattern.re.lastIndex = 0;
+        let match;
+        while ((match = pattern.re.exec(text)) !== null) {
             const value = match[1];
-            if (value && addVault(pattern.name, value)) {
+            if (!value) continue;
+            if (pattern.name === 'IP Address' && !isInterestingIP(value)) continue;
+
+            if (addVault(pattern.name, value)) {
                 found++;
-                log(`[LEAK] ${pattern.name} (via ${source}): ${trunc(value, 80)}`, 'danger');
+                log(`[LEAK] ${pattern.name} (via ${source}): ${trunc(value, 78)}`, 'danger', true);
             }
         }
     }
@@ -480,7 +638,7 @@ function scanPayload(payload, source, verbose = false) {
 }
 
 /* ============================================================
-   4. UTIL: timeout wrapper
+   5. UTIL: timeout wrapper
    ============================================================ */
 function withTimeout(promise, ms) {
     return Promise.race([
@@ -490,47 +648,71 @@ function withTimeout(promise, ms) {
 }
 
 /* ============================================================
-   5. DEFINISI FUNGSI HOOK (agar bisa dipasang/dilepas berulang)
+   6. MOCK SELECTIVE (HANYA untuk URL demo internal)
+   ============================================================ */
+const MOCK_FETCH_PAYLOAD = () => ({
+    camera_id:  'CAM-01-PRESIDEN',
+    stream_url: 'https://cdn.cctv-portal.go.id/live/cam01.m3u8?token=SECRET',
+    admin_pin:  '8899',
+    rtsp_url:   'rtsp://admin:Pass123@10.0.0.1/live'
+});
+
+const MOCK_XHR_PAYLOAD = () => ({
+    status: 'success',
+    user:   'admin',
+    token:  'eyJhbGciOiJIUzI1NiJ9.U0VDUkVULVRPS0VOLTEyMw.abc'
+});
+
+const MOCK_WS_PAYLOAD = (cmd) => JSON.stringify({
+    type:      'STREAM_CONFIG',
+    command:   cmd,
+    url:       'https://cdn.cctv-portal.go.id/live/drone-07.m3u8?token=DRONE',
+    rtsp_url:  'rtsp://admin:Dr0n3P4ss@10.10.4.7:554/live/drone07',
+    lat:       -6.175392,
+    lng:       106.827153
+});
+
+const MOCK_SSE_PAYLOADS = [
+    JSON.stringify({ pin: '1357', stream_url: 'https://cdn.cctv-portal.go.id/live/sse-cam.m3u8?token=SSE' }),
+    JSON.stringify({ event: 'heartbeat', ts: Date.now() })
+];
+
+/* ============================================================
+   7. HOOK DEFINITIONS
    ============================================================ */
 
-/* ---------- 5A. HOOK FETCH ---------- */
-const hookedFetch = async function (input, init) {
+/* ---------- 7A. FETCH (Pass-Through Sniffer) ---------- */
+async function hookedFetch(input, init) {
     const url = (typeof input === 'string') ? input : (input && input.url) || String(input);
     const method = (init && init.method) || 'GET';
 
     stats.req++; refreshStats();
-    log(`[FETCH] ${method} ${trunc(url, 80)}`, 'info');
+    log(`[FETCH] ${method} ${trunc(url, 82)}`, 'info');
     if (init && init.body) log(`[FETCH] body → ${trunc(init.body, 60)}`, 'warn');
 
-    /* --- Mock: API CCTV internal --- */
+    /* --- Selective mock: hanya untuk API CCTV demo --- */
     if (url.includes('api.cctv-portal.go.id')) {
-        const payload = {
-            camera_id:  'CAM-01-PRESIDEN',
-            stream_url: 'https://cdn.cctv-portal.go.id/live/cam01.m3u8?token=SECRET',
-            admin_pin:  '8899',
-            rtsp_url:   'rtsp://admin:Pass123@10.0.0.1/live'
-        };
+        const payload = MOCK_FETCH_PAYLOAD();
         const body = JSON.stringify(payload);
-
-        setTimeout(() => scanPayload(body, 'FETCH'), 50);
-
-        return new Response(body, {
+        const response = new Response(body, {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
         });
+        response.clone().text().then(t => scanPayload(t, 'FETCH')).catch(() => {});
+        return response;
     }
 
-    /* --- Passthrough: internet asli (dengan fallback) --- */
+    /* --- Pass-through ke server ASLI --- */
     try {
-        const response = await withTimeout(NATIVE.fetch.call(this, input, init), 6000);
-        const clone = response.clone();
-        clone.text()
-            .then((text) => scanPayload(text, 'FETCH', true))
+        const response = await withTimeout(NATIVE.fetch.call(this, input, init), 8000);
+        response.clone().text()
+            .then(text => scanPayload(text, 'FETCH', true))
             .catch(() => {});
         return response;
     } catch (err) {
+        /* Fallback OFFLINE untuk demo button JSONPlaceholder */
         if (url.includes('jsonplaceholder.typicode.com')) {
-            log(`[FETCH] ⚠ Native fetch gagal (${err.message}) — pakai fallback mock`, 'warn');
+            log(`[FETCH] ⚠ Native gagal (${err.message}) — fallback demo offline`, 'warn');
             const mock = JSON.stringify({
                 userId: 1, id: 1,
                 title: 'delectus aut autem (offline fallback)',
@@ -544,32 +726,27 @@ const hookedFetch = async function (input, init) {
         log(`[FETCH] ✖ ${err.message}`, 'danger');
         throw err;
     }
-};
+}
 
-/* ---------- 5B. HOOK XHR ---------- */
-const hookedXHROpen = function (method, url) {
+/* ---------- 7B. XHR (Pass-Through Sniffer) ---------- */
+function hookedXHROpen(method, url) {
     this.__meta = { method: String(method || 'GET').toUpperCase(), url: String(url) };
     return NATIVE.XHRopen.apply(this, arguments);
-};
+}
 
-const hookedXHRSend = function (body) {
+function hookedXHRSend(body) {
     const meta = this.__meta || {};
     stats.req++; refreshStats();
-    log(`[XHR] ${meta.method || 'GET'} ${trunc(meta.url || '?', 80)}`, 'info');
+    log(`[XHR] ${meta.method || 'GET'} ${trunc(meta.url || '?', 82)}`, 'info');
     if (body) log(`[XHR] body → ${trunc(body, 60)}`, 'warn');
 
-    /* Mock: API CCTV internal */
+    /* --- Selective mock: hanya untuk API CCTV demo --- */
     if (meta.url && meta.url.includes('api.cctv-portal.go.id')) {
         const self = this;
-        const payload = {
-            status: 'success',
-            user: 'admin',
-            token: 'eyJhbGciOiJIUzI1NiJ9.U0VDUkVULVRPS0VOLTEyMw.abc'
-        };
+        const payload = MOCK_XHR_PAYLOAD();
         const bodyStr = JSON.stringify(payload);
 
         setTimeout(() => {
-            /* Set properti response di instance */
             const props = {
                 readyState: 4,
                 status: 200,
@@ -578,7 +755,6 @@ const hookedXHRSend = function (body) {
                 response: bodyStr,
                 responseURL: meta.url
             };
-
             for (const [k, v] of Object.entries(props)) {
                 try {
                     Object.defineProperty(self, k, { value: v, configurable: true, writable: true });
@@ -586,109 +762,260 @@ const hookedXHRSend = function (body) {
                     try { self[k] = v; } catch (e2) {}
                 }
             }
-
-            /* Fire event handlers */
-            const fire = (type, handler) => {
-                if (typeof handler === 'function') {
-                    try { handler.call(self, new Event(type)); } catch (e) {}
-                }
-            };
-
-            try { self.dispatchEvent(new Event('readystatechange')); } catch (e) {}
-            fire('readystatechange', self.onreadystatechange);
-
-            try { self.dispatchEvent(new Event('load')); } catch (e) {}
-            fire('load', self.onload);
-
-            try { self.dispatchEvent(new Event('loadend')); } catch (e) {}
-            fire('loadend', self.onloadend);
-
+            fireXHREvent(self, 'readystatechange');
+            fireXHREvent(self, 'load');
+            fireXHREvent(self, 'loadend');
             scanPayload(bodyStr, 'XHR');
-        }, 500);
-
+        }, 400);
         return;
     }
 
-    /* XHR asli */
-    return NATIVE.XHRsend.apply(this, arguments);
-};
-
-/* ---------- 5C. HOOK WEBSOCKET ---------- */
-const HookedWS = function (url, protocols) {
-    const urlStr = String(url);
-    stats.req++; refreshStats();
-    log(`[WS] Handshake → ${trunc(urlStr, 80)}`, 'info');
-
-    /* Mock: Drone CCTV internal */
-    if (urlStr.includes('drone.cctv-portal.go.id')) {
-        const fakeWS = {
-            readyState: 0,
-            url: urlStr,
-            send: function (data) {
-                log(`[WS] frame keluar → ${trunc(data, 60)}`, 'warn');
-
-                let cmd = 'UNKNOWN';
-                try { cmd = JSON.parse(data).command || cmd; } catch (e) {}
-
-                setTimeout(() => {
-                    const reply = JSON.stringify({
-                        type: 'STREAM_CONFIG',
-                        command: cmd,
-                        url: 'https://cdn.cctv-portal.go.id/live/drone-07.m3u8?token=DRONE',
-                        rtsp_url: 'rtsp://admin:Dr0n3P4ss@10.10.4.7:554/live/drone07',
-                        lat: -6.175392,
-                        lng: 106.827153
-                    });
-
-                    if (typeof fakeWS.onmessage === 'function') {
-                        try { fakeWS.onmessage({ data: reply }); } catch (e) {}
-                    }
-                    scanPayload(reply, 'WEBSOCKET');
-                }, 700);
-            },
-            close: function () {
-                this.readyState = 3;
-                if (typeof this.onclose === 'function') this.onclose();
+    /* --- Pass-through: sniff response lewat listener 'load' --- */
+    this.addEventListener('load', function () {
+        try {
+            if (this.responseType === '' || this.responseType === 'text') {
+                scanPayload(this.responseText, 'XHR', true);
+            } else if (this.responseType === 'json') {
+                scanPayload(this.response, 'XHR', true);
             }
-        };
+        } catch (e) {}
+    });
 
+    return NATIVE.XHRsend.apply(this, arguments);
+}
+
+function fireXHREvent(xhr, type) {
+    try { xhr.dispatchEvent(new Event(type)); } catch (e) {}
+    const handler = xhr['on' + type];
+    if (typeof handler === 'function') {
+        try { handler.call(xhr, new Event(type)); } catch (e) {}
+    }
+}
+
+/* ---------- 7C. WEBSOCKET (Pass-Through Sniffer) ---------- */
+class MockWS extends EventTarget {
+    constructor(url) {
+        super();
+        this.url = String(url);
+        this.protocol = '';
+        this.readyState = 0;
+        this.bufferedAmount = 0;
+        this.binaryType = 'blob';
         setTimeout(() => {
-            fakeWS.readyState = 1;
-            if (typeof fakeWS.onopen === 'function') {
-                try { fakeWS.onopen(); } catch (e) {}
+            if (this.readyState !== 0) return;
+            this.readyState = 1;
+            this.dispatchEvent(new Event('open'));
+            if (typeof this.onopen === 'function') {
+                try { this.onopen(new Event('open')); } catch (e) {}
             }
         }, 300);
+    }
+    send(data) {
+        log(`[WS] → ${trunc(data, 60)}`, 'warn');
+        let cmd = 'UNKNOWN';
+        try { cmd = JSON.parse(data).command || cmd; } catch (e) {}
+        const reply = MOCK_WS_PAYLOAD(cmd);
+        setTimeout(() => {
+            const ev = new MessageEvent('message', { data: reply });
+            this.dispatchEvent(ev);
+            if (typeof this.onmessage === 'function') {
+                try { this.onmessage(ev); } catch (e) {}
+            }
+            scanPayload(reply, 'WEBSOCKET');
+        }, 600);
+    }
+    close() {
+        this.readyState = 3;
+        this.dispatchEvent(new Event('close'));
+        if (typeof this.onclose === 'function') {
+            try { this.onclose(new Event('close')); } catch (e) {}
+        }
+    }
+}
 
-        return fakeWS;
+function HookedWS(url, protocols) {
+    const urlStr = String(url);
+    stats.req++; refreshStats();
+    log(`[WS] handshake → ${trunc(urlStr, 82)}`, 'info');
+
+    /* --- Selective mock: hanya untuk drone CCTV demo --- */
+    if (urlStr.includes('drone.cctv-portal.go.id')) {
+        return new MockWS(urlStr);
     }
 
-    /* WebSocket asli */
-    const realWS = (protocols !== undefined)
+    /* --- Pass-through ke server ASLI --- */
+    const ws = (protocols !== undefined)
         ? new NATIVE.WS(url, protocols)
         : new NATIVE.WS(url);
 
-    realWS.addEventListener('message', (e) => {
-        log(`[WS] frame masuk (${String(e.data).length} byte)`, 'info');
+    ws.addEventListener('open',  () => log('[WS] terbuka', 'success'));
+    ws.addEventListener('close', () => log('[WS] ditutup', 'sys'));
+    ws.addEventListener('error', () => log('[WS] error', 'danger'));
+    ws.addEventListener('message', (e) => {
+        log(`[WS] ← frame ${String(e.data).length} byte`, 'info');
         scanPayload(e.data, 'WEBSOCKET');
     });
 
-    return realWS;
-};
+    /* Sniff frame keluar */
+    const nativeSend = ws.send.bind(ws);
+    ws.send = function (data) {
+        log(`[WS] → ${trunc(data, 60)}`, 'warn');
+        scanPayload(data, 'WS-SEND');
+        return nativeSend(data);
+    };
+
+    return ws;
+}
 HookedWS.prototype = NATIVE.WS.prototype;
 HookedWS.CONNECTING = 0;
 HookedWS.OPEN = 1;
 HookedWS.CLOSING = 2;
 HookedWS.CLOSED = 3;
 
-/* ---------- 5D. HOOK STORAGE ---------- */
-const hookedSetItem = function (key, value) {
+/* ---------- 7D. STORAGE ---------- */
+function hookedSetItem(key, value) {
     log(`[STORAGE] Menyimpan "${key}" (${String(value).length} byte)`, 'info');
     scanPayload(value, 'STORAGE');
     return NATIVE.StorageSet.call(this, key, value);
-};
+}
+
+/* ---------- 7E. RTCPeerConnection ---------- */
+function HookedRTC(config) {
+    stats.req++; refreshStats();
+    log('[RTC] PeerConnection dibuat', 'info');
+
+    if (config && config.iceServers) {
+        const cfg = JSON.stringify(config.iceServers);
+        log(`[RTC] ICE servers: ${trunc(cfg, 70)}`, 'warn');
+        scanPayload(cfg, 'RTC-CONFIG');
+    }
+
+    const pc = new NATIVE.RTC(config);
+
+    const origSetLocal = pc.setLocalDescription.bind(pc);
+    pc.setLocalDescription = function (desc) {
+        if (desc && desc.sdp) {
+            log(`[RTC] SDP lokal (${desc.sdp.length} byte)`, 'info');
+            scanPayload(desc.sdp, 'RTC-SDP-LOCAL');
+        }
+        return origSetLocal(desc);
+    };
+
+    const origSetRemote = pc.setRemoteDescription.bind(pc);
+    pc.setRemoteDescription = function (desc) {
+        if (desc && desc.sdp) {
+            log(`[RTC] SDP remote (${desc.sdp.length} byte)`, 'info');
+            scanPayload(desc.sdp, 'RTC-SDP-REMOTE');
+        }
+        return origSetRemote(desc);
+    };
+
+    const origAddIce = pc.addIceCandidate.bind(pc);
+    pc.addIceCandidate = function (candidate) {
+        if (candidate && candidate.candidate) {
+            log(`[RTC] ICE candidate: ${trunc(candidate.candidate, 60)}`, 'sys');
+            scanPayload(candidate.candidate, 'RTC-ICE');
+        }
+        return origAddIce(candidate);
+    };
+
+    return pc;
+}
+HookedRTC.prototype = NATIVE.RTC.prototype;
+
+/* ---------- 7F. navigator.sendBeacon ---------- */
+function hookedSendBeacon(url, data) {
+    stats.req++; refreshStats();
+    log(`[BEACON] → ${trunc(url, 82)}`, 'info');
+
+    if (data !== undefined && data !== null) {
+        if (typeof data === 'string') {
+            log(`[BEACON] payload: ${trunc(data, 60)}`, 'warn');
+            scanPayload(data, 'BEACON');
+        } else if (data instanceof Blob) {
+            data.text().then(t => {
+                log(`[BEACON] blob payload: ${trunc(t, 60)}`, 'warn');
+                scanPayload(t, 'BEACON');
+            }).catch(() => {});
+        } else {
+            log(`[BEACON] payload: [FormData/binary]`, 'sys');
+        }
+    }
+
+    try {
+        return NATIVE.sendBeacon.call(navigator, url, data);
+    } catch (e) {
+        log(`[BEACON] ✖ ${e.message}`, 'danger');
+        return false;
+    }
+}
+
+/* ---------- 7G. EventSource ---------- */
+class MockEventSource extends EventTarget {
+    constructor(url) {
+        super();
+        this.url = String(url);
+        this.readyState = 0;
+        this.withCredentials = false;
+        setTimeout(() => {
+            if (this.readyState !== 0) return;
+            this.readyState = 1;
+            this.dispatchEvent(new Event('open'));
+            if (typeof this.onopen === 'function') {
+                try { this.onopen(new Event('open')); } catch (e) {}
+            }
+            MOCK_SSE_PAYLOADS.forEach((payload, i) => {
+                setTimeout(() => {
+                    if (this.readyState !== 1) return;
+                    const ev = new MessageEvent('message', { data: payload });
+                    this.dispatchEvent(ev);
+                    if (typeof this.onmessage === 'function') {
+                        try { this.onmessage(ev); } catch (e) {}
+                    }
+                    log(`[SSE] ← data ${payload.length} byte`, 'info');
+                    scanPayload(payload, 'SSE');
+                }, (i + 1) * 600);
+            });
+        }, 300);
+    }
+    close() {
+        this.readyState = 2;
+        this.dispatchEvent(new Event('close'));
+        if (typeof this.onclose === 'function') {
+            try { this.onclose(new Event('close')); } catch (e) {}
+        }
+    }
+}
+
+function HookedES(url, config) {
+    const urlStr = String(url);
+    stats.req++; refreshStats();
+    log(`[SSE] koneksi → ${trunc(urlStr, 82)}`, 'info');
+
+    /* --- Selective mock: hanya untuk SSE CCTV demo --- */
+    if (urlStr.includes('api.cctv-portal.go.id')) {
+        return new MockEventSource(urlStr);
+    }
+
+    /* --- Pass-through ke server ASLI --- */
+    const es = new NATIVE.ES(url, config);
+
+    es.addEventListener('open', () => log('[SSE] terbuka', 'success'));
+    es.addEventListener('error', () => log('[SSE] error / putus', 'warn'));
+    es.addEventListener('message', (e) => {
+        log(`[SSE] ← data ${String(e.data).length} byte`, 'info');
+        scanPayload(e.data, 'SSE');
+    });
+
+    return es;
+}
+HookedES.prototype = NATIVE.ES.prototype;
+HookedES.CONNECTING = 0;
+HookedES.OPEN = 1;
+HookedES.CLOSED = 2;
 
 /* ============================================================
-   6. PASANG / LEPAS HOOKS
+   8. PASANG / LEPAS HOOKS (Idempotent)
    ============================================================ */
 let hooksActive = false;
 
@@ -702,16 +1029,28 @@ function applyHooks() {
     HookedWS.prototype = NATIVE.WS.prototype;
     Storage.prototype.setItem = hookedSetItem;
 
-    hooksActive = true;
+    if (NATIVE.RTC) window.RTCPeerConnection = HookedRTC;
+    if (NATIVE.sendBeacon) {
+        try {
+            Object.defineProperty(navigator, 'sendBeacon', {
+                value: hookedSendBeacon,
+                writable: true,
+                configurable: true
+            });
+        } catch (e) {
+            try { navigator.sendBeacon = hookedSendBeacon; } catch (e2) {}
+        }
+    }
+    if (NATIVE.ES) window.EventSource = HookedES;
 
+    hooksActive = true;
     $('targetStatus').textContent = 'ONLINE (Hooked)';
     $('targetStatus').className = 'badge warn';
-    $('restoreLbl').textContent = 'RESTORE HOOKS';
+    $('restoreLbl').textContent = 'RESTORE';
 }
 
 function removeHooks() {
     if (!hooksActive) return;
-
     if (stealthOn) setStealth(false);
 
     window.fetch = NATIVE.fetch;
@@ -720,16 +1059,37 @@ function removeHooks() {
     window.WebSocket = NATIVE.WS;
     Storage.prototype.setItem = NATIVE.StorageSet;
 
-    hooksActive = false;
+    if (NATIVE.RTC) window.RTCPeerConnection = NATIVE.RTC;
+    if (NATIVE.sendBeacon) {
+        try {
+            Object.defineProperty(navigator, 'sendBeacon', {
+                value: NATIVE.sendBeacon,
+                writable: true,
+                configurable: true
+            });
+        } catch (e) {
+            try { navigator.sendBeacon = NATIVE.sendBeacon; } catch (e2) {}
+        }
+    }
+    if (NATIVE.ES) window.EventSource = NATIVE.ES;
 
+    /* Restore Object.freeze/seal bila di-patch oleh stealth */
+    if (window.__stealthBackup) {
+        Object.freeze = window.__stealthBackup.freeze;
+        Object.seal = window.__stealthBackup.seal;
+        Object.preventExtensions = window.__stealthBackup.preventExtensions;
+        delete window.__stealthBackup;
+    }
+
+    hooksActive = false;
     $('targetStatus').textContent = 'ONLINE (Native)';
     $('targetStatus').className = 'badge ok';
-    $('restoreLbl').textContent = 'REAPPLY HOOKS';
+    $('restoreLbl').textContent = 'REAPPLY';
     log('[SYS] Semua hook dilepas. Sistem kembali normal.', 'success');
 }
 
 /* ============================================================
-   7. STEALTH MODE
+   9. STEALTH MODE (toString + freeze protection)
    ============================================================ */
 let stealthOn = false;
 
@@ -738,27 +1098,81 @@ function setStealth(on) {
 
     const fakeNative = (name) => `function ${name}() { [native code] }`;
 
+    const hookTargets = [
+        [window.fetch,                    'fetch'],
+        [XMLHttpRequest.prototype.open,   'open'],
+        [XMLHttpRequest.prototype.send,   'send'],
+        [window.WebSocket,                'WebSocket'],
+        [Storage.prototype.setItem,       'setItem'],
+        [navigator.sendBeacon,            'sendBeacon'],
+        [window.RTCPeerConnection,        'RTCPeerConnection'],
+        [window.EventSource,              'EventSource']
+    ];
+
     if (on) {
-        window.fetch.toString                = () => fakeNative('fetch');
-        NATIVE.XHR.prototype.open.toString   = () => fakeNative('open');
-        NATIVE.XHR.prototype.send.toString   = () => fakeNative('send');
-        window.WebSocket.toString            = () => fakeNative('WebSocket');
-        Storage.prototype.setItem.toString   = () => fakeNative('setItem');
+        /* 1) Palsukan toString */
+        for (const [fn, name] of hookTargets) {
+            if (typeof fn === 'function') {
+                try { fn.toString = () => fakeNative(name); } catch (e) {}
+            }
+        }
+
+        /* 2) Lindungi hook dari Object.freeze / seal / preventExtensions */
+        if (!window.__stealthBackup) {
+            window.__stealthBackup = {
+                freeze:           Object.freeze,
+                seal:             Object.seal,
+                preventExtensions: Object.preventExtensions
+            };
+        }
+        const bk = window.__stealthBackup;
+
+        Object.freeze = function (obj) {
+            if (obj === window || obj === navigator) {
+                log('[STEALTH] Object.freeze() pada global diblokir', 'warn');
+                return obj;
+            }
+            return bk.freeze.call(Object, obj);
+        };
+        Object.seal = function (obj) {
+            if (obj === window || obj === navigator) {
+                log('[STEALTH] Object.seal() pada global diblokir', 'warn');
+                return obj;
+            }
+            return bk.seal.call(Object, obj);
+        };
+        Object.preventExtensions = function (obj) {
+            if (obj === window || obj === navigator) {
+                log('[STEALTH] Object.preventExtensions() pada global diblokir', 'warn');
+                return obj;
+            }
+            return bk.preventExtensions.call(Object, obj);
+        };
+
+        log('[SYS] Stealth AKTIF — hook disamarkan & dilindungi dari freeze/seal', 'success');
     } else {
-        delete window.fetch.toString;
-        delete NATIVE.XHR.prototype.open.toString;
-        delete NATIVE.XHR.prototype.send.toString;
-        delete window.WebSocket.toString;
-        delete Storage.prototype.setItem.toString;
+        /* 1) Pulihkan toString */
+        for (const [fn] of hookTargets) {
+            if (typeof fn === 'function') {
+                try { delete fn.toString; } catch (e) {}
+            }
+        }
+        /* 2) Pulihkan Object.* */
+        if (window.__stealthBackup) {
+            Object.freeze = window.__stealthBackup.freeze;
+            Object.seal = window.__stealthBackup.seal;
+            Object.preventExtensions = window.__stealthBackup.preventExtensions;
+            delete window.__stealthBackup;
+        }
+        log('[SYS] Stealth NONAKTIF — hook terdeteksi', 'warn');
     }
 
     $('stealthLbl').textContent = `STEALTH: ${on ? 'ON' : 'OFF'}`;
     $('stealthBtn').classList.toggle('on', on);
-    log(`[SYS] Stealth ${on ? 'AKTIF — hook disamarkan' : 'NONAKTIF — hook terdeteksi'}`, on ? 'success' : 'warn');
 }
 
 /* ============================================================
-   8. SISI KORBAN — ACTIONS
+   10. SISI KORBAN — ACTIONS
    ============================================================ */
 function tlog(msg, cls = '') {
     const box = $('targetScreen');
@@ -781,7 +1195,7 @@ function setFeed(url) {
     `;
 }
 
-/* ---------- 8A. REAL FETCH ---------- */
+/* ---------- 10A. REAL FETCH ---------- */
 async function targetRealFetch() {
     tlog('Mengambil data dari JSONPlaceholder (Internet Asli)...');
     try {
@@ -793,7 +1207,7 @@ async function targetRealFetch() {
     }
 }
 
-/* ---------- 8B. MOCK FETCH CCTV ---------- */
+/* ---------- 10B. MOCK FETCH CCTV ---------- */
 function targetMockFetch() {
     tlog('Meminta API CCTV Rahasia...');
     fetch('https://api.cctv-portal.go.id/v1/streams/live')
@@ -802,10 +1216,10 @@ function targetMockFetch() {
             tlog(`Berhasil! Kamera: ${data.camera_id}`, 'ok');
             setFeed(data.stream_url);
         })
-        .catch(() => tlog('✖ Gagal', 'err'));
+        .catch((e) => tlog(`✖ ${e.message}`, 'err'));
 }
 
-/* ---------- 8C. XHR CCTV ---------- */
+/* ---------- 10C. XHR CCTV ---------- */
 function targetXHR() {
     tlog('Menghubungi server via XHR...');
     const xhr = new XMLHttpRequest();
@@ -826,7 +1240,7 @@ function targetXHR() {
     xhr.send();
 }
 
-/* ---------- 8D. WEBSOCKET DRONE ---------- */
+/* ---------- 10D. WEBSOCKET DRONE ---------- */
 function targetWS() {
     tlog('Membuka WebSocket Drone...');
     const ws = new WebSocket('wss://drone.cctv-portal.go.id/live');
@@ -835,7 +1249,6 @@ function targetWS() {
         tlog('Terhubung. Meminta STREAM_URL...', 'ok');
         ws.send(JSON.stringify({ command: 'STREAM_URL' }));
     };
-
     ws.onmessage = (e) => {
         try {
             const data = JSON.parse(e.data);
@@ -845,29 +1258,31 @@ function targetWS() {
             tlog('✖ Frame tidak valid', 'err');
         }
     };
-
     ws.onerror = () => tlog('✖ websocket error', 'err');
 }
 
-/* ---------- 8E. STORAGE ---------- */
+/* ---------- 10E. STORAGE ---------- */
 function targetStorage() {
     tlog('Menyimpan Session Token...');
     localStorage.setItem('auth_token', 'eyJhbGciOiJIUzI1NiJ9.USER-ADMIN-1.SECRET-KEY');
     tlog('Token berhasil disimpan.', 'ok');
 }
 
-/* ---------- 8F. INTEGRITY CHECK ---------- */
+/* ---------- 10F. INTEGRITY CHECK ---------- */
 function targetDetect() {
     tlog('Menjalankan Integrity Check...');
 
     setTimeout(() => {
         const checks = [
-            ['window.fetch',              window.fetch],
-            ['XMLHttpRequest.open',       XMLHttpRequest.prototype.open],
-            ['XMLHttpRequest.send',       XMLHttpRequest.prototype.send],
-            ['window.WebSocket',          window.WebSocket],
-            ['Storage.setItem',           Storage.prototype.setItem]
-        ];
+            ['window.fetch',                window.fetch],
+            ['XMLHttpRequest.open',         XMLHttpRequest.prototype.open],
+            ['XMLHttpRequest.send',         XMLHttpRequest.prototype.send],
+            ['window.WebSocket',            window.WebSocket],
+            ['Storage.setItem',             Storage.prototype.setItem],
+            ['navigator.sendBeacon',        navigator.sendBeacon],
+            ['window.RTCPeerConnection',    window.RTCPeerConnection],
+            ['window.EventSource',          window.EventSource]
+        ].filter(([, fn]) => typeof fn === 'function');
 
         const dirty = checks
             .filter(([, fn]) => !/\[native code\]/.test(String(fn)))
@@ -881,8 +1296,133 @@ function targetDetect() {
     }, 400);
 }
 
+/* ---------- 10G. NEW: WebRTC test ---------- */
+async function targetRTC() {
+    tlog('Membuat RTCPeerConnection...');
+    try {
+        const pc = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+        pc.createDataChannel('test-channel');
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        tlog('SDP offer dibuat & setLocalDescription dipanggil.', 'ok');
+
+        setTimeout(() => { try { pc.close(); } catch (e) {} }, 800);
+    } catch (e) {
+        tlog(`✖ RTC error: ${e.message}`, 'err');
+    }
+}
+
+/* ---------- 10H. NEW: sendBeacon test ---------- */
+function targetBeacon() {
+    tlog('Mengirim beacon background...');
+    const payload = JSON.stringify({
+        event: 'pageview',
+        pin: '7766',
+        token: 'eyJhbGciOiJIUzI1NiJ9.QkVBR09OLVNFQ1JFVC.xyz'
+    });
+    const ok = navigator.sendBeacon('https://api.cctv-portal.go.id/beacon/track', payload);
+    tlog(ok ? 'Beacon terkirim (queued).' : 'Beacon gagal dikirim.', ok ? 'ok' : 'err');
+}
+
+/* ---------- 10I. NEW: EventSource test ---------- */
+function targetEventSource() {
+    tlog('Membuka EventSource (SSE)...');
+    try {
+        const es = new EventSource('https://api.cctv-portal.go.id/sse/live');
+        es.onopen = () => tlog('SSE terbuka.', 'ok');
+        es.onmessage = (e) => {
+            try {
+                const d = JSON.parse(e.data);
+                if (d.stream_url) {
+                    tlog(`SSE data: ${trunc(d.stream_url, 40)}`, 'ok');
+                    setFeed(d.stream_url);
+                } else {
+                    tlog(`SSE data: ${trunc(e.data, 40)}`, 'ok');
+                }
+            } catch (err) {
+                tlog(`SSE data: ${trunc(e.data, 40)}`, 'ok');
+            }
+        };
+        es.onerror = () => tlog('SSE error / ditutup.', 'err');
+        setTimeout(() => { try { es.close(); } catch (e) {} }, 3000);
+    } catch (e) {
+        tlog(`✖ SSE error: ${e.message}`, 'err');
+    }
+}
+
 /* ============================================================
-   9. EVENT BINDING
+   11. URL / IFRAME LOADER
+   ============================================================ */
+function openUrl() {
+    let url = $('urlInput').value.trim();
+    if (!url) return;
+
+    /* Auto-prepend scheme jika perlu */
+    if (!/^https?:\/\//i.test(url) && !/^(about|data):/i.test(url)) {
+        if (/^[\w.-]+\.[a-z]{2,}/i.test(url)) url = 'https://' + url;
+        else { tlog('URL tidak valid.', 'err'); return; }
+    }
+
+    const frame  = $('targetFrame');
+    const screen = $('targetScreen');
+
+    frame.src = url;
+    frame.style.display = 'block';
+    screen.style.display = 'none';
+    $('closeUrlBtn').classList.add('visible');
+
+    tlog(`Memuat iframe: ${trunc(url, 40)}`);
+    log(`[BROWSER] Memuat iframe: ${trunc(url, 70)}`, 'warn');
+    log(`[BROWSER] ⚠ Catatan: request dari iframe TIDAK dapat disadap dari parent (same-origin policy).`, 'sys');
+    log(`[BROWSER] Gunakan tombol demo di panel kiri untuk menguji hook.`, 'sys');
+}
+
+function closeUrl() {
+    const frame  = $('targetFrame');
+    const screen = $('targetScreen');
+
+    frame.src = 'about:blank';
+    frame.style.display = 'none';
+    screen.style.display = '';
+    $('closeUrlBtn').classList.remove('visible');
+    tlog('Iframe ditutup.');
+}
+
+/* ============================================================
+   12. EXPORT VAULT (JSON)
+   ============================================================ */
+function exportVault() {
+    if (vaultEntries.length === 0) {
+        log('[EXPORT] Vault kosong — tidak ada yang diekspor.', 'warn');
+        return;
+    }
+
+    const data = {
+        exported_at: new Date().toISOString(),
+        total: vaultEntries.length,
+        entries: vaultEntries
+    };
+
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vault-${Date.now()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+    log(`[EXPORT] ${vaultEntries.length} entri diekspor ke vault-*.json`, 'success');
+}
+
+/* ============================================================
+   13. EVENT BINDING
    ============================================================ */
 $('clearBtn').addEventListener('click', () => {
     termEl.textContent = '';
@@ -900,15 +1440,27 @@ $('restoreBtn').addEventListener('click', () => {
     }
 });
 
+$('exportBtn').addEventListener('click', exportVault);
+
+$('filterAll').addEventListener('click', () => applyFilter('all'));
+$('filterLeak').addEventListener('click', () => applyFilter('leak'));
+
+$('openUrlBtn').addEventListener('click', openUrl);
+$('closeUrlBtn').addEventListener('click', closeUrl);
+$('urlInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') openUrl();
+});
+
 /* ============================================================
-   10. INISIALISASI
+   14. INISIALISASI
    ============================================================ */
 applyHooks();
 
 log('════════════════════════════════════════════', 'sys');
-log(' ADVANCED INTERCEPTOR v3.0 — CYBER LAB', 'success');
+log(' ADVANCED INTERCEPTOR v3.1 — CYBER LAB', 'success');
 log('════════════════════════════════════════════', 'sys');
-log('[SYS] Hook terpasang: fetch, XHR, WebSocket, Storage', 'info');
+log('[SYS] Hook: fetch, XHR, WebSocket, Storage, Beacon, RTC, EventSource', 'info');
+log('[SYS] Mode: PASS-THROUGH SNIFFER (mock hanya untuk demo CCTV)', 'info');
 log('[SYS] Menunggu trafik dari target...', 'sys');
 refreshStats();
 updateVaultCount();
