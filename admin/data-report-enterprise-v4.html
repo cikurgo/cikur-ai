@@ -1,0 +1,2863 @@
+<!doctype html>
+<html lang="id" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Enterprise Data Report Studio</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#091321;--p:#112139;--line:#2c4562;--txt:#eaf2fc;--muted:#a5b7cb;
+  --accent:#54d4c3;--accent2:#709df0;--panel:#12243a;--panel2:#0d1a2c;
+  --input:#081525;--th:#1b3049;--bar:#54d4c3;--bar2:#709df0;
+  --ext-top:rgba(84,212,100,.18);--ext-bot:rgba(255,128,128,.18);
+  --modal-bg:rgba(4, 10, 18, 0.85);
+}
+html[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f4f8fc;--p:#ffffff;--line:#cfdae6;--txt:#12243a;--muted:#5a6b7f;
+  --accent:#0f8a7c;--accent2:#2f6ed0;--panel:#ffffff;--panel2:#f8fbff;
+  --input:#f0f5fa;--th:#e2ebf5;--bar:#0f8a7c;--bar2:#2f6ed0;
+  --ext-top:rgba(15,138,124,.15);--ext-bot:rgba(210,60,60,.15);
+  --modal-bg:rgba(255, 255, 255, 0.85);
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(135deg,var(--bg),var(--panel));color:var(--txt);font:15px/1.5 system-ui,Arial;overflow-x:hidden}
+header{padding:22px clamp(14px,4vw,42px);background:var(--p);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+h1{margin:0;font-size:clamp(23px,3vw,34px)}
+header p,.muted{color:var(--muted)}
+main{max-width:1450px;margin:auto;padding:20px clamp(10px,3vw,32px)}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px}
+.card{grid-column:span 12;background:linear-gradient(145deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:15px;padding:17px;min-width:0;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1)}
+.half{grid-column:span 6}
+h2{font-size:18px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+label{display:block;font-size:13px;color:var(--muted);margin:0 0 5px}
+input,select,button,textarea{font:inherit}
+input,select,textarea{width:100%;padding:10px;background:var(--input);color:var(--txt);border:1px solid var(--line);border-radius:8px;text-overflow:ellipsis;}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent2);outline-offset:-1px}
+button{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 15px;background:var(--accent);border:1px solid var(--accent);color:#041014;border-radius:9px;cursor:pointer;font-weight:650;transition:all .15s;}
+html[data-theme="light"] button{color:#fff}
+button:hover:not(:disabled){filter:brightness(1.1);transform:translateY(-1px)}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.45;cursor:not-allowed;transform:none!important}
+button.secondary{background:var(--th);border-color:var(--line);color:var(--txt)}
+html[data-theme="light"] button.secondary{color:var(--txt)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.status{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--input);border:1px solid var(--line);border-radius:9px;padding:10px;margin-top:10px;color:var(--muted);font-size:14px}
+.status.loading::before{content:"";display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.good{color:#3fd0a8!important;border-color:#3fd0a8!important}
+.warn{color:#ffb84d!important;border-color:#ffb84d!important}
+.bad{color:#ff8080!important;border-color:#ff8080!important}
+
+/* Progress Bar */
+.progress-container{width:100%;height:6px;background:var(--input);border-radius:4px;margin-top:10px;overflow:hidden;display:none}
+.progress-fill{height:100%;background:var(--accent);width:0%;transition:width 0.3s ease;}
+
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.kpi{background:var(--p);border:1px solid var(--line);border-radius:11px;padding:13px}
+.kpi small{display:block;color:var(--muted)}
+.kpi strong{font-size:clamp(18px,2vw,27px);overflow-wrap:anywhere}
+.tablewrap{overflow:auto;max-height:440px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)}
+table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
+td,th{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
+th{background:var(--th);position:sticky;top:0;cursor:pointer;user-select:none;z-index:1}
+th:hover{filter:brightness(1.1)}
+th .sorticon{opacity:.35;transition:opacity .12s,transform .15s}
+th.sorted .sorticon{opacity:1}
+th .sorticon.desc{transform:rotate(180deg)}
+tr:nth-child(even) td{background:rgba(128,160,200,.05)}
+tr.ext-top td{background:var(--ext-top)!important}
+tr.ext-bot td{background:var(--ext-bot)!important}
+.chart{position:relative;height:290px;background:var(--input);border-radius:8px;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.chart::before{content:"Menunggu data untuk digrafikkan...";color:var(--muted);font-size:13px;position:absolute;z-index:0}
+.chart.has-data::before{display:none}
+.chart canvas{position:relative;z-index:1;display:block}
+.chartinfo{font-size:12px;color:var(--muted);margin:6px 0 0}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:2px 8px;margin:2px;color:var(--muted);font-size:12px}
+.pager{display:flex;align-items:center;gap:8px;margin:10px 0;flex-wrap:wrap}
+.pager select{width:auto;padding:6px 8px}
+.pager button{padding:6px 10px}
+.pager .spacer{flex:1}
+.preview-toolbar{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0;align-items:center;font-size:13px}
+.preview-toolbar label{display:inline-flex;align-items:center;gap:5px;color:var(--muted);cursor:pointer;margin:0}
+.preview-toolbar input[type=checkbox]{width:auto;padding:0}
+details#colToggle{margin:8px 0 10px}
+details#colToggle summary{cursor:pointer;user-select:none;padding:6px 0;color:var(--muted);font-size:13px}
+.collist{display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:var(--input);border-radius:8px;border:1px solid var(--line);max-height:160px;overflow:auto}
+.collist label{display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;color:var(--txt);margin:0}
+.collist input[type=checkbox]{width:auto;padding:0}
+footer{font-size:12px;color:var(--muted);margin:20px 0;text-align:center}
+.theme-toggle{background:var(--th);border:1px solid var(--line);color:var(--txt);padding:8px 11px;border-radius:8px;cursor:pointer}
+.rowbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.rowbar label{margin:0;font-size:13px}
+.rowbar select{width:auto;padding:6px 8px}
+#pivot table{table-layout:auto}
+#pivot tbody th{position:sticky;left:0;background:var(--th);z-index:2;cursor:default}
+#pivot tfoot th,#pivot tfoot td{background:var(--th);font-weight:700;border-top:2px solid var(--line)}
+#pivot td{text-align:right}
+
+/* INLINE FILE MONITOR (standby panel, bukan popup) */
+.monitor-standby{padding:18px;border:1px dashed var(--line);border-radius:10px;background:var(--input);color:var(--muted);text-align:center;font-size:14px}
+.monitor-standby strong{color:var(--txt);display:block;margin-bottom:4px}
+.monitor-active{display:none}
+.monitor-active.show{display:block}
+.monitor-meta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:10px;font-size:13px}
+.monitor-meta .pill-name{font-weight:650;color:var(--accent)}
+#modalTableWrap{max-height:280px}
+.adv-row{display:grid;grid-template-columns:1.2fr 1fr 1.4fr auto;gap:8px;align-items:center}
+.adv-row select,.adv-row input{width:100%;padding:8px}
+.quality-score{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-weight:650;font-size:13px;border:1px solid var(--line)}
+.quality-score.good{background:rgba(63,208,168,.15);color:#3fd0a8}
+.quality-score.warn{background:rgba(255,184,77,.15);color:#ffb84d}
+.quality-score.bad{background:rgba(255,128,128,.15);color:#ff8080}
+@media(max-width:600px){.adv-row{grid-template-columns:1fr}}
+/* UI refinement: clearer focus, compact mobile controls, and safe wide-table scrolling. */
+button:focus-visible,.theme-toggle:focus-visible,summary:focus-visible{outline:2px solid var(--accent2);outline-offset:3px}
+#pivot{max-width:100%;overflow:auto;border-radius:9px}
+#pivot table{min-width:max-content}
+@media(max-width:600px){
+  header{padding:16px 12px}
+  main{padding:12px 8px}
+  .actions button{flex:1 1 auto;min-width:110px}
+  .pager{gap:6px}
+  .pager .spacer{flex-basis:100%}
+  .chart{height:240px}
+  .status{font-size:13px}
+}
+
+@media(max-width:800px){
+  .half{grid-column:span 12}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  header{flex-direction:column;align-items:flex-start}
+}
+@media(max-width:480px){
+  .fields{grid-template-columns:1fr}
+  .card{padding:12px}
+}
+@media print{
+  body{background:#fff!important;color:#000!important}
+  .no-print,header,footer,.actions,button,input,select,textarea,.pager,details#colToggle,.status,.preview-toolbar,.rowbar,#fileMonitorCard{display:none!important}
+  .card{background:#fff!important;border:1px solid #ccc!important;color:#000!important;break-inside:avoid;box-shadow:none}
+  .kpi{background:#f5f5f5!important;border-color:#ddd!important;color:#000!important}
+  .tablewrap{max-height:none!important;overflow:visible!important;border-color:#ccc!important}
+  table td,table th{border-bottom:1px solid #ccc!important}
+  th{background:#eee!important;color:#000!important;position:static}
+  .chart{height:280px;page-break-inside:avoid;border:none}
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+<header>
+  <div>
+    <h1>📊 Enterprise Data Report Studio</h1>
+    <p>Unggah → Preview → Validasi → Hitung → Filter → Grafik interaktif → Ekspor multi-format.</p>
+  </div>
+  <button id="themeBtn" class="theme-toggle" title="Ganti tema">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    <span id="themeLabel">Terang</span>
+  </button>
+</header>
+<main><div class="grid">
+
+<section class="card half no-print">
+  <h2>1. Unggah Sumber Data</h2>
+  <label>Excel, CSV, Word, PDF, atau TXT (Maks. rekomendasi: 100MB)</label>
+  <input id="file" type="file" accept=".xlsx,.xls,.csv,.docx,.pdf,.txt">
+  <div class="progress-container" id="progContainer"><div class="progress-fill" id="progFill"></div></div>
+  <div class="actions">
+    <button id="load">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Pilih & Preview File
+    </button>
+    <button id="sample" class="secondary">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.7 5.7 1.9-5.7 1.9L12 18l-1.9-5.5L4.4 10.6l5.7-1.9L12 3z"/></svg>
+      Muat Contoh
+    </button>
+    <button id="reset" class="secondary">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      Reset
+    </button>
+  </div>
+  <div id="loadStatus" class="status">Belum ada file. File asli tidak diubah.</div>
+  <p class="muted" style="margin-top:8px">CSV diproses di worker latar belakang bila didukung browser. File besar tetap membutuhkan memori perangkat. Data tidak dikirim ke server manapun (100% Client-side).</p>
+</section>
+
+<section class="card no-print" id="fileMonitorCard">
+  <h2>📋 Monitor Pratinjau File</h2>
+  <div id="monitorStandby" class="monitor-standby">
+    <strong>Standby</strong>
+    Pilih file di atas. Pratinjau header & baris awal akan muncul di sini (bukan popup), lalu Anda konfirmasi sebelum data diproses penuh.
+  </div>
+  <div id="monitorActive" class="monitor-active">
+    <div class="monitor-meta">
+      <span>File: <span id="modalFileName" class="pill-name">—</span></span>
+      <span class="pill">Preview: <b id="modalRowCount">0</b> baris</span>
+      <span id="monitorHint" class="muted"></span>
+    </div>
+    <div id="modalTableWrap" class="tablewrap">
+      <p class="muted" style="padding:10px">Menunggu data…</p>
+    </div>
+    <div class="actions">
+      <button id="confirmProcessBtn">✓ Proses Seluruh Data</button>
+      <button id="cancelPreviewBtn" class="secondary">Batal / Tutup Preview</button>
+    </div>
+  </div>
+</section>
+
+<section class="card half no-print">
+  <h2>2. Pilihan Analisis & Filter</h2>
+  <div class="fields">
+    <div><label>Sheet Excel</label><select id="sheet" disabled></select></div>
+    <div><label>Kelompokkan menurut</label><select id="group" disabled></select></div>
+    <div><label>Kolom angka</label><select id="value" disabled></select></div>
+    <div><label>Agregasi</label><select id="agg" disabled>
+      <option value="sum">Total (SUM)</option>
+      <option value="avg">Rata-rata (AVG)</option>
+      <option value="count">Jumlah data (COUNT)</option>
+      <option value="min">Minimum</option>
+      <option value="max">Maksimum</option>
+      <option value="median">Median</option>
+    </select></div>
+    <div><label>Kolom tanggal</label><select id="date" disabled><option value="">Tidak digunakan</option></select></div>
+    <div><label>Tanggal mulai</label><input id="from" type="date" disabled></div>
+    <div><label>Tanggal akhir</label><input id="to" type="date" disabled></div>
+    <div><label>Pencarian global</label><input id="globalSearch" disabled placeholder="Kata kunci..."></div>
+    <div><label>Kolom filter (cepat)</label><select id="filter" disabled><option value="">Tidak digunakan</option></select></div>
+    <div><label>Nilai filter cepat (koma = OR)</label><input id="needle" disabled placeholder="Mis. Jakarta, Bandung"></div>
+  </div>
+
+  <details id="advFilterBox" style="margin-top:12px">
+    <summary style="cursor:pointer;color:var(--muted);font-size:13px;user-select:none">⚙ Filter lanjutan (multi-kondisi AND/OR)</summary>
+    <div style="margin-top:10px;padding:12px;background:var(--input);border:1px solid var(--line);border-radius:10px">
+      <div class="rowbar" style="margin-bottom:8px">
+        <label>Logika antar kondisi:</label>
+        <select id="advLogic" disabled>
+          <option value="and">AND (semua harus cocok)</option>
+          <option value="or">OR (salah satu cocok)</option>
+        </select>
+        <button id="advAdd" class="secondary" disabled style="padding:6px 10px;margin-left:auto">+ Kondisi</button>
+      </div>
+      <div id="advFilterList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <p class="muted" style="margin:8px 0 0;font-size:12px">Operator: contains, equals, ≠, &gt;, &lt;, ≥, ≤, kosong, tidak kosong, starts with, ends with.</p>
+      <div class="rowbar" style="margin-top:10px;gap:6px">
+        <input id="presetName" disabled placeholder="Nama preset filter…" style="flex:1;min-width:120px;padding:8px">
+        <button id="presetSave" class="secondary" disabled style="padding:6px 10px">Simpan preset</button>
+        <select id="presetLoad" disabled style="width:auto;min-width:140px">
+          <option value="">Muat preset…</option>
+        </select>
+        <button id="presetDelete" class="secondary" disabled style="padding:6px 10px" title="Hapus preset terpilih">Hapus</button>
+      </div>
+    </div>
+  </details>
+
+  <details id="calcBox" style="margin-top:10px">
+    <summary style="cursor:pointer;color:var(--muted);font-size:13px;user-select:none">∑ Kolom hitung (calculated)</summary>
+    <div style="margin-top:10px;padding:12px;background:var(--input);border:1px solid var(--line);border-radius:10px">
+      <div class="fields" style="grid-template-columns:1fr 2fr auto">
+        <div><label>Nama kolom baru</label><input id="calcName" disabled placeholder="Mis. HargaSatuan"></div>
+        <div><label>Ekspresi (nama kolom + − × ÷)</label><input id="calcExpr" disabled placeholder="Mis. Pendapatan / Jumlah"></div>
+        <div style="display:flex;align-items:flex-end"><button id="calcAdd" class="secondary" disabled style="width:100%">Tambah</button></div>
+      </div>
+      <div id="calcList" class="muted" style="margin-top:8px;font-size:12px"></div>
+    </div>
+  </details>
+
+  <div class="actions">
+    <button id="analyze" disabled>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+      Jalankan Analisis
+    </button>
+    <button id="clear" class="secondary" disabled>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      Hapus Filter
+    </button>
+    <button id="cleanDup" class="secondary" disabled title="Hapus data yang persis sama">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      Hapus Duplikat
+    </button>
+    <button id="cleanEmpty" class="secondary" disabled title="Hapus baris yang semua selnya kosong">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+      Hapus Baris Kosong
+    </button>
+    <button id="undoBtn" class="secondary" disabled title="Urungkan clean / kolom hitung (Ctrl+Z)">↩ Undo</button>
+  </div>
+  <div id="analysisStatus" class="status">Unggah dataset untuk memulai.</div>
+  <p class="muted" style="margin:8px 0 0;font-size:12px">Shortcut: <b>Ctrl+Enter</b> analisis · <b>Ctrl+Z</b> undo · <b>Ctrl+S</b> ekspor Excel</p>
+</section>
+
+<section class="card">
+  <h2>3. Ringkasan Indikator</h2>
+  <div class="kpis">
+    <div class="kpi"><small>Baris setelah filter</small><strong id="rowsK">—</strong></div>
+    <div class="kpi"><small>Total nilai</small><strong id="sumK">—</strong></div>
+    <div class="kpi"><small>Rata-rata</small><strong id="avgK">—</strong></div>
+    <div class="kpi"><small>Minimum / maksimum</small><strong id="minmaxK">—</strong></div>
+  </div>
+  <div id="extra" class="muted" style="margin-top:10px">Indikator tambahan akan muncul setelah analisis.</div>
+</section>
+
+<section class="card half">
+  <h2>4. Grafik per Kelompok</h2>
+  <div class="rowbar">
+    <label>Jenis chart:</label>
+    <select id="chartType">
+      <option value="bar">Batang</option>
+      <option value="bar_h">Batang horizontal</option>
+      <option value="line">Garis</option>
+      <option value="pie">Pie</option>
+      <option value="doughnut">Doughnut</option>
+    </select>
+    <button id="dlBar" class="secondary" style="margin-left:auto;padding:6px 10px" title="Unduh grafik sebagai PNG">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      PNG
+    </button>
+  </div>
+  <div class="chart" id="barWrap"><canvas id="bar"></canvas></div>
+  <p id="barInfo" class="chartinfo"></p>
+</section>
+
+<section class="card half">
+  <h2>5. Distribusi Nilai</h2>
+  <div class="chart" id="histWrap"><canvas id="hist"></canvas></div>
+  <p id="histInfo" class="chartinfo"></p>
+</section>
+
+<section class="card half">
+  <h2>6. Tren Waktu</h2>
+  <div class="rowbar">
+    <label>Granularitas:</label>
+    <select id="tsGran">
+      <option value="day">Harian</option>
+      <option value="week">Mingguan</option>
+      <option value="month" selected>Bulanan</option>
+      <option value="year">Tahunan</option>
+    </select>
+    <label style="margin-left:8px">Agregasi:</label>
+    <select id="tsAgg">
+      <option value="sum">Total</option>
+      <option value="avg">Rata-rata</option>
+      <option value="count">Jumlah</option>
+      <option value="min">Min</option>
+      <option value="max">Max</option>
+      <option value="median">Median</option>
+    </select>
+  </div>
+  <div class="chart" id="tsWrap"><canvas id="ts"></canvas></div>
+  <p id="tsInfo" class="chartinfo">Pilih kolom tanggal di bagian 2 untuk melihat tren.</p>
+</section>
+
+<section class="card">
+  <h2>7. Rekapitulasi Kelompok</h2>
+  <div id="summary" class="tablewrap"><p class="muted" style="padding:10px">Belum ada hasil.</p></div>
+</section>
+
+<section class="card">
+  <h2>8. Pivot Table (Cross-tab)</h2>
+  <div class="fields" style="margin-bottom:10px">
+    <div><label>Baris</label><select id="pivotRow" disabled></select></div>
+    <div><label>Kolom</label><select id="pivotCol" disabled></select></div>
+    <div><label>Nilai</label><select id="pivotValue" disabled></select></div>
+    <div><label>Agregasi</label><select id="pivotAgg" disabled>
+      <option value="sum">Total</option>
+      <option value="avg">Rata-rata</option>
+      <option value="count">Jumlah</option>
+      <option value="min">Min</option>
+      <option value="max">Max</option>
+      <option value="median">Median</option>
+    </select></div>
+    <div><label>Batas Baris (Top N)</label><select id="pivotLimit" disabled>
+      <option value="50">Top 50</option>
+      <option value="100" selected>Top 100</option>
+      <option value="200">Top 200</option>
+      <option value="500">Top 500</option>
+      <option value="all">Semua (Hati-hati Freeze)</option>
+    </select></div>
+    <div><label>Tampilan %</label><select id="pivotShare" disabled>
+      <option value="none">Nilai saja</option>
+      <option value="grand">% Grand total</option>
+      <option value="row">% per baris</option>
+      <option value="col">% per kolom</option>
+    </select></div>
+  </div>
+  <div class="actions">
+    <button id="pivotRun" disabled>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Bangun Pivot
+    </button>
+  </div>
+  <div id="pivot" class="tablewrap" style="margin-top:10px"><p class="muted" style="padding:10px">Pilih baris, kolom, dan nilai, lalu klik Bangun Pivot.</p></div>
+</section>
+
+<section class="card">
+  <h2>9. Pratinjau Data Hasil Filter</h2>
+  <div class="preview-toolbar">
+    <label><input type="checkbox" id="highlightEx"> Sorot nilai ekstrem (top 3 & bottom 3)</label>
+  </div>
+  <details id="colToggle"><summary>Tampilkan / sembunyikan kolom</summary><div id="colList" class="collist"></div></details>
+  <div class="pager">
+    <button id="prevPage" class="secondary" disabled title="Sebelumnya">◀</button>
+    <span id="pageInfo" class="muted">—</span>
+    <button id="nextPage" class="secondary" disabled title="Berikutnya">▶</button>
+    <span class="spacer"></span>
+    <label style="margin:0;display:flex;align-items:center;gap:6px;font-size:13px">
+      Baris/halaman
+      <select id="pageSize" style="width:auto">
+        <option value="25">25</option>
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+        <option value="250">250</option>
+        <option value="0">Semua</option>
+      </select>
+    </label>
+  </div>
+  <div id="preview" class="tablewrap"><p class="muted" style="padding:10px">Belum ada data.</p></div>
+</section>
+
+<section class="card half no-print">
+  <h2>10. Kualitas Data</h2>
+  <div id="quality" class="status">Belum diperiksa.</div>
+</section>
+
+<section class="card half no-print">
+  <h2>11. Ekspor & Bagikan</h2>
+  <p class="muted">Unduh hasil dalam berbagai format atau bagikan langsung.</p>
+  <div class="actions">
+    <button id="xlsx" disabled>Excel</button>
+    <button id="csv" disabled>CSV</button>
+    <button id="report" disabled>HTML</button>
+    <button id="pdf" disabled>PDF</button>
+    <button id="print" class="secondary" disabled>Cetak</button>
+    <button id="copy" class="secondary" disabled>Salin</button>
+    <button id="shareBtn" class="secondary" disabled style="background:#709df0;border-color:#709df0;color:#fff">Bagikan (Share)</button>
+    <button id="emailBtn" class="secondary" disabled style="background:#e87ea1;border-color:#e87ea1;color:#fff">Kirim Email</button>
+  </div>
+  <div id="exportStatus" class="status">Jalankan analisis sebelum ekspor.</div>
+</section>
+
+<section class="card no-print">
+  <h2>12. Teks Hasil Ekstraksi Dokumen</h2>
+  <textarea id="docText" rows="5" readonly placeholder="Teks dari Word/PDF/TXT akan muncul di sini."></textarea>
+</section>
+
+</div>
+<footer>Enterprise Data Report Studio — presisi Kahan sum, percentile interpolasi, insight periode, preset filter, rekonsiliasi total. Client-side 100%.</footer>
+</main>
+
+<script>
+"use strict";
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ---------- STATE ----------
+  const S = {
+    wb: null, sheets: [], headers: [], columnTypes: {},
+    raw: [], rows: [], groups: [],
+    name: "", ready: false, analysis: null,
+    v: null, g: null,
+    sort: { col: null, dir: 1 },
+    page: 1, pageSize: 50,
+    hiddenCols: new Set(),
+    filterSkip: 0,
+    busy: false,
+    chartType: "bar", agg: "sum",
+    globalSearch: "",
+    highlightExtremes: false,
+    barChartInstance: null, histChartInstance: null, tsChartInstance: null,
+    pivot: null,
+    pendingFile: null,
+    // --- Tier upgrades ---
+    advFilters: [],          // [{col, op, value}]
+    advFilterLogic: "and",   // and | or
+    undoStack: [],           // snapshots of raw/headers/types
+    calcCols: [],            // [{name, expr}]
+    pivotShare: "none"       // none | grand | row | col
+  };
+
+  const MAX_UNDO = 8;
+  const LARGE_ROW_WARN = 30000;
+
+  // Register Chart.js Datalabels plugin globally (optional)
+  try {
+    if (window.Chart && window.ChartDataLabels) Chart.register(ChartDataLabels);
+  } catch (e) { /* plugin optional */ }
+
+  // ---------- UTILS ----------
+  const esc = x => String(x ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  const fmt = x => Number.isFinite(x) ? new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(x) : "—";
+  const fmtShort = x => {
+    if (!Number.isFinite(x)) return "—";
+    const abs = Math.abs(x);
+    if (abs >= 1e9) return (x / 1e9).toFixed(2).replace(".", ",") + " M";
+    if (abs >= 1e6) return (x / 1e6).toFixed(2).replace(".", ",") + " jt";
+    if (abs >= 1e3) return (x / 1e3).toFixed(2).replace(".", ",") + " rb";
+    return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(x);
+  };
+  const pct = (n, t) => t ? ((n / t) * 100).toFixed(1) : "0";
+  const aggLabel = a => ({ sum: "Total", avg: "Rata-rata", count: "Jumlah", min: "Minimum", max: "Maksimum", median: "Median" }[a] || a);
+  const medianOf = arr => {
+    if (!arr.length) return null;
+    const s = [...arr].sort((a, b) => a - b);
+    const n = s.length;
+    return n % 2 ? s[(n - 1) >> 1] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  };
+  // Iterative extrema avoid argument-count/stack failures on large datasets.
+  const minOf = arr => {
+    if (!arr || !arr.length) return null;
+    let value = Infinity;
+    for (let i = 0; i < arr.length; i++) if (arr[i] < value) value = arr[i];
+    return Number.isFinite(value) ? value : null;
+  };
+  const maxOf = arr => {
+    if (!arr || !arr.length) return null;
+    let value = -Infinity;
+    for (let i = 0; i < arr.length; i++) if (arr[i] > value) value = arr[i];
+    return Number.isFinite(value) ? value : null;
+  };
+  const aggregate = (nums, fn) => {
+    if (!nums.length) return null;
+    switch (fn) {
+      case "sum": return sumPrecise(nums);
+      case "avg": return sumPrecise(nums) / nums.length;
+      case "count": return nums.length;
+      case "min": return minOf(nums);
+      case "max": return maxOf(nums);
+      case "median": return medianOf(nums);
+      default: return null;
+    }
+  };
+  const aggValueOf = (g, agg) => {
+    if (!g) return null;
+    if (agg === "sum") return g.sum;
+    if (agg === "avg") return g.avg;
+    if (agg === "count") return g.valid;
+    if (agg === "min") return g.nums && g.nums.length ? minOf(g.nums) : null;
+    if (agg === "max") return g.nums && g.nums.length ? maxOf(g.nums) : null;
+    if (agg === "median") return g.nums && g.nums.length ? medianOf(g.nums) : null;
+    return g.sum;
+  };
+  const recommendAgg = colName => {
+    const n = String(colName || "").toLowerCase();
+    if (/(avg|rata|rating|skor|score|persen|percent|rate|rasio|ratio)/.test(n)) return "avg";
+    if (/(min|minimum)/.test(n)) return "min";
+    if (/(max|maximum)/.test(n)) return "max";
+    if (/(qty|quantity|jumlah|count|banyak)/.test(n)) return "sum";
+    return "sum";
+  };
+
+  function status(id, txt, kind = "") {
+    const e = $(id);
+    if(!e) return;
+    e.className = "status " + kind;
+    e.textContent = txt;
+  }
+  function busyStatus(id, txt) {
+    const e = $(id);
+    e.className = "status loading";
+    e.textContent = txt;
+  }
+
+  // ---------- DATE FORMATTING (FIX FOR RAW DATE OBJECTS) ----------
+  function formatDisplayDate(val) {
+    // Dataset dates are calendar dates: never append a time component to them.
+    // Indonesian display convention (DD/MM/YYYY); ISO input remains accepted.
+    if (val instanceof Date) {
+      if (isNaN(val)) return "";
+      const d = String(val.getDate()).padStart(2, '0');
+      const m = String(val.getMonth() + 1).padStart(2, '0');
+      const y = String(val.getFullYear()).padStart(4, '0');
+      return `${d}/${m}/${y}`;
+    }
+    const raw = String(val ?? "").trim();
+    const iso = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T\s])/);
+    if (iso) {
+      const d = dateVal(`${iso[1]}-${iso[2]}-${iso[3]}`);
+      if (d) return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getFullYear()).padStart(4, '0')}`;
+    }
+    const local = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    const englishMonth = /^(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{4})$/i.test(raw);
+    if (local || englishMonth) {
+      const d = dateVal(raw);
+      if (d) return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth()+1).padStart(2, '0')}/${String(d.getFullYear()).padStart(4, '0')}`;
+    }
+    return String(val ?? "");
+  }
+
+  // ---------- NUMBER PARSER ----------
+  // Accept Indonesian and English grouping/decimal conventions, currency symbols,
+  // spaces, and accounting negatives such as (1.234,50).
+  // Single-separator + exactly 3 fractional digits is treated as thousands ONLY when
+  // the integer part does not look like a leading-zero decimal (so 0.123 stays 0.123,
+  // while 1.234 / 12.345 stay Indonesian-style thousands).
+  function num(v) {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (v == null || String(v).trim() === "") return null;
+    let s = String(v).trim();
+    let negative = false;
+    if (/^\(.*\)$/.test(s)) { negative = true; s = s.slice(1, -1).trim(); }
+    s = s.replace(/[\s\u00A0\u202F\u2009\u2007']/g, "");
+    s = s.replace(/[Rp$€£¥₹%]/gi, "");
+    if (!s || !/^[+-]?(?:\d[\d.,]*|[.,]\d+)$/.test(s)) return null;
+    const sign = s.startsWith("-") ? -1 : 1;
+    s = s.replace(/^[+-]/, "");
+    const lastDot = s.lastIndexOf(".");
+    const lastComma = s.lastIndexOf(",");
+    if (lastDot >= 0 && lastComma >= 0) {
+      // The rightmost punctuation is the decimal separator; the other groups thousands.
+      const decimal = lastDot > lastComma ? "." : ",";
+      const grouping = decimal === "." ? /,/g : /\./g;
+      const parts = s.split(decimal);
+      if (parts.length !== 2 || !/^\d{1,}$/.test(parts[1]) || !/^(?:\d+|\d{1,3}(?:[.,]\d{3})+)$/.test(parts[0])) return null;
+      s = parts[0].replace(grouping, "") + "." + parts[1];
+    } else if (lastDot >= 0 || lastComma >= 0) {
+      const sep = lastDot >= 0 ? "." : ",";
+      const parts = s.split(sep);
+      if (parts.length > 2) {
+        if (!parts.every((part, i) => i === 0 ? /^\d{1,3}$/.test(part) : /^\d{3}$/.test(part))) return null;
+        s = parts.join("");
+      } else if (parts.length === 2) {
+        if (!parts[0] || !parts[1]) return null;
+        // Thousands only when right side is exactly 3 digits AND left is a normal
+        // 1–3 digit integer without a leading zero (avoids turning 0.123 into 123).
+        const looksThousands =
+          parts[1].length === 3 &&
+          parts[0].length >= 1 &&
+          parts[0].length <= 3 &&
+          !/^0/.test(parts[0]);
+        if (looksThousands) s = parts.join("");
+        else s = parts[0] + "." + parts[1];
+      }
+    }
+    const n = Number(s);
+    if (!Number.isFinite(n)) return null;
+    return n === 0 ? 0 : n * sign * (negative ? -1 : 1);
+  }
+
+  // ---------- DATE PARSER ----------
+  function dateVal(v) {
+    if (v instanceof Date && !isNaN(v)) return v;
+    if (typeof v === "number" && window.XLSX) {
+      const d = XLSX.SSF.parse_date_code(v);
+      if (d) return new Date(d.y, d.m - 1, d.d);
+    }
+    if (v == null || String(v).trim() === "") return null;
+    const s = String(v).trim();
+    const validDate = (year, month, day) => {
+      if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+      if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+      const d = new Date(year, month - 1, day);
+      return d.getFullYear() === year && d.getMonth() === month - 1 && d.getDate() === day ? d : null;
+    };
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:$|[T\s])/);
+    if (m) {
+      const d = validDate(+m[1], +m[2], +m[3]);
+      if (!d) return null;
+      if (s.length > m[0].length - (m[0].endsWith("T") || m[0].endsWith(" ") ? 1 : 0)) {
+        const parsed = new Date(s);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+      }
+      return d;
+    }
+    m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (m) {
+      const a = +m[1], b = +m[2], year = +m[3];
+      // Keep the existing day-first default when both components are ambiguous.
+      if (a > 12) return validDate(year, b, a);
+      if (b > 12) return validDate(year, a, b);
+      return validDate(year, b, a);
+    }
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  // ---------- TYPE DETECTION ----------
+  function detectTypes(rows, headers) {
+    const t = {};
+    headers.forEach(h => {
+      let nNum = 0, nDate = 0, nNonEmpty = 0;
+      const sample = rows.length > 1000 ? rows.slice(0, 1000) : rows;
+      sample.forEach(r => {
+        const v = r[h];
+        if (v == null || String(v).trim() === "") return;
+        nNonEmpty++;
+        if (num(v) !== null) nNum++;
+        else if (dateVal(v)) nDate++;
+      });
+      if (nNonEmpty === 0) t[h] = "empty";
+      else if (nNum / nNonEmpty > 0.6) t[h] = "number";
+      else if (nDate / nNonEmpty > 0.6) t[h] = "date";
+      else t[h] = "text";
+    });
+    return t;
+  }
+
+  // ---------- STATS (presisi) ----------
+  // Kahan compensated summation — mengurangi error akumulasi floating-point pada dataset besar.
+  function sumPrecise(arr) {
+    let sum = 0, c = 0;
+    for (let i = 0; i < arr.length; i++) {
+      const y = arr[i] - c;
+      const t = sum + y;
+      c = (t - sum) - y;
+      sum = t;
+    }
+    return sum;
+  }
+
+  // Percentile dengan interpolasi linear (lebih akurat dari index floor saja).
+  function percentile(sorted, p) {
+    const n = sorted.length;
+    if (!n) return null;
+    if (n === 1) return sorted[0];
+    const idx = (n - 1) * p;
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    if (lo === hi) return sorted[lo];
+    const w = idx - lo;
+    return sorted[lo] * (1 - w) + sorted[hi] * w;
+  }
+
+  function stats(vals) {
+    const n = vals.length;
+    if (!n) return { median: null, std: null, p25: null, p75: null, mean: null };
+    const sorted = [...vals].sort((a, b) => a - b);
+    const mean = sumPrecise(vals) / n;
+    // Population std (dataset terfilter dianggap populasi yang dianalisis).
+    let varSum = 0, c = 0;
+    for (let i = 0; i < n; i++) {
+      const d = vals[i] - mean;
+      const y = d * d - c;
+      const t = varSum + y;
+      c = (t - varSum) - y;
+      varSum = t;
+    }
+    const varr = varSum / n;
+    return {
+      median: percentile(sorted, 0.5),
+      mean,
+      std: Math.sqrt(varr),
+      p25: percentile(sorted, 0.25),
+      p75: percentile(sorted, 0.75)
+    };
+  }
+
+  // Kunci baris stabil untuk deduplikasi (lebih cepat & hemat memori dari JSON.stringify).
+  const ROW_KEY_SEP = "\u0001";
+  function rowKey(r, headers) {
+    let k = "";
+    for (let i = 0; i < headers.length; i++) {
+      if (i) k += ROW_KEY_SEP;
+      k += String(r[headers[i]] ?? "");
+    }
+    return k;
+  }
+
+  // Insight perbandingan periode (setengah awal vs setengah akhir) bila kolom tanggal aktif.
+  function periodInsight(rows, dateCol, valueCol) {
+    if (!dateCol || !valueCol || !rows.length) return "";
+    const dated = [];
+    for (let i = 0; i < rows.length; i++) {
+      const d = dateVal(rows[i][dateCol]);
+      const n = num(rows[i][valueCol]);
+      if (d && n !== null) dated.push({ t: d.getTime(), n });
+    }
+    if (dated.length < 4) return "";
+    dated.sort((a, b) => a.t - b.t);
+    const mid = Math.floor(dated.length / 2);
+    const first = dated.slice(0, mid);
+    const second = dated.slice(mid);
+    const s1 = sumPrecise(first.map(x => x.n));
+    const s2 = sumPrecise(second.map(x => x.n));
+    if (s1 === 0 && s2 === 0) return "";
+    const growth = s1 === 0 ? null : ((s2 - s1) / Math.abs(s1)) * 100;
+    const d0 = new Date(first[0].t);
+    const d1 = new Date(first[first.length - 1].t);
+    const d2 = new Date(second[0].t);
+    const d3 = new Date(second[second.length - 1].t);
+    const fmtD = d => `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+    let msg = `Periode awal (${fmtD(d0)}–${fmtD(d1)}): <b>${fmt(s1)}</b> · Periode akhir (${fmtD(d2)}–${fmtD(d3)}): <b>${fmt(s2)}</b>`;
+    if (growth !== null && Number.isFinite(growth)) {
+      const dir = growth > 0 ? "naik" : growth < 0 ? "turun" : "stabil";
+      msg += ` · Perubahan ≈ <b>${dir} ${Math.abs(growth).toFixed(1)}%</b>`;
+    }
+    return msg;
+  }
+
+  // ---------- CHART HELPERS ----------
+  function destroyCharts() {
+    ["barChartInstance","histChartInstance","tsChartInstance"].forEach(k => {
+      if (S[k]) { try { S[k].destroy(); } catch {} S[k] = null; }
+    });
+    document.querySelectorAll('.chart').forEach(c => c.classList.remove('has-data'));
+  }
+
+  function resetSheetUI() {
+    const sh = $("sheet");
+    if(!sh) return;
+    sh.innerHTML = "";
+    sh.disabled = true;
+    sh.onchange = null;
+  }
+
+  function clearAnalysisUI() {
+    destroyCharts();
+    S.analysis = null;
+    S.rows = S.raw.slice();
+    S.groups = [];
+    S.v = null; S.g = null;
+    ["rowsK","sumK","avgK","minmaxK"].forEach(id => $(id).textContent = "—");
+    $("extra").textContent = "Indikator tambahan akan muncul setelah analisis.";
+    $("summary").innerHTML = '<p class="muted" style="padding:10px">Belum ada hasil.</p>';
+    $("barInfo").textContent = ""; $("histInfo").textContent = "";
+    $("tsInfo").textContent = "Pilih kolom tanggal di bagian 2 untuk melihat tren.";
+    ["xlsx","report","csv","print","pdf","copy","shareBtn","emailBtn"].forEach(id => $(id).disabled = true);
+    status("exportStatus", "Jalankan analisis sebelum ekspor.");
+  }
+
+  function invalidateResults() {
+    S.ready = false;
+    clearAnalysisUI();
+    ["analyze","clear","cleanDup","cleanEmpty"].forEach(id => $(id).disabled = true);
+    status("analysisStatus", "Dataset berubah; jalankan analisis kembali.");
+  }
+
+  // ---------- PARSE MATRIX ----------
+  function parseRows(matrix) {
+    const m = matrix.filter(r => Array.isArray(r) && r.some(v => String(v ?? "").trim() !== ""));
+    if (!m.length) return { headers: [], rows: [] };
+    const maxCols = m.reduce((max, row) => Math.max(max, row.length), 0);
+    const headRow = m[0];
+    const seen = {};
+    const headers = [];
+    for (let i = 0; i < maxCols; i++) {
+      let h = String(headRow[i] ?? "").trim();
+      if (!h) h = `Kolom_${i + 1}`;
+      seen[h] = (seen[h] || 0) + 1;
+      if (seen[h] > 1) h = `${h}_${seen[h]}`;
+      headers.push(h);
+    }
+    const uniq = {};
+    const finalHeaders = headers.map(h => {
+      let n = h;
+      while (uniq[n]) { uniq[h] = (uniq[h] || 1) + 1; n = `${h}_${uniq[h]}`; }
+      uniq[n] = 1;
+      return n;
+    });
+    const rows = m.slice(1).map(r => {
+      const o = {};
+      for (let i = 0; i < finalHeaders.length; i++) {
+        let v = r[i] ?? "";
+        // Format Date Objects to clean string (YYYY-MM-DD HH:mm:ss)
+        if (v instanceof Date) {
+          v = formatDisplayDate(v);
+        }
+        o[finalHeaders[i]] = v;
+      }
+      return o;
+    });
+    return { headers: finalHeaders, rows };
+  }
+
+  // ---------- LOAD TABLE ----------
+  function loadTable(name, matrix) {
+    invalidateResults();
+    const p = parseRows(matrix);
+    if (!p.headers.length) {
+      status("loadStatus", "Tidak ditemukan header dan baris data.", "bad");
+      return;
+    }
+    S.name = name;
+    S.headers = p.headers;
+    S.raw = p.rows;
+    S.rows = p.rows.slice();
+    S.columnTypes = detectTypes(p.rows, p.headers);
+    S.ready = true;
+    S.sort = { col: null, dir: 1 };
+    S.page = 1;
+    S.hiddenCols.clear();
+    S.globalSearch = "";
+    S.pivot = null;
+
+    options("group", S.headers);
+    options("value", S.headers);
+    options("date", S.headers, true);
+    options("filter", S.headers, true);
+    options("pivotValue", S.headers);
+    options("pivotRow", S.headers);
+    options("pivotCol", S.headers, true);
+
+    const numCols = S.headers.filter(h => S.columnTypes[h] === "number");
+    const dateCols = S.headers.filter(h => S.columnTypes[h] === "date");
+    const textCols = S.headers.filter(h => S.columnTypes[h] === "text");
+    const groupCols = textCols.length ? textCols : S.headers.filter(h => S.columnTypes[h] !== "number");
+
+    const defVal = numCols[0] || S.headers[0];
+    const defGroup = groupCols[0] || S.headers[0];
+    const defDate = dateCols[0] || "";
+
+    $("value").value = defVal;
+    $("group").value = defGroup;
+    $("date").value = defDate;
+    $("filter").value = ""; $("needle").value = "";
+    $("from").value = ""; $("to").value = "";
+    $("agg").value = recommendAgg(defVal);
+    S.agg = $("agg").value;
+    if ($("tsAgg")) $("tsAgg").value = S.agg;
+    $("globalSearch").value = "";
+
+    $("pivotRow").value = defGroup;
+    $("pivotCol").value = "";
+    $("pivotValue").value = defVal;
+    $("pivotAgg").value = "sum";
+    $("pivotLimit").value = "100";
+
+    ["group","value","agg","date","filter","needle","from","to","analyze","clear","globalSearch",
+     "pivotRow","pivotCol","pivotValue","pivotAgg","pivotRun","pivotLimit","pivotShare","cleanDup","cleanEmpty",
+     "advLogic","advAdd","calcName","calcExpr","calcAdd","presetName","presetSave","presetLoad","presetDelete"].forEach(x => { if ($(x)) $(x).disabled = false; });
+
+    S.advFilters = [];
+    S.calcCols = [];
+    S.undoStack = [];
+    if ($("undoBtn")) $("undoBtn").disabled = true;
+    if ($("advLogic")) $("advLogic").value = "and";
+    renderAdvFilters();
+    renderCalcList();
+    refreshPresetSelect();
+    renderColumnToggles();
+    renderPreview();
+    quality(S.raw);
+
+    const typeCount = { number: numCols.length, date: dateCols.length, text: textCols.length };
+    let loadMsg =
+      `Berhasil membaca ${name}\n${S.raw.length.toLocaleString("id-ID")} baris · ${S.headers.length} kolom (${typeCount.number} angka, ${typeCount.date} tanggal, ${typeCount.text} teks).\nPilih opsi lalu jalankan analisis.`;
+    if (S.raw.length >= LARGE_ROW_WARN) {
+      loadMsg += `\n⚠️ Dataset besar (${S.raw.length.toLocaleString("id-ID")} baris). Gunakan filter & pagination; hindari pivot "Semua".`;
+    }
+    status("loadStatus", loadMsg, S.raw.length >= LARGE_ROW_WARN ? "warn" : "good");
+    status("analysisStatus", "Dataset siap; analisis belum dijalankan.");
+    $("pivot").innerHTML = '<p class="muted" style="padding:10px">Pilih baris, kolom, dan nilai, lalu klik Bangun Pivot.</p>';
+
+    $("progContainer").style.display = "none";
+    $("progFill").style.width = "0%";
+  }
+
+  // ---------- INLINE FILE MONITOR (bukan popup) ----------
+  function showMonitorStandby() {
+    const st = $("monitorStandby");
+    const ac = $("monitorActive");
+    if (st) st.style.display = "block";
+    if (ac) ac.classList.remove("show");
+    S.pendingFile = null;
+  }
+
+  function showMonitorActive() {
+    const st = $("monitorStandby");
+    const ac = $("monitorActive");
+    if (st) st.style.display = "none";
+    if (ac) ac.classList.add("show");
+  }
+
+  async function handleFileSelect(file) {
+    if (!file) return;
+    S.pendingFile = file;
+    $("modalFileName").textContent = file.name;
+    $("modalTableWrap").innerHTML = '<p class="muted" style="padding:10px">Membaca pratinjau data (maks 500 baris)…</p>';
+    $("modalRowCount").textContent = "…";
+    $("monitorHint").textContent = "";
+    showMonitorActive();
+    // Scroll monitor into view so user sees it (bukan popup)
+    try { $("fileMonitorCard").scrollIntoView({ behavior: "smooth", block: "nearest" }); } catch {}
+
+    try {
+      const ext = file.name.split(".").pop().toLowerCase();
+      let matrix = [];
+
+      if (["xlsx", "xls"].includes(ext)) {
+        if (!window.XLSX) throw new Error("Library Excel belum termuat.");
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: "array", sheetRows: 500, cellDates: true });
+        const firstSheet = wb.SheetNames[0];
+        matrix = XLSX.utils.sheet_to_json(wb.Sheets[firstSheet], { header: 1, defval: "", raw: true });
+        $("monitorHint").textContent = wb.SheetNames.length > 1
+          ? `Sheet preview: ${firstSheet} (${wb.SheetNames.length} sheet tersedia setelah proses)`
+          : `Sheet: ${firstSheet}`;
+      } else if (ext === "csv") {
+        if (!window.Papa) throw new Error("Library PapaParse belum termuat.");
+        const text = await file.slice(0, 1024 * 1024).text();
+        matrix = Papa.parse(text, { skipEmptyLines: true, preview: 500 }).data;
+        $("monitorHint").textContent = "CSV · preview 500 baris pertama";
+      } else if (["docx", "pdf", "txt"].includes(ext)) {
+        $("modalTableWrap").innerHTML =
+          '<p class="muted" style="padding:12px">Pratinjau tabel tidak tersedia untuk dokumen teks/PDF/Word. Klik <b>Proses Seluruh Data</b> untuk mengekstrak teks ke panel bawah.</p>';
+        $("modalRowCount").textContent = "0";
+        $("monitorHint").textContent = "Mode ekstraksi teks";
+        status("loadStatus", `File ${file.name} siap diproses. Konfirmasi di panel Monitor.`, "warn");
+        return;
+      } else {
+        $("modalTableWrap").innerHTML = '<p class="bad" style="padding:12px">Format tidak didukung.</p>';
+        $("modalRowCount").textContent = "0";
+        return;
+      }
+
+      if (matrix.length > 0) {
+        const p = parseRows(matrix);
+        $("modalRowCount").textContent = String(p.rows.length);
+        const maxPreview = Math.min(p.rows.length, 100);
+        let html = "<table><thead><tr>" + p.headers.map(h => `<th>${esc(h)}</th>`).join("") + "</tr></thead><tbody>";
+        for (let i = 0; i < maxPreview; i++) {
+          const r = p.rows[i];
+          html += "<tr>" + p.headers.map(h => `<td>${esc(r[h])}</td>`).join("") + "</tr>";
+        }
+        html += "</tbody></table>";
+        if (p.rows.length > maxPreview) {
+          html += `<p class="muted" style="padding:8px">Menampilkan ${maxPreview} dari ${p.rows.length} baris preview.</p>`;
+        }
+        $("modalTableWrap").innerHTML = html;
+        status("loadStatus", `Preview siap: ${file.name}. Periksa Monitor lalu klik Proses Seluruh Data.`, "good");
+      } else {
+        $("modalTableWrap").innerHTML = '<p class="muted" style="padding:12px">Data kosong atau tidak terbaca.</p>';
+        $("modalRowCount").textContent = "0";
+      }
+    } catch (e) {
+      $("modalTableWrap").innerHTML = `<p class="bad" style="padding:12px">Gagal membaca pratinjau: ${esc(e.message)}</p>`;
+      status("loadStatus", "Gagal preview: " + e.message, "bad");
+    }
+  }
+
+  $("confirmProcessBtn").onclick = () => {
+    if (S.pendingFile) {
+      const f = S.pendingFile;
+      showMonitorStandby();
+      readFileActual(f);
+    } else {
+      status("loadStatus", "Tidak ada file yang menunggu konfirmasi.", "warn");
+    }
+  };
+  $("cancelPreviewBtn").onclick = () => {
+    showMonitorStandby();
+    $("file").value = "";
+    status("loadStatus", "Preview dibatalkan. Belum ada file.", "warn");
+  };
+
+  // ---------- FILE READ (ACTUAL PROCESSING) ----------
+  function finishLoadUI(ok) {
+    $("progFill").style.width = "100%";
+    setTimeout(() => { $("progContainer").style.display = "none"; $("progFill").style.width = "0%"; }, 400);
+    const loadBtn = $("load");
+    if (loadBtn) loadBtn.disabled = false;
+    S.busy = false;
+  }
+
+  async function readFileActual(f) {
+    if (!f) return;
+    if (S.busy) return;
+    S.busy = true;
+    const loadBtn = $("load");
+    if (loadBtn) loadBtn.disabled = true;
+
+    $("progContainer").style.display = "block";
+    $("progFill").style.width = "10%";
+    busyStatus("loadStatus", "Memproses keseluruhan file…");
+
+    try {
+      const ext = f.name.split(".").pop().toLowerCase();
+
+      if (["xlsx", "xls"].includes(ext)) {
+        if (!window.XLSX) throw new Error("Library Excel belum termuat; periksa internet.");
+        $("progFill").style.width = "30%";
+        await new Promise(r => setTimeout(r, 30));
+        S.wb = XLSX.read(await f.arrayBuffer(), { type: "array", cellDates: true });
+        S.sheets = S.wb.SheetNames;
+        options("sheet", S.sheets);
+        $("sheet").disabled = false;
+        const choose = () => {
+          busyStatus("loadStatus", "Mengekstrak sheet…");
+          $("progFill").style.width = "70%";
+          const sheetName = $("sheet").value;
+          const matrix = XLSX.utils.sheet_to_json(S.wb.Sheets[sheetName], { header: 1, defval: "", raw: true });
+          loadTable(f.name + " / " + sheetName, matrix);
+          finishLoadUI(true);
+        };
+        $("sheet").onchange = choose;
+        choose();
+        return; // finishLoadUI called from choose
+
+      } else if (ext === "csv") {
+        resetSheetUI();
+        if (!window.Papa) throw new Error("Library PapaParse belum termuat.");
+        busyStatus("loadStatus", "Memproses CSV di worker latar belakang…");
+        Papa.parse(f, {
+          worker: true,
+          skipEmptyLines: true,
+          complete: function (results) {
+            $("progFill").style.width = "90%";
+            try {
+              loadTable(f.name, results.data);
+            } catch (err) {
+              status("loadStatus", "Gagal memuat CSV: " + err.message, "bad");
+            }
+            finishLoadUI(true);
+          },
+          error: function (err) {
+            status("loadStatus", "Gagal parsing CSV: " + (err && err.message ? err.message : err), "bad");
+            finishLoadUI(false);
+          }
+        });
+        return; // finishLoadUI in callbacks
+
+      } else if (ext === "txt") {
+        resetSheetUI();
+        $("progFill").style.width = "50%";
+        $("docText").value = await f.text();
+        S.name = f.name;
+        status("loadStatus", `Teks berhasil dibaca (${$("docText").value.length.toLocaleString("id-ID")} karakter). Tidak ada dataset terstruktur otomatis.`, "good");
+
+      } else if (ext === "docx") {
+        resetSheetUI();
+        if (!window.mammoth) throw new Error("Library Word belum termuat.");
+        $("progFill").style.width = "50%";
+        const r = await mammoth.extractRawText({ arrayBuffer: await f.arrayBuffer() });
+        $("docText").value = r.value;
+        S.name = f.name;
+        status("loadStatus", `Teks Word diekstrak (${r.value.length.toLocaleString("id-ID")} karakter).`, "good");
+
+      } else if (ext === "pdf") {
+        resetSheetUI();
+        if (!window.pdfjsLib) throw new Error("Library PDF belum termuat.");
+        pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        const pdf = await pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise;
+        let txt = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          $("progFill").style.width = `${10 + (i / pdf.numPages) * 80}%`;
+          const p = await pdf.getPage(i);
+          const c = await p.getTextContent();
+          txt += `\n--- Halaman ${i} ---\n` + c.items.map(x => x.str).join(" ") + "\n";
+        }
+        $("docText").value = txt;
+        S.name = f.name;
+        status("loadStatus", `PDF dibaca: ${pdf.numPages} halaman.`, "good");
+      } else {
+        throw new Error("Format tidak didukung.");
+      }
+
+      finishLoadUI(true);
+    } catch (e) {
+      status("loadStatus", "Gagal memproses file: " + e.message, "bad");
+      finishLoadUI(false);
+    }
+  }
+
+  // ---------- UNDO STACK ----------
+  function pushUndo(label) {
+    try {
+      S.undoStack.push({
+        label: label || "ubah",
+        raw: S.raw.map(r => ({ ...r })),
+        headers: S.headers.slice(),
+        columnTypes: { ...S.columnTypes },
+        calcCols: S.calcCols.map(c => ({ ...c }))
+      });
+      if (S.undoStack.length > MAX_UNDO) S.undoStack.shift();
+      if ($("undoBtn")) $("undoBtn").disabled = !S.undoStack.length;
+    } catch (e) { /* ignore quota */ }
+  }
+
+  function undoLast() {
+    if (!S.undoStack.length) {
+      status("analysisStatus", "Tidak ada aksi untuk di-undo.", "warn");
+      return;
+    }
+    const snap = S.undoStack.pop();
+    S.raw = snap.raw;
+    S.headers = snap.headers;
+    S.columnTypes = snap.columnTypes;
+    S.calcCols = snap.calcCols || [];
+    S.rows = S.raw.slice();
+    S.ready = true;
+    options("group", S.headers);
+    options("value", S.headers);
+    options("date", S.headers, true);
+    options("filter", S.headers, true);
+    options("pivotValue", S.headers);
+    options("pivotRow", S.headers);
+    options("pivotCol", S.headers, true);
+    renderColumnToggles();
+    renderCalcList();
+    renderAdvFilters();
+    if ($("undoBtn")) $("undoBtn").disabled = !S.undoStack.length;
+    status("analysisStatus", `Undo: ${snap.label}. Menjalankan ulang analisis…`, "good");
+    if (S.analysis) analyze();
+    else { renderPreview(); quality(S.raw); }
+  }
+
+  // ---------- ADVANCED FILTER UI ----------
+  const ADV_OPS = [
+    { v: "contains", t: "mengandung" },
+    { v: "equals", t: "sama dengan" },
+    { v: "not_equals", t: "tidak sama" },
+    { v: "gt", t: ">" },
+    { v: "gte", t: "≥" },
+    { v: "lt", t: "<" },
+    { v: "lte", t: "≤" },
+    { v: "empty", t: "kosong" },
+    { v: "not_empty", t: "tidak kosong" },
+    { v: "starts", t: "dimulai" },
+    { v: "ends", t: "diakhiri" }
+  ];
+
+  function renderAdvFilters() {
+    const box = $("advFilterList");
+    if (!box) return;
+    if (!S.advFilters.length) {
+      box.innerHTML = '<p class="muted" style="margin:0;font-size:13px">Belum ada kondisi. Klik "+ Kondisi".</p>';
+      return;
+    }
+    box.innerHTML = S.advFilters.map((f, i) => {
+      const colOpts = S.headers.map(h => `<option value="${esc(h)}" ${f.col === h ? "selected" : ""}>${esc(h)}</option>`).join("");
+      const opOpts = ADV_OPS.map(o => `<option value="${o.v}" ${f.op === o.v ? "selected" : ""}>${o.t}</option>`).join("");
+      const needVal = f.op !== "empty" && f.op !== "not_empty";
+      return `<div class="adv-row" data-i="${i}">
+        <select data-k="col" ${S.ready ? "" : "disabled"}>${colOpts}</select>
+        <select data-k="op" ${S.ready ? "" : "disabled"}>${opOpts}</select>
+        <input data-k="value" value="${esc(f.value || "")}" placeholder="Nilai…" ${needVal ? "" : "disabled"} ${S.ready ? "" : "disabled"}>
+        <button type="button" class="secondary" data-rm="${i}" style="padding:8px 10px" title="Hapus">×</button>
+      </div>`;
+    }).join("");
+    box.querySelectorAll("select,input").forEach(el => {
+      el.addEventListener("change", () => {
+        const row = el.closest(".adv-row");
+        const i = +row.dataset.i;
+        const k = el.dataset.k;
+        if (!S.advFilters[i]) return;
+        S.advFilters[i][k] = el.value;
+        if (k === "op") renderAdvFilters();
+      });
+    });
+    box.querySelectorAll("[data-rm]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        S.advFilters.splice(+btn.dataset.rm, 1);
+        renderAdvFilters();
+      });
+    });
+  }
+
+  function addAdvFilter() {
+    if (!S.headers.length) return;
+    S.advFilters.push({ col: S.headers[0], op: "contains", value: "" });
+    renderAdvFilters();
+  }
+
+  function matchAdv(r, f) {
+    const raw = r[f.col];
+    const s = String(raw ?? "");
+    const sl = s.toLowerCase();
+    const v = String(f.value ?? "");
+    const vl = v.toLowerCase();
+    switch (f.op) {
+      case "contains": return sl.includes(vl);
+      case "equals": return sl === vl;
+      case "not_equals": return sl !== vl;
+      case "starts": return sl.startsWith(vl);
+      case "ends": return sl.endsWith(vl);
+      case "empty": return s.trim() === "";
+      case "not_empty": return s.trim() !== "";
+      case "gt": case "gte": case "lt": case "lte": {
+        const a = num(raw), b = num(v);
+        if (a === null || b === null) return false;
+        if (f.op === "gt") return a > b;
+        if (f.op === "gte") return a >= b;
+        if (f.op === "lt") return a < b;
+        return a <= b;
+      }
+      default: return true;
+    }
+  }
+
+  // ---------- CALCULATED COLUMNS ----------
+  function safeEvalExpr(expr, row) {
+    // Accept only arithmetic and exact known column-name tokens. Blank source cells
+    // retain the established zero-for-calculation behavior; unknown names fail closed.
+    let source = String(expr || "").trim();
+    if (!source) return null;
+    const cols = [...S.headers].sort((a, b) => b.length - a.length);
+    let out = "";
+    for (let i = 0; i < source.length;) {
+      const ch = source[i];
+      // Match complete known headers before interpreting operator characters. This
+      // preserves support for legitimate headers such as "Price (USD)" or "A+B".
+      let matched = null;
+      for (const h of cols) {
+        if (!h || !source.startsWith(h, i)) continue;
+        const before = i > 0 ? source[i - 1] : "";
+        const after = source[i + h.length] || "";
+        const wordChar = c => !!c && /[\p{L}\p{N}_]/u.test(c);
+        if ((wordChar(h[0]) && wordChar(before)) || (wordChar(h[h.length - 1]) && wordChar(after))) continue;
+        matched = h; break;
+      }
+      if (matched) {
+        const value = num(row[matched]);
+        out += value === null ? "0" : String(value);
+        i += matched.length; continue;
+      }
+      if (/\d/.test(ch) || ch === ".") {
+        const m = source.slice(i).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+        if (!m) return null;
+        out += m[0]; i += m[0].length; continue;
+      }
+      if (/\s/.test(ch)) { out += ch; i++; continue; }
+      if (/[+\-*/()]/.test(ch)) { out += ch; i++; continue; }
+      return null;
+    }
+    if (!/^[\d\s+\-*/().eE]+$/.test(out)) return null;
+    try {
+      // The expression is now restricted to numeric literals and arithmetic operators.
+      const value = Function(`"use strict"; return (${out});`)();
+      return Number.isFinite(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function expressionReferences(expr, headers) {
+    const source = String(expr || "");
+    const cols = [...headers].sort((a, b) => b.length - a.length);
+    const refs = new Set();
+    for (let i = 0; i < source.length;) {
+      const ch = source[i];
+      // Keep reference discovery aligned with safeEvalExpr for headers containing symbols.
+      let matched = null;
+      for (const h of cols) {
+        if (!h || !source.startsWith(h, i)) continue;
+        const before = i > 0 ? source[i - 1] : "";
+        const after = source[i + h.length] || "";
+        const wordChar = c => !!c && /[\p{L}\p{N}_]/u.test(c);
+        if ((wordChar(h[0]) && wordChar(before)) || (wordChar(h[h.length - 1]) && wordChar(after))) continue;
+        matched = h; break;
+      }
+      if (matched) { refs.add(matched); i += matched.length; continue; }
+      if (/\s/.test(ch) || /[+\-*/()]/.test(ch)) { i++; continue; }
+      const numeric = source.slice(i).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+      if (numeric) { i += numeric[0].length; continue; }
+      i++;
+    }
+    return refs;
+  }
+
+  function wouldCreateCalcCycle(name, expr) {
+    const headers = S.headers.slice();
+    const formulas = new Map(S.calcCols.map(c => [c.name, c.expr]));
+    formulas.set(name, expr);
+    const visit = (current, path) => {
+      if (path.has(current)) return true;
+      const formula = formulas.get(current);
+      if (formula == null) return false;
+      const nextPath = new Set(path); nextPath.add(current);
+      const refs = expressionReferences(formula, headers);
+      for (const ref of refs) {
+        if (ref === name && current !== name) return true;
+        if (formulas.has(ref) && visit(ref, nextPath)) return true;
+      }
+      return false;
+    };
+    const refs = expressionReferences(expr, headers);
+    for (const ref of refs) {
+      if (ref === name || (formulas.has(ref) && visit(ref, new Set([name])))) return true;
+    }
+    return false;
+  }
+
+  function applyCalcToRaw() {
+    // Evaluate calculated columns in dependency order so formulas remain correct even
+    // when a dependent column was created before the column it references.
+    S.calcCols.forEach(c => {
+      if (!S.headers.includes(c.name)) S.headers.push(c.name);
+      S.columnTypes[c.name] = "number";
+    });
+
+    const byName = new Map(S.calcCols.map(c => [c.name, c]));
+    const visited = new Set();
+    const visiting = new Set();
+    const ordered = [];
+    const cyclic = new Set();
+    const visit = (name, path) => {
+      if (visited.has(name)) return;
+      if (visiting.has(name)) {
+        path.forEach(item => cyclic.add(item));
+        cyclic.add(name);
+        return;
+      }
+      const col = byName.get(name);
+      if (!col) return;
+      visiting.add(name);
+      path.add(name);
+      for (const ref of expressionReferences(col.expr, S.headers)) {
+        if (byName.has(ref)) visit(ref, path);
+      }
+      path.delete(name);
+      visiting.delete(name);
+      visited.add(name);
+      ordered.push(col);
+    };
+    S.calcCols.forEach(c => visit(c.name, new Set()));
+
+    // Legacy/corrupt cyclic formulas fail closed rather than leaving stale values.
+    cyclic.forEach(name => S.raw.forEach(row => { row[name] = null; }));
+    ordered.forEach(c => {
+      if (cyclic.has(c.name)) return;
+      S.raw.forEach(row => { row[c.name] = safeEvalExpr(c.expr, row); });
+    });
+  }
+
+  function renderCalcList() {
+    const el = $("calcList");
+    if (!el) return;
+    if (!S.calcCols.length) {
+      el.textContent = "Belum ada kolom hitung.";
+      return;
+    }
+    el.innerHTML = S.calcCols.map((c, i) =>
+      `<span class="pill">${esc(c.name)} = ${esc(c.expr)} <button type="button" data-calc-rm="${i}" style="border:none;background:transparent;color:var(--muted);cursor:pointer">×</button></span>`
+    ).join(" ");
+    el.querySelectorAll("[data-calc-rm]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        pushUndo("hapus kolom hitung");
+        const c = S.calcCols.splice(+btn.dataset.calcRm, 1)[0];
+        if (c) {
+          S.headers = S.headers.filter(h => h !== c.name);
+          delete S.columnTypes[c.name];
+          S.raw.forEach(r => { delete r[c.name]; });
+        }
+        renderCalcList();
+        options("group", S.headers);
+        options("value", S.headers);
+        options("pivotValue", S.headers);
+        renderColumnToggles();
+        if (S.analysis) analyze();
+      });
+    });
+  }
+
+  function addCalculatedColumn() {
+    if (!S.ready) return;
+    const name = ($("calcName").value || "").trim();
+    const expr = ($("calcExpr").value || "").trim();
+    if (!name || !expr) {
+      status("analysisStatus", "Isi nama kolom dan ekspresi.", "warn");
+      return;
+    }
+    if (S.headers.includes(name) && !S.calcCols.some(c => c.name === name)) {
+      status("analysisStatus", `Kolom "${name}" sudah ada.`, "warn");
+      return;
+    }
+    const existing = S.calcCols.findIndex(c => c.name === name);
+    if (wouldCreateCalcCycle(name, expr)) {
+      status("analysisStatus", "Rumus ditolak karena membentuk siklus dependensi antarkolom hitung.", "bad");
+      return;
+    }
+    // Validate against real sample rows (and a non-zero synthetic probe) before mutating state.
+    const priorHeaders = S.headers.slice();
+    if (existing >= 0) S.headers = S.headers.filter(h => h !== name);
+    const headersForExpr = priorHeaders.filter(h => h !== name);
+    const refs = expressionReferences(expr, headersForExpr);
+    // Synthetic row: prefer a non-zero numeric sample per referenced column so
+    // division-by-zero on sparse real rows does not falsely reject a valid formula.
+    const synthetic = {};
+    headersForExpr.forEach(h => {
+      let pick = null;
+      for (let i = 0; i < S.raw.length && i < 200; i++) {
+        const nv = num(S.raw[i][h]);
+        if (nv !== null && nv !== 0) { pick = nv; break; }
+        if (pick === null && nv !== null) pick = nv;
+      }
+      synthetic[h] = pick === null ? 1 : pick;
+    });
+    const sample = S.raw.slice(0, Math.min(40, S.raw.length));
+    const probeOk = safeEvalExpr(expr, synthetic) !== null;
+    const sampleOk = sample.some(r => {
+      const v = safeEvalExpr(expr, r);
+      return v !== null && Number.isFinite(v);
+    });
+    // Reject only when the expression cannot evaluate on the probe or any sample row
+    // (syntax error / unknown token). All-null on sparse data alone is allowed if probe works.
+    const invalid = !expr || !S.raw.length || (!probeOk && !sampleOk);
+    S.headers = priorHeaders;
+    if (invalid) {
+      status("analysisStatus", "Rumus tidak valid. Periksa nama kolom, operator (+ − * /), dan tanda kurung. Referensi: " +
+        ([...refs].join(", ") || "(konstanta saja)"), "bad");
+      return;
+    }
+    pushUndo("tambah kolom hitung");
+    if (existing >= 0) S.calcCols[existing].expr = expr;
+    else S.calcCols.push({ name, expr });
+    applyCalcToRaw();
+    options("group", S.headers);
+    options("value", S.headers);
+    options("date", S.headers, true);
+    options("filter", S.headers, true);
+    options("pivotValue", S.headers);
+    options("pivotRow", S.headers);
+    options("pivotCol", S.headers, true);
+    $("value").value = name;
+    renderColumnToggles();
+    renderCalcList();
+    $("calcName").value = "";
+    $("calcExpr").value = "";
+    status("analysisStatus", `Kolom hitung "${name}" ditambahkan.`, "good");
+    if (S.analysis) analyze();
+    else { S.rows = S.raw.slice(); renderPreview(); quality(S.raw); }
+  }
+
+  // ---------- FILTER PRESETS (localStorage) ----------
+  const PRESET_KEY = "drs-filter-presets";
+
+  function loadPresetMap() {
+    try {
+      return JSON.parse(localStorage.getItem(PRESET_KEY) || "{}") || {};
+    } catch { return {}; }
+  }
+
+  function savePresetMap(map) {
+    try { localStorage.setItem(PRESET_KEY, JSON.stringify(map)); } catch {}
+  }
+
+  function refreshPresetSelect() {
+    const sel = $("presetLoad");
+    if (!sel) return;
+    const map = loadPresetMap();
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Muat preset…</option>';
+    Object.keys(map).sort().forEach(name => sel.add(new Option(name, name)));
+    if (map[cur]) sel.value = cur;
+  }
+
+  function collectFilterState() {
+    return {
+      globalSearch: ($("globalSearch") && $("globalSearch").value) || "",
+      filter: ($("filter") && $("filter").value) || "",
+      needle: ($("needle") && $("needle").value) || "",
+      date: ($("date") && $("date").value) || "",
+      from: ($("from") && $("from").value) || "",
+      to: ($("to") && $("to").value) || "",
+      advLogic: ($("advLogic") && $("advLogic").value) || "and",
+      advFilters: S.advFilters.map(f => ({ col: f.col, op: f.op, value: f.value }))
+    };
+  }
+
+  function applyFilterState(st) {
+    if (!st) return;
+    if ($("globalSearch")) { $("globalSearch").value = st.globalSearch || ""; S.globalSearch = st.globalSearch || ""; }
+    if ($("filter") && st.filter != null) $("filter").value = st.filter;
+    if ($("needle") && st.needle != null) $("needle").value = st.needle;
+    if ($("date") && st.date != null) $("date").value = st.date;
+    if ($("from") && st.from != null) $("from").value = st.from;
+    if ($("to") && st.to != null) $("to").value = st.to;
+    if ($("advLogic") && st.advLogic) { $("advLogic").value = st.advLogic; S.advFilterLogic = st.advLogic; }
+    S.advFilters = Array.isArray(st.advFilters) ? st.advFilters.map(f => ({ col: f.col, op: f.op, value: f.value || "" })) : [];
+    renderAdvFilters();
+  }
+
+  function saveFilterPreset() {
+    if (!S.ready) return;
+    const name = (($("presetName") && $("presetName").value) || "").trim();
+    if (!name) {
+      status("analysisStatus", "Isi nama preset terlebih dahulu.", "warn");
+      return;
+    }
+    const map = loadPresetMap();
+    map[name] = collectFilterState();
+    savePresetMap(map);
+    refreshPresetSelect();
+    if ($("presetLoad")) $("presetLoad").value = name;
+    status("analysisStatus", `Preset filter "${name}" disimpan.`, "good");
+  }
+
+  function loadFilterPreset() {
+    if (!S.ready) return;
+    const name = $("presetLoad") ? $("presetLoad").value : "";
+    if (!name) return;
+    const map = loadPresetMap();
+    if (!map[name]) {
+      status("analysisStatus", "Preset tidak ditemukan.", "warn");
+      return;
+    }
+    applyFilterState(map[name]);
+    status("analysisStatus", `Preset "${name}" dimuat. Menjalankan analisis…`, "good");
+    analyze();
+  }
+
+  function deleteFilterPreset() {
+    const name = $("presetLoad") ? $("presetLoad").value : "";
+    if (!name) {
+      status("analysisStatus", "Pilih preset yang akan dihapus.", "warn");
+      return;
+    }
+    const map = loadPresetMap();
+    delete map[name];
+    savePresetMap(map);
+    refreshPresetSelect();
+    status("analysisStatus", `Preset "${name}" dihapus.`, "good");
+  }
+
+  // ---------- FILTER ----------
+  function filtered() {
+    let a = S.raw.slice();
+    S.filterSkip = 0;
+    if (S.globalSearch) {
+      const gs = S.globalSearch.toLowerCase();
+      a = a.filter(r => S.headers.some(h => String(r[h] ?? "").toLowerCase().includes(gs)));
+    }
+    // Legacy quick filter
+    const f = $("filter") ? $("filter").value : "";
+    const n = $("needle") ? $("needle").value.trim().toLowerCase() : "";
+    if (f && n) {
+      const terms = n.split(",").map(s => s.trim()).filter(Boolean);
+      if (terms.length) {
+        a = a.filter(r => {
+          const val = String(r[f] ?? "").toLowerCase();
+          return terms.some(t => val.includes(t));
+        });
+      }
+    }
+    // Advanced multi-filter
+    if (S.advFilters.length) {
+      const logic = ($("advLogic") && $("advLogic").value) || S.advFilterLogic || "and";
+      S.advFilterLogic = logic;
+      a = a.filter(r => {
+        if (logic === "or") return S.advFilters.some(fl => matchAdv(r, fl));
+        return S.advFilters.every(fl => matchAdv(r, fl));
+      });
+    }
+    const d = $("date") ? $("date").value : "";
+    const from = $("from") ? $("from").value : "";
+    const to = $("to") ? $("to").value : "";
+    if (d && (from || to)) {
+      let skip = 0;
+      a = a.filter(r => {
+        const x = dateVal(r[d]);
+        if (!x) { skip++; return false; }
+        const iso = `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,"0")}-${String(x.getDate()).padStart(2,"0")}`;
+        return (!from || iso >= from) && (!to || iso <= to);
+      });
+      S.filterSkip = skip;
+    }
+    return a;
+  }
+
+  // ---------- OPTIONS ----------
+  function options(id, arr, optional = false) {
+    const e = $(id);
+    if (!e) return;
+    e.innerHTML = "";
+    if (optional) e.add(new Option("Tidak digunakan", ""));
+    (arr || []).forEach(x => e.add(new Option(x, x)));
+    e.disabled = !(arr && arr.length);
+  }
+
+  // ---------- COLUMN TOGGLES ----------
+  function renderColumnToggles() {
+    const c = $("colList");
+    if (!S.headers.length) { c.innerHTML = '<span class="muted">Belum ada kolom.</span>'; return; }
+    c.innerHTML = S.headers.map(h => {
+      const t = S.columnTypes[h] || "text";
+      return `<label title="${esc(t)}"><input type="checkbox" data-col="${esc(h)}" ${S.hiddenCols.has(h) ? "" : "checked"}> ${esc(h)}</label>`;
+    }).join("");
+    c.querySelectorAll("input[type=checkbox]").forEach(cb => {
+      cb.addEventListener("change", () => {
+        const h = cb.dataset.col;
+        if (cb.checked) S.hiddenCols.delete(h); else S.hiddenCols.add(h);
+        renderPreview();
+      });
+    });
+  }
+
+  // ---------- PREVIEW ----------
+  function renderPreview() {
+    let data = S.rows.slice();
+    if (S.sort.col) {
+      const c = S.sort.col, d = S.sort.dir, t = S.columnTypes[c] || "text";
+      data.sort((a, b) => {
+        const va = a[c], vb = b[c];
+        if (t === "number") {
+          const na = num(va), nb = num(vb);
+          if (na === null && nb === null) return 0;
+          if (na === null) return 1;
+          if (nb === null) return -1;
+          return (na - nb) * d;
+        }
+        if (t === "date") {
+          const da = dateVal(va), db = dateVal(vb);
+          if (!da && !db) return 0;
+          if (!da) return 1;
+          if (!db) return -1;
+          return (da - db) * d;
+        }
+        return String(va ?? "").localeCompare(String(vb ?? ""), "id") * d;
+      });
+    }
+
+    let ext = null;
+    if (S.highlightExtremes && S.v) {
+      const byVal = data.filter(r => num(r[S.v]) !== null)
+        .slice().sort((a, b) => num(b[S.v]) - num(a[S.v]));
+      if (byVal.length >= 6) {
+        ext = { top: new Set(byVal.slice(0, 3)), bot: new Set(byVal.slice(-3)) };
+      }
+    }
+
+    const total = data.length;
+    const size = S.pageSize;
+    const pages = size === 0 ? 1 : Math.max(1, Math.ceil(total / size));
+    if (S.page > pages) S.page = pages;
+    if (S.page < 1) S.page = 1;
+    const start = size === 0 ? 0 : (S.page - 1) * size;
+    const slice = size === 0 ? data : data.slice(start, start + size);
+
+    const e = $("preview");
+    const visHeads = S.headers.filter(h => !S.hiddenCols.has(h));
+    
+    if (!total) {
+      e.innerHTML = '<p class="muted" style="padding:10px">Tidak ada data.</p>';
+    } else if (!visHeads.length) {
+      e.innerHTML = '<p class="muted" style="padding:10px">Semua kolom disembunyikan.</p>';
+    } else {
+      const headHtml = visHeads.map(h => {
+        const sorted = S.sort.col === h ? "sorted" : "";
+        const dirCls = (S.sort.col === h && S.sort.dir === -1) ? "desc" : "";
+        return `<th class="${sorted}" data-sort-col="${esc(h)}">${esc(h)}<svg class="sorticon ${dirCls}" viewBox="0 0 12 12" width="10" height="10" fill="currentColor"><path d="M6 9L2 4h8z"/></svg></th>`;
+      }).join("");
+      const bodyHtml = slice.map(r => {
+        const cls = ext ? (ext.top.has(r) ? "ext-top" : ext.bot.has(r) ? "ext-bot" : "") : "";
+        return `<tr class="${cls}">` + visHeads.map(h => `<td>${esc(r[h] ?? "")}</td>`).join("") + '</tr>';
+      }).join("");
+      e.innerHTML = `<table><thead><tr>${headHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+      e.querySelectorAll("th[data-sort-col]").forEach(th => {
+        th.addEventListener("click", () => sortPreview(th.dataset.sortCol));
+      });
+    }
+
+    $("pageInfo").textContent = total === 0
+      ? "—"
+      : (size === 0
+        ? `Semua ${total.toLocaleString('id-ID')} baris`
+        : `Hal ${S.page} dari ${pages} · ${total.toLocaleString('id-ID')} baris`);
+    $("prevPage").disabled = size === 0 || S.page <= 1;
+    $("nextPage").disabled = size === 0 || S.page >= pages;
+  }
+
+  function sortPreview(col) {
+    if (S.sort.col === col) {
+      if (S.sort.dir === 1) S.sort.dir = -1;
+      else if (S.sort.dir === -1) { S.sort.col = null; S.sort.dir = 1; }
+    } else { S.sort.col = col; S.sort.dir = 1; }
+    S.page = 1;
+    renderPreview();
+  }
+
+  // ---------- QUALITY ----------
+  function quality(rows) {
+    const n = rows.length;
+    if (!n) { status("quality", "Tidak ada data untuk diperiksa."); return; }
+    let empty = 0, dup = 0;
+    const seen = new Set();
+    const missingByCol = {};
+    const hdrs = S.headers;
+    hdrs.forEach(h => { missingByCol[h] = 0; });
+    for (let i = 0; i < n; i++) {
+      const r = rows[i];
+      let rowEmpty = false;
+      for (let j = 0; j < hdrs.length; j++) {
+        if (String(r[hdrs[j]] ?? "").trim() === "") {
+          missingByCol[hdrs[j]]++;
+          rowEmpty = true;
+        }
+      }
+      if (rowEmpty) empty++;
+      const k = rowKey(r, hdrs);
+      if (seen.has(k)) dup++; else seen.add(k);
+    }
+    const missList = S.headers
+      .map(h => ({ h, m: missingByCol[h], p: (missingByCol[h] / n) * 100 }))
+      .filter(x => x.m > 0)
+      .sort((a, b) => b.m - a.m)
+      .slice(0, 6);
+    const missInfo = missList.length
+      ? missList.map(x => `${x.h}: ${x.m} (${x.p.toFixed(1)}%)`).join("; ")
+      : "tidak ada";
+
+    let outlierInfo = "—";
+    if (S.v) {
+      const nums = rows.map(r => num(r[S.v])).filter(x => x !== null).sort((a, b) => a - b);
+      if (nums.length >= 8) {
+        const q1 = nums[Math.floor((nums.length - 1) * 0.25)];
+        const q3 = nums[Math.floor((nums.length - 1) * 0.75)];
+        const iqr = q3 - q1;
+        const lo = q1 - 1.5 * iqr, hi = q3 + 1.5 * iqr;
+        const outN = nums.filter(v => v < lo || v > hi).length;
+        outlierInfo = `kolom "${S.v}": ${outN} dari ${nums.length} (${pct(outN, nums.length)}%) di luar IQR [${fmt(lo)} … ${fmt(hi)}]`;
+      } else if (nums.length) {
+        outlierInfo = `kolom "${S.v}": sampel terlalu kecil untuk IQR (${nums.length})`;
+      }
+    }
+
+    const typeInfo = S.headers.map(h => `${h}: ${S.columnTypes[h] || "text"}`).join(", ");
+    // Quality score 0–100
+    let score = 100;
+    score -= Math.min(40, (empty / n) * 50);
+    score -= Math.min(25, (dup / n) * 40);
+    if (missList[0]) score -= Math.min(20, missList[0].p * 0.4);
+    score = Math.max(0, Math.round(score));
+    const scoreKind = score >= 80 ? "good" : score >= 55 ? "warn" : "bad";
+    const scoreLabel = score >= 80 ? "Baik" : score >= 55 ? "Perlu perhatian" : "Buruk";
+    const msg =
+      `Skor kualitas: ${score}/100 (${scoreLabel})\n` +
+      `Baris diperiksa: ${n.toLocaleString("id-ID")}\n` +
+      `Baris dengan sel kosong: ${empty.toLocaleString("id-ID")} (${pct(empty, n)}%)\n` +
+      `Baris duplikat (exact): ${dup.toLocaleString("id-ID")} (${pct(dup, n)}%)\n` +
+      `Missing per kolom (tertinggi): ${missInfo}\n` +
+      `Outlier (IQR): ${outlierInfo}\n` +
+      `Kolom terdeteksi: ${typeInfo}\n` +
+      `Catatan: data tidak dihapus otomatis. Gunakan Undo setelah clean jika perlu.`;
+    status("quality", msg, scoreKind);
+  }
+
+  // ---------- DATA CLEANING ----------
+  function cleanDuplicates() {
+    if (!S.raw.length) return;
+    const seen = new Set();
+    const before = S.raw.length;
+    const hdrs = S.headers;
+    const next = S.raw.filter(r => {
+      const k = rowKey(r, hdrs);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    const removed = before - next.length;
+    if (removed > 0) {
+      pushUndo("hapus duplikat");
+      S.raw = next;
+      status("analysisStatus", `Berhasil menghapus ${removed.toLocaleString("id-ID")} baris duplikat. Undo tersedia.`, "good");
+      if (S.ready) analyze();
+    } else {
+      status("analysisStatus", "Tidak ada data duplikat yang ditemukan.", "warn");
+    }
+  }
+
+  function cleanEmptyRows() {
+    if (!S.raw.length) return;
+    const before = S.raw.length;
+    const next = S.raw.filter(r => S.headers.some(h => String(r[h] ?? "").trim() !== ""));
+    const removed = before - next.length;
+    if (removed > 0) {
+      pushUndo("hapus baris kosong");
+      S.raw = next;
+      status("analysisStatus", `Berhasil menghapus ${removed.toLocaleString("id-ID")} baris kosong. Undo tersedia.`, "good");
+      if (S.ready) analyze();
+    } else {
+      status("analysisStatus", "Tidak ada baris kosong yang ditemukan.", "warn");
+    }
+  }
+
+  // ---------- ANALYZE ----------
+  function analyze() {
+    if (!S.ready || S.busy) {
+      if (!S.ready) status("analysisStatus", "Muat dataset terlebih dahulu.", "warn");
+      return;
+    }
+    clearAnalysisUI();
+    S.agg = $("agg").value || "sum";
+    const rows = filtered();
+    const v = $("value").value, g = $("group").value;
+    const vals = [];
+    for (let i = 0; i < rows.length; i++) {
+      const n = num(rows[i][v]);
+      if (n !== null) vals.push(n);
+    }
+    if (!vals.length) {
+      status("analysisStatus", `Tidak ada nilai numerik valid pada "${v}". Periksa kolom atau format data.`, "warn");
+      $("quality").textContent = "Tidak ada data numerik valid pada kolom ini.";
+      S.rows = rows;
+      renderPreview();
+      return;
+    }
+    const sum = sumPrecise(vals);
+    const avg = sum / vals.length;
+    const min = minOf(vals);
+    const max = maxOf(vals);
+    const st = stats(vals);
+
+    const map = new Map();
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const k = String(r[g] ?? "(kosong)") || "(kosong)";
+      const n = num(r[v]);
+      if (!map.has(k)) map.set(k, { group: k, count: 0, valid: 0, sum: 0, nums: [] });
+      const x = map.get(k);
+      x.count++;
+      if (n !== null) { x.valid++; x.nums.push(n); }
+    }
+    // Recompute group sums with compensated summation for precision.
+    S.groups = [...map.values()].map(x => {
+      const gSum = x.nums.length ? sumPrecise(x.nums) : 0;
+      return { ...x, sum: gSum, avg: x.valid ? gSum / x.valid : 0 };
+    });
+    S.groups.sort((a, b) => {
+      const va = aggValueOf(a, S.agg);
+      const vb = aggValueOf(b, S.agg);
+      if (va === null && vb === null) return 0;
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return vb - va;
+    });
+
+    S.rows = rows;
+    S.analysis = { sum, avg, min, max, valid: vals.length, rowCount: rows.length, median: st.median, std: st.std, p25: st.p25, p75: st.p75 };
+    S.v = v; S.g = g;
+
+    $("rowsK").textContent = fmt(rows.length);
+    $("sumK").textContent = fmt(sum);
+    $("avgK").textContent = fmt(avg);
+    $("minmaxK").textContent = fmt(min) + " / " + fmt(max);
+
+    const totalSum = sumPrecise(S.groups.map(g => g.sum));
+    // Rekonsiliasi: total kelompok harus ≈ total nilai (toleransi floating-point sangat kecil).
+    const reconcileOk = Math.abs(totalSum - sum) <= Math.max(1e-6, Math.abs(sum) * 1e-9);
+
+    let insightHtml = "";
+    if (S.groups.length) {
+      const top = S.groups[0];
+      const topShare = totalSum ? (top.sum / totalSum * 100) : 0;
+      const bottom = S.groups[S.groups.length - 1];
+      const dateCol = $("date") ? $("date").value : "";
+      const periodMsg = periodInsight(rows, dateCol, v);
+      insightHtml =
+        `<div style="margin-top:8px;padding:10px;background:var(--input);border:1px solid var(--line);border-radius:8px;font-size:13px">` +
+        `<b>Insight otomatis:</b> Kelompok teratas <b>${esc(top.group)}</b> menyumbang <b>${fmt(top.sum)}</b> ` +
+        `(${topShare.toFixed(1)}% dari total). ` +
+        (S.groups.length > 1
+          ? `Kelompok terendah: <b>${esc(bottom.group)}</b> (${fmt(bottom.sum)}). `
+          : "") +
+        `Rentang nilai: ${fmt(min)} – ${fmt(max)}. ` +
+        (st.std > 0 && avg ? `Koefisien variasi ≈ ${((st.std / Math.abs(avg)) * 100).toFixed(1)}%. ` : "") +
+        (reconcileOk ? `✓ Total kelompok selaras dengan total nilai. ` : `⚠ Selisih rekonsiliasi total: ${fmt(totalSum - sum)}. `) +
+        (periodMsg ? `<br>${periodMsg}` : "") +
+        `</div>`;
+    }
+
+    $("extra").innerHTML =
+      `Nilai numerik valid: <b>${vals.length.toLocaleString("id-ID")}</b> dari ${rows.length.toLocaleString("id-ID")} baris · ` +
+      `Kelompok: <b>${S.groups.length}</b><br>` +
+      `Median: <b>${fmt(st.median)}</b> · Std dev: <b>${fmt(st.std)}</b> · P25/P75: <b>${fmt(st.p25)} / ${fmt(st.p75)}</b><br>` +
+      `Kolom angka: <span class="pill">${esc(v)}</span> · ` +
+      `Kelompok: <span class="pill">${esc(g)}</span> · ` +
+      `Agregasi: <span class="pill">${aggLabel(S.agg)}</span>` +
+      insightHtml;
+
+    if ($("tsAgg")) $("tsAgg").value = S.agg;
+
+    const aggColLabel = aggLabel(S.agg);
+    const hs = ["Kelompok", "Baris", "Valid", "Total", "Rata-rata", aggColLabel, "Kontribusi %"];
+    $("summary").innerHTML = '<table><thead><tr>' +
+      hs.map(x => `<th>${x}</th>`).join("") +
+      '</tr></thead><tbody>' +
+      S.groups.map(x => {
+        const aggVal = aggValueOf(x, S.agg);
+        return `<tr><td>${esc(x.group)}</td><td>${x.count}</td><td>${x.valid}</td><td>${fmt(x.sum)}</td><td>${fmt(x.avg)}</td><td>${fmt(aggVal)}</td><td>${pct(x.sum, totalSum)}%</td></tr>`;
+      }).join("") +
+      '</tbody></table>';
+
+    renderPreview();
+    quality(rows);
+    barChart(S.groups);
+    histChart(vals);
+    buildTimeSeries();
+
+    let msg = `Analisis selesai: ${rows.length.toLocaleString('id-ID')} baris setelah filter, ${vals.length.toLocaleString('id-ID')} nilai numerik valid. ` +
+      `Agregasi: ${aggLabel(S.agg)} pada "${v}".`;
+    if (S.filterSkip > 0) msg += `\n${S.filterSkip} baris dilewati karena tanggal tidak valid / kosong.`;
+    if (S.globalSearch) msg += `\nPencarian global aktif: "${S.globalSearch}".`;
+    status("analysisStatus", msg, "good");
+
+    ["xlsx","report","csv","print","pdf","copy","shareBtn","emailBtn"].forEach(id => $(id).disabled = false);
+    status("exportStatus", "Siap diunduh.", "good");
+
+    if (S.pivot) buildPivot();
+  }
+
+  // ---------- CHARTS (Chart.js) ----------
+  const COLORS = ["#54d4c3","#709df0","#e4b363","#e87ea1","#8bd450","#c98ee8","#70c8e0","#f4a26b","#b0b0f0","#7de0b0","#f0a0a0","#a0e0c0"];
+
+  function barChart(groups) {
+    const info = $("barInfo");
+    const wrap = $("barWrap");
+    if (!groups.length) {
+      if (S.barChartInstance) { try { S.barChartInstance.destroy(); } catch {} S.barChartInstance = null; }
+      info.textContent = "";
+      wrap.classList.remove('has-data');
+      return;
+    }
+    wrap.classList.add('has-data');
+    
+    const isPie = S.chartType === "pie" || S.chartType === "doughnut";
+    // LIMIT CHART DATA TO PREVENT CHROME FREEZE
+    const showN = isPie ? 10 : 15; 
+    
+    let labels = [];
+    let data = [];
+
+    if (groups.length > showN) {
+        const shown = groups.slice(0, showN);
+        const rest = groups.slice(showN);
+        // Jumlah sisa pakai sumPrecise agar total visual chart selaras.
+        const restVals = rest.map(b => aggValueOf(b, S.agg)).filter(x => x !== null && Number.isFinite(x));
+        const restSum = restVals.length ? sumPrecise(restVals) : 0;
+
+        labels = shown.map(g => g.group);
+        data = shown.map(g => aggValueOf(g, S.agg));
+
+        // "Lainnya" untuk pie selalu; untuk bar/line jika agregasi sum agar total visual = grand total.
+        if (isPie || S.agg === "sum") {
+          labels.push("Lainnya");
+          data.push(restSum);
+        }
+        info.textContent = `Menampilkan Top ${showN} + Lainnya dari ${groups.length} kelompok.`;
+    } else {
+        labels = groups.map(g => g.group);
+        data = groups.map(g => aggValueOf(g, S.agg));
+        info.textContent = `${groups.length} kelompok · ${aggLabel(S.agg)}.`;
+    }
+
+    if (S.barChartInstance) { try { S.barChartInstance.destroy(); } catch {} }
+    const ctx = $("bar").getContext("2d");
+    const isLine = S.chartType === "line";
+    const isHorizontal = S.chartType === "bar_h";
+    const chartType = isHorizontal ? "bar" : S.chartType;
+    const tickColor = getComputedStyle(document.documentElement).getPropertyValue("--muted");
+    const gridColor = getComputedStyle(document.documentElement).getPropertyValue("--line");
+    const txtColor = getComputedStyle(document.documentElement).getPropertyValue("--txt");
+
+    S.barChartInstance = new Chart(ctx, {
+      type: chartType,
+      data: {
+        labels,
+        datasets: [{
+          label: aggLabel(S.agg),
+          data,
+          backgroundColor: isPie ? COLORS : (isLine ? "rgba(84,212,195,.15)" : "rgba(84,212,195,.85)"),
+          borderColor: isPie ? "#fff" : "#2a7e73",
+          borderWidth: isPie ? 2 : 1.5,
+          tension: 0.3,
+          pointRadius: isLine ? 4 : undefined,
+          pointHoverRadius: isLine ? 6 : undefined,
+          fill: isLine,
+        }]
+      },
+      options: {
+        indexAxis: isHorizontal ? "y" : "x",
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: isPie, position: "right", labels: { color: txtColor } },
+          datalabels: window.ChartDataLabels ? {
+            display: data.length <= 12,
+            color: isPie ? "#fff" : "#2a7e73",
+            font: { weight: "bold", size: 10 },
+            formatter: (val) => fmtShort(val)
+          } : { display: false },
+          tooltip: {
+            callbacks: {
+              label: c => {
+                const v = isHorizontal ? (c.parsed.x ?? c.parsed) : (c.parsed.y ?? c.parsed);
+                const total = data.reduce((a, b) => a + (b || 0), 0);
+                const perc = total ? (v / total * 100).toFixed(1) : "0";
+                return `${c.dataset.label}: ${fmt(v)} (${perc}%)`;
+              }
+            }
+          }
+        },
+        scales: isPie ? {} : (isHorizontal ? {
+          x: { beginAtZero: true, ticks: { callback: v => fmtShort(v), color: tickColor }, grid: { color: gridColor } },
+          y: { ticks: { color: tickColor }, grid: { display: false } }
+        } : {
+          y: { beginAtZero: true, ticks: { callback: v => fmtShort(v), color: tickColor }, grid: { color: gridColor } },
+          x: { ticks: { autoSkip: false, maxRotation: 45, minRotation: 0, color: tickColor }, grid: { display: false } }
+        })
+      }
+    });
+  }
+
+  function histChart(vals) {
+    const info = $("histInfo");
+    const wrap = $("histWrap");
+    if (!vals.length) {
+      if (S.histChartInstance) { try { S.histChartInstance.destroy(); } catch {} S.histChartInstance = null; }
+      info.textContent = "";
+      wrap.classList.remove('has-data');
+      return;
+    }
+    wrap.classList.add('has-data');
+    const bins = Math.min(10, Math.max(4, Math.ceil(Math.sqrt(vals.length))));
+    const min = minOf(vals), max = maxOf(vals);
+    const span = max - min || 1;
+    const counts = Array(bins).fill(0);
+    vals.forEach(v => counts[Math.min(bins - 1, Math.floor((v - min) / span * bins))]++);
+    const labels = counts.map((_, i) => {
+      const lo = min + (i / bins) * span;
+      const hi = min + ((i + 1) / bins) * span;
+      return `${fmtShort(lo)}–${fmtShort(hi)}`;
+    });
+    info.textContent = `${vals.length.toLocaleString('id-ID')} nilai dibagi ke ${bins} bin (${fmt(min)} – ${fmt(max)}).`;
+
+    if (S.histChartInstance) { try { S.histChartInstance.destroy(); } catch {} }
+    const ctx = $("hist").getContext("2d");
+    S.histChartInstance = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [{
+          label: "Frekuensi",
+          data: counts,
+          backgroundColor: "rgba(112,157,240,.85)",
+          borderColor: "#3d6bd1",
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          datalabels: { display: false }, 
+          tooltip: { callbacks: { label: c => `Frekuensi: ${c.parsed.y}` } }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { precision: 0, color: getComputedStyle(document.documentElement).getPropertyValue('--muted') }, grid:{color: getComputedStyle(document.documentElement).getPropertyValue('--line')} },
+          x: { ticks: { maxRotation: 45, autoSkip: true, color: getComputedStyle(document.documentElement).getPropertyValue('--muted') }, grid:{display:false} }
+        }
+      }
+    });
+  }
+
+  function buildTimeSeries() {
+    const info = $("tsInfo");
+    const wrap = $("tsWrap");
+    if (!S.analysis) { info.textContent = "Jalankan analisis dulu."; return; }
+    const dateCol = $("date").value;
+    const valCol = $("value").value;
+    const gran = $("tsGran").value;
+    const tsAgg = ($("tsAgg") && $("tsAgg").value) || S.agg || "sum";
+
+    if (!dateCol) {
+      if (S.tsChartInstance) { try { S.tsChartInstance.destroy(); } catch {} S.tsChartInstance = null; }
+      info.textContent = "Pilih kolom tanggal di bagian 2 untuk melihat tren.";
+      wrap.classList.remove('has-data');
+      return;
+    }
+
+    const buckets = new Map();
+    S.rows.forEach(r => {
+      const d = dateVal(r[dateCol]);
+      if (!d) return;
+      let key;
+      if (gran === "day") {
+        key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      } else if (gran === "week") {
+        const tmp = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const day = tmp.getDay() || 7;
+        tmp.setDate(tmp.getDate() - day + 1);
+        const yearStart = new Date(tmp.getFullYear(), 0, 1);
+        const weekNo = Math.ceil((((tmp - yearStart) / 86400000) + 1) / 7);
+        key = `${tmp.getFullYear()}-W${String(weekNo).padStart(2,"0")}`;
+      } else if (gran === "month") {
+        key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      } else {
+        key = String(d.getFullYear());
+      }
+      if (!buckets.has(key)) buckets.set(key, []);
+      const n = num(r[valCol]);
+      if (n !== null) buckets.get(key).push(n);
+    });
+
+    const sortedKeys = [...buckets.keys()].sort();
+    if (!sortedKeys.length) {
+      if (S.tsChartInstance) { try { S.tsChartInstance.destroy(); } catch {} S.tsChartInstance = null; }
+      info.textContent = "Tidak ada tanggal valid pada data hasil filter.";
+      wrap.classList.remove('has-data');
+      return;
+    }
+    wrap.classList.add('has-data');
+    
+    const data = sortedKeys.map(k => aggregate(buckets.get(k), tsAgg));
+    const counts = sortedKeys.map(k => buckets.get(k).length);
+    const labelAgg = aggLabel(tsAgg);
+    info.textContent = `${sortedKeys.length} titik data (${gran}) · ${labelAgg} ${valCol} per periode.`;
+
+    if (S.tsChartInstance) { try { S.tsChartInstance.destroy(); } catch {} }
+    const ctx = $("ts").getContext("2d");
+    S.tsChartInstance = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: sortedKeys,
+        datasets: [{
+          label: `${labelAgg} ${valCol}`,
+          data,
+          borderColor: "#54d4c3",
+          backgroundColor: "rgba(84,212,195,.15)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 4,
+          pointHoverRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: true, labels:{color: getComputedStyle(document.documentElement).getPropertyValue('--txt')} },
+          datalabels: { display: false }, 
+          tooltip: {
+            callbacks: {
+              label: c => `${labelAgg}: ${fmt(c.parsed.y)}`,
+              afterLabel: c => `Baris valid: ${counts[c.dataIndex]}`
+            }
+          }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { callback: v => fmtShort(v), color: getComputedStyle(document.documentElement).getPropertyValue('--muted') }, grid:{color: getComputedStyle(document.documentElement).getPropertyValue('--line')} },
+          x: { ticks: { maxRotation: 45, autoSkip: true, color: getComputedStyle(document.documentElement).getPropertyValue('--muted') }, grid:{display:false} }
+        }
+      }
+    });
+  }
+
+  // ---------- PIVOT (UPGRADED WITH LIMIT) ----------
+  function buildPivot() {
+    if (!S.analysis) {
+      $("pivot").innerHTML = '<p class="muted" style="padding:10px">Jalankan analisis dulu.</p>';
+      return;
+    }
+    const rowCol = $("pivotRow").value;
+    const colCol = $("pivotCol").value;
+    const valCol = $("pivotValue").value;
+    const agg = $("pivotAgg").value;
+    const limitOpt = $("pivotLimit").value;
+    const limit = limitOpt === "all" ? Infinity : parseInt(limitOpt);
+
+    if (!rowCol || !valCol) {
+      $("pivot").innerHTML = '<p class="muted" style="padding:10px">Pilih kolom baris dan nilai.</p>';
+      return;
+    }
+
+    const rowVals = new Set();
+    const colVals = new Set();
+    const cells = new Map();
+    const pivotKey = (rowValue, colValue) => JSON.stringify([rowValue, colValue]);
+
+    S.rows.forEach(r => {
+      const rv = String(r[rowCol] ?? "(kosong)") || "(kosong)";
+      const cv = colCol ? (String(r[colCol] ?? "(kosong)") || "(kosong)") : "Total";
+      rowVals.add(rv);
+      colVals.add(cv);
+      const key = pivotKey(rv, cv);
+      if (!cells.has(key)) cells.set(key, []);
+      const n = num(r[valCol]);
+      if (n !== null) cells.get(key).push(n);
+    });
+
+    let rowList = [...rowVals];
+    const colList = [...colVals].sort();
+
+    // Sort by the selected aggregation across each row's underlying numeric values.
+    const rowSortValues = new Map();
+    rowList.forEach(rv => {
+      const all = [];
+      colList.forEach(cv => {
+        const values = cells.get(pivotKey(rv, cv));
+        if (values) for (let i = 0; i < values.length; i++) all.push(values[i]);
+      });
+      rowSortValues.set(rv, aggregate(all, agg));
+    });
+    rowList.sort((a, b) => {
+      const va = rowSortValues.get(a), vb = rowSortValues.get(b);
+      if (va === null && vb === null) return String(a).localeCompare(String(b));
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return vb - va || String(a).localeCompare(String(b));
+    });
+
+    // Keep full row categories for mathematically consistent footer totals, even when
+    // the visible body is limited to Top N.
+    const allRowList = rowList.slice();
+    const totalRowsCount = rowList.length;
+    const isLimited = totalRowsCount > limit;
+    if (isLimited) {
+      rowList = rowList.slice(0, limit);
+    }
+
+    if (colList.length > 50) {
+      $("pivot").innerHTML = `<p class="muted" style="padding:10px">Terlalu banyak kolom (${colList.length}). Pilih kolom dengan nilai unik lebih sedikit.</p>`;
+      return;
+    }
+
+    const aggVals = new Map();
+    cells.forEach((nums, key) => aggVals.set(key, aggregate(nums, agg)));
+
+    const rowTotals = new Map();
+    rowList.forEach(rv => {
+      const all = [];
+      colList.forEach(cv => {
+        const key = pivotKey(rv, cv);
+        if (cells.has(key)) { const values = cells.get(key); for (let i = 0; i < values.length; i++) all.push(values[i]); }
+      });
+      rowTotals.set(rv, aggregate(all, agg));
+    });
+    const colTotals = new Map();
+    colList.forEach(cv => {
+      const all = [];
+      allRowList.forEach(rv => {
+        const key = pivotKey(rv, cv);
+        if (cells.has(key)) { const values = cells.get(key); for (let i = 0; i < values.length; i++) all.push(values[i]); }
+      });
+      colTotals.set(cv, aggregate(all, agg));
+    });
+    const allNums = [];
+    cells.forEach(nums => { for (let i = 0; i < nums.length; i++) allNums.push(nums[i]); });
+    const grand = aggregate(allNums, agg);
+
+    const shareMode = ($("pivotShare") && $("pivotShare").value) || S.pivotShare || "none";
+    S.pivotShare = shareMode;
+    const cellTxt = (v, base) => {
+      if (v === null || v === undefined) return "—";
+      if (shareMode === "none" || !base || !Number.isFinite(base) || base === 0) return fmt(v);
+      const share = (v / base) * 100;
+      return `${fmt(v)}<br><span style="font-size:11px;color:var(--muted)">${share.toFixed(1)}%</span>`;
+    };
+    const header = `<tr><th>${esc(rowCol)} \\ ${colCol ? esc(colCol) : "Total"}</th>${colList.map(cv => `<th>${esc(cv)}</th>`).join("")}<th>Total</th></tr>`;
+    const body = rowList.map(rv => {
+      const cellsHtml = colList.map(cv => {
+        const v = aggVals.get(pivotKey(rv, cv));
+        let base = grand;
+        if (shareMode === "row") base = rowTotals.get(rv);
+        else if (shareMode === "col") base = colTotals.get(cv);
+        return `<td>${cellTxt(v, base)}</td>`;
+      }).join("");
+      const rowBase = shareMode === "grand" ? grand : (shareMode === "row" ? rowTotals.get(rv) : grand);
+      return `<tr><th>${esc(rv)}</th>${cellsHtml}<td style="font-weight:600">${cellTxt(rowTotals.get(rv), rowBase)}</td></tr>`;
+    }).join("");
+    const footer = `<tr><th>Total</th>${colList.map(cv => {
+      const base = shareMode === "col" ? colTotals.get(cv) : grand;
+      return `<td style="font-weight:600">${cellTxt(colTotals.get(cv), base)}</td>`;
+    }).join("")}<td>${fmt(grand)}</td></tr>`;
+
+    const note = isLimited ? `<p class="warn" style="padding:6px 0 0;font-size:12px;font-weight:bold;">⚠️ Menampilkan Top ${limit} baris dari total ${totalRowsCount} baris unik. Untuk melihat sisanya, ubah batas baris di atas.</p>` : "";
+    const shareLabels = { none: "", grand: "Persentase = kontribusi terhadap grand total.", row: "Persentase = kontribusi terhadap total baris.", col: "Persentase = kontribusi terhadap total kolom." };
+    const noteShare = shareMode !== "none"
+      ? `<p class="muted" style="padding:6px 0 0;font-size:12px">${shareLabels[shareMode]} Grand total: ${fmt(grand)}.</p>`
+      : "";
+
+    $("pivot").innerHTML = `<table><thead>${header}</thead><tbody>${body}</tbody><tfoot>${footer}</tfoot></table>${note}${noteShare}`;
+    S.pivot = { rowCol, colCol, valCol, agg, shareMode };
+  }
+
+  // ---------- EXPORT ----------
+  function safe(s) {
+    return String(s || "data").replace(/\.[^.]+$/, "").replace(/[^a-z0-9_-]+/gi, "_").slice(0, 60) || "data";
+  }
+
+  function download(blob, name) {
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = u; a.download = name;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      try { document.body.removeChild(a); } catch {}
+      URL.revokeObjectURL(u);
+    }, 1500);
+  }
+
+  function exportXlsx() {
+    if (!S.analysis) return;
+    if (!window.XLSX) throw new Error("Library ekspor Excel belum tersedia.");
+    const wb = XLSX.utils.book_new();
+    const matrix = [S.headers, ...S.rows.map(r => S.headers.map(h => r[h] ?? ""))];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(matrix), "Data_Hasil_Filter");
+    
+    const totalSum = S.groups.reduce((a, x) => a + x.sum, 0);
+    XLSX.utils.book_append_sheet(wb,
+      XLSX.utils.aoa_to_sheet([["Kelompok", "Jumlah baris", "Nilai valid", "Total", "Rata-rata", aggLabel(S.agg), "Kontribusi %"],
+        ...S.groups.map(g => {
+          return [g.group, g.count, g.valid, g.sum, g.avg, aggValueOf(g, S.agg), totalSum ? (g.sum / totalSum * 100).toFixed(2) : 0];
+        })]), "Rekapitulasi");
+        
+    const a = S.analysis;
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      ["Indikator","Nilai"],
+      ["Sumber", S.name],
+      ["Baris", a.rowCount],
+      ["Kolom angka", S.v],
+      ["Kolom kelompok", S.g],
+      ["Agregasi", aggLabel(S.agg)],
+      ["Nilai valid", a.valid],
+      ["Total", a.sum],
+      ["Rata-rata", a.avg],
+      ["Median", a.median],
+      ["Std dev", a.std],
+      ["P25", a.p25],
+      ["P75", a.p75],
+      ["Minimum", a.min],
+      ["Maksimum", a.max],
+      ["Pencarian global", S.globalSearch || "—"],
+      ["Filter kolom", $("filter").value || "—"],
+      ["Filter teks", $("needle").value || "—"],
+      ["Tanggal mulai", $("from").value || "—"],
+      ["Tanggal akhir", $("to").value || "—"],
+      ["Metode", "Nilai kosong/non-numerik diabaikan."]
+    ]), "Ringkasan");
+    XLSX.utils.book_append_sheet(wb,
+      XLSX.utils.aoa_to_sheet([["Pemeriksaan"], ...$("quality").textContent.split("\n").map(x => [x])]), "Validasi");
+    if (S.calcCols.length) {
+      XLSX.utils.book_append_sheet(wb,
+        XLSX.utils.aoa_to_sheet([["Nama kolom", "Ekspresi"], ...S.calcCols.map(c => [c.name, c.expr])]), "Kolom_Hitung");
+    }
+    XLSX.writeFile(wb, `Laporan_${safe(S.name)}.xlsx`);
+    status("exportStatus", "Excel dibuat: Data, Rekapitulasi, Ringkasan, Validasi" + (S.calcCols.length ? ", Kolom_Hitung" : "") + ".", "good");
+  }
+
+  function exportCsv() {
+    if (!S.analysis) return;
+    const rows = [S.headers, ...S.rows.map(r => S.headers.map(h => r[h] ?? ""))];
+    const csvCell = value => {
+      let textValue = String(value ?? "");
+      // Neutralize spreadsheet formulas while preserving ordinary negative numbers.
+      if (/^[\t\r\n ]*[=+@]/.test(textValue) || /^[\t\r\n ]*-(?!\d+(?:[.,]\d+)?(?:[eE][+-]?\d+)?$)/.test(textValue)) {
+        textValue = "'" + textValue;
+      }
+      return '"' + textValue.replace(/"/g, '""') + '"';
+    };
+    const txt = rows.map(r => r.map(csvCell).join(",")).join("\r\n");
+    download(new Blob(["\ufeff", txt], { type: "text/csv;charset=utf-8" }), `Data_Hasil_${safe(S.name)}.csv`);
+    status("exportStatus", "CSV dibuat dengan perlindungan formula spreadsheet.", "good");
+  }
+
+  function exportReport() {
+    if (!S.analysis) return;
+    const a = S.analysis;
+    const totalSum = S.groups.reduce((x, g) => x + g.sum, 0);
+    const groupsHtml = S.groups.map(g =>
+      `<tr><td>${esc(g.group)}</td><td>${g.count}</td><td>${g.valid}</td><td>${fmt(g.sum)}</td><td>${fmt(g.avg)}</td><td>${fmt(aggValueOf(g, S.agg))}</td><td>${pct(g.sum, totalSum)}%</td></tr>`
+    ).join("");
+    const LIMIT = 2000;
+    const limitedRows = S.rows.slice(0, LIMIT);
+    const dataRows = limitedRows.map(r =>
+      "<tr>" + S.headers.map(h => `<td>${esc(r[h] ?? "")}</td>`).join("") + "</tr>"
+    ).join("");
+    const note = S.rows.length > LIMIT
+      ? `<p><em>Pratinjau data dibatasi ${LIMIT} baris pertama dari ${S.rows.length.toLocaleString('id-ID')} baris. Untuk dataset lengkap, gunakan ekspor Excel/CSV.</em></p>`
+      : "";
+    const html = `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Laporan Analisis</title>
+<style>body{font:14px Arial;margin:30px;color:#172334}table{border-collapse:collapse;width:100%;margin:12px 0 24px}
+td,th{border:1px solid #bbc9d7;padding:7px;text-align:left}th{background:#eaf1f7}h1,h2{color:#173c5a}pre{background:#f5f8fb;padding:10px;border-radius:6px}</style>
+</head><body>
+<h1>Laporan Analisis Data</h1>
+<p>Sumber: ${esc(S.name)} · Dibuat ${new Date().toLocaleString("id-ID")}</p>
+<h2>Ringkasan</h2>
+<p>Baris: ${a.rowCount.toLocaleString('id-ID')} · Total: ${fmt(a.sum)} · Rata-rata: ${fmt(a.avg)} · Median: ${fmt(a.median)} · Std dev: ${fmt(a.std)} · Min: ${fmt(a.min)} · Maks: ${fmt(a.max)}</p>
+<p>Kolom angka: ${esc(S.v)}; kelompok: ${esc(S.g)}; agregasi: ${aggLabel(S.agg)}.</p>
+<h2>Rekapitulasi</h2>
+<table><tr><th>Kelompok</th><th>Baris</th><th>Nilai valid</th><th>Total</th><th>Rata-rata</th><th>${esc(aggLabel(S.agg))}</th><th>Kontribusi</th></tr>${groupsHtml}</table>
+<h2>Kualitas data</h2>
+<pre>${esc($("quality").textContent)}</pre>
+<h2>Data hasil filter</h2>
+${note}
+<table><tr>${S.headers.map(h => `<th>${esc(h)}</th>`).join("")}</tr>${dataRows}</table>
+</body></html>`;
+    download(new Blob([html], { type: "text/html;charset=utf-8" }), `Laporan_${safe(S.name)}.html`);
+    status("exportStatus", "Laporan HTML dibuat.", "good");
+  }
+
+  function exportPdf() {
+    if (!S.analysis) return;
+    if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("Library PDF belum termuat.");
+    const { jsPDF } = window.jspdf;
+    
+    const isWide = S.headers.length > 6;
+    const doc = new jsPDF({ orientation: isWide ? "landscape" : "portrait", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const a = S.analysis;
+    let y = 15;
+
+    doc.setFontSize(16);
+    doc.text("Laporan Analisis Data", 14, y); y += 8;
+    doc.setFontSize(9);
+    doc.text(`Sumber: ${S.name}`, 14, y); y += 5;
+    doc.text(`Dibuat: ${new Date().toLocaleString("id-ID")}`, 14, y); y += 8;
+
+    doc.setFontSize(12);
+    doc.text("Ringkasan", 14, y); y += 6;
+    doc.setFontSize(9);
+    const summaryLines = [
+      `Baris: ${a.rowCount.toLocaleString('id-ID')}    Nilai valid: ${a.valid.toLocaleString('id-ID')}`,
+      `Total: ${fmt(a.sum)}    Rata-rata: ${fmt(a.avg)}    Median: ${fmt(a.median)}`,
+      `Std dev: ${fmt(a.std)}    P25/P75: ${fmt(a.p25)} / ${fmt(a.p75)}`,
+      `Min / Maks: ${fmt(a.min)} / ${fmt(a.max)}`,
+      `Kolom angka: ${S.v}    Kelompok: ${S.g}    Agregasi: ${aggLabel(S.agg)}`
+    ];
+    summaryLines.forEach(l => { doc.text(l, 14, y); y += 5; });
+    y += 3;
+
+    if (doc.autoTable) {
+      doc.autoTable({
+        startY: y,
+        head: [["Kelompok", "Baris", "Valid", "Total", "Rata-rata", aggLabel(S.agg)]],
+        body: S.groups.map(g => [
+          String(g.group), String(g.count), String(g.valid),
+          fmt(g.sum), fmt(g.avg), fmt(aggValueOf(g, S.agg))
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [27, 48, 73], textColor: [255, 255, 255] },
+        styles: { fontSize: 8, cellPadding: 2 },
+        margin: { left: 14, right: 14 }
+      });
+      y = doc.lastAutoTable.finalY + 8;
+    }
+
+    if (S.barChartInstance) {
+      try {
+        const img = S.barChartInstance.toBase64Image("image/png", 1);
+        if (y > (isWide ? 120 : 160)) { doc.addPage(); y = 15; }
+        doc.setFontSize(11);
+        doc.text("Grafik per kelompok", 14, y); y += 4;
+        const imgW = isWide ? 250 : 180, imgH = 70;
+        doc.addImage(img, "PNG", 14, y, imgW, imgH);
+        y += imgH + 8;
+      } catch (e) { }
+    }
+
+    const qText = ($("quality") && $("quality").textContent) || "";
+    if (qText && qText !== "Belum diperiksa.") {
+      if (y > (isWide ? 180 : 250)) { doc.addPage(); y = 15; }
+      doc.setFontSize(11);
+      doc.text("Kualitas data", 14, y); y += 5;
+      doc.setFontSize(8);
+      const lines = doc.splitTextToSize(qText.replace(/\n/g, " | "), isWide ? 260 : 180);
+      lines.slice(0, 12).forEach(l => { doc.text(l, 14, y); y += 4; });
+      y += 4;
+    }
+
+    if (doc.autoTable && S.rows.length) {
+      const LIMIT = 250;
+      const maxCols = Math.min(S.headers.length, isWide ? 15 : 10);
+      if (y > (isWide ? 150 : 200)) { doc.addPage(); y = 15; }
+      doc.setFontSize(11);
+      doc.text(`Data Hasil Filter${S.rows.length > LIMIT ? ` (maks ${LIMIT} baris)` : ""} · ${maxCols} kolom`, 14, y); y += 3;
+      doc.autoTable({
+        startY: y,
+        head: [S.headers.slice(0, maxCols)],
+        body: S.rows.slice(0, LIMIT).map(r => S.headers.slice(0, maxCols).map(h => String(r[h] ?? "").slice(0, 40))),
+        theme: "striped",
+        headStyles: { fillColor: [27, 48, 73], textColor: [255, 255, 255] },
+        styles: { fontSize: isWide ? 6 : 6.5, cellPadding: 1 },
+        margin: { left: 14, right: 14 }
+      });
+    }
+
+    doc.save(`Laporan_${safe(S.name)}.pdf`);
+    status("exportStatus", "PDF dibuat (ringkasan + grafik + kualitas + data).", "good");
+  }
+
+  async function copyTable() {
+    if (!S.analysis) return;
+    const rows = [S.headers, ...S.rows.map(r => S.headers.map(h => r[h] ?? ""))];
+    const tsv = rows.map(r => r.map(v => String(v).replace(/[\t\r\n]/g, " ")).join("\t")).join("\n");
+    try {
+      await navigator.clipboard.writeText(tsv);
+      status("exportStatus", `Tabel disalin ke clipboard (${S.rows.length.toLocaleString('id-ID')} baris).`, "good");
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = tsv;
+      ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); status("exportStatus", "Tabel disalin.", "good"); }
+      catch { status("exportStatus", "Gagal menyalin.", "bad"); }
+      document.body.removeChild(ta);
+    }
+  }
+
+  async function shareData() {
+    if (!S.analysis) return;
+    const text = `Laporan Data: ${S.name}\nTotal: ${fmt(S.analysis.sum)}\nRata-rata: ${fmt(S.analysis.avg)}\nBaris: ${S.rows.length.toLocaleString('id-ID')}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Data Report',
+          text: text,
+          url: window.location.href
+        });
+        status("exportStatus", "Berhasil dibagikan.", "good");
+      } catch (e) {
+        if (e.name !== 'AbortError') status("exportStatus", "Gagal membagikan: " + e.message, "bad");
+      }
+    } else {
+      await copyTable();
+      status("exportStatus", "Browser tidak mendukung Web Share API. Data disalin ke clipboard sebagai gantinya.", "warn");
+    }
+  }
+
+  function emailData() {
+    if (!S.analysis) return;
+    const subject = encodeURIComponent(`Laporan Analisis Data - ${S.name}`);
+    const body = encodeURIComponent(
+      `Halo,\n\nBerikut adalah ringkasan analisis data:\n\n` +
+      `Sumber File: ${S.name}\n` +
+      `Baris Data: ${S.rows.length.toLocaleString('id-ID')}\n` +
+      `Total Nilai: ${fmt(S.analysis.sum)}\n` +
+      `Rata-rata: ${fmt(S.analysis.avg)}\n` +
+      `Kelompok Teratas: ${S.groups.length > 0 ? S.groups[0].group : 'N/A'}\n\n` +
+      `Silakan unduh lampiran (CSV/Excel) secara terpisah dari aplikasi untuk melampirkan data lengkap.\n\n` +
+      `Salam,\nData Report Studio`
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    status("exportStatus", "Membuka klien email default...", "good");
+  }
+
+  function downloadBarChart() {
+    if (!S.barChartInstance) { status("exportStatus", "Tidak ada grafik untuk diunduh.", "warn"); return; }
+    const url = S.barChartInstance.toBase64Image();
+    if (!url || url === 'data:,') return;
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Grafik_${S.chartType}_${safe(S.name)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    status("exportStatus", "Grafik PNG diunduh.", "good");
+  }
+
+  // ---------- SAMPLE ----------
+  function sample() {
+    loadTable("Contoh_Data.csv", [
+      ["Tanggal","Wilayah","Produk","Jumlah","Pendapatan","Status"],
+      ["2026-01-05","Jakarta","Produk A",12,1200000,"Selesai"],
+      ["2026-01-08","Bandung","Produk B",8,640000,"Selesai"],
+      ["2026-01-12","Jakarta","Produk B",5,400000,"Proses"],
+      ["2026-02-03","Surabaya","Produk A",10,1000000,"Selesai"],
+      ["2026-02-10","Bandung","Produk A",7,700000,"Batal"],
+      ["2026-02-18","Jakarta","Produk C",4,520000,"Selesai"],
+      ["2026-03-02","Surabaya","Produk B",9,720000,"Selesai"],
+      ["2026-03-12","Bandung","Produk C",6,780000,"Proses"]
+    ]);
+    $("date").value = "Tanggal";
+    $("group").value = "Wilayah";
+    $("value").value = "Pendapatan";
+    $("agg").value = "sum";
+    analyze();
+  }
+
+  // ---------- RESET ----------
+  function reset() {
+    destroyCharts();
+    S.wb = null; S.sheets = []; S.headers = []; S.raw = []; S.rows = []; S.groups = [];
+    S.ready = false; S.analysis = null; S.columnTypes = {};
+    S.v = null; S.g = null; S.pivot = null;
+    S.sort = { col: null, dir: 1 }; S.page = 1; S.hiddenCols.clear();
+    S.globalSearch = "";
+    S.advFilters = []; S.calcCols = []; S.undoStack = []; S.pivotShare = "none";
+    $("file").value = ""; $("docText").value = "";
+    ["sheet","group","value","agg","date","filter","needle","from","to","analyze","clear",
+     "xlsx","report","csv","print","pdf","copy","globalSearch","shareBtn","emailBtn",
+     "pivotRow","pivotCol","pivotValue","pivotAgg","pivotLimit","pivotShare","pivotRun","cleanDup","cleanEmpty",
+     "advLogic","advAdd","calcName","calcExpr","calcAdd","undoBtn","presetName","presetSave","presetLoad","presetDelete"].forEach(id => { if ($(id)) $(id).disabled = true; });
+    resetSheetUI();
+    ["rowsK","sumK","avgK","minmaxK"].forEach(id => $(id).textContent = "—");
+    $("extra").textContent = "Indikator tambahan akan muncul setelah analisis.";
+    $("summary").innerHTML = '<p class="muted" style="padding:10px">Belum ada hasil.</p>';
+    $("preview").innerHTML = '<p class="muted" style="padding:10px">Belum ada data.</p>';
+    $("pivot").innerHTML = '<p class="muted" style="padding:10px">Pilih baris, kolom, dan nilai, lalu klik Bangun Pivot.</p>';
+    $("colList").innerHTML = "";
+    if ($("advFilterList")) $("advFilterList").innerHTML = "";
+    if ($("calcList")) $("calcList").textContent = "";
+    $("pageInfo").textContent = "—";
+    $("prevPage").disabled = true; $("nextPage").disabled = true;
+    $("barInfo").textContent = ""; $("histInfo").textContent = "";
+    $("tsInfo").textContent = "Pilih kolom tanggal di bagian 2 untuk melihat tren.";
+    $("globalSearch").value = "";
+    status("loadStatus", "Belum ada file.");
+    status("analysisStatus", "Unggah dataset untuk memulai.");
+    status("quality", "Belum diperiksa.");
+    status("exportStatus", "Jalankan analisis sebelum ekspor.");
+    $("progContainer").style.display = "none";
+    $("progFill").style.width = "0%";
+    if (typeof showMonitorStandby === "function") showMonitorStandby();
+    else {
+      const st = $("monitorStandby"); const ac = $("monitorActive");
+      if (st) st.style.display = "block";
+      if (ac) ac.classList.remove("show");
+    }
+  }
+
+  // ---------- THEME ----------
+  function applyTheme(t) {
+    document.documentElement.dataset.theme = t;
+    $("themeLabel").textContent = t === "dark" ? "Terang" : "Gelap";
+    try { localStorage.setItem("drs-theme", t); } catch {}
+    if (S.analysis) {
+      barChart(S.groups);
+      histChart(S.rows.map(r => num(r[S.v])).filter(v => v !== null));
+      buildTimeSeries();
+    }
+  }
+  function initTheme() {
+    let t = "dark";
+    try { t = localStorage.getItem("drs-theme") || "dark"; } catch {}
+    document.documentElement.dataset.theme = t;
+    $("themeLabel").textContent = t === "dark" ? "Terang" : "Gelap";
+  }
+
+  // ---------- PREFERENCES ----------
+  function initPrefs() {
+    try {
+      const ps = localStorage.getItem("drs-pageSize");
+      if (ps !== null && $("pageSize")) {
+        const opt = $("pageSize").querySelector(`option[value="${ps}"]`);
+        if (opt) { $("pageSize").value = ps; S.pageSize = Number(ps); }
+      }
+    } catch {}
+  }
+
+  // ---------- WIRE EVENTS ----------
+  $("load").onclick = () => {
+    if(!$("file").files[0]) {
+      status("loadStatus", "Pilih file terlebih dahulu.", "warn");
+      return;
+    }
+    handleFileSelect($("file").files[0]);
+  };
+  $("file").onchange = () => { if ($("file").files[0]) handleFileSelect($("file").files[0]); };
+  $("sample").onclick = sample;
+  $("reset").onclick = reset;
+  $("analyze").onclick = analyze;
+  $("cleanDup").onclick = cleanDuplicates;
+  $("cleanEmpty").onclick = cleanEmptyRows;
+  
+  $("clear").onclick = () => {
+    if (!S.ready) { status("analysisStatus", "Muat dataset terlebih dahulu.", "warn"); return; }
+    if ($("filter")) $("filter").value = "";
+    if ($("needle")) $("needle").value = "";
+    if ($("from")) $("from").value = "";
+    if ($("to")) $("to").value = "";
+    if ($("globalSearch")) $("globalSearch").value = "";
+    S.globalSearch = "";
+    S.advFilters = [];
+    renderAdvFilters();
+    analyze();
+  };
+
+  if ($("undoBtn")) $("undoBtn").onclick = undoLast;
+  if ($("advAdd")) $("advAdd").onclick = addAdvFilter;
+  if ($("advLogic")) $("advLogic").onchange = () => {
+    S.advFilterLogic = $("advLogic").value;
+  };
+  if ($("calcAdd")) $("calcAdd").onclick = addCalculatedColumn;
+  if ($("presetSave")) $("presetSave").onclick = saveFilterPreset;
+  if ($("presetLoad")) $("presetLoad").onchange = loadFilterPreset;
+  if ($("presetDelete")) $("presetDelete").onclick = deleteFilterPreset;
+
+  $("xlsx").onclick = () => { try { exportXlsx(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
+  $("csv").onclick = () => { try { exportCsv(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
+  $("report").onclick = () => { try { exportReport(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
+  $("pdf").onclick = () => { try { exportPdf(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); } };
+  $("print").onclick = () => { window.print(); };
+  $("copy").onclick = () => { copyTable(); };
+  $("shareBtn").onclick = () => { shareData(); };
+  $("emailBtn").onclick = () => { emailData(); };
+  $("dlBar").onclick = () => { downloadBarChart(); };
+  $("themeBtn").onclick = () => {
+    const cur = document.documentElement.dataset.theme || "dark";
+    applyTheme(cur === "dark" ? "light" : "dark");
+  };
+  $("prevPage").onclick = () => { if (S.page > 1) { S.page--; renderPreview(); } };
+  $("nextPage").onclick = () => { S.page++; renderPreview(); };
+  $("pageSize").onchange = () => {
+    S.pageSize = Number($("pageSize").value);
+    S.page = 1;
+    try { localStorage.setItem("drs-pageSize", String(S.pageSize)); } catch {}
+    renderPreview();
+  };
+  $("chartType").onchange = () => {
+    S.chartType = $("chartType").value;
+    if (S.analysis) barChart(S.groups);
+  };
+  $("agg").onchange = () => {
+    S.agg = $("agg").value;
+    if (S.ready && S.analysis) analyze();
+  };
+  $("highlightEx").onchange = () => {
+    S.highlightExtremes = $("highlightEx").checked;
+    renderPreview();
+  };
+  let searchTimer = null;
+  $("globalSearch").oninput = () => {
+    S.globalSearch = $("globalSearch").value.trim();
+    if (S.ready && S.analysis) {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => { analyze(); }, 400);
+    }
+  };
+  $("tsGran").onchange = () => { if (S.analysis) buildTimeSeries(); };
+  if ($("tsAgg")) $("tsAgg").onchange = () => { if (S.analysis) buildTimeSeries(); };
+  $("date").onchange = () => { if (S.analysis) buildTimeSeries(); };
+  $("pivotRun").onclick = () => { buildPivot(); };
+  if ($("pivotShare")) $("pivotShare").onchange = () => { if (S.pivot) buildPivot(); };
+
+  // Keyboard shortcuts
+  document.addEventListener("keydown", (ev) => {
+    const tag = (ev.target && ev.target.tagName) || "";
+    const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter") {
+      ev.preventDefault();
+      if (S.ready && !S.busy) analyze();
+    } else if ((ev.ctrlKey || ev.metaKey) && (ev.key === "z" || ev.key === "Z") && !typing) {
+      ev.preventDefault();
+      undoLast();
+    } else if ((ev.ctrlKey || ev.metaKey) && (ev.key === "s" || ev.key === "S")) {
+      ev.preventDefault();
+      if (S.analysis) {
+        try { exportXlsx(); } catch (e) { status("exportStatus", "Ekspor gagal: " + e.message, "bad"); }
+      }
+    }
+  });
+
+  // File size warning on select
+  $("file").addEventListener("change", () => {
+    const f = $("file").files[0];
+    if (f && f.size > 40 * 1024 * 1024) {
+      status("loadStatus", `File besar (${(f.size / 1024 / 1024).toFixed(1)} MB). Preview & proses bisa lambat di browser.`, "warn");
+    }
+  });
+
+  // ---------- INIT ----------
+  initTheme();
+  initPrefs();
+  renderAdvFilters();
+  refreshPresetSelect();
+  barChart([]);
+  histChart([]);
+})();
+</script>
+</body>
+  </html>
