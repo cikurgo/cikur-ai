@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Cyber Lab Gold Master — Web Security Interceptor Demo</title>
+<title>Cyber Lab Gold Master — Real Network Interceptor & Scanner</title>
 <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -104,13 +104,13 @@
     .grid {
         flex: 1 1 auto;
         display: grid;
-        grid-template-columns: minmax(270px, 320px) minmax(320px, 1fr) minmax(300px, 380px);
+        grid-template-columns: minmax(280px, 340px) minmax(340px, 1fr) minmax(300px, 390px);
         gap: 1px;
         background: var(--line);
         overflow: hidden;
         min-height: 0;
     }
-    @media (max-width: 980px) {
+    @media (max-width: 1100px) {
         .grid { grid-template-columns: 1fr; overflow: visible; height: auto; }
         body { overflow-y: auto; }
     }
@@ -245,6 +245,24 @@
         font-weight: 700;
     }
 
+    /* ========== SCAN CHIPS ========== */
+    .scan-toggles { display: flex; flex-wrap: wrap; gap: 5px; }
+    .chip {
+        font: inherit;
+        font-size: 9.5px;
+        padding: 5px 9px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        transition: .15s;
+        font-weight: 700;
+        letter-spacing: .3px;
+    }
+    .chip.on { color: var(--cyan); border-color: rgba(45,212,238,.5); background: var(--cyan-dim); }
+    .chip:hover { border-color: var(--cyan); }
+
     /* ========== CARDS (monitor) ========== */
     .card {
         border: 1px solid var(--line);
@@ -301,12 +319,31 @@
 
     pre.json {
         margin: 0; white-space: pre-wrap; word-break: break-word;
-        font-size: 10.5px; color: #9fc9d6; max-height: 140px; overflow-y: auto;
+        font-size: 10.5px; color: #9fc9d6; max-height: 180px; overflow-y: auto;
     }
+
+    .scan-summary { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 9px; }
+    .scan-badge {
+        font-size: 9.5px; padding: 3px 8px; border-radius: 999px;
+        border: 1px solid var(--line); color: var(--muted); background: #0a1119;
+    }
+    .scan-badge.hot { color: var(--red); border-color: rgba(255,77,109,.45); background: rgba(255,77,109,.08); }
+    .scan-list { display: flex; flex-direction: column; gap: 5px; max-height: 190px; overflow-y: auto; }
+    .scan-item {
+        display: flex; align-items: center; gap: 7px;
+        padding: 5px 7px; border-left: 2px solid var(--cyan);
+        background: #0c141d; border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        font-size: 10px;
+    }
+    .scan-item.high { border-left-color: var(--red); }
+    .scan-item.medium { border-left-color: var(--amber); }
+    .scan-item.info { border-left-color: var(--cyan); }
+    .scan-item .cat { flex: 0 0 auto; font-weight: 700; color: var(--purple); }
+    .scan-item code { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9fb4c9; }
 
     /* ========== TERMINAL / FEED ========== */
     .terminal {
-        flex: 1 1 auto; min-height: 160px; overflow-y: auto;
+        flex: 1 1 auto; min-height: 180px; overflow-y: auto;
         background: #000; border: 1px solid var(--line);
         padding: 10px 12px; font-size: 11px; line-height: 1.6;
         border-radius: var(--radius);
@@ -321,7 +358,7 @@
     .log-danger { color: var(--red); }
     .log-success { color: var(--green); text-shadow: 0 0 7px rgba(25,255,168,.3); }
 
-    .filter-bar { display: flex; gap: 6px; }
+    .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; }
     .filter-bar button {
         padding: 6px 12px;
         background: transparent; border: 1px solid var(--line); color: var(--muted);
@@ -331,9 +368,10 @@
     .filter-bar button:hover { color: var(--text); border-color: #2f4055; }
     .filter-bar button.on { color: var(--cyan); border-color: rgba(45,212,238,.5); background: var(--cyan-dim); }
     .filter-bar button[data-filter="leak"].on { color: var(--red); border-color: rgba(255,77,109,.5); background: rgba(255,77,109,.08); }
+    .filter-bar button[data-filter="scan"].on { color: var(--amber); border-color: rgba(255,200,87,.5); background: rgba(255,200,87,.08); }
 
     .vault {
-        flex: 0 0 auto; max-height: 130px; overflow-y: auto;
+        flex: 0 0 auto; max-height: 150px; overflow-y: auto;
         background: var(--panel-2); border: 1px solid var(--line);
         padding: 9px 11px; border-radius: var(--radius);
     }
@@ -419,13 +457,14 @@
         <div class="mark"><svg><use href="#i-terminal"/></svg></div>
         <div>
             <h1>Cyber Lab Gold Master</h1>
-            <div class="sub">Web Security Interceptor · Edukasi</div>
+            <div class="sub">Real Interceptor · Real Scanner · Public Targets</div>
         </div>
     </div>
     <div class="top-right">
         <span class="pill warn" id="targetStatus"><span class="dot"></span>ONLINE (Hooked)</span>
         <span class="pill muted" id="statReq">0 request</span>
-        <span class="pill muted" id="statLeak">0 bocor</span>
+        <span class="pill muted" id="statLeak">0 sensitif</span>
+        <span class="pill muted" id="statScan">0 temuan</span>
         <span class="pill muted" id="statHist">0 hist</span>
         <span class="pill ok">GOLD MASTER</span>
     </div>
@@ -436,9 +475,10 @@
     <!-- ================= KIRI: KONTROL TARGET ================= -->
     <section class="panel control">
         <p class="desc">
-            Simulasi aman di dalam tab ini sendiri: endpoint publik/demo dipanggil,
-            lalu fetch/XHR/WebSocket "disadap" untuk menunjukkan cara kerja interception
-            di sisi klien. Hasil nyata tampil di panel <strong>Live Monitor</strong> di tengah.
+            Semua request berjalan nyata di tab ini. Endpoint publik diverifikasi lewat
+            status HTTP / event <code>playing</code> / handshake WebSocket / event SSE —
+            bukan label palsu. CORS tetap ditegakkan browser; sistem memakai multi-fallback
+            endpoint yang memang mengizinkan akses lintas-origin.
         </p>
 
         <div class="urlbar">
@@ -448,45 +488,44 @@
             <button id="closeUrlBtn" class="close-btn" title="Tutup iframe"><svg><use href="#i-x"/></svg></button>
         </div>
 
-        <div class="group-label">Real Target — CCTV / Stream API</div>
+        <div class="group-label">Real Targets — Multi-Fallback</div>
         <div class="btn-group">
-            <button class="btn" id="btnCCTV" onclick="targetRealCCTV()">
-                <svg><use href="#i-cctv"/></svg><span class="lbl">Tembak API CCTV Publik (HLS)</span><span class="status-dot" data-dot="cctv"></span>
+            <button class="btn" id="btnHLS" onclick="targetHLS()">
+                <svg><use href="#i-cctv"/></svg><span class="lbl">Stream HLS Nyata (CORS)</span><span class="status-dot" data-dot="hls"></span>
             </button>
-            <button class="btn" id="btnIP" onclick="targetRealFetch()">
-                <svg><use href="#i-download"/></svg><span class="lbl">Fetch Real Internet (IP Publik)</span><span class="status-dot" data-dot="ip"></span>
+            <button class="btn" id="btnIP" onclick="targetIP()">
+                <svg><use href="#i-download"/></svg><span class="lbl">IP Publik + Geolokasi</span><span class="status-dot" data-dot="ip"></span>
             </button>
             <button class="btn" id="btnXHR" onclick="targetXHR()">
-                <svg><use href="#i-database"/></svg><span class="lbl">XHR API Publik (JSON User)</span><span class="status-dot" data-dot="xhr"></span>
+                <svg><use href="#i-database"/></svg><span class="lbl">XHR API JSON Nyata</span><span class="status-dot" data-dot="xhr"></span>
             </button>
             <button class="btn ws" id="btnWS" onclick="targetWS()">
-                <svg><use href="#i-wifi"/></svg><span class="lbl">WebSocket Echo (Publik)</span><span class="status-dot" data-dot="ws"></span>
+                <svg><use href="#i-wifi"/></svg><span class="lbl">WebSocket Echo Nyata</span><span class="status-dot" data-dot="ws"></span>
             </button>
             <button class="btn" id="btnStorage" onclick="targetStorage()">
-                <svg><use href="#i-save"/></svg><span class="lbl">Simpan Session (LocalStorage)</span><span class="status-dot" data-dot="storage"></span>
+                <svg><use href="#i-save"/></svg><span class="lbl">Session Storage Nyata</span><span class="status-dot" data-dot="storage"></span>
             </button>
-            <button class="btn detect" id="btnDetect" onclick="targetDetect()">
-                <svg><use href="#i-search"/></svg><span class="lbl">Integrity Check (Anti-Tamper)</span><span class="status-dot" data-dot="detect"></span>
+            <button class="btn" id="btnRTC" onclick="targetRTC()">
+                <svg><use href="#i-video"/></svg><span class="lbl">WebRTC ICE Nyata</span><span class="status-dot" data-dot="rtc"></span>
+            </button>
+            <button class="btn" id="btnBeacon" onclick="targetBeacon()">
+                <svg><use href="#i-beacon"/></svg><span class="lbl">SendBeacon (fire-and-forget)</span><span class="status-dot" data-dot="beacon"></span>
+            </button>
+            <button class="btn" id="btnSSE" onclick="targetSSE()">
+                <svg><use href="#i-sse"/></svg><span class="lbl">EventSource SSE Nyata</span><span class="status-dot" data-dot="sse"></span>
+            </button>
+            <button class="btn detect" id="btnDetect" onclick="targetIntegrity()">
+                <svg><use href="#i-search"/></svg><span class="lbl">Integrity Check (string-based)</span><span class="status-dot" data-dot="detect"></span>
             </button>
         </div>
 
-        <div class="group-label">Advanced Hooks (RTC / Beacon / SSE)</div>
-        <div class="btn-group">
-            <button class="btn mini" id="btnRTC" onclick="targetRTC()">
-                <svg><use href="#i-video"/></svg><span class="lbl">Test WebRTC (STUN Google)</span><span class="status-dot" data-dot="rtc"></span>
-            </button>
-            <button class="btn mini" id="btnBeacon" onclick="targetBeacon()">
-                <svg><use href="#i-beacon"/></svg><span class="lbl">Test SendBeacon (Payload)</span><span class="status-dot" data-dot="beacon"></span>
-            </button>
-            <button class="btn mini" id="btnSSE" onclick="targetEventSource()">
-                <svg><use href="#i-sse"/></svg><span class="lbl">Test EventSource (SSE)</span><span class="status-dot" data-dot="sse"></span>
-            </button>
-        </div>
+        <div class="group-label">Filter Pemindaian — Pilih Kategori</div>
+        <div class="scan-toggles" id="scanToggles"></div>
 
         <div class="group-label">Kontrol Lab</div>
         <div class="btn-group">
-            <button class="btn mini" id="runAllBtn" onclick="runAllDemos()">
-                <svg><use href="#i-play"/></svg><span class="lbl">Jalankan semua demo (smoke test)</span>
+            <button class="btn mini" id="runAllBtn" onclick="runAll()">
+                <svg><use href="#i-play"/></svg><span class="lbl">Jalankan semua target (paralel)</span>
             </button>
             <button class="btn mini" id="pauseBtn" onclick="togglePause()">
                 <svg><use href="#i-pause"/></svg><span class="lbl" id="pauseLbl">Pause sniffer: OFF</span>
@@ -495,51 +534,54 @@
                 <svg><use href="#i-trash"/></svg><span class="lbl">Kosongkan vault</span>
             </button>
             <button class="btn mini" id="histBtn" onclick="showHistory()">
-                <svg><use href="#i-list"/></svg><span class="lbl">Riwayat request (terminal)</span>
+                <svg><use href="#i-list"/></svg><span class="lbl">Riwayat request</span>
             </button>
         </div>
     </section>
 
-    <!-- ================= TENGAH: LIVE MONITOR (BARU) ================= -->
+    <!-- ================= TENGAH: LIVE MONITOR ================= -->
     <section class="panel monitor">
         <div class="ph">
             <h2><svg><use href="#i-monitor"/></svg>Live Monitor</h2>
             <span class="pill muted" id="monitorStatus">Menunggu hasil…</span>
         </div>
-        <p class="desc">Hasil nyata dari tiap tes muncul di sini — bukan cuma baris log.</p>
+        <p class="desc">Hasil nyata tiap target — diverifikasi lewat event/status, bukan asumsi.</p>
 
         <div class="card">
-            <div class="card-h"><span>Stream Monitor (generik — HLS/MP4/WebM)</span><span class="tag" id="streamTag">idle</span></div>
+            <div class="card-h"><span>Stream Monitor — HLS / MP4 / WebM</span><span class="tag" id="streamTag">idle</span></div>
             <div class="video-box" id="videoBox">
                 <div class="rec"><span class="dot"></span>LIVE</div>
                 <video id="monitorVideo" playsinline muted controls></video>
-                <div class="ph-msg" id="videoPlaceholder">Jalankan "Tembak API CCTV Publik", atau tempel URL stream apa pun di bawah lalu PUTAR.</div>
+                <div class="ph-msg" id="videoPlaceholder">Jalankan "Stream HLS Nyata", atau tempel URL stream lalu PUTAR.</div>
             </div>
             <div class="urlbar" style="padding:9px 12px; border-top:1px solid var(--line-soft);">
                 <input type="text" id="streamUrlInput" placeholder="https://.../stream.m3u8 atau video.mp4" spellcheck="false" autocomplete="off" inputmode="url">
-                <button id="streamPlayBtn" title="Coba putar URL stream apa pun secara langsung">PUTAR</button>
+                <button id="streamPlayBtn" title="Putar URL stream apa pun">PUTAR</button>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-h"><span>Network Info (IP Publik)</span><span class="tag" id="ipTag">idle</span></div>
-            <div class="card-body empty" id="ipCard">Belum ada data. Jalankan "Fetch Real Internet".</div>
+            <div class="card-h"><span>Network Info — IP Publik</span><span class="tag" id="ipTag">idle</span></div>
+            <div class="card-body empty" id="ipCard">Belum ada data. Jalankan "IP Publik".</div>
         </div>
 
         <div class="card">
-            <div class="card-h"><span>API Response (XHR User)</span><span class="tag" id="xhrTag">idle</span></div>
-            <div class="card-body empty" id="xhrCard">Belum ada data. Jalankan "XHR API Publik".</div>
+            <div class="card-h"><span>API Response — XHR / Fetch</span><span class="tag" id="xhrTag">idle</span></div>
+            <div class="card-body empty" id="xhrCard">Belum ada data. Jalankan "XHR API JSON".</div>
         </div>
 
         <div class="card">
-            <div class="card-h"><span>Realtime Channel (WS / SSE)</span><span class="tag" id="rtTag">idle</span></div>
-            <div class="card-body empty" id="rtCard">Belum ada data. Jalankan WebSocket / EventSource.</div>
+            <div class="card-h"><span>Realtime — WS / SSE / RTC</span><span class="tag" id="rtTag">idle</span></div>
+            <div class="card-body empty" id="rtCard">Belum ada data. Jalankan WebSocket / SSE / RTC.</div>
         </div>
 
-        <div class="feed" id="feedBar" style="display:none"></div>
+        <div class="card">
+            <div class="card-h"><span>Scan Hasil — Kategori & Temuan</span><span class="tag" id="scanTag">idle</span></div>
+            <div class="card-body empty" id="scanCard">Belum ada temuan. Jalankan target atau fetch URL apa pun.</div>
+        </div>
     </section>
 
-    <!-- ================= KANAN: HACKER TERMINAL ================= -->
+    <!-- ================= KANAN: TERMINAL & VAULT ================= -->
     <section class="panel hacker">
         <div class="scanline"></div>
         <div class="ph">
@@ -547,14 +589,15 @@
         </div>
 
         <div class="filter-bar">
-            <button id="filterAll" class="on" data-filter="all">SEMUA LOG</button>
-            <button id="filterLeak" data-filter="leak">HANYA LEAK</button>
+            <button id="filterAll" class="on" data-filter="all">SEMUA</button>
+            <button id="filterLeak" data-filter="leak">LEAK</button>
+            <button id="filterScan" data-filter="scan">SCAN</button>
         </div>
 
         <div class="terminal" id="terminal"></div>
 
         <div class="vault">
-            <h3><svg><use href="#i-lock"/></svg>Vault — Data Tersadap <span class="count" id="vaultCount">(0)</span></h3>
+            <h3><svg><use href="#i-lock"/></svg>Vault — Temuan <span class="count" id="vaultCount">(0)</span></h3>
             <ul id="vault"></ul>
         </div>
 
@@ -568,22 +611,19 @@
 
 </main>
 
-<!-- iframe target (disisipkan lewat JS saat dibutuhkan, lihat openUrl()) -->
 <div id="iframeHost" style="display:none"></div>
-
-<!-- hls.js untuk memutar stream HLS publik di panel Live Monitor -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 
 <script>
 /* ============================================================
-   CYBER LAB GOLD MASTER — Web Security Interceptor Demo
-   Semua request terjadi di dalam tab ini sendiri, memakai
-   endpoint publik/demo. Tidak ada data yang dikirim ke server
-   pihak ketiga manapun oleh skrip ini.
+   CYBER LAB GOLD MASTER — REAL INTERCEPTOR & SCANNER
+   - Semua request nyata di tab ini, memakai endpoint publik
+     yang mengizinkan CORS.
+   - Tidak melakukan bypass CORS / kebijakan keamanan server.
+   - Setiap hasil diverifikasi lewat event/status nyata.
    ============================================================ */
 
 const NATIVE = {
-    fetch:              window.fetch,
+    fetch:              window.fetch.bind(window),
     XHR:                window.XMLHttpRequest,
     XHRopen:            window.XMLHttpRequest.prototype.open,
     XHRsend:            window.XMLHttpRequest.prototype.send,
@@ -592,7 +632,8 @@ const NATIVE = {
     StorageSet:         Storage.prototype.setItem,
     sendBeacon:         navigator.sendBeacon,
     RTC:                window.RTCPeerConnection,
-    ES:                 window.EventSource
+    ES:                 window.EventSource,
+    fnToString:         Function.prototype.toString
 };
 
 const $     = (id) => document.getElementById(id);
@@ -601,13 +642,16 @@ const trunc = (s, n = 110) => { s = String(s); return s.length > n ? s.slice(0, 
 const now   = () => new Date().toLocaleTimeString('id-ID', { hour12: false });
 
 const termEl = $('terminal');
-const stats  = { req: 0, leak: 0 };
+const stats  = { req: 0, leak: 0, scan: 0 };
 const vaultEntries = [];
 const vaultSet = new Set();
 const reqHistory = [];
 let sniffPaused = false;
 let smokeRunning = false;
+let stealthOn = false;
+let currentFilter = 'all';
 
+/* ---------- SVG HELPER ---------- */
 const SVG_PATHS = {
     copy:  '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>',
     check: '<polyline points="20 6 9 17 4 12"/>'
@@ -616,7 +660,7 @@ function svgHTML(name, size = 12) {
     return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SVG_PATHS[name] || ''}</svg>`;
 }
 
-/* ---------- STATUS DOTS (tombol kiri) ---------- */
+/* ---------- STATUS DOTS ---------- */
 function setDot(key, state) {
     const el = document.querySelector(`[data-dot="${key}"]`);
     if (!el) return;
@@ -624,13 +668,12 @@ function setDot(key, state) {
     if (state) el.classList.add(state);
 }
 
-/* ---------- LOGGING ---------- */
-let currentFilter = 'all';
-
-function log(msg, type = 'sys', isLeak = false) {
+/* ---------- LOGGING & FILTER ---------- */
+function log(msg, type = 'sys', opts = {}) {
     const row = document.createElement('div');
     row.className = `log log-${type}`;
-    if (isLeak) row.dataset.leak = '1';
+    if (opts.leak) row.dataset.leak = '1';
+    if (opts.scan) row.dataset.scan = '1';
 
     const stamp = document.createElement('span');
     stamp.className = 'ts';
@@ -638,28 +681,105 @@ function log(msg, type = 'sys', isLeak = false) {
     row.appendChild(stamp);
     row.appendChild(document.createTextNode(msg));
 
-    if (currentFilter === 'leak' && !isLeak) row.style.display = 'none';
-
+    applyRowFilter(row);
     termEl.appendChild(row);
     termEl.scrollTop = termEl.scrollHeight;
 
-    while (termEl.childElementCount > 450) termEl.removeChild(termEl.firstElementChild);
+    while (termEl.childElementCount > 600) termEl.removeChild(termEl.firstElementChild);
+}
+
+function applyRowFilter(row) {
+    if (currentFilter === 'leak') {
+        row.style.display = row.dataset.leak === '1' ? '' : 'none';
+    } else if (currentFilter === 'scan') {
+        row.style.display = row.dataset.scan === '1' ? '' : 'none';
+    } else {
+        row.style.display = '';
+    }
 }
 
 function applyFilter(f) {
     currentFilter = f;
     $('filterAll').classList.toggle('on', f === 'all');
     $('filterLeak').classList.toggle('on', f === 'leak');
-    for (const el of termEl.children) {
-        el.style.display = (f === 'leak' && el.dataset.leak !== '1') ? 'none' : '';
-    }
+    $('filterScan').classList.toggle('on', f === 'scan');
+    for (const el of termEl.children) applyRowFilter(el);
 }
 
 function refreshStats() {
     $('statReq').textContent  = `${stats.req} request`;
-    $('statLeak').textContent = `${stats.leak} bocor`;
+    $('statLeak').textContent = `${stats.leak} sensitif`;
     $('statLeak').classList.toggle('hot', stats.leak > 0);
+    $('statScan').textContent = `${stats.scan} temuan`;
+    $('statScan').classList.toggle('hot', stats.scan > 0);
     $('statHist').textContent = `${reqHistory.length} hist`;
+}
+
+/* ---------- SCAN RULES ---------- */
+const SCAN_RULES = [
+    {
+        id: 'jwt', label: 'JWT', risk: 'high',
+        re: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g
+    },
+    {
+        id: 'secret', label: 'Secret Field', risk: 'high',
+        re: /"(?:pin|password|passwd|secret|token|ssn|api[_-]?key|apikey|auth[_-]?token|access[_-]?token|refresh[_-]?token)"\s*:\s*"([^"]{4,})"/gi
+    },
+    {
+        id: 'apikey', label: 'API Key', risk: 'high',
+        re: /\b(?:sk_live_[A-Za-z0-9]{8,}|AIza[0-9A-Za-z_-]{30,}|AKIA[0-9A-Z]{16})\b/g
+    },
+    {
+        id: 'bearer', label: 'Bearer Token', risk: 'high',
+        re: /Bearer\s+([A-Za-z0-9\-._~+/]+=*)/gi
+    },
+    {
+        id: 'cookie', label: 'Cookie', risk: 'medium',
+        re: /(?:^|;\s*)([A-Za-z0-9_\-]+=[^;\s]{8,})/g
+    },
+    {
+        id: 'hls', label: 'HLS URL', risk: 'info',
+        re: /https?:\/\/[^\s"'<>\\]+\.m3u8[^\s"'<>\\]*/gi
+    },
+    {
+        id: 'rtsp', label: 'RTSP URL', risk: 'info',
+        re: /rtsp:\/\/[^\s"'<>\\]+/gi
+    },
+    {
+        id: 'ws', label: 'WS URL', risk: 'info',
+        re: /wss?:\/\/[^\s"'<>\\]+/gi
+    },
+    {
+        id: 'email', label: 'Email', risk: 'low',
+        re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g
+    },
+    {
+        id: 'ipv4', label: 'IPv4', risk: 'low',
+        re: /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b/g
+    }
+];
+
+const scanEnabled = new Set(SCAN_RULES.map(r => r.id));
+
+function renderScanToggles() {
+    const host = $('scanToggles');
+    host.innerHTML = '';
+    for (const rule of SCAN_RULES) {
+        const btn = document.createElement('button');
+        btn.className = 'chip on';
+        btn.textContent = rule.label;
+        btn.dataset.rule = rule.id;
+        btn.title = `Klik untuk ${scanEnabled.has(rule.id) ? 'menonaktifkan' : 'mengaktifkan'} filter ${rule.label}`;
+        btn.addEventListener('click', () => {
+            if (scanEnabled.has(rule.id)) scanEnabled.delete(rule.id);
+            else scanEnabled.add(rule.id);
+            btn.classList.toggle('on', scanEnabled.has(rule.id));
+            btn.title = `Klik untuk ${scanEnabled.has(rule.id) ? 'menonaktifkan' : 'mengaktifkan'} filter ${rule.label}`;
+            renderScanCard();
+            log(`[FILTER] ${rule.label}: ${scanEnabled.has(rule.id) ? 'ON' : 'OFF'}`, 'sys');
+        });
+        host.appendChild(btn);
+    }
 }
 
 /* ---------- VAULT ---------- */
@@ -667,18 +787,24 @@ function updateVaultCount() {
     $('vaultCount').textContent = `(${vaultEntries.length})`;
 }
 
-function addVault(name, value) {
-    if (!value || vaultSet.has(value)) return false;
-    vaultSet.add(value);
-    vaultEntries.push({ name, value });
+function addVault(ruleId, label, value, risk, source) {
+    const key = ruleId + '::' + value;
+    if (vaultSet.has(key)) return false;
+    if (vaultEntries.length >= 300) {
+        log('[VAULT] Batas 300 temuan tercapai. Kosongkan vault untuk melanjutkan.', 'warn');
+        return false;
+    }
+
+    vaultSet.add(key);
+    vaultEntries.push({ ruleId, label, value, risk, source, time: Date.now() });
 
     const li = document.createElement('li');
     const tag = document.createElement('span');
     tag.className = 'vtag';
-    tag.textContent = name;
+    tag.textContent = label;
 
     const code = document.createElement('code');
-    code.textContent = trunc(value, 56);
+    code.textContent = trunc(value, 58);
     code.title = value;
 
     const btn = document.createElement('button');
@@ -701,111 +827,156 @@ function addVault(name, value) {
     li.append(tag, code, btn);
     $('vault').prepend(li);
 
-    stats.leak++;
+    stats.scan++;
+    if (risk === 'high' || risk === 'medium') stats.leak++;
     refreshStats();
     updateVaultCount();
+    renderScanCard();
     return true;
 }
 
-function clearVaultUI() {
+function clearVault() {
+    vaultEntries.length = 0;
+    vaultSet.clear();
     $('vault').innerHTML = '';
+    stats.leak = 0;
+    stats.scan = 0;
+    refreshStats();
+    updateVaultCount();
+    renderScanCard();
+    log('[SYS] Vault dikosongkan.', 'sys');
 }
 
 function recordReq(entry) {
     reqHistory.push(Object.assign({ t: Date.now() }, entry));
-    if (reqHistory.length > 220) reqHistory.shift();
+    if (reqHistory.length > 240) reqHistory.shift();
     refreshStats();
 }
 
-/* ---------- PATTERNS ---------- */
-const PATTERNS = [
-    { name: 'JWT Token',    re: /(eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]+)/g },
-    { name: 'HLS Stream',   re: /(https?:\/\/[^\s"'<>\\]+\.m3u8[^\s"'<>\\]*)/gi },
-    { name: 'RTSP Cam',     re: /(rtsp:\/\/[^\s"'<>\\]+)/gi },
-    { name: 'Secret Field', re: /"[a-zA-Z_]*(?:pin|password|passwd|secret|token|ssn|apiKey|api_key|apikey)[a-zA-Z_]*"\s*:\s*"([^"]+)"/gi },
-    { name: 'API Key',      re: /\b(sk_live_[A-Za-z0-9_-]{8,})/g }
-];
+/* ---------- SCAN ENGINE ---------- */
+function shouldInspect(url, contentType = '') {
+    if (!url) return false;
+    if (/\.(ts|m4s|mp4|webm|ogg|mp3|aac|jpg|jpeg|png|gif|webp|svg|woff2?|ttf|wasm)(\?|#|$)/i.test(url)) return false;
+    if (/^(video|audio|image|font)\//i.test(contentType)) return false;
+    if (/octet-stream/i.test(contentType)) return false;
+    return true;
+}
 
-function scanPayload(payload, source, verbose = false) {
-    if (payload === undefined || payload === null) return 0;
-    let text;
-    try {
-        text = (typeof payload === 'string') ? payload : JSON.stringify(payload);
-    } catch (e) { return 0; }
-    if (!text) return 0;
+function scanText(text, source) {
+    if (!text || typeof text !== 'string') return 0;
+    if (text.length > 2_000_000) text = text.slice(0, 2_000_000);
 
     let found = 0;
-    for (const pattern of PATTERNS) {
-        pattern.re.lastIndex = 0;
-        let match;
-        while ((match = pattern.re.exec(text)) !== null) {
-            const value = match[1];
-            if (!value) continue;
-            if (addVault(pattern.name, value)) {
+    for (const rule of SCAN_RULES) {
+        if (!scanEnabled.has(rule.id)) continue;
+        rule.re.lastIndex = 0;
+        let m, guard = 0;
+        while ((m = rule.re.exec(text)) !== null && guard++ < 60) {
+            const value = String(m[1] || m[0]).trim();
+            if (!value || value.length < 4) continue;
+            if (addVault(rule.id, rule.label, value, rule.risk, source)) {
                 found++;
-                log(`[LEAK] ${pattern.name} (via ${source}): ${trunc(value, 78)}`, 'danger', true);
+                const isLeak = rule.risk === 'high' || rule.risk === 'medium';
+                log(`[SCAN] ${rule.label} via ${trunc(source, 50)}: ${trunc(value, 80)}`,
+                    isLeak ? 'danger' : 'info',
+                    { scan: true, leak: isLeak });
             }
         }
-    }
-    if (found === 0 && verbose) {
-        log(`[SCAN] ${source}: bersih — tidak ada pola sensitif.`, 'sys');
     }
     return found;
 }
 
-/* ---------- TIMEOUT HELPER ---------- */
-function withTimeout(promise, ms) {
-    let timer;
-    const timeoutPromise = new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('timeout ' + ms + 'ms')), ms);
-    });
-    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+/* ---------- RENDER SCAN CARD ---------- */
+function renderScanCard() {
+    const card = $('scanCard');
+    const tag = $('scanTag');
+    if (!vaultEntries.length) {
+        card.className = 'card-body empty';
+        card.textContent = 'Belum ada temuan. Jalankan target atau fetch URL apa pun.';
+        tag.textContent = 'idle';
+        tag.className = 'tag';
+        return;
+    }
+
+    card.className = 'card-body';
+    const counts = {};
+    for (const e of vaultEntries) counts[e.ruleId] = (counts[e.ruleId] || 0) + 1;
+
+    const badges = SCAN_RULES.map(r => {
+        const n = counts[r.id] || 0;
+        if (!n) return '';
+        const hot = r.risk === 'high' || r.risk === 'medium';
+        return `<span class="scan-badge${hot ? ' hot' : ''}">${esc(r.label)}: ${n}</span>`;
+    }).join('');
+
+    const latest = vaultEntries.slice(-10).reverse().map(e => `
+        <div class="scan-item ${esc(e.risk)}">
+            <span class="cat">${esc(e.label)}</span>
+            <code title="${esc(e.value)}">${esc(trunc(e.value, 100))}</code>
+        </div>
+    `).join('');
+
+    card.innerHTML = `<div class="scan-summary">${badges}</div><div class="scan-list">${latest}</div>`;
+    tag.textContent = `${vaultEntries.length} temuan`;
+    tag.className = 'tag live';
+}
+
+/* ---------- TIMEOUT FETCH (REAL ABORT) ---------- */
+async function timedFetch(url, ms = 10000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(new DOMException('timeout', 'AbortError')), ms);
+    try {
+        return await fetch(url, { signal: ctrl.signal, cache: 'no-store', redirect: 'follow' });
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 /* ---------- HOOKS ---------- */
-async function hookedFetch(input, init) {
+function hookedFetch(input, init) {
     const url = (typeof input === 'string') ? input : (input && input.url) || String(input);
     const method = ((init && init.method) || 'GET').toUpperCase();
 
-    if (sniffPaused) return NATIVE.fetch.call(this, input, init);
+    if (sniffPaused) return NATIVE.fetch(input, init);
 
     stats.req++; refreshStats();
     const t0 = performance.now();
 
     try {
-        log(`[FETCH] ${method} ${trunc(url, 82)}`, 'info');
-        if (init && init.body) log(`[FETCH] body → ${trunc(init.body, 60)}`, 'warn');
+        log(`[FETCH] ${method} ${trunc(url, 84)}`, 'info');
+        if (init && init.body) log(`[FETCH] body → ${trunc(init.body, 70)}`, 'warn');
         if (init && init.headers) {
             try {
                 const h = init.headers;
                 const hStr = (typeof h === 'string') ? h
-                    : (h instanceof Headers) ? Array.from(h.entries()).map(([k,v])=>`${k}: ${v}`).join(' | ')
+                    : (h instanceof Headers) ? Array.from(h.entries()).map(([k, v]) => `${k}: ${v}`).join(' | ')
                     : JSON.stringify(h);
-                log(`[FETCH] headers → ${trunc(hStr, 80)}`, 'sys');
-                scanPayload(hStr, 'FETCH-HEADERS');
+                log(`[FETCH] headers → ${trunc(hStr, 84)}`, 'sys');
+                scanText(hStr, 'FETCH-HEADERS ' + trunc(url, 50));
             } catch (e) {}
         }
     } catch (e) {}
 
-    try {
-        const response = await withTimeout(NATIVE.fetch.call(this, input, init), 20000);
+    return NATIVE.fetch(input, init).then(response => {
         const ms = Math.round(performance.now() - t0);
-        log(`[FETCH] ← ${response.status} ${response.statusText || ''} · ${ms}ms · ${trunc(response.headers.get('content-type') || '', 40)}`, response.ok ? 'success' : 'warn');
+        log(`[FETCH] ← ${response.status} ${response.statusText || ''} · ${ms}ms · ${trunc(response.headers.get('content-type') || '', 40)}`,
+            response.ok ? 'success' : 'warn');
         recordReq({ kind: 'FETCH', method, url, status: response.status, ms });
 
-        response.clone().text()
-            .then(text => {
+        const ct = response.headers.get('content-type') || '';
+        if (shouldInspect(url, ct)) {
+            response.clone().text().then(text => {
                 log(`[FETCH] body ${text.length} byte`, 'sys');
-                scanPayload(text, 'FETCH', true);
-            })
-            .catch(() => {});
+                scanText(text, 'FETCH ' + trunc(url, 60));
+            }).catch(() => {});
+        }
         return response;
-    } catch (err) {
+    }).catch(err => {
         const ms = Math.round(performance.now() - t0);
         log(`[FETCH] ✖ ${err.message} · ${ms}ms`, 'danger');
         recordReq({ kind: 'FETCH', method, url, status: 0, ms, error: err.message });
         throw err;
-    }
+    });
 }
 
 function hookedXHROpen(method, url) {
@@ -819,8 +990,8 @@ function hookedXHRSetRequestHeader(name, value) {
     this.__headers[name] = value;
     if (!sniffPaused) {
         try {
-            log(`[XHR] header "${name}": ${trunc(value, 60)}`, 'sys');
-            scanPayload(`${name}: ${value}`, 'XHR-HEADER');
+            log(`[XHR] header "${name}": ${trunc(value, 64)}`, 'sys');
+            scanText(`${name}: ${value}`, 'XHR-HEADER');
         } catch (e) {}
     }
     return NATIVE.XHRsetReqHeader.apply(this, arguments);
@@ -832,15 +1003,19 @@ function hookedXHRSend(body) {
 
     stats.req++; refreshStats();
     try {
-        log(`[XHR] ${meta.method || 'GET'} ${trunc(meta.url || '?', 82)}`, 'info');
-        if (body) log(`[XHR] body → ${trunc(body, 60)}`, 'warn');
+        log(`[XHR] ${meta.method || 'GET'} ${trunc(meta.url || '?', 84)}`, 'info');
+        if (body) log(`[XHR] body → ${trunc(body, 70)}`, 'warn');
     } catch (e) {}
 
     this.addEventListener('load', function () {
         try {
-            const meta = this.__meta || {};
-            log(`[XHR] ← ${this.status} · ${trunc(meta.url || '?', 70)}`, this.status >= 200 && this.status < 400 ? 'success' : 'warn');
-            recordReq({ kind: 'XHR', method: meta.method, url: meta.url, status: this.status });
+            const m = this.__meta || {};
+            log(`[XHR] ← ${this.status} · ${trunc(m.url || '?', 72)}`,
+                this.status >= 200 && this.status < 400 ? 'success' : 'warn');
+            recordReq({ kind: 'XHR', method: m.method, url: m.url, status: this.status });
+
+            const ct = this.getResponseHeader('content-type') || '';
+            if (!shouldInspect(m.url, ct)) return;
 
             let text = null;
             if (this.responseType === '' || this.responseType === 'text') {
@@ -850,15 +1025,16 @@ function hookedXHRSend(body) {
             }
             if (text) {
                 log(`[XHR] body ${text.length} byte`, 'sys');
-                scanPayload(text, 'XHR', true);
+                scanText(text, 'XHR ' + trunc(m.url || '', 60));
             }
         } catch (e) {}
     });
+
     this.addEventListener('timeout', function () {
-        try { log(`[XHR] ✖ timeout · ${trunc((this.__meta||{}).url || '?', 70)}`, 'danger'); } catch (e) {}
+        try { log(`[XHR] ✖ timeout · ${trunc((this.__meta || {}).url || '?', 72)}`, 'danger'); } catch (e) {}
     });
     this.addEventListener('error', function () {
-        try { log(`[XHR] ✖ network error · ${trunc((this.__meta||{}).url || '?', 70)}`, 'danger'); } catch (e) {}
+        try { log(`[XHR] ✖ network error · ${trunc((this.__meta || {}).url || '?', 72)}`, 'danger'); } catch (e) {}
     });
 
     if (!this.timeout) { try { this.timeout = 20000; } catch (e) {} }
@@ -872,7 +1048,7 @@ function HookedWS(url, protocols) {
 
     const urlStr = String(url);
     stats.req++; refreshStats();
-    try { log(`[WS] handshake → ${trunc(urlStr, 82)}`, 'info'); } catch (e) {}
+    try { log(`[WS] handshake → ${trunc(urlStr, 84)}`, 'info'); } catch (e) {}
 
     const ws = (protocols !== undefined) ? new NATIVE.WS(url, protocols) : new NATIVE.WS(url);
 
@@ -881,16 +1057,23 @@ function HookedWS(url, protocols) {
     ws.addEventListener('error', () => { try { log('[WS] error', 'danger'); } catch (e) {} });
     ws.addEventListener('message', (e) => {
         try {
-            log(`[WS] ← frame ${String(e.data).length} byte`, 'info');
-            scanPayload(e.data, 'WEBSOCKET');
+            const data = e.data;
+            if (typeof data === 'string') {
+                log(`[WS] ← frame ${data.length} byte`, 'info');
+                scanText(data, 'WS ' + trunc(urlStr, 50));
+            } else {
+                log(`[WS] ← binary frame`, 'sys');
+            }
         } catch (err) {}
     });
 
     const nativeSend = ws.send.bind(ws);
     ws.send = function (data) {
         try {
-            log(`[WS] → ${trunc(data, 60)}`, 'warn');
-            scanPayload(data, 'WS-SEND');
+            if (typeof data === 'string') {
+                log(`[WS] → ${trunc(data, 70)}`, 'warn');
+                scanText(data, 'WS-SEND');
+            }
         } catch (err) {}
         return nativeSend(data);
     };
@@ -907,7 +1090,7 @@ function hookedSetItem(key, value) {
     if (sniffPaused) return NATIVE.StorageSet.call(this, key, value);
     try {
         log(`[STORAGE] Menyimpan "${key}" (${String(value).length} byte)`, 'info');
-        scanPayload(value, 'STORAGE');
+        scanText(String(value), 'STORAGE');
     } catch (e) {}
     return NATIVE.StorageSet.call(this, key, value);
 }
@@ -922,7 +1105,7 @@ function HookedRTC(config) {
         try {
             const cfg = JSON.stringify(config.iceServers);
             log(`[RTC] ICE servers: ${trunc(cfg, 70)}`, 'warn');
-            scanPayload(cfg, 'RTC-CONFIG');
+            scanText(cfg, 'RTC-CONFIG');
         } catch (e) {}
     }
 
@@ -933,7 +1116,7 @@ function HookedRTC(config) {
         if (desc && desc.sdp) {
             try {
                 log(`[RTC] SDP lokal (${desc.sdp.length} byte)`, 'info');
-                scanPayload(desc.sdp, 'RTC-SDP-LOCAL');
+                scanText(desc.sdp, 'RTC-SDP-LOCAL');
             } catch (e) {}
         }
         return origSetLocal(desc);
@@ -944,7 +1127,7 @@ function HookedRTC(config) {
         if (desc && desc.sdp) {
             try {
                 log(`[RTC] SDP remote (${desc.sdp.length} byte)`, 'info');
-                scanPayload(desc.sdp, 'RTC-SDP-REMOTE');
+                scanText(desc.sdp, 'RTC-SDP-REMOTE');
             } catch (e) {}
         }
         return origSetRemote(desc);
@@ -955,7 +1138,7 @@ function HookedRTC(config) {
         if (candidate && candidate.candidate) {
             try {
                 log(`[RTC] ICE candidate: ${trunc(candidate.candidate, 60)}`, 'sys');
-                scanPayload(candidate.candidate, 'RTC-ICE');
+                scanText(candidate.candidate, 'RTC-ICE');
             } catch (e) {}
         }
         return origAddIce(candidate);
@@ -969,22 +1152,22 @@ function hookedSendBeacon(url, data) {
     if (sniffPaused) return NATIVE.sendBeacon.call(navigator, url, data);
 
     stats.req++; refreshStats();
-    try { log(`[BEACON] → ${trunc(url, 82)}`, 'info'); } catch (e) {}
+    try { log(`[BEACON] → ${trunc(url, 84)}`, 'info'); } catch (e) {}
 
     if (data !== undefined && data !== null) {
         try {
             if (typeof data === 'string') {
-                log(`[BEACON] payload: ${trunc(data, 60)}`, 'warn');
-                scanPayload(data, 'BEACON');
+                log(`[BEACON] payload: ${trunc(data, 70)}`, 'warn');
+                scanText(data, 'BEACON');
             } else if (data instanceof Blob) {
                 data.text().then(t => {
                     try {
-                        log(`[BEACON] blob payload: ${trunc(t, 60)}`, 'warn');
-                        scanPayload(t, 'BEACON');
+                        log(`[BEACON] blob payload: ${trunc(t, 70)}`, 'warn');
+                        scanText(t, 'BEACON');
                     } catch (e) {}
                 }).catch(() => {});
             } else {
-                log(`[BEACON] payload: [FormData/binary]`, 'sys');
+                log('[BEACON] payload: [FormData/binary]', 'sys');
             }
         } catch (e) {}
     }
@@ -1002,7 +1185,7 @@ function HookedES(url, config) {
 
     const urlStr = String(url);
     stats.req++; refreshStats();
-    try { log(`[SSE] koneksi → ${trunc(urlStr, 82)}`, 'info'); } catch (e) {}
+    try { log(`[SSE] koneksi → ${trunc(urlStr, 84)}`, 'info'); } catch (e) {}
 
     const es = new NATIVE.ES(url, config);
 
@@ -1010,9 +1193,10 @@ function HookedES(url, config) {
     es.addEventListener('error', () => { try { log('[SSE] error / putus', 'warn'); } catch (e) {} });
     es.addEventListener('message', (e) => {
         try {
-            log(`[SSE] ← data ${String(e.data).length} byte`, 'info');
-            scanPayload(e.data, 'SSE');
-            renderRealtime('SSE', e.data);
+            const data = String(e.data);
+            log(`[SSE] ← data ${data.length} byte`, 'info');
+            scanText(data, 'SSE');
+            renderRealtime('SSE', data);
         } catch (err) {}
     });
 
@@ -1074,13 +1258,6 @@ function removeHooks() {
     }
     if (NATIVE.ES) window.EventSource = NATIVE.ES;
 
-    if (window.__stealthBackup) {
-        Object.freeze = window.__stealthBackup.freeze;
-        Object.seal = window.__stealthBackup.seal;
-        Object.preventExtensions = window.__stealthBackup.preventExtensions;
-        delete window.__stealthBackup;
-    }
-
     hooksActive = false;
     $('targetStatus').innerHTML = '<span class="dot"></span>ONLINE (Native)';
     $('targetStatus').className = 'pill ok';
@@ -1088,14 +1265,10 @@ function removeHooks() {
     log('[SYS] Semua hook dilepas. Sistem kembali normal.', 'success');
 }
 
-/* ---------- STEALTH ---------- */
-let stealthOn = false;
-
+/* ---------- STEALTH (COSMETIC) ---------- */
 function setStealth(on) {
     stealthOn = on;
-    const fakeNative = (name) => `function ${name}() { [native code] }`;
-
-    const hookTargets = [
+    const pairs = [
         [window.fetch, 'fetch'],
         [XMLHttpRequest.prototype.open, 'open'],
         [XMLHttpRequest.prototype.send, 'send'],
@@ -1108,53 +1281,58 @@ function setStealth(on) {
     ];
 
     if (on) {
-        for (const [fn, name] of hookTargets) {
+        for (const [fn, name] of pairs) {
             if (typeof fn === 'function') {
-                try { fn.toString = () => fakeNative(name); } catch (e) {}
+                try {
+                    Object.defineProperty(fn, 'toString', {
+                        value: () => `function ${name}() { [native code] }`,
+                        configurable: true
+                    });
+                } catch (e) {}
             }
         }
-        if (!window.__stealthBackup) {
-            window.__stealthBackup = { freeze: Object.freeze, seal: Object.seal, preventExtensions: Object.preventExtensions };
-        }
-        const bk = window.__stealthBackup;
-        Object.freeze = function (obj) {
-            if (obj === window || obj === navigator) { log('[STEALTH] Object.freeze() pada global diblokir', 'warn'); return obj; }
-            return bk.freeze.call(Object, obj);
-        };
-        Object.seal = function (obj) {
-            if (obj === window || obj === navigator) { log('[STEALTH] Object.seal() pada global diblokir', 'warn'); return obj; }
-            return bk.seal.call(Object, obj);
-        };
-        Object.preventExtensions = function (obj) {
-            if (obj === window || obj === navigator) { log('[STEALTH] Object.preventExtensions() pada global diblokir', 'warn'); return obj; }
-            return bk.preventExtensions.call(Object, obj);
-        };
-        log('[SYS] Stealth AKTIF — hook disamarkan & dilindungi', 'success');
+        log('[SYS] Stealth COSMETIC aktif — toString disamarkan. Deteksi lewat Function.prototype.toString tetap bisa menembus.', 'warn');
     } else {
-        for (const [fn] of hookTargets) {
+        for (const [fn] of pairs) {
             if (typeof fn === 'function') {
                 try { delete fn.toString; } catch (e) {}
             }
         }
-        if (window.__stealthBackup) {
-            Object.freeze = window.__stealthBackup.freeze;
-            Object.seal = window.__stealthBackup.seal;
-            Object.preventExtensions = window.__stealthBackup.preventExtensions;
-            delete window.__stealthBackup;
-        }
-        log('[SYS] Stealth NONAKTIF', 'warn');
+        log('[SYS] Stealth COSMETIC nonaktif.', 'sys');
     }
 
     $('stealthLbl').textContent = `STEALTH: ${on ? 'ON' : 'OFF'}`;
     $('stealthBtn').classList.toggle('on', on);
 }
 
-/* ---------- LIVE MONITOR (BARU) ----------
-   Playback diverifikasi lewat event nyata (playing/error/timeout), bukan
-   diasumsikan "LIVE" begitu play() dipanggil — supaya status yang tampil
-   selalu mencerminkan kondisi sebenarnya, bukan dummy. Generik: menerima
-   URL HLS (.m3u8) maupun file media langsung (mp4/webm/ogg/dll). */
+/* ---------- HLS / MEDIA PLAYBACK (REAL VERIFICATION) ---------- */
 let hlsInstance = null;
+let hlsLoadPromise = null;
+
+function ensureHls() {
+    if (window.Hls) return Promise.resolve(window.Hls);
+    if (hlsLoadPromise) return hlsLoadPromise;
+
+    const urls = [
+        'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js',
+        'https://unpkg.com/hls.js@1.5.13/dist/hls.min.js'
+    ];
+
+    hlsLoadPromise = new Promise((resolve, reject) => {
+        let i = 0;
+        const tryNext = () => {
+            if (i >= urls.length) return reject(new Error('hls.js gagal dimuat dari semua CDN'));
+            const s = document.createElement('script');
+            s.src = urls[i++];
+            s.onload = () => window.Hls ? resolve(window.Hls) : tryNext();
+            s.onerror = tryNext;
+            document.head.appendChild(s);
+        };
+        tryNext();
+    });
+    return hlsLoadPromise;
+}
 
 function destroyHls() {
     if (hlsInstance) {
@@ -1171,8 +1349,8 @@ function videoErrorMessage(err) {
     if (!err) return 'kesalahan media tidak diketahui';
     const map = {
         1: 'dibatalkan (MEDIA_ERR_ABORTED)',
-        2: 'jaringan gagal — kemungkinan diblokir CORS/region (MEDIA_ERR_NETWORK)',
-        3: 'gagal decode — format/codec tidak didukung (MEDIA_ERR_DECODE)',
+        2: 'jaringan gagal — CORS/region (MEDIA_ERR_NETWORK)',
+        3: 'gagal decode — codec tidak didukung (MEDIA_ERR_DECODE)',
         4: 'sumber tidak didukung / URL salah (MEDIA_ERR_SRC_NOT_SUPPORTED)'
     };
     return map[err.code] || ('kode error ' + err.code);
@@ -1185,8 +1363,6 @@ function setStreamState(state, text) {
     $('videoBox').classList.toggle('live', state === 'live');
 }
 
-/* Mencoba memutar satu URL dan menunggu konfirmasi NYATA (event 'playing')
-   sebelum dianggap berhasil. Mengembalikan { ok, reason }. */
 function attemptPlayback(url, { timeoutMs = 9000 } = {}) {
     return new Promise((resolve) => {
         const video = $('monitorVideo');
@@ -1202,6 +1378,7 @@ function attemptPlayback(url, { timeoutMs = 9000 } = {}) {
             clearTimeout(timer);
             video.removeEventListener('playing', onPlaying);
             video.removeEventListener('error', onError);
+            if (!ok) destroyHls();
             resolve({ ok, reason });
         };
 
@@ -1211,33 +1388,34 @@ function attemptPlayback(url, { timeoutMs = 9000 } = {}) {
         video.addEventListener('playing', onPlaying);
         video.addEventListener('error', onError);
 
-        const timer = setTimeout(() => finish(false, `timeout ${Math.round(timeoutMs / 1000)}s (tidak ada respons)`), timeoutMs);
+        const timer = setTimeout(() => finish(false, `timeout ${Math.round(timeoutMs / 1000)}s`), timeoutMs);
 
-        try {
-            if (isHlsUrl(url)) {
-                const native = video.canPlayType('application/vnd.apple.mpegurl');
-                if (native === 'probably' || native === 'maybe') {
+        (async () => {
+            try {
+                if (isHlsUrl(url)) {
+                    const native = video.canPlayType('application/vnd.apple.mpegurl');
+                    if (native === 'probably' || native === 'maybe') {
+                        video.src = url;
+                        video.play().catch(() => {});
+                    } else {
+                        const Hls = await ensureHls();
+                        if (!Hls.isSupported()) return finish(false, 'HLS tidak didukung browser ini');
+                        hlsInstance = new Hls({ maxBufferLength: 15, enableWorker: true });
+                        hlsInstance.on(Hls.Events.ERROR, (evt, data) => {
+                            if (data && data.fatal) finish(false, `hls.js: ${data.type}${data.details ? ' / ' + data.details : ''}`);
+                        });
+                        hlsInstance.loadSource(url);
+                        hlsInstance.attachMedia(video);
+                        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
+                    }
+                } else {
                     video.src = url;
                     video.play().catch(() => {});
-                } else if (window.Hls && window.Hls.isSupported()) {
-                    hlsInstance = new window.Hls({ maxBufferLength: 15 });
-                    hlsInstance.on(window.Hls.Events.ERROR, (evt, data) => {
-                        if (data && data.fatal) finish(false, `hls.js: ${data.type}${data.details ? ' / ' + data.details : ''}`);
-                    });
-                    hlsInstance.loadSource(url);
-                    hlsInstance.attachMedia(video);
-                    hlsInstance.on(window.Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
-                } else {
-                    finish(false, 'HLS tidak didukung di browser ini');
                 }
-            } else {
-                // Generik: mp4/webm/ogg/audio/URL tak dikenal — coba langsung sebagai media src
-                video.src = url;
-                video.play().catch(() => {});
+            } catch (e) {
+                finish(false, e.message);
             }
-        } catch (e) {
-            finish(false, e.message);
-        }
+        })();
     });
 }
 
@@ -1250,7 +1428,7 @@ async function playStream(url) {
         return true;
     }
     setStreamState('err', 'gagal diputar');
-    $('videoPlaceholder').textContent = `Gagal diputar: ${reason}. Link tetap tersimpan di Vault / riwayat.`;
+    $('videoPlaceholder').textContent = `Gagal diputar: ${reason}. Link tetap tersimpan di vault / riwayat.`;
     $('videoPlaceholder').style.display = 'flex';
     log(`[MONITOR] Gagal memutar: ${reason}`, 'warn');
     return false;
@@ -1264,350 +1442,475 @@ async function playStreamManual() {
     $('streamPlayBtn').disabled = true;
     log(`[MONITOR] Mencoba memutar manual: ${trunc(url, 70)}`, 'info');
     const ok = await playStream(url);
-    log(ok ? '[MONITOR] Berhasil — video benar-benar tampil (event "playing" terkonfirmasi).' : '[MONITOR] Tidak berhasil diputar langsung di sini.', ok ? 'success' : 'warn');
+    log(ok
+        ? '[MONITOR] Berhasil — video benar-benar tampil (event "playing" terkonfirmasi).'
+        : '[MONITOR] Tidak berhasil diputar langsung di sini.', ok ? 'success' : 'warn');
     $('streamPlayBtn').disabled = false;
 }
 
-function renderIpCard(data, ms) {
+/* ---------- RENDER CARDS ---------- */
+function renderIpCard(data, source, ms) {
     const el = $('ipCard');
     el.classList.remove('empty');
     const rows = [
         ['IP', data.ip || data.query || '—'],
         ['Kota', data.city || '—'],
-        ['Negara', data.country_name || data.country || '—'],
+        ['Region', data.region || data.regionName || '—'],
+        ['Negara', data.country || data.countryName || '—'],
         ['ISP/Org', data.org || data.isp || '—'],
-        ['Latensi', ms ? ms + ' ms' : '—']
+        ['Latensi', ms ? ms + ' ms' : '—'],
+        ['Sumber', source || '—']
     ];
-    el.innerHTML = `<div class="kv">${rows.map(([k,v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>`;
+    el.innerHTML = `<div class="kv">${rows.map(([k, v]) =>
+        `<div class="row"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`
+    ).join('')}</div>`;
     $('ipTag').textContent = 'live';
-    $('ipTag').classList.add('live');
+    $('ipTag').className = 'tag live';
 }
 
-function renderXhrCard(data) {
+function renderApiCard(payload, meta = '') {
     const el = $('xhrCard');
     el.classList.remove('empty');
     let pretty;
-    try { pretty = JSON.stringify(data, null, 2); } catch (e) { pretty = String(data); }
-    el.innerHTML = `<pre class="json">${esc(trunc(pretty, 700))}</pre>`;
+    try { pretty = JSON.stringify(payload, null, 2); } catch (e) { pretty = String(payload); }
+    el.innerHTML = `${meta ? `<div class="kv" style="margin-bottom:7px"><div class="row"><span class="k">Meta</span><span class="v">${esc(meta)}</span></div></div>` : ''}<pre class="json">${esc(trunc(pretty, 1400))}</pre>`;
     $('xhrTag').textContent = 'live';
-    $('xhrTag').classList.add('live');
+    $('xhrTag').className = 'tag live';
 }
 
 function renderRealtime(label, msg) {
     const el = $('rtCard');
     el.classList.remove('empty');
     el.innerHTML = `<div class="kv"><div class="row"><span class="k">Channel</span><span class="v">${esc(label)}</span></div></div>
-        <pre class="json" style="margin-top:7px">${esc(trunc(String(msg), 300))}</pre>`;
+        <pre class="json" style="margin-top:7px">${esc(trunc(String(msg), 500))}</pre>`;
     $('rtTag').textContent = 'live';
-    $('rtTag').classList.add('live');
+    $('rtTag').className = 'tag live';
 }
 
-/* ---------- TARGET ACTIONS ---------- */
-function tlog(msg, cls = '') {
-    // Kompatibilitas: log ringkas juga masuk ke terminal utama sebagai info/err
-    log('[TARGET] ' + msg, cls === 'err' ? 'warn' : 'sys');
+/* ---------- NORMALIZE URL ---------- */
+function normalizeUrl(raw) {
+    let url = (raw || '').trim();
+    if (!url) return '';
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url)) url = 'https://' + url;
+    return url;
 }
 
-/* 9A. CCTV — multiple fallbacks, lalu coba putar beberapa kandidat sampai
-   benar-benar terkonfirmasi nyala (event 'playing'), bukan cuma label. */
-async function targetRealCCTV() {
-    setDot('cctv', 'busy');
-    log('[TARGET] Request API CCTV publik (playlist IPTV)...', 'info');
+/* ============================================================
+   REAL TARGET ACTIONS
+   ============================================================ */
+
+/* 1. HLS — kandidat yang sudah diverifikasi CORS-friendly */
+async function targetHLS() {
+    setDot('hls', 'busy');
     setStreamState('busy', 'mencari…');
     $('videoPlaceholder').style.display = 'none';
+    $('videoPlaceholder').textContent = 'Menghubungi stream HLS…';
 
-    const endpoints = [
-        'https://iptv-org.github.io/iptv/countries/id.m3u',
-        'https://iptv-org.github.io/iptv/index.m3u',
-        'https://raw.githubusercontent.com/iptv-org/iptv/master/streams/id.m3u',
-        'https://cdn.jsdelivr.net/gh/iptv-org/iptv@master/streams/id.m3u'
+    const candidates = [
+        'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_adv_example_hevc/master.m3u8',
+        'https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8',
+        'https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8',
+        'https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8'
     ];
 
-    let streams = [];
-    for (const ep of endpoints) {
-        try {
-            const res = await fetch(ep);
-            if (!res.ok) { log(`[TARGET] HTTP ${res.status} di ${trunc(ep,50)} — coba cadangan...`, 'warn'); continue; }
-            const text = await res.text();
-            streams = text.split('\n')
-                .map(l => l.trim())
-                .filter(l => l && !l.startsWith('#') && (l.includes('.m3u8') || l.startsWith('http')));
-            if (streams.length) {
-                log(`[TARGET] ${streams.length} link stream terdaftar dari ${trunc(ep,45)}.`, 'success');
-                break;
-            }
-        } catch (e) {
-            log(`[TARGET] ✖ ${trunc(ep,40)}: ${e.message}`, 'warn');
-        }
-    }
+    let ok = false;
+    let lastReason = '';
 
-    if (!streams.length) {
-        setDot('cctv', 'err');
-        setStreamState('err', 'gagal');
-        $('videoPlaceholder').textContent = 'Semua endpoint playlist gagal diakses (cek koneksi internet perangkat).';
-        $('videoPlaceholder').style.display = 'flex';
-        log('[TARGET] Semua endpoint CCTV gagal diakses.', 'danger');
-        return;
-    }
+    for (let i = 0; i < candidates.length; i++) {
+        const url = candidates[i];
+        setStreamState('busy', `coba ${i + 1}/${candidates.length}…`);
+        log(`[HLS] Mencoba #${i + 1}: ${trunc(url, 64)}`, 'sys');
 
-    // Banyak stream publik gratis sudah mati/geo-lock/CORS-block — coba
-    // beberapa kandidat berturut-turut sampai ada yang BENAR-BENAR tampil.
-    const MAX_TRY = Math.min(6, streams.length);
-    let success = false;
-    for (let i = 0; i < MAX_TRY; i++) {
-        const url = streams[i];
-        setStreamState('busy', `mencoba ${i + 1}/${MAX_TRY}…`);
-        log(`[TARGET] Mencoba stream #${i + 1}: ${trunc(url, 60)}`, 'sys');
-        const { ok, reason } = await attemptPlayback(url, { timeoutMs: 7000 });
-        if (ok) {
-            log(`[TARGET] Stream #${i + 1} terkonfirmasi tampil di Live Monitor.`, 'success');
+        const result = await attemptPlayback(url, { timeoutMs: 8000 });
+        if (result.ok) {
+            ok = true;
             setStreamState('live', 'live (terkonfirmasi)');
             $('streamUrlInput').value = url;
-            success = true;
+            log(`[HLS] #${i + 1} terkonfirmasi tampil (event "playing").`, 'success');
+            addVault('hls', 'HLS URL', url, 'info', 'TARGET-HLS');
             break;
         }
-        log(`[TARGET] ✖ Stream #${i + 1} gagal: ${reason}`, 'warn');
+
+        lastReason = result.reason;
+        log(`[HLS] ✖ #${i + 1} gagal: ${result.reason}`, 'warn');
     }
 
-    if (success) {
-        setDot('cctv', 'ok');
+    if (ok) {
+        setDot('hls', 'ok');
     } else {
-        setDot('cctv', 'err');
-        setStreamState('err', 'tidak ada yang hidup');
-        $('videoPlaceholder').textContent = `${streams.length} link ditemukan & tercatat di Vault, tapi ${MAX_TRY} kandidat pertama gagal diputar langsung (umumnya CORS/region-lock pada stream publik gratis). Salin salah satu link dari Vault ke kolom di atas untuk coba manual, atau tempel URL stream lain yang kamu punya.`;
+        setDot('hls', 'err');
+        setStreamState('err', 'gagal');
+        $('videoPlaceholder').textContent = `Semua kandidat gagal. Alasan terakhir: ${lastReason}. Link kandidat tetap bisa kamu salin dari log.`;
         $('videoPlaceholder').style.display = 'flex';
-        log(`[TARGET] ${MAX_TRY} kandidat pertama gagal diputar langsung dari browser.`, 'danger');
+        log('[HLS] Tidak ada kandidat yang berhasil diputar.', 'danger');
     }
 }
 
-/* 9B. IP Public */
-async function targetRealFetch() {
+/* 2. IP Publik — multi endpoint */
+async function targetIP() {
     setDot('ip', 'busy');
-    log('[TARGET] Mengambil IP publik asli...', 'info');
-    const endpoints = ['https://ipapi.co/json/', 'https://api.ipify.org?format=json', 'https://api64.ipify.org?format=json'];
-    for (const ep of endpoints) {
+    log('[IP] Mengambil IP publik + geolokasi…', 'info');
+
+    const sources = [
+        {
+            url: 'https://ipapi.co/json/',
+            map: d => ({ ip: d.ip, city: d.city, region: d.region, country: d.country_name, org: d.org })
+        },
+        {
+            url: 'https://api.ipapi.is/',
+            map: d => ({
+                ip: d.ip,
+                city: d.location && d.location.city,
+                region: d.location && d.location.state,
+                country: d.location && d.location.country,
+                org: d.asn && d.asn.org
+            })
+        },
+        {
+            url: 'https://freeipapi.com/api/json',
+            map: d => ({ ip: d.ipAddress, city: d.cityName, region: d.regionName, country: d.countryName })
+        },
+        {
+            url: 'https://api.ipify.org?format=json',
+            map: d => ({ ip: d.ip })
+        }
+    ];
+
+    for (const src of sources) {
         const t0 = performance.now();
         try {
-            const res = await withTimeout(fetch(ep), 8000);
+            const res = await timedFetch(src.url, 8000);
+            if (!res.ok) { log(`[IP] HTTP ${res.status} di ${src.url} — lanjut fallback`, 'warn'); continue; }
             const data = await res.json();
             const ms = Math.round(performance.now() - t0);
-            log(`[TARGET] IP Publik: ${data.ip || data.query || 'unknown'}`, 'success');
-            renderIpCard(data, ms);
+            const mapped = src.map(data);
+            if (!mapped.ip) { log(`[IP] ${src.url} tidak mengembalikan IP — lanjut fallback`, 'warn'); continue; }
+            renderIpCard(mapped, src.url, ms);
             setDot('ip', 'ok');
+            log(`[IP] OK via ${src.url} → ${mapped.ip}`, 'success');
             return;
-        } catch (err) { /* coba endpoint berikutnya */ }
+        } catch (e) {
+            log(`[IP] ✖ ${src.url}: ${e.message}`, 'warn');
+        }
     }
+
     setDot('ip', 'err');
-    log('[TARGET] ✖ Gagal mengambil IP publik dari semua endpoint.', 'danger');
+    log('[IP] Semua endpoint IP gagal.', 'danger');
 }
 
-/* 9C. XHR */
+/* 3. XHR — JSON nyata */
 function targetXHR() {
     setDot('xhr', 'busy');
-    log('[TARGET] Menghubungi API publik via XHR...', 'info');
+    log('[XHR] Menghubungi API JSON publik…', 'info');
+
     const xhr = new XMLHttpRequest();
     xhr.open('GET', 'https://dummyjson.com/users/1');
-    xhr.timeout = 10000;
+    xhr.timeout = 12000;
     xhr.setRequestHeader('X-Demo-Auth', 'Bearer eyJhbGciOiJIUzI1NiJ9.XHR-HEADER-DEMO.sig');
+
     xhr.onload = function () {
-        if (xhr.status === 200) {
-            log('[TARGET] XHR 200 OK — data user ditarik.', 'success');
-            try { renderXhrCard(JSON.parse(xhr.responseText)); } catch (e) { renderXhrCard(xhr.responseText); }
+        if (xhr.status >= 200 && xhr.status < 300) {
+            let data;
+            try { data = JSON.parse(xhr.responseText); } catch (e) { data = xhr.responseText; }
+            renderApiCard(data, `XHR 200 · dummyjson.com/users/1`);
             setDot('xhr', 'ok');
+            log('[XHR] 200 OK — data user nyata ditarik.', 'success');
         } else {
-            log(`[TARGET] XHR error: ${xhr.status}`, 'warn');
             setDot('xhr', 'err');
+            log(`[XHR] HTTP ${xhr.status}`, 'warn');
         }
     };
-    xhr.onerror = function () { log('[TARGET] XHR network error', 'danger'); setDot('xhr', 'err'); };
-    xhr.ontimeout = function () { log('[TARGET] XHR timeout', 'danger'); setDot('xhr', 'err'); };
+    xhr.onerror = function () { setDot('xhr', 'err'); log('[XHR] network error', 'danger'); };
+    xhr.ontimeout = function () { setDot('xhr', 'err'); log('[XHR] timeout', 'danger'); };
     xhr.send();
 }
 
-/* 9D. WebSocket */
-function targetWS() {
-    setDot('ws', 'busy');
-    log('[TARGET] Membuka WebSocket Echo publik...', 'info');
-    try {
-        const ws = new WebSocket('wss://ws.postman-echo.com/raw');
+/* 4. WebSocket — multi echo server, verifikasi handshake */
+function tryWSOnce(url, timeoutMs = 6000) {
+    return new Promise((resolve) => {
+        let settled = false;
+        let ws = null;
+        const finish = (ok, data, reason) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try { if (ws) ws.close(); } catch (e) {}
+            resolve({ ok, data, reason, url });
+        };
+
+        const timer = setTimeout(() => finish(false, '', 'timeout handshake'), timeoutMs);
+
+        try {
+            ws = new WebSocket(url);
+        } catch (e) {
+            return finish(false, '', e.message);
+        }
+
         ws.onopen = () => {
-            log('[TARGET] WS terhubung. Mengirim token demo...', 'success');
-            ws.send(JSON.stringify({ command: 'STREAM', token: 'eyJhbGciOiJIUzI1NiJ9.DUMMY-SECRET.xyz' }));
+            log(`[WS] terbuka → ${url}`, 'success');
+            try {
+                ws.send(JSON.stringify({
+                    type: 'probe',
+                    from: 'cyber-lab',
+                    token: 'eyJhbGciOiJIUzI1NiJ9.DUMMY-WS-TOKEN.sig'
+                }));
+            } catch (e) {}
         };
-        ws.onmessage = (e) => { log(`[TARGET] WS echo diterima (${String(e.data).length} byte)`, 'success'); renderRealtime('WebSocket', e.data); setDot('ws', 'ok'); };
-        ws.onerror = () => { log('[TARGET] WS error', 'danger'); setDot('ws', 'err'); };
-        ws.onclose = () => { log('[TARGET] WS ditutup.', 'sys'); };
-        setTimeout(() => { try { ws.close(); } catch(e){} }, 4500);
-    } catch (e) { log('[TARGET] ' + e.message, 'danger'); setDot('ws', 'err'); }
-}
 
-/* 9E. Storage */
-function targetStorage() {
-    setDot('storage', 'busy');
-    log('[TARGET] Menyimpan token sesi demo...', 'info');
-    const token = 'eyJhbGciOiJIUzI1NiJ9.YWRtaW4tc2Vzc2lvbg.SECRET-KEY';
-    try {
-        localStorage.setItem('auth_token', token);
-        log('[TARGET] Token (JWT demo) berhasil disimpan.', 'success');
-        setDot('storage', 'ok');
-    } catch (e) { log('[TARGET] ✖ ' + e.message, 'danger'); setDot('storage', 'err'); }
-}
-
-/* 9F. Integrity Check */
-function targetDetect() {
-    setDot('detect', 'busy');
-    log('[TARGET] Menjalankan Integrity Check...', 'info');
-    setTimeout(() => {
-        const dirty = [];
-        const checks = {
-            'fetch':                    window.fetch,
-            'XMLHttpRequest.open':      XMLHttpRequest.prototype.open,
-            'XMLHttpRequest.send':      XMLHttpRequest.prototype.send,
-            'XMLHttpRequest.setHeader': XMLHttpRequest.prototype.setRequestHeader,
-            'WebSocket':                window.WebSocket,
-            'Storage.setItem':          Storage.prototype.setItem,
-            'sendBeacon':               navigator.sendBeacon,
-            'RTCPeerConnection':        window.RTCPeerConnection,
-            'EventSource':              window.EventSource
+        ws.onmessage = (e) => {
+            finish(true, e.data, 'echo');
         };
-        for (const [name, fn] of Object.entries(checks)) {
-            if (typeof fn !== 'function') continue;
-            if (!/\[native code\]/.test(String(fn))) dirty.push(name);
-        }
-        if (dirty.length) {
-            log(`[DETECT] Hook terdeteksi pada: ${dirty.join(', ')}`, 'warn');
-            setDot('detect', 'err');
-        } else {
-            log('[DETECT] Semua API terlihat native.', 'success');
-            setDot('detect', 'ok');
-        }
-    }, 350);
-}
 
-/* 9G. WebRTC */
-async function targetRTC() {
-    setDot('rtc', 'busy');
-    log('[TARGET] Membuat RTCPeerConnection (STUN Google)...', 'info');
-    try {
-        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-        pc.createDataChannel('test');
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        log('[TARGET] SDP Offer dibuat. Sniffer menyadap SDP.', 'success');
-        setDot('rtc', 'ok');
-        setTimeout(() => { try { pc.close(); } catch (e) {} }, 1300);
-    } catch (e) { log('[TARGET] ' + e.message, 'danger'); setDot('rtc', 'err'); }
-}
+        ws.onerror = () => {
+            if (!settled) finish(false, '', 'error');
+        };
 
-/* 9H. Beacon */
-function targetBeacon() {
-    setDot('beacon', 'busy');
-    log('[TARGET] Mengirim SendBeacon demo...', 'info');
-    const payload = JSON.stringify({ event: 'track', pin: '1234', uid: 'admin' });
-    const ok = navigator.sendBeacon('https://jsonplaceholder.typicode.com/posts', new Blob([payload], { type: 'application/json' }));
-    log(ok ? '[TARGET] Beacon terkirim.' : '[TARGET] Gagal mengirim beacon.', ok ? 'success' : 'warn');
-    setDot('beacon', ok ? 'ok' : 'err');
-}
-
-/* 9I. SSE */
-function targetEventSource() {
-    setDot('sse', 'busy');
-    log('[TARGET] Membuka EventSource (SSE)...', 'info');
-    try {
-        const es = new EventSource('https://sse.dev/test');
-        es.onopen = () => { log('[TARGET] SSE terbuka.', 'success'); setDot('sse', 'ok'); };
-        es.onmessage = (e) => log(`[TARGET] SSE data: ${trunc(e.data, 42)}`, 'success');
-        es.onerror = () => { log('[TARGET] SSE error / ditutup.', 'warn'); setDot('sse', 'err'); };
-        setTimeout(() => { try { es.close(); } catch (e) {} }, 3800);
-    } catch (e) { log('[TARGET] ' + e.message, 'danger'); setDot('sse', 'err'); }
-}
-
-/* ---------- CONTROL LAB ---------- */
-function togglePause() {
-    sniffPaused = !sniffPaused;
-    $('pauseLbl').textContent = sniffPaused ? 'Pause sniffer: ON' : 'Pause sniffer: OFF';
-    log(sniffPaused ? '[SYS] Sniffer PAUSE (semua hook di-bypass)' : '[SYS] Sniffer ACTIVE', 'warn');
-}
-
-function clearVault() {
-    vaultEntries.length = 0;
-    vaultSet.clear();
-    clearVaultUI();
-    stats.leak = 0;
-    refreshStats();
-    updateVaultCount();
-    log('[SYS] Vault dikosongkan.', 'sys');
-}
-
-function showHistory() {
-    if (!reqHistory.length) return log('[HIST] Belum ada riwayat.', 'warn');
-    log(`── Riwayat ${reqHistory.length} request terakhir ──`, 'info');
-    reqHistory.slice(-30).forEach(r => {
-        const status = r.status !== undefined ? r.status : '-';
-        log(`[HIST] ${r.kind} ${status} ${trunc(r.url || '', 60)}`, 'sys');
+        ws.onclose = () => {
+            if (!settled) finish(false, '', 'closed sebelum echo');
+        };
     });
 }
 
-async function fetchUrlFromBar() {
-    let url = $('urlInput').value.trim();
-    if (!url) return log('[SYS] URL kosong.', 'warn');
-    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-    log('[SYS] FETCH manual: ' + trunc(url, 60), 'info');
-    try {
-        const res = await fetch(url);
-        const text = await res.text();
-        log(`[SYS] HTTP ${res.status} (${text.length} byte)`, 'success');
-    } catch (e) { log(`[SYS] Gagal: ${e.message}`, 'danger'); }
+async function targetWS() {
+    setDot('ws', 'busy');
+    log('[WS] Mencoba WebSocket echo publik…', 'info');
+
+    const candidates = [
+        'wss://echo.websocket.org',
+        'wss://api.sondahub.com/v1/utils/ws',
+        'wss://echo.rapidtoolset.com/ws',
+        'wss://ws.ifelse.io'
+    ];
+
+    for (let i = 0; i < candidates.length; i++) {
+        const url = candidates[i];
+        log(`[WS] Kandidat #${i + 1}: ${url}`, 'sys');
+        const r = await tryWSOnce(url, 6000);
+        if (r.ok) {
+            renderRealtime('WebSocket', r.data);
+            setDot('ws', 'ok');
+            log(`[WS] Echo nyata diterima dari ${url}.`, 'success');
+            return;
+        }
+        log(`[WS] ✖ ${url}: ${r.reason}`, 'warn');
+    }
+
+    setDot('ws', 'err');
+    log('[WS] Semua echo server gagal dihubungi.', 'danger');
 }
 
-/* Tombol yang dinonaktifkan bersama saat smoke test berjalan (robust: cegah klik ganda) */
-const ALL_ACTION_BTN_IDS = ['btnCCTV','btnIP','btnXHR','btnWS','btnStorage','btnDetect','btnRTC','btnBeacon','btnSSE','runAllBtn','fetchUrlBtn','streamPlayBtn'];
-function setActionsDisabled(disabled) {
-    ALL_ACTION_BTN_IDS.forEach(id => { const el = $(id); if (el) el.disabled = disabled; });
-}
+/* 5. Storage — real localStorage */
+function targetStorage() {
+    setDot('storage', 'busy');
+    log('[STORAGE] Menulis token sesi demo ke localStorage…', 'info');
 
-async function runAllDemos() {
-    if (smokeRunning) { log('[SMOKE] Masih berjalan, tunggu selesai...', 'warn'); return; }
-    smokeRunning = true;
-    setActionsDisabled(true);
-
-    log('[SMOKE] Memulai rangkaian demo…', 'info');
-
+    const token = 'eyJhbGciOiJIUzI1NiJ9.YWRtaW4tc2Vzc2lvbg.SECRET-KEY';
     try {
-        await targetRealFetch();
-        await new Promise(r => setTimeout(r, 650));
-        targetXHR();
-        await new Promise(r => setTimeout(r, 750));
-        targetStorage();
-        await new Promise(r => setTimeout(r, 500));
-        targetBeacon();
-        await new Promise(r => setTimeout(r, 800));
-        await targetRealCCTV();
-        await new Promise(r => setTimeout(r, 900));
-        await targetRTC();
-        await new Promise(r => setTimeout(r, 850));
-        targetWS();
-        await new Promise(r => setTimeout(r, 1100));
-        targetEventSource();
-        await new Promise(r => setTimeout(r, 4000));
-
-        log('[SMOKE] Rangkaian demo selesai.', 'success');
+        localStorage.setItem('auth_token', token);
+        localStorage.setItem('demo_session', JSON.stringify({
+            user: 'admin',
+            token,
+            ts: Date.now()
+        }));
+        setDot('storage', 'ok');
+        log('[STORAGE] Token & session nyata tersimpan di localStorage.', 'success');
     } catch (e) {
-        log(`[SMOKE] Error: ${e.message}`, 'danger');
-    } finally {
-        smokeRunning = false;
-        setActionsDisabled(false);
+        setDot('storage', 'err');
+        log(`[STORAGE] ✖ ${e.message}`, 'danger');
     }
 }
 
-/* ---------- IFRAME (dibuat on-demand agar robust & mudah dibersihkan) ---------- */
+/* 6. WebRTC — tunggu ICE gathering selesai */
+async function targetRTC() {
+    setDot('rtc', 'busy');
+    log('[RTC] Membuat RTCPeerConnection + STUN Google…', 'info');
+
+    try {
+        const pc = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        });
+        pc.createDataChannel('probe');
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        await new Promise((resolve) => {
+            if (pc.iceGatheringState === 'complete') return resolve();
+            const t = setTimeout(resolve, 6000);
+            pc.addEventListener('icegatheringstatechange', () => {
+                if (pc.iceGatheringState === 'complete') {
+                    clearTimeout(t);
+                    resolve();
+                }
+            });
+        });
+
+        const sdp = (pc.localDescription && pc.localDescription.sdp) || '';
+        const n = (sdp.match(/a=candidate:/g) || []).length;
+
+        renderRealtime('WebRTC', `ICE gathering: ${pc.iceGatheringState} · candidates: ${n}`);
+        log(`[RTC] ICE gathering ${pc.iceGatheringState} · ${n} candidate terkumpul.`,
+            n > 0 ? 'success' : 'warn');
+        setDot('rtc', n > 0 ? 'ok' : 'err');
+
+        setTimeout(() => { try { pc.close(); } catch (e) {} }, 800);
+    } catch (e) {
+        setDot('rtc', 'err');
+        log(`[RTC] ✖ ${e.message}`, 'danger');
+    }
+}
+
+/* 7. SendBeacon — fire-and-forget, jujur soal no-cors */
+function targetBeacon() {
+    setDot('beacon', 'busy');
+    log('[BEACON] Mengirim payload demo via sendBeacon…', 'info');
+
+    const payload = JSON.stringify({
+        event: 'demo_track',
+        pin: '1234',
+        uid: 'admin',
+        token: 'eyJhbGciOiJIUzI1NiJ9.BEACON-DEMO.sig'
+    });
+
+    try {
+        const blob = new Blob([payload], { type: 'application/json' });
+        const ok = navigator.sendBeacon('https://jsonplaceholder.typicode.com/posts', blob);
+        setDot('beacon', ok ? 'ok' : 'err');
+        log(ok
+            ? '[BEACON] Diantrikan browser (fire-and-forget, no-cors — status server tidak bisa diverifikasi).'
+            : '[BEACON] Gagal diantrikan.', ok ? 'success' : 'warn');
+    } catch (e) {
+        setDot('beacon', 'err');
+        log(`[BEACON] ✖ ${e.message}`, 'danger');
+    }
+}
+
+/* 8. SSE — Wikimedia EventStreams (real, CORS-enabled) */
+function trySSEOnce(url, timeoutMs = 6000) {
+    return new Promise((resolve) => {
+        let count = 0;
+        let first = null;
+        let settled = false;
+        let es = null;
+
+        const finish = (ok, reason) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try { if (es) es.close(); } catch (e) {}
+            resolve({ ok, count, first, reason, url });
+        };
+
+        const timer = setTimeout(() => {
+            finish(count > 0, count > 0 ? 'events received' : 'timeout tanpa event');
+        }, timeoutMs);
+
+        try {
+            es = new EventSource(url);
+        } catch (e) {
+            return finish(false, e.message);
+        }
+
+        es.onopen = () => log(`[SSE] terbuka → ${url}`, 'success');
+        es.onmessage = (e) => {
+            count++;
+            if (!first) first = e.data;
+            if (count === 1) log(`[SSE] event pertama diterima (${e.data.length} byte).`, 'success');
+        };
+        es.onerror = () => {
+            if (!settled && count === 0) finish(false, 'error / CORS / ditutup');
+        };
+    });
+}
+
+async function targetSSE() {
+    setDot('sse', 'busy');
+    log('[SSE] Membuka EventSource nyata…', 'info');
+
+    const candidates = [
+        'https://stream.wikimedia.org/v2/stream/recentchange'
+    ];
+
+    for (const url of candidates) {
+        const r = await trySSEOnce(url, 6500);
+        if (r.ok) {
+            renderRealtime('SSE', `${r.count} event dalam ~6.5s · contoh: ${trunc(r.first || '', 220)}`);
+            setDot('sse', 'ok');
+            log(`[SSE] ${r.count} event nyata dari ${url}.`, 'success');
+            return;
+        }
+        log(`[SSE] ✖ ${url}: ${r.reason}`, 'warn');
+    }
+
+    setDot('sse', 'err');
+    log('[SSE] Tidak ada event yang diterima.', 'danger');
+}
+
+/* 9. Integrity Check — string-based, honest */
+function targetIntegrity() {
+    setDot('detect', 'busy');
+    log('[DETECT] Memeriksa apakah API global masih native…', 'info');
+
+    const checks = [
+        ['fetch', window.fetch],
+        ['XMLHttpRequest.open', XMLHttpRequest.prototype.open],
+        ['XMLHttpRequest.send', XMLHttpRequest.prototype.send],
+        ['XMLHttpRequest.setRequestHeader', XMLHttpRequest.prototype.setRequestHeader],
+        ['WebSocket', window.WebSocket],
+        ['Storage.setItem', Storage.prototype.setItem],
+        ['sendBeacon', navigator.sendBeacon],
+        ['RTCPeerConnection', window.RTCPeerConnection],
+        ['EventSource', window.EventSource]
+    ];
+
+    const dirty = [];
+    for (const [name, fn] of checks) {
+        if (typeof fn !== 'function') continue;
+        const src = NATIVE.fnToString.call(fn);
+        if (!/\[native code\]/.test(src)) dirty.push(name);
+    }
+
+    if (dirty.length) {
+        setDot('detect', 'err');
+        log(`[DETECT] Hook terdeteksi pada: ${dirty.join(', ')}`, 'warn');
+        log('[DETECT] Catatan: ini deteksi string-based, bukan SRI/hash kriptografis.', 'sys');
+    } else {
+        setDot('detect', 'ok');
+        log('[DETECT] Semua API terlihat native (string-based).', 'success');
+        log('[DETECT] Catatan: stealth cosmetic tidak menipu pemeriksaan ini karena memakai Function.prototype.toString.call().', 'sys');
+    }
+}
+
+/* 10. Custom fetch dari URL bar */
+async function fetchCustom() {
+    const url = normalizeUrl($('urlInput').value);
+    if (!url) return log('[SYS] URL kosong.', 'warn');
+
+    log(`[SYS] FETCH manual: ${trunc(url, 70)}`, 'info');
+    try {
+        const res = await timedFetch(url, 12000);
+        const ct = res.headers.get('content-type') || '';
+        const text = await res.text();
+        renderApiCard(
+            { url, status: res.status, contentType: ct, bytes: text.length, preview: trunc(text, 1800) },
+            `fetch · HTTP ${res.status}`
+        );
+        log(`[SYS] HTTP ${res.status} (${text.length} byte)`, 'success');
+        scanText(text, 'CUSTOM ' + trunc(url, 50));
+    } catch (e) {
+        log(`[SYS] Gagal: ${e.message}`, 'danger');
+    }
+}
+
+/* ---------- IFRAME ---------- */
 let iframeEl = null;
 let iframeLoadTimer = null;
 
 function openUrl() {
-    let url = $('urlInput').value.trim();
+    let url = normalizeUrl($('urlInput').value);
     if (!url) return log('[SYS] URL kosong.', 'warn');
-    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
 
     if (!iframeEl) {
         iframeEl = document.createElement('iframe');
@@ -1629,34 +1932,92 @@ function openUrl() {
     iframeEl.src = url;
     log(`[BROWSER] Memuat iframe: ${trunc(url, 70)}`, 'warn');
 }
+
 function closeUrl() {
     if (iframeEl) iframeEl.src = 'about:blank';
     $('iframeHost').style.display = 'none';
     $('closeUrlBtn').classList.remove('visible');
 }
 
+/* ---------- LAB CONTROLS ---------- */
+function togglePause() {
+    sniffPaused = !sniffPaused;
+    $('pauseLbl').textContent = sniffPaused ? 'Pause sniffer: ON' : 'Pause sniffer: OFF';
+    log(sniffPaused ? '[SYS] Sniffer PAUSE — hook di-bypass.' : '[SYS] Sniffer ACTIVE.', 'warn');
+}
+
+function showHistory() {
+    if (!reqHistory.length) return log('[HIST] Belum ada riwayat.', 'warn');
+    log(`── Riwayat ${reqHistory.length} request terakhir ──`, 'info');
+    reqHistory.slice(-40).forEach(r => {
+        const status = r.status !== undefined ? r.status : '-';
+        log(`[HIST] ${r.kind} ${status} ${trunc(r.url || '', 70)}`, 'sys');
+    });
+}
+
+const ALL_ACTION_BTN_IDS = [
+    'btnHLS', 'btnIP', 'btnXHR', 'btnWS', 'btnStorage', 'btnRTC',
+    'btnBeacon', 'btnSSE', 'btnDetect', 'runAllBtn', 'fetchUrlBtn', 'streamPlayBtn'
+];
+
+function setActionsDisabled(disabled) {
+    ALL_ACTION_BTN_IDS.forEach(id => {
+        const el = $(id);
+        if (el) el.disabled = disabled;
+    });
+}
+
+async function runAll() {
+    if (smokeRunning) { log('[SMOKE] Masih berjalan, tunggu selesai…', 'warn'); return; }
+    smokeRunning = true;
+    setActionsDisabled(true);
+    log('[SMOKE] Menjalankan semua target secara paralel…', 'info');
+
+    const tasks = [
+        targetHLS(),
+        targetIP(),
+        targetXHR(),
+        targetStorage(),
+        targetRTC(),
+        targetWS(),
+        targetSSE(),
+        targetBeacon()
+    ];
+
+    const results = await Promise.allSettled(tasks);
+    const failed = results.filter(r => r.status === 'rejected').length;
+
+    log(`[SMOKE] Selesai. ${results.length - failed}/${results.length} target selesai tanpa exception.`,
+        failed ? 'warn' : 'success');
+    smokeRunning = false;
+    setActionsDisabled(false);
+}
+
 /* ---------- EXPORT ---------- */
 function exportVault() {
     if (!vaultEntries.length) return log('[EXPORT] Vault kosong.', 'warn');
+
     const data = {
         export_at: new Date().toISOString(),
-        version: 'gold-master',
+        version: 'gold-master-real',
         stats,
+        filters: Array.from(scanEnabled),
         vault: vaultEntries,
         history: reqHistory
     };
+
     try {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `vault-${Date.now()}.json`;
+        a.download = `vault-real-${Date.now()}.json`;
         document.body.appendChild(a);
         a.click();
         a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-        log(`[EXPORT] ${vaultEntries.length} data diekspor.`, 'success');
+        setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+        log(`[EXPORT] ${vaultEntries.length} temuan diekspor.`, 'success');
     } catch (e) {
-        log('[EXPORT] ✖ ' + e.message, 'danger');
+        log(`[EXPORT] ✖ ${e.message}`, 'danger');
     }
 }
 
@@ -1667,22 +2028,28 @@ $('restoreBtn').onclick = () => hooksActive ? removeHooks() : applyHooks();
 $('exportBtn').onclick = exportVault;
 $('filterAll').onclick = () => applyFilter('all');
 $('filterLeak').onclick = () => applyFilter('leak');
+$('filterScan').onclick = () => applyFilter('scan');
 $('openUrlBtn').onclick = openUrl;
 $('closeUrlBtn').onclick = closeUrl;
-$('fetchUrlBtn').onclick = fetchUrlFromBar;
-$('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchUrlFromBar(); });
+$('fetchUrlBtn').onclick = fetchCustom;
+$('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchCustom(); });
 $('streamPlayBtn').onclick = playStreamManual;
 $('streamUrlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') playStreamManual(); });
 
-/* INIT */
+/* ---------- INIT ---------- */
 applyHooks();
+renderScanToggles();
+renderScanCard();
+refreshStats();
+updateVaultCount();
+
 log('════════════════════════════════════════════', 'sys');
-log(' CYBER LAB GOLD MASTER', 'success');
-log(' UI dirapihkan · Live Monitor baru · lebih robust', 'success');
+log(' CYBER LAB GOLD MASTER — REAL INTERCEPTOR', 'success');
+log(' Multi-fallback target · scan filter · verifikasi nyata', 'success');
 log('════════════════════════════════════════════', 'sys');
-log('[SYS] Panel "Live Monitor" menampilkan hasil nyata (video/IP/JSON/WS).', 'info');
-log('[SYS] Semua tombol dinonaktifkan otomatis saat smoke test berjalan.', 'info');
-log('[SYS] Demo berjalan sepenuhnya di tab ini, memakai endpoint publik/dummy.', 'info');
+log('[SYS] Semua target memakai endpoint publik yang mengizinkan CORS.', 'info');
+log('[SYS] Hasil diverifikasi lewat event/status nyata, bukan label palsu.', 'info');
+log('[SYS] CORS tetap ditegakkan browser; tidak ada bypass kebijakan keamanan.', 'info');
 </script>
 </body>
-</html>
+   </html>
