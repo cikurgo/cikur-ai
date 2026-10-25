@@ -2,408 +2,535 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyber Lab Gold Master v4.1 — Real Network Interceptor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Cyber Lab Gold Master — Web Security Interceptor Demo</title>
 <style>
-    *, *::before, *::after { box-sizing: border-box; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-        --bg: #060a0f; --panel: #0b1118; --line: #1c2836;
-        --cyan: #22d3ee; --green: #00ff9c; --purple: #b026ff;
-        --red: #ff3b6b; --amber: #ffc857; --text: #c9d6e4; --muted: #6b7d92;
+        --bg: #04070c;
+        --panel: #0a1016;
+        --panel-2: #070d13;
+        --line: #1b2a3a;
+        --line-soft: #13202c;
+        --cyan: #2dd4ee;
+        --cyan-dim: rgba(45,212,238,.12);
+        --green: #19ffa8;
+        --purple: #b86bff;
+        --red: #ff4d6d;
+        --amber: #ffc857;
+        --text: #cfe0ef;
+        --muted: #728296;
+        --muted-2: #475b70;
+        --radius: 10px;
+        --radius-sm: 6px;
+        color-scheme: dark;
     }
 
-    html, body { height: 100%; margin: 0; }
+    html, body { height: 100%; }
 
     body {
-        display: flex; background: var(--bg); color: var(--text);
-        font-family: 'Courier New', ui-monospace, monospace; overflow: hidden;
+        background:
+            radial-gradient(ellipse at top, #0c1420 0%, var(--bg) 55%),
+            linear-gradient(var(--bg), var(--bg));
+        color: var(--text);
+        font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.45;
+        display: flex;
+        flex-direction: column;
+        min-height: 100%;
+        padding: env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);
+    }
+
+    /* ========== TOPBAR ========== */
+    .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(180deg, #0b131d 0%, #060a10 100%);
+        flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand .mark {
+        width: 28px; height: 28px;
+        display: grid; place-items: center;
+        border: 1px solid rgba(45,212,238,.5);
+        border-radius: 7px;
+        color: var(--cyan);
+        box-shadow: 0 0 14px rgba(45,212,238,.25) inset, 0 0 10px rgba(45,212,238,.18);
+    }
+    .brand .mark svg { width: 16px; height: 16px; }
+    .brand h1 {
+        font-size: 13.5px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        font-weight: 800;
+        color: var(--cyan);
+        text-shadow: 0 0 14px rgba(45,212,238,.35);
+    }
+    .brand .sub {
+        font-size: 9.5px;
+        letter-spacing: 1px;
+        color: var(--muted);
+        text-transform: uppercase;
+        margin-top: 2px;
+    }
+    .top-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .pill {
+        font-size: 10px;
+        letter-spacing: .8px;
+        padding: 5px 10px;
+        border-radius: 999px;
+        border: 1px solid;
+        white-space: nowrap;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .pill.ok { color: var(--green); border-color: rgba(25,255,168,.4); background: rgba(25,255,168,.08); }
+    .pill.warn { color: var(--amber); border-color: rgba(255,200,87,.45); background: rgba(255,200,87,.09); }
+    .pill.muted { color: var(--muted); border-color: var(--line); }
+    .pill.ok .dot { animation: blink 1.2s steps(2) infinite; }
+    @keyframes blink { 50% { opacity: .25; } }
+
+    /* ========== LAYOUT ========== */
+    .grid {
+        flex: 1 1 auto;
+        display: grid;
+        grid-template-columns: minmax(270px, 320px) minmax(320px, 1fr) minmax(300px, 380px);
+        gap: 1px;
+        background: var(--line);
+        overflow: hidden;
+        min-height: 0;
+    }
+    @media (max-width: 980px) {
+        .grid { grid-template-columns: 1fr; overflow: visible; height: auto; }
+        body { overflow-y: auto; }
     }
 
     .panel {
-        flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column;
-        gap: 10px; padding: 14px 16px;
+        background: var(--panel);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+        min-width: 0;
+        min-height: 0;
+        overflow-y: auto;
     }
-    .panel.target {
-        border-right: 1px solid var(--line);
-        background: linear-gradient(180deg, #0b1118, #070c12);
-    }
-    .panel.hacker { background: #05080c; position: relative; overflow: hidden; }
+    .panel::-webkit-scrollbar { width: 7px; }
+    .panel::-webkit-scrollbar-thumb { background: #1b2838; border-radius: 4px; }
+    .panel.control { background: linear-gradient(180deg, #0b1118 0%, #070c12 100%); }
+    .panel.monitor { background: #070b11; }
+    .panel.hacker  { background: #05080c; position: relative; }
 
-    /* ---------- HEADER ---------- */
-    .ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .ph {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
     .ph h2 {
-        margin: 0; font-size: 13px; letter-spacing: 1.6px;
-        text-transform: uppercase; white-space: nowrap;
-        display: flex; align-items: center; gap: 7px;
-    }
-    .ph h2 svg { flex: 0 0 auto; width: 16px; height: 16px; }
-    .target .ph h2 { color: var(--cyan); }
-    .hacker .ph h2 { color: var(--green); text-shadow: 0 0 10px rgba(0,255,156,.55); }
-
-    .badge {
-        font-size: 10px; letter-spacing: 1px; padding: 3px 8px;
-        border-radius: 3px; border: 1px solid; white-space: nowrap;
-    }
-    .badge.ok { color: var(--green); border-color: rgba(0,255,156,.4); background: rgba(0,255,156,.08); }
-    .badge.warn { color: var(--amber); border-color: rgba(255,200,87,.4); background: rgba(255,200,87,.08); }
-
-    .stats { display: flex; gap: 6px; font-size: 10px; flex-wrap: wrap; }
-    .stats span {
-        padding: 3px 8px; border: 1px solid var(--line); border-radius: 3px;
-        color: var(--muted); transition: .2s; display: flex; align-items: center; gap: 4px;
-    }
-    .stats span svg { width: 12px; height: 12px; }
-    .stats span.hot {
-        color: var(--red); border-color: rgba(255,59,107,.5);
-        background: rgba(255,59,107,.1);
-    }
-
-    .desc { margin: 0; font-size: 10.5px; line-height: 1.5; color: var(--muted); }
-
-    /* ---------- URL BAR ---------- */
-    .urlbar { display: flex; gap: 6px; }
-    .urlbar input {
-        flex: 1; min-width: 0; background: #000; border: 1px solid var(--line);
-        color: var(--text); padding: 7px 10px; font: inherit;
-        font-size: 11px; border-radius: 3px; outline: none;
-    }
-    .urlbar input:focus { border-color: var(--cyan); }
-    .urlbar button {
-        padding: 7px 14px; background: transparent; border: 1px solid var(--cyan);
-        color: var(--cyan); font: inherit; font-size: 11px; font-weight: bold;
-        cursor: pointer; border-radius: 3px; transition: .15s; display: flex; align-items: center; gap: 5px;
+        margin: 0;
+        font-size: 12px;
+        letter-spacing: 1.6px;
+        text-transform: uppercase;
         white-space: nowrap;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-weight: 800;
     }
-    .urlbar button:hover { background: rgba(34,211,238,.1); }
-    .urlbar button.close-btn {
-        border-color: var(--muted); color: var(--muted);
-        padding: 7px 10px; display: none;
+    .ph h2 svg { flex: 0 0 auto; width: 15px; height: 15px; }
+    .control .ph h2 { color: var(--cyan); }
+    .monitor .ph h2 { color: var(--green); }
+    .hacker  .ph h2 { color: var(--green); text-shadow: 0 0 10px rgba(25,255,168,.4); }
+
+    .stats { display: flex; gap: 6px; font-size: 9.5px; flex-wrap: wrap; align-items: center; }
+    .stats span {
+        padding: 3px 8px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        color: var(--muted);
+        transition: .2s;
+        display: inline-flex; align-items: center; gap: 4px;
     }
+    .stats span.hot { color: var(--red); border-color: rgba(255,77,109,.5); background: rgba(255,77,109,.1); }
+
+    .desc { margin: 0; font-size: 10.5px; line-height: 1.55; color: var(--muted); }
+
+    /* ========== URL BAR ========== */
+    .urlbar { display: flex; gap: 6px; align-items: stretch; }
+    .urlbar input {
+        flex: 1; min-width: 0;
+        background: #000;
+        border: 1px solid var(--line);
+        color: var(--text);
+        padding: 9px 12px;
+        font: inherit; font-size: 11.5px;
+        border-radius: var(--radius-sm);
+        outline: none;
+        transition: border-color .15s, box-shadow .15s;
+    }
+    .urlbar input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px var(--cyan-dim); }
+    .urlbar input::placeholder { color: var(--muted-2); }
+    .urlbar button {
+        padding: 9px 13px;
+        background: transparent;
+        border: 1px solid var(--cyan);
+        color: var(--cyan);
+        font: inherit; font-size: 10.5px; font-weight: 800;
+        cursor: pointer;
+        border-radius: var(--radius-sm);
+        transition: .15s;
+        display: inline-flex; align-items: center; gap: 5px;
+        white-space: nowrap;
+        letter-spacing: .4px;
+    }
+    .urlbar button:hover { background: var(--cyan-dim); }
+    .urlbar button:active { transform: scale(.97); }
+    .urlbar button.close-btn { border-color: var(--muted); color: var(--muted); padding: 9px 10px; display: none; }
     .urlbar button.close-btn.visible { display: inline-flex; }
-    .urlbar button.close-btn:hover { border-color: var(--red); color: var(--red); background: rgba(255,59,107,.1); }
+    .urlbar button.close-btn:hover { border-color: var(--red); color: var(--red); background: rgba(255,77,109,.1); }
 
-    /* ---------- BUTTONS ---------- */
+    /* ========== BUTTONS / GROUPS ========== */
     .btn-group { display: flex; flex-direction: column; gap: 6px; }
-
     .btn {
-        display: flex; align-items: center; gap: 10px; padding: 7px 12px;
-        background: transparent; border: 1px solid var(--cyan); color: var(--cyan);
-        font: inherit; font-size: 10.5px; font-weight: bold; text-align: left;
-        cursor: pointer; transition: all .18s;
+        display: flex; align-items: center; gap: 10px;
+        padding: 9px 12px;
+        background: #0a1119;
+        border: 1px solid var(--line);
+        color: var(--cyan);
+        font: inherit; font-size: 11px; font-weight: 700;
+        text-align: left; cursor: pointer;
+        transition: all .16s ease;
+        border-radius: var(--radius-sm);
+        position: relative;
     }
     .btn svg { flex: 0 0 auto; width: 14px; height: 14px; }
     .btn .lbl { flex: 1; }
-    .btn:hover {
-        background: rgba(34,211,238,.1); box-shadow: 0 0 14px rgba(34,211,238,.22);
-        transform: translateX(3px);
+    .btn .status-dot {
+        flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%;
+        background: var(--muted-2); transition: background .2s, box-shadow .2s;
     }
-    .btn:active { transform: translateX(3px) scale(.985); }
-    .btn.ws { border-color: var(--purple); color: var(--purple); }
-    .btn.ws:hover { background: rgba(176,38,255,.1); box-shadow: 0 0 14px rgba(176,38,255,.28); }
-    .btn.detect { border-color: var(--amber); color: var(--amber); }
-    .btn.detect:hover { background: rgba(255,200,87,.1); box-shadow: 0 0 14px rgba(255,200,87,.25); }
-    .btn.mini {
-        border-color: #2b4c56; color: #6fa8b3;
-        font-size: 10px; padding: 6px 10px;
-    }
-    .btn.mini:hover { border-color: #3d6b78; color: #8cd4e0; background: rgba(34,211,238,.05); transform: translateX(2px); }
+    .btn .status-dot.ok { background: var(--green); box-shadow: 0 0 6px rgba(25,255,168,.7); }
+    .btn .status-dot.err { background: var(--red); box-shadow: 0 0 6px rgba(255,77,109,.7); }
+    .btn .status-dot.busy { background: var(--amber); box-shadow: 0 0 6px rgba(255,200,87,.7); animation: blink 1s steps(2) infinite; }
+    .btn:hover:not(:disabled) { border-color: var(--cyan); background: var(--cyan-dim); box-shadow: 0 0 14px rgba(45,212,238,.15); }
+    .btn:active:not(:disabled) { transform: scale(.985); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    .btn.ws { color: var(--purple); }
+    .btn.ws:hover:not(:disabled) { border-color: var(--purple); background: rgba(184,107,255,.1); box-shadow: 0 0 14px rgba(184,107,255,.2); }
+    .btn.detect { color: var(--amber); }
+    .btn.detect:hover:not(:disabled) { border-color: var(--amber); background: rgba(255,200,87,.1); box-shadow: 0 0 14px rgba(255,200,87,.18); }
+    .btn.mini { color: #7fb3bd; font-size: 10.5px; padding: 8px 11px; }
+    .btn.mini:hover:not(:disabled) { border-color: #3d6b78; color: #a6dde6; }
 
     .group-label {
-        font-size: 9px; letter-spacing: 1.4px; text-transform: uppercase;
-        color: #3d4f63; margin: 2px 0 -2px;
+        font-size: 9px;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        color: #3d4f63;
+        margin: 2px 0 0;
+        font-weight: 700;
     }
 
-    /* ---------- SCREEN & IFRAME ---------- */
-    .screen-wrap {
-        flex: 1 1 auto; min-height: 100px;
-        display: flex; position: relative;
+    /* ========== CARDS (monitor) ========== */
+    .card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel-2);
+        overflow: hidden;
     }
-    .screen {
-        flex: 1; overflow-y: auto; background: #000;
-        border: 1px solid var(--line); padding: 8px 10px;
-        font-size: 10.5px; line-height: 1.65;
+    .card-h {
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--line-soft);
+        font-size: 10px; letter-spacing: 1.1px; text-transform: uppercase;
+        color: var(--muted); font-weight: 700;
     }
-    .screen::-webkit-scrollbar { width: 6px; }
-    .screen::-webkit-scrollbar-thumb { background: #1f3247; }
-    .tline { color: #8ba0b8; }
-    .tline.ok { color: var(--green); }
-    .tline.err { color: var(--red); }
+    .card-h .tag {
+        font-size: 9px; padding: 2px 7px; border-radius: 999px;
+        border: 1px solid var(--line); color: var(--muted-2);
+    }
+    .card-h .tag.live { color: var(--green); border-color: rgba(25,255,168,.4); background: rgba(25,255,168,.08); }
+    .card-body { padding: 11px 12px; font-size: 11px; }
+    .card-body.empty { color: var(--muted-2); font-style: italic; }
 
-    #targetFrame {
-        flex: 1; width: 100%; height: 100%; border: 1px solid var(--line);
-        background: #fff; display: none;
+    .video-box {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #000 repeating-linear-gradient(135deg,#050a0f 0 10px,#070d14 10px 20px);
+        display: flex; align-items: center; justify-content: center;
+        overflow: hidden;
     }
+    .video-box video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+    .video-box .ph-msg { color: var(--muted-2); font-size: 10.5px; text-align: center; padding: 0 14px; }
+    .video-box .rec {
+        position: absolute; top: 8px; left: 8px;
+        display: none; align-items: center; gap: 5px;
+        font-size: 9.5px; letter-spacing: 1px; color: var(--red);
+        background: rgba(0,0,0,.55); padding: 3px 8px; border-radius: 999px;
+    }
+    .video-box.live .rec { display: inline-flex; }
+    .video-box .rec .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); animation: blink 1s steps(2) infinite; }
 
-    /* ---------- FEED ---------- */
-    .feed {
-        height: 70px; flex: 0 0 auto; border: 1px solid var(--line);
-        background: repeating-linear-gradient(0deg, #04070a, #04070a 2px, #060b10 2px, #060b10 4px);
-        display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 3px; font-size: 10px; letter-spacing: 1px; color: #26364a;
-        position: relative; overflow: hidden; transition: .3s;
-    }
-    .feed.live { border-color: rgba(0,255,156,.35); color: var(--green); }
-    .feed.live::after {
-        content: ''; position: absolute; inset: 0;
-        background: linear-gradient(180deg, transparent, rgba(0,255,156,.09), transparent);
-        animation: sweep 2.4s linear infinite;
-        pointer-events: none;
-    }
-    @keyframes sweep { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
-    .feed .live-dot { animation: blink 1.1s steps(2) infinite; }
-    @keyframes blink { 50% { opacity: .25; } }
-    .feed .cam { font-size: 13px; letter-spacing: 4px; color: var(--green); }
-    .feed .url {
-        font-size: 9px; color: #4d7a63; max-width: 92%;
-        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
+    .kv { display: flex; flex-direction: column; gap: 6px; }
+    .kv .row { display: flex; justify-content: space-between; gap: 10px; }
+    .kv .k { color: var(--muted); }
+    .kv .v { color: var(--text); text-align: right; word-break: break-all; }
 
-    /* ---------- TERMINAL ---------- */
-    .filter-bar { display: flex; gap: 6px; }
-    .filter-bar button {
-        padding: 5px 12px; background: transparent; border: 1px solid var(--line);
-        color: var(--muted); font: inherit; font-size: 9.5px; letter-spacing: 1px;
-        cursor: pointer; transition: .15s; border-radius: 3px;
-    }
-    .filter-bar button:hover { color: var(--text); border-color: #2f4055; }
-    .filter-bar button.on {
-        color: var(--cyan); border-color: rgba(34,211,238,.5);
-        background: rgba(34,211,238,.08);
-    }
-    .filter-bar button[data-filter="leak"].on {
-        color: var(--red); border-color: rgba(255,59,107,.5);
-        background: rgba(255,59,107,.08);
+    pre.json {
+        margin: 0; white-space: pre-wrap; word-break: break-word;
+        font-size: 10.5px; color: #9fc9d6; max-height: 140px; overflow-y: auto;
     }
 
+    /* ========== TERMINAL / FEED ========== */
     .terminal {
-        flex: 1 1 auto; min-height: 120px; overflow-y: auto; background: #000;
-        border: 1px solid var(--line); padding: 8px 10px;
-        font-size: 10.5px; line-height: 1.6;
+        flex: 1 1 auto; min-height: 160px; overflow-y: auto;
+        background: #000; border: 1px solid var(--line);
+        padding: 10px 12px; font-size: 11px; line-height: 1.6;
+        border-radius: var(--radius);
     }
     .terminal::-webkit-scrollbar { width: 7px; }
-    .terminal::-webkit-scrollbar-thumb { background: #14372a; border-radius: 4px; }
-
-    .log { white-space: pre-wrap; word-break: break-word; }
-    .ts { color: #33475e; }
-    .log-sys { color: #5d7288; }
+    .terminal::-webkit-scrollbar-thumb { background: #123024; border-radius: 4px; }
+    .log { white-space: pre-wrap; word-break: break-word; margin-bottom: 1px; }
+    .ts { color: #2e4154; }
+    .log-sys { color: #6b7f94; }
     .log-info { color: var(--cyan); }
     .log-warn { color: var(--amber); }
     .log-danger { color: var(--red); }
-    .log-success { color: var(--green); text-shadow: 0 0 8px rgba(0,255,156,.4); }
+    .log-success { color: var(--green); text-shadow: 0 0 7px rgba(25,255,168,.3); }
 
-    /* ---------- VAULT ---------- */
+    .filter-bar { display: flex; gap: 6px; }
+    .filter-bar button {
+        padding: 6px 12px;
+        background: transparent; border: 1px solid var(--line); color: var(--muted);
+        font: inherit; font-size: 9.5px; letter-spacing: 1px; cursor: pointer;
+        transition: .15s; border-radius: var(--radius-sm); font-weight: 700;
+    }
+    .filter-bar button:hover { color: var(--text); border-color: #2f4055; }
+    .filter-bar button.on { color: var(--cyan); border-color: rgba(45,212,238,.5); background: var(--cyan-dim); }
+    .filter-bar button[data-filter="leak"].on { color: var(--red); border-color: rgba(255,77,109,.5); background: rgba(255,77,109,.08); }
+
     .vault {
-        flex: 0 0 auto; max-height: 110px; overflow-y: auto;
-        background: #080d13; border: 1px solid var(--line); padding: 7px 10px;
+        flex: 0 0 auto; max-height: 130px; overflow-y: auto;
+        background: var(--panel-2); border: 1px solid var(--line);
+        padding: 9px 11px; border-radius: var(--radius);
     }
     .vault::-webkit-scrollbar { width: 6px; }
-    .vault::-webkit-scrollbar-thumb { background: #3a1d54; }
+    .vault::-webkit-scrollbar-thumb { background: #3a1d54; border-radius: 3px; }
     .vault h3 {
-        margin: 0 0 5px; font-size: 10px; letter-spacing: 1.2px;
-        text-transform: uppercase; color: var(--purple);
-        display: flex; align-items: center; gap: 6px;
-        position: sticky; top: 0; background: #080d13; padding-bottom: 4px;
+        margin: 0 0 7px; font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase;
+        color: var(--purple); display: flex; align-items: center; gap: 7px;
+        position: sticky; top: 0; background: var(--panel-2); padding-bottom: 4px; font-weight: 800;
     }
     .vault h3 svg { width: 12px; height: 12px; }
-    .vault h3 .count { color: var(--muted); font-weight: normal; }
-    .vault ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+    .vault h3 .count { color: var(--muted); font-weight: 500; }
+    .vault ul { list-style: none; display: flex; flex-direction: column; gap: 4px; }
     .vault li {
-        display: flex; align-items: center; gap: 6px; font-size: 10px;
-        padding: 3px 6px; background: #0c141d; border-left: 2px solid var(--purple);
+        display: flex; align-items: center; gap: 7px; font-size: 10.5px; padding: 4px 7px;
+        background: #0c141d; border-left: 2px solid var(--purple); border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     }
-    .vtag { flex: 0 0 auto; color: var(--purple); }
-    .vault code {
-        flex: 1; overflow: hidden; text-overflow: ellipsis;
-        white-space: nowrap; color: #9fb4c9;
+    .vtag { flex: 0 0 auto; color: var(--purple); font-weight: 700; font-size: 9.5px; }
+    .vault code { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9fb4c9; font-size: 10.5px; }
+    .vault button.copy {
+        flex: 0 0 auto; background: transparent; border: none; color: var(--muted);
+        cursor: pointer; padding: 3px; display: flex; border-radius: 4px;
     }
-    .copy {
-        flex: 0 0 auto; background: none; border: 1px solid var(--line);
-        color: var(--muted); font-size: 10px; padding: 2px 6px; cursor: pointer;
-        border-radius: 2px; transition: .15s; display: flex; align-items: center;
-    }
-    .copy svg { width: 11px; height: 11px; }
-    .copy:hover { color: var(--green); border-color: var(--green); }
-    .copy.done { color: var(--green); border-color: var(--green); }
+    .vault button.copy:hover { color: var(--cyan); background: rgba(45,212,238,.1); }
+    .vault button.copy.done { color: var(--green); }
+    .vault .empty-hint { color: var(--muted-2); font-size: 10.5px; font-style: italic; padding: 4px 2px; }
 
-    /* ---------- ACTIONS ---------- */
-    .actions { display: flex; gap: 5px; flex-wrap: wrap; }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; }
     .actions button {
-        flex: 1 1 calc(50% - 3px); min-width: 0; padding: 7px 6px;
-        background: transparent; border: 1px solid var(--line);
-        color: var(--muted); font: inherit; font-size: 9.5px; letter-spacing: .3px;
-        cursor: pointer; transition: .15s;
-        display: flex; align-items: center; justify-content: center; gap: 5px;
-        white-space: nowrap; overflow: hidden;
+        flex: 1 1 auto; min-width: 74px;
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        padding: 9px 6px;
+        background: transparent; border: 1px solid var(--line); color: var(--muted);
+        font: inherit; font-size: 9px; letter-spacing: .8px; cursor: pointer;
+        border-radius: var(--radius-sm); transition: .15s; font-weight: 700;
     }
-    .actions button svg { width: 12px; height: 12px; flex: 0 0 auto; }
-    .actions button:hover { color: var(--text); border-color: #2f4055; }
-    .actions button.on {
-        color: var(--green); border-color: rgba(0,255,156,.45);
-        background: rgba(0,255,156,.07);
-    }
+    .actions button svg { width: 15px; height: 15px; }
+    .actions button:hover { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
+    .actions button.on { border-color: var(--purple); color: var(--purple); background: rgba(184,107,255,.1); }
 
-    /* ---------- SCANLINE ---------- */
     .scanline {
-        position: absolute; inset: 0; pointer-events: none; opacity: .35;
-        background: linear-gradient(to bottom, transparent, transparent 50%, rgba(0,0,0,.35) 50%, rgba(0,0,0,.35));
-        background-size: 100% 4px;
+        position: absolute; inset: 0; pointer-events: none; opacity: .5;
+        background: repeating-linear-gradient(0deg, rgba(255,255,255,.015) 0, rgba(255,255,255,.015) 1px, transparent 1px, transparent 3px);
     }
 
-    /* ---------- RESPONSIVE ---------- */
-    @media (max-width: 860px) {
-        body { flex-direction: column; overflow-y: auto; height: auto; }
-        .panel { flex: 0 0 auto; }
-        .panel.target { border-right: none; border-bottom: 1px solid var(--line); }
-        .terminal { min-height: 240px; }
-        .screen-wrap { min-height: 130px; }
-        .feed { height: 80px; }
-        .actions button { flex: 1 1 calc(50% - 3px); }
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+
+    @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
     }
 </style>
 </head>
 <body>
 
-    <!-- SVG SPRITE UNTUK IKON -->
-    <svg xmlns="http://www.w3.org/2000/svg" style="display:none;">
-        <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
-        <symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
-        <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
-        <symbol id="i-cctv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7h2a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/><path d="M10 14H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><circle cx="12" cy="19" r="2"/><line x1="12" y1="14" x2="12" y2="17"/></symbol>
-        <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></symbol>
-        <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></symbol>
-        <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
-        <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
-        <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.55-2.27A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.89L15 14"/><rect x="3" y="6" width="12" height="12" rx="2" ry="2"/></symbol>
-        <symbol id="i-beacon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></symbol>
-        <symbol id="i-sse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 8-8"/><path d="M20 12a8 8 0 0 1-8 8"/><path d="M12 4a8 8 0 0 1 8 8"/><path d="M12 20a8 8 0 0 1-8-8"/><circle cx="12" cy="12" r="2"/></symbol>
-        <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></symbol>
-        <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></symbol>
-        <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
-        <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></symbol>
-        <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
-        <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
-        <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
-        <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></symbol>
-        <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
-        <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
-        <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
-    </svg>
+<svg width="0" height="0" style="position:absolute">
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></symbol>
+    <symbol id="i-cctv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 10l4-2v8l-4-2"/><rect x="2" y="6" width="15" height="12" rx="2"/><circle cx="7" cy="12" r="2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></symbol>
+    <symbol id="i-beacon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></symbol>
+    <symbol id="i-sse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+</svg>
 
-    <!-- ================= KIRI: TARGET WEBSITE (KORBAN) ================= -->
-    <section class="panel target">
-        <div class="ph">
-            <h2><svg><use href="#i-globe"/></svg> Target Website</h2>
-            <span class="badge warn" id="targetStatus">ONLINE (Hooked)</span>
+<header class="topbar">
+    <div class="brand">
+        <div class="mark"><svg><use href="#i-terminal"/></svg></div>
+        <div>
+            <h1>Cyber Lab Gold Master</h1>
+            <div class="sub">Web Security Interceptor · Edukasi</div>
         </div>
+    </div>
+    <div class="top-right">
+        <span class="pill warn" id="targetStatus"><span class="dot"></span>ONLINE (Hooked)</span>
+        <span class="pill muted" id="statReq">0 request</span>
+        <span class="pill muted" id="statLeak">0 bocor</span>
+        <span class="pill muted" id="statHist">0 hist</span>
+        <span class="pill ok">GOLD MASTER</span>
+    </div>
+</header>
 
+<main class="grid">
+
+    <!-- ================= KIRI: KONTROL TARGET ================= -->
+    <section class="panel control">
         <p class="desc">
-            Target real CCTV API. Klik tombol untuk memicu request. Terminal kanan
-            menyadap semua data secara real-time.
+            Simulasi aman di dalam tab ini sendiri: endpoint publik/demo dipanggil,
+            lalu fetch/XHR/WebSocket "disadap" untuk menunjukkan cara kerja interception
+            di sisi klien. Hasil nyata tampil di panel <strong>Live Monitor</strong> di tengah.
         </p>
 
         <div class="urlbar">
-            <input type="text" id="urlInput" placeholder="https://api.example.com/data" spellcheck="false" autocomplete="off">
-            <button id="fetchUrlBtn" title="fetch() URL — tersadap terminal"><svg><use href="#i-download"/></svg> FETCH</button>
-            <button id="openUrlBtn" title="Buka di iframe"><svg><use href="#i-globe"/></svg> BUKA</button>
+            <input type="text" id="urlInput" placeholder="https://api.example.com/data" spellcheck="false" autocomplete="off" inputmode="url">
+            <button id="fetchUrlBtn" title="fetch() URL — tersadap terminal"><svg><use href="#i-download"/></svg>FETCH</button>
+            <button id="openUrlBtn" title="Buka di iframe"><svg><use href="#i-globe"/></svg>BUKA</button>
             <button id="closeUrlBtn" class="close-btn" title="Tutup iframe"><svg><use href="#i-x"/></svg></button>
         </div>
 
         <div class="group-label">Real Target — CCTV / Stream API</div>
-
         <div class="btn-group">
-            <button class="btn" onclick="targetRealCCTV()">
-                <svg><use href="#i-cctv"/></svg>
-                <span class="lbl">Tembak API CCTV Publik (HLS Streams)</span>
+            <button class="btn" id="btnCCTV" onclick="targetRealCCTV()">
+                <svg><use href="#i-cctv"/></svg><span class="lbl">Tembak API CCTV Publik (HLS)</span><span class="status-dot" data-dot="cctv"></span>
             </button>
-
-            <button class="btn" onclick="targetRealFetch()">
-                <svg><use href="#i-download"/></svg>
-                <span class="lbl">Fetch Real Internet (IP Public)</span>
+            <button class="btn" id="btnIP" onclick="targetRealFetch()">
+                <svg><use href="#i-download"/></svg><span class="lbl">Fetch Real Internet (IP Publik)</span><span class="status-dot" data-dot="ip"></span>
             </button>
-
-            <button class="btn" onclick="targetXHR()">
-                <svg><use href="#i-database"/></svg>
-                <span class="lbl">XHR API Publik (JSON User)</span>
+            <button class="btn" id="btnXHR" onclick="targetXHR()">
+                <svg><use href="#i-database"/></svg><span class="lbl">XHR API Publik (JSON User)</span><span class="status-dot" data-dot="xhr"></span>
             </button>
-
-            <button class="btn ws" onclick="targetWS()">
-                <svg><use href="#i-wifi"/></svg>
-                <span class="lbl">WebSocket Echo (Publik)</span>
+            <button class="btn ws" id="btnWS" onclick="targetWS()">
+                <svg><use href="#i-wifi"/></svg><span class="lbl">WebSocket Echo (Publik)</span><span class="status-dot" data-dot="ws"></span>
             </button>
-
-            <button class="btn" onclick="targetStorage()">
-                <svg><use href="#i-save"/></svg>
-                <span class="lbl">Simpan Session (LocalStorage)</span>
+            <button class="btn" id="btnStorage" onclick="targetStorage()">
+                <svg><use href="#i-save"/></svg><span class="lbl">Simpan Session (LocalStorage)</span><span class="status-dot" data-dot="storage"></span>
             </button>
-
-            <button class="btn detect" onclick="targetDetect()">
-                <svg><use href="#i-search"/></svg>
-                <span class="lbl">Integrity Check (Anti-Tamper)</span>
+            <button class="btn detect" id="btnDetect" onclick="targetDetect()">
+                <svg><use href="#i-search"/></svg><span class="lbl">Integrity Check (Anti-Tamper)</span><span class="status-dot" data-dot="detect"></span>
             </button>
         </div>
 
         <div class="group-label">Advanced Hooks (RTC / Beacon / SSE)</div>
-
         <div class="btn-group">
-            <button class="btn mini" onclick="targetRTC()">
-                <svg><use href="#i-video"/></svg>
-                <span class="lbl">Test WebRTC (STUN Google)</span>
+            <button class="btn mini" id="btnRTC" onclick="targetRTC()">
+                <svg><use href="#i-video"/></svg><span class="lbl">Test WebRTC (STUN Google)</span><span class="status-dot" data-dot="rtc"></span>
             </button>
-
-            <button class="btn mini" onclick="targetBeacon()">
-                <svg><use href="#i-beacon"/></svg>
-                <span class="lbl">Test SendBeacon (Payload)</span>
+            <button class="btn mini" id="btnBeacon" onclick="targetBeacon()">
+                <svg><use href="#i-beacon"/></svg><span class="lbl">Test SendBeacon (Payload)</span><span class="status-dot" data-dot="beacon"></span>
             </button>
-
-            <button class="btn mini" onclick="targetEventSource()">
-                <svg><use href="#i-sse"/></svg>
-                <span class="lbl">Test EventSource (SSE)</span>
+            <button class="btn mini" id="btnSSE" onclick="targetEventSource()">
+                <svg><use href="#i-sse"/></svg><span class="lbl">Test EventSource (SSE)</span><span class="status-dot" data-dot="sse"></span>
             </button>
         </div>
 
-        <div class="group-label">Kontrol Lab (smoke / pause / vault / history)</div>
+        <div class="group-label">Kontrol Lab</div>
         <div class="btn-group">
             <button class="btn mini" id="runAllBtn" onclick="runAllDemos()">
-                <svg><use href="#i-play"/></svg>
-                <span class="lbl">Jalankan semua demo (smoke test)</span>
+                <svg><use href="#i-play"/></svg><span class="lbl">Jalankan semua demo (smoke test)</span>
             </button>
             <button class="btn mini" id="pauseBtn" onclick="togglePause()">
-                <svg><use href="#i-pause"/></svg>
-                <span class="lbl" id="pauseLbl">Pause sniffer: OFF</span>
+                <svg><use href="#i-pause"/></svg><span class="lbl" id="pauseLbl">Pause sniffer: OFF</span>
             </button>
             <button class="btn mini" id="clearVaultBtn" onclick="clearVault()">
-                <svg><use href="#i-trash"/></svg>
-                <span class="lbl">Kosongkan vault</span>
+                <svg><use href="#i-trash"/></svg><span class="lbl">Kosongkan vault</span>
             </button>
             <button class="btn mini" id="histBtn" onclick="showHistory()">
-                <svg><use href="#i-list"/></svg>
-                <span class="lbl">Riwayat request (terminal)</span>
+                <svg><use href="#i-list"/></svg><span class="lbl">Riwayat request (terminal)</span>
             </button>
         </div>
+    </section>
 
-        <div class="screen-wrap">
-            <div class="screen" id="targetScreen">
-                <div class="tline">Menunggu interaksi...</div>
+    <!-- ================= TENGAH: LIVE MONITOR (BARU) ================= -->
+    <section class="panel monitor">
+        <div class="ph">
+            <h2><svg><use href="#i-monitor"/></svg>Live Monitor</h2>
+            <span class="pill muted" id="monitorStatus">Menunggu hasil…</span>
+        </div>
+        <p class="desc">Hasil nyata dari tiap tes muncul di sini — bukan cuma baris log.</p>
+
+        <div class="card">
+            <div class="card-h"><span>Stream Monitor (HLS)</span><span class="tag" id="streamTag">idle</span></div>
+            <div class="video-box" id="videoBox">
+                <div class="rec"><span class="dot"></span>LIVE</div>
+                <video id="monitorVideo" playsinline muted controls></video>
+                <div class="ph-msg" id="videoPlaceholder">Jalankan "Tembak API CCTV Publik" untuk memuat stream publik di sini.</div>
             </div>
-            <iframe id="targetFrame" referrerpolicy="no-referrer"></iframe>
         </div>
 
-        <div class="feed" id="feed"><span>TIDAK ADA SINYAL</span></div>
+        <div class="card">
+            <div class="card-h"><span>Network Info (IP Publik)</span><span class="tag" id="ipTag">idle</span></div>
+            <div class="card-body empty" id="ipCard">Belum ada data. Jalankan "Fetch Real Internet".</div>
+        </div>
+
+        <div class="card">
+            <div class="card-h"><span>API Response (XHR User)</span><span class="tag" id="xhrTag">idle</span></div>
+            <div class="card-body empty" id="xhrCard">Belum ada data. Jalankan "XHR API Publik".</div>
+        </div>
+
+        <div class="card">
+            <div class="card-h"><span>Realtime Channel (WS / SSE)</span><span class="tag" id="rtTag">idle</span></div>
+            <div class="card-body empty" id="rtCard">Belum ada data. Jalankan WebSocket / EventSource.</div>
+        </div>
+
+        <div class="feed" id="feedBar" style="display:none"></div>
     </section>
 
     <!-- ================= KANAN: HACKER TERMINAL ================= -->
     <section class="panel hacker">
         <div class="scanline"></div>
-
         <div class="ph">
-            <h2><svg><use href="#i-terminal"/></svg> Hacker Terminal</h2>
-            <div class="stats">
-                <span id="statReq">0 request</span>
-                <span id="statLeak">0 bocor</span>
-                <span id="statHist" title="Riwayat">0 hist</span>
-                <span class="badge ok" style="margin-left:4px">v4.1</span>
-            </div>
+            <h2><svg><use href="#i-terminal"/></svg>Hacker Terminal</h2>
         </div>
 
         <div class="filter-bar">
@@ -414,34 +541,34 @@
         <div class="terminal" id="terminal"></div>
 
         <div class="vault">
-            <h3><svg><use href="#i-lock"/></svg> Vault — Data Curian <span class="count" id="vaultCount">(0)</span></h3>
+            <h3><svg><use href="#i-lock"/></svg>Vault — Data Tersadap <span class="count" id="vaultCount">(0)</span></h3>
             <ul id="vault"></ul>
         </div>
 
         <div class="actions">
-            <button id="clearBtn">
-                <svg><use href="#i-trash"/></svg>
-                <span>CLEAR</span>
-            </button>
-            <button id="stealthBtn">
-                <svg><use href="#i-eye-off"/></svg>
-                <span id="stealthLbl">STEALTH: OFF</span>
-            </button>
-            <button id="restoreBtn">
-                <svg><use href="#i-refresh"/></svg>
-                <span id="restoreLbl">RESTORE</span>
-            </button>
-            <button id="exportBtn">
-                <svg><use href="#i-upload"/></svg>
-                <span>EXPORT</span>
-            </button>
+            <button id="clearBtn"><svg><use href="#i-trash"/></svg><span>CLEAR</span></button>
+            <button id="stealthBtn"><svg><use href="#i-eye-off"/></svg><span id="stealthLbl">STEALTH: OFF</span></button>
+            <button id="restoreBtn"><svg><use href="#i-refresh"/></svg><span id="restoreLbl">RESTORE</span></button>
+            <button id="exportBtn"><svg><use href="#i-upload"/></svg><span>EXPORT</span></button>
         </div>
     </section>
 
+</main>
+
+<!-- iframe target (disisipkan lewat JS saat dibutuhkan, lihat openUrl()) -->
+<div id="iframeHost" style="display:none"></div>
+
+<!-- hls.js untuk memutar stream HLS publik di panel Live Monitor -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+
 <script>
 /* ============================================================
-   0. SIMPAN REFERENSI FUNGSI ASLI (NATIVE)
+   CYBER LAB GOLD MASTER — Web Security Interceptor Demo
+   Semua request terjadi di dalam tab ini sendiri, memakai
+   endpoint publik/demo. Tidak ada data yang dikirim ke server
+   pihak ketiga manapun oleh skrip ini.
    ============================================================ */
+
 const NATIVE = {
     fetch:              window.fetch,
     XHR:                window.XMLHttpRequest,
@@ -452,16 +579,11 @@ const NATIVE = {
     StorageSet:         Storage.prototype.setItem,
     sendBeacon:         navigator.sendBeacon,
     RTC:                window.RTCPeerConnection,
-    ES:                 window.EventSource,
-    freeze:             Object.freeze,
-    seal:               Object.seal,
-    preventExtensions:  Object.preventExtensions
+    ES:                 window.EventSource
 };
 
-/* ============================================================
-   1. UTILITAS
-   ============================================================ */
 const $     = (id) => document.getElementById(id);
+const esc   = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const trunc = (s, n = 110) => { s = String(s); return s.length > n ? s.slice(0, n) + '…' : s; };
 const now   = () => new Date().toLocaleTimeString('id-ID', { hour12: false });
 
@@ -471,19 +593,25 @@ const vaultEntries = [];
 const vaultSet = new Set();
 const reqHistory = [];
 let sniffPaused = false;
+let smokeRunning = false;
 
-/* ---------- SVG PATH HELPER ---------- */
 const SVG_PATHS = {
     copy:  '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>',
     check: '<polyline points="20 6 9 17 4 12"/>'
 };
-function svgHTML(name, size = 11) {
+function svgHTML(name, size = 12) {
     return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SVG_PATHS[name] || ''}</svg>`;
 }
 
-/* ============================================================
-   2. LOGGING TERMINAL (dengan filter)
-   ============================================================ */
+/* ---------- STATUS DOTS (tombol kiri) ---------- */
+function setDot(key, state) {
+    const el = document.querySelector(`[data-dot="${key}"]`);
+    if (!el) return;
+    el.classList.remove('ok', 'err', 'busy');
+    if (state) el.classList.add(state);
+}
+
+/* ---------- LOGGING ---------- */
 let currentFilter = 'all';
 
 function log(msg, type = 'sys', isLeak = false) {
@@ -497,27 +625,20 @@ function log(msg, type = 'sys', isLeak = false) {
     row.appendChild(stamp);
     row.appendChild(document.createTextNode(msg));
 
-    if (currentFilter === 'leak' && !isLeak) {
-        row.style.display = 'none';
-    }
+    if (currentFilter === 'leak' && !isLeak) row.style.display = 'none';
 
     termEl.appendChild(row);
     termEl.scrollTop = termEl.scrollHeight;
 
-    while (termEl.childElementCount > 400) termEl.removeChild(termEl.firstElementChild);
+    while (termEl.childElementCount > 450) termEl.removeChild(termEl.firstElementChild);
 }
 
 function applyFilter(f) {
     currentFilter = f;
     $('filterAll').classList.toggle('on', f === 'all');
     $('filterLeak').classList.toggle('on', f === 'leak');
-
     for (const el of termEl.children) {
-        if (f === 'leak') {
-            el.style.display = (el.dataset.leak === '1') ? '' : 'none';
-        } else {
-            el.style.display = '';
-        }
+        el.style.display = (f === 'leak' && el.dataset.leak !== '1') ? 'none' : '';
     }
 }
 
@@ -528,9 +649,7 @@ function refreshStats() {
     $('statHist').textContent = `${reqHistory.length} hist`;
 }
 
-/* ============================================================
-   3. VAULT
-   ============================================================ */
+/* ---------- VAULT ---------- */
 function updateVaultCount() {
     $('vaultCount').textContent = `(${vaultEntries.length})`;
 }
@@ -575,15 +694,17 @@ function addVault(name, value) {
     return true;
 }
 
+function clearVaultUI() {
+    $('vault').innerHTML = '';
+}
+
 function recordReq(entry) {
     reqHistory.push(Object.assign({ t: Date.now() }, entry));
-    if (reqHistory.length > 200) reqHistory.shift();
+    if (reqHistory.length > 220) reqHistory.shift();
     refreshStats();
 }
 
-/* ============================================================
-   4. POLA SENSITIF (Capture Group = hanya nilai rahasia)
-   ============================================================ */
+/* ---------- PATTERNS ---------- */
 const PATTERNS = [
     { name: 'JWT Token',    re: /(eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]+)/g },
     { name: 'HLS Stream',   re: /(https?:\/\/[^\s"'<>\\]+\.m3u8[^\s"'<>\\]*)/gi },
@@ -594,61 +715,46 @@ const PATTERNS = [
 
 function scanPayload(payload, source, verbose = false) {
     if (payload === undefined || payload === null) return 0;
-
     let text;
     try {
         text = (typeof payload === 'string') ? payload : JSON.stringify(payload);
-    } catch (e) {
-        return 0;
-    }
+    } catch (e) { return 0; }
     if (!text) return 0;
 
     let found = 0;
-
     for (const pattern of PATTERNS) {
         pattern.re.lastIndex = 0;
         let match;
         while ((match = pattern.re.exec(text)) !== null) {
             const value = match[1];
             if (!value) continue;
-
             if (addVault(pattern.name, value)) {
                 found++;
                 log(`[LEAK] ${pattern.name} (via ${source}): ${trunc(value, 78)}`, 'danger', true);
             }
         }
     }
-
     if (found === 0 && verbose) {
         log(`[SCAN] ${source}: bersih — tidak ada pola sensitif.`, 'sys');
     }
-
     return found;
 }
 
-/* ============================================================
-   5. UTIL: timeout wrapper (dengan cleanup timer)
-   ============================================================ */
+/* ---------- TIMEOUT HELPER ---------- */
 function withTimeout(promise, ms) {
     let timer;
     const timeoutPromise = new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error('timeout')), ms);
+        timer = setTimeout(() => reject(new Error('timeout ' + ms + 'ms')), ms);
     });
     return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
 }
 
-/* ============================================================
-   6. HOOK DEFINITIONS — PASS-THROUGH SNIFFER
-   ============================================================ */
-
-/* ---------- 6A. FETCH ---------- */
+/* ---------- HOOKS ---------- */
 async function hookedFetch(input, init) {
     const url = (typeof input === 'string') ? input : (input && input.url) || String(input);
     const method = ((init && init.method) || 'GET').toUpperCase();
 
-    if (sniffPaused) {
-        return NATIVE.fetch.call(this, input, init);
-    }
+    if (sniffPaused) return NATIVE.fetch.call(this, input, init);
 
     stats.req++; refreshStats();
     const t0 = performance.now();
@@ -689,7 +795,6 @@ async function hookedFetch(input, init) {
     }
 }
 
-/* ---------- 6B. XHR ---------- */
 function hookedXHROpen(method, url) {
     this.__meta = { method: String(method || 'GET').toUpperCase(), url: String(url) };
     this.__headers = {};
@@ -736,11 +841,17 @@ function hookedXHRSend(body) {
             }
         } catch (e) {}
     });
+    this.addEventListener('timeout', function () {
+        try { log(`[XHR] ✖ timeout · ${trunc((this.__meta||{}).url || '?', 70)}`, 'danger'); } catch (e) {}
+    });
+    this.addEventListener('error', function () {
+        try { log(`[XHR] ✖ network error · ${trunc((this.__meta||{}).url || '?', 70)}`, 'danger'); } catch (e) {}
+    });
 
+    if (!this.timeout) { try { this.timeout = 20000; } catch (e) {} }
     return NATIVE.XHRsend.apply(this, arguments);
 }
 
-/* ---------- 6C. WEBSOCKET (murni passthrough) ---------- */
 function HookedWS(url, protocols) {
     if (sniffPaused) {
         return (protocols !== undefined) ? new NATIVE.WS(url, protocols) : new NATIVE.WS(url);
@@ -779,7 +890,6 @@ HookedWS.OPEN = 1;
 HookedWS.CLOSING = 2;
 HookedWS.CLOSED = 3;
 
-/* ---------- 6D. STORAGE ---------- */
 function hookedSetItem(key, value) {
     if (sniffPaused) return NATIVE.StorageSet.call(this, key, value);
     try {
@@ -789,7 +899,6 @@ function hookedSetItem(key, value) {
     return NATIVE.StorageSet.call(this, key, value);
 }
 
-/* ---------- 6E. RTCPeerConnection ---------- */
 function HookedRTC(config) {
     if (sniffPaused) return new NATIVE.RTC(config);
 
@@ -841,9 +950,8 @@ function HookedRTC(config) {
 
     return pc;
 }
-HookedRTC.prototype = NATIVE.RTC.prototype;
+HookedRTC.prototype = NATIVE.RTC ? NATIVE.RTC.prototype : undefined;
 
-/* ---------- 6F. navigator.sendBeacon ---------- */
 function hookedSendBeacon(url, data) {
     if (sniffPaused) return NATIVE.sendBeacon.call(navigator, url, data);
 
@@ -876,7 +984,6 @@ function hookedSendBeacon(url, data) {
     }
 }
 
-/* ---------- 6G. EventSource (murni passthrough) ---------- */
 function HookedES(url, config) {
     if (sniffPaused) return new NATIVE.ES(url, config);
 
@@ -892,19 +999,18 @@ function HookedES(url, config) {
         try {
             log(`[SSE] ← data ${String(e.data).length} byte`, 'info');
             scanPayload(e.data, 'SSE');
+            renderRealtime('SSE', e.data);
         } catch (err) {}
     });
 
     return es;
 }
-HookedES.prototype = NATIVE.ES.prototype;
+HookedES.prototype = NATIVE.ES ? NATIVE.ES.prototype : undefined;
 HookedES.CONNECTING = 0;
 HookedES.OPEN = 1;
 HookedES.CLOSED = 2;
 
-/* ============================================================
-   7. PASANG / LEPAS HOOKS
-   ============================================================ */
+/* ---------- APPLY / REMOVE HOOKS ---------- */
 let hooksActive = false;
 
 function applyHooks() {
@@ -921,11 +1027,7 @@ function applyHooks() {
     if (NATIVE.RTC) window.RTCPeerConnection = HookedRTC;
     if (NATIVE.sendBeacon) {
         try {
-            Object.defineProperty(navigator, 'sendBeacon', {
-                value: hookedSendBeacon,
-                writable: true,
-                configurable: true
-            });
+            Object.defineProperty(navigator, 'sendBeacon', { value: hookedSendBeacon, writable: true, configurable: true });
         } catch (e) {
             try { navigator.sendBeacon = hookedSendBeacon; } catch (e2) {}
         }
@@ -933,8 +1035,8 @@ function applyHooks() {
     if (NATIVE.ES) window.EventSource = HookedES;
 
     hooksActive = true;
-    $('targetStatus').textContent = 'ONLINE (Hooked)';
-    $('targetStatus').className = 'badge warn';
+    $('targetStatus').innerHTML = '<span class="dot"></span>ONLINE (Hooked)';
+    $('targetStatus').className = 'pill warn';
     $('restoreLbl').textContent = 'RESTORE';
 }
 
@@ -952,11 +1054,7 @@ function removeHooks() {
     if (NATIVE.RTC) window.RTCPeerConnection = NATIVE.RTC;
     if (NATIVE.sendBeacon) {
         try {
-            Object.defineProperty(navigator, 'sendBeacon', {
-                value: NATIVE.sendBeacon,
-                writable: true,
-                configurable: true
-            });
+            Object.defineProperty(navigator, 'sendBeacon', { value: NATIVE.sendBeacon, writable: true, configurable: true });
         } catch (e) {
             try { navigator.sendBeacon = NATIVE.sendBeacon; } catch (e2) {}
         }
@@ -971,32 +1069,29 @@ function removeHooks() {
     }
 
     hooksActive = false;
-    $('targetStatus').textContent = 'ONLINE (Native)';
-    $('targetStatus').className = 'badge ok';
+    $('targetStatus').innerHTML = '<span class="dot"></span>ONLINE (Native)';
+    $('targetStatus').className = 'pill ok';
     $('restoreLbl').textContent = 'REAPPLY';
     log('[SYS] Semua hook dilepas. Sistem kembali normal.', 'success');
 }
 
-/* ============================================================
-   8. STEALTH MODE
-   ============================================================ */
+/* ---------- STEALTH ---------- */
 let stealthOn = false;
 
 function setStealth(on) {
     stealthOn = on;
-
     const fakeNative = (name) => `function ${name}() { [native code] }`;
 
     const hookTargets = [
-        [window.fetch,                       'fetch'],
-        [XMLHttpRequest.prototype.open,      'open'],
-        [XMLHttpRequest.prototype.send,      'send'],
+        [window.fetch, 'fetch'],
+        [XMLHttpRequest.prototype.open, 'open'],
+        [XMLHttpRequest.prototype.send, 'send'],
         [XMLHttpRequest.prototype.setRequestHeader, 'setRequestHeader'],
-        [window.WebSocket,                   'WebSocket'],
-        [Storage.prototype.setItem,          'setItem'],
-        [navigator.sendBeacon,               'sendBeacon'],
-        [window.RTCPeerConnection,           'RTCPeerConnection'],
-        [window.EventSource,                 'EventSource']
+        [window.WebSocket, 'WebSocket'],
+        [Storage.prototype.setItem, 'setItem'],
+        [navigator.sendBeacon, 'sendBeacon'],
+        [window.RTCPeerConnection, 'RTCPeerConnection'],
+        [window.EventSource, 'EventSource']
     ];
 
     if (on) {
@@ -1005,39 +1100,23 @@ function setStealth(on) {
                 try { fn.toString = () => fakeNative(name); } catch (e) {}
             }
         }
-
         if (!window.__stealthBackup) {
-            window.__stealthBackup = {
-                freeze:           Object.freeze,
-                seal:             Object.seal,
-                preventExtensions: Object.preventExtensions
-            };
+            window.__stealthBackup = { freeze: Object.freeze, seal: Object.seal, preventExtensions: Object.preventExtensions };
         }
         const bk = window.__stealthBackup;
-
         Object.freeze = function (obj) {
-            if (obj === window || obj === navigator) {
-                log('[STEALTH] Object.freeze() pada global diblokir', 'warn');
-                return obj;
-            }
+            if (obj === window || obj === navigator) { log('[STEALTH] Object.freeze() pada global diblokir', 'warn'); return obj; }
             return bk.freeze.call(Object, obj);
         };
         Object.seal = function (obj) {
-            if (obj === window || obj === navigator) {
-                log('[STEALTH] Object.seal() pada global diblokir', 'warn');
-                return obj;
-            }
+            if (obj === window || obj === navigator) { log('[STEALTH] Object.seal() pada global diblokir', 'warn'); return obj; }
             return bk.seal.call(Object, obj);
         };
         Object.preventExtensions = function (obj) {
-            if (obj === window || obj === navigator) {
-                log('[STEALTH] Object.preventExtensions() pada global diblokir', 'warn');
-                return obj;
-            }
+            if (obj === window || obj === navigator) { log('[STEALTH] Object.preventExtensions() pada global diblokir', 'warn'); return obj; }
             return bk.preventExtensions.call(Object, obj);
         };
-
-        log('[SYS] Stealth AKTIF — hook disamarkan & dilindungi dari freeze/seal', 'success');
+        log('[SYS] Stealth AKTIF — hook disamarkan & dilindungi', 'success');
     } else {
         for (const [fn] of hookTargets) {
             if (typeof fn === 'function') {
@@ -1050,142 +1129,225 @@ function setStealth(on) {
             Object.preventExtensions = window.__stealthBackup.preventExtensions;
             delete window.__stealthBackup;
         }
-        log('[SYS] Stealth NONAKTIF — hook terdeteksi', 'warn');
+        log('[SYS] Stealth NONAKTIF', 'warn');
     }
 
     $('stealthLbl').textContent = `STEALTH: ${on ? 'ON' : 'OFF'}`;
     $('stealthBtn').classList.toggle('on', on);
 }
 
-/* ============================================================
-   9. SISI KORBAN — ACTIONS (REAL TARGETS)
-   ============================================================ */
+/* ---------- LIVE MONITOR (BARU) ---------- */
+let hlsInstance = null;
 
+function playStream(url) {
+    const video = $('monitorVideo');
+    const placeholder = $('videoPlaceholder');
+    const box = $('videoBox');
+    const tag = $('streamTag');
+
+    placeholder.style.display = 'none';
+    box.classList.add('live');
+    tag.textContent = 'menyambung…';
+    tag.className = 'tag';
+
+    try {
+        if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+            // Safari/iOS: dukungan HLS native
+            video.src = url;
+            video.play().catch(() => {});
+            tag.textContent = 'live (native)';
+            tag.className = 'tag live';
+        } else if (window.Hls && window.Hls.isSupported()) {
+            hlsInstance = new window.Hls({ maxBufferLength: 15 });
+            hlsInstance.loadSource(url);
+            hlsInstance.attachMedia(video);
+            hlsInstance.on(window.Hls.Events.MANIFEST_PARSED, () => {
+                video.play().catch(() => {});
+                tag.textContent = 'live (hls.js)';
+                tag.className = 'tag live';
+            });
+            hlsInstance.on(window.Hls.Events.ERROR, (evt, data) => {
+                if (data && data.fatal) {
+                    tag.textContent = 'gagal diputar';
+                    placeholder.textContent = 'Stream ditemukan tapi gagal diputar (kemungkinan diblokir CORS/region). Link tetap tersimpan di Vault.';
+                    placeholder.style.display = 'flex';
+                    box.classList.remove('live');
+                    log(`[MONITOR] hls.js error: ${data.type}`, 'warn');
+                }
+            });
+        } else {
+            tag.textContent = 'player tidak tersedia';
+            placeholder.textContent = 'Browser/jaringan ini tidak mendukung pemutaran HLS langsung. Link stream tetap tersimpan di Vault.';
+            placeholder.style.display = 'flex';
+            box.classList.remove('live');
+        }
+    } catch (e) {
+        tag.textContent = 'error';
+        placeholder.textContent = 'Gagal memuat player: ' + e.message;
+        placeholder.style.display = 'flex';
+        box.classList.remove('live');
+    }
+}
+
+function renderIpCard(data, ms) {
+    const el = $('ipCard');
+    el.classList.remove('empty');
+    const rows = [
+        ['IP', data.ip || data.query || '—'],
+        ['Kota', data.city || '—'],
+        ['Negara', data.country_name || data.country || '—'],
+        ['ISP/Org', data.org || data.isp || '—'],
+        ['Latensi', ms ? ms + ' ms' : '—']
+    ];
+    el.innerHTML = `<div class="kv">${rows.map(([k,v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join('')}</div>`;
+    $('ipTag').textContent = 'live';
+    $('ipTag').classList.add('live');
+}
+
+function renderXhrCard(data) {
+    const el = $('xhrCard');
+    el.classList.remove('empty');
+    let pretty;
+    try { pretty = JSON.stringify(data, null, 2); } catch (e) { pretty = String(data); }
+    el.innerHTML = `<pre class="json">${esc(trunc(pretty, 700))}</pre>`;
+    $('xhrTag').textContent = 'live';
+    $('xhrTag').classList.add('live');
+}
+
+function renderRealtime(label, msg) {
+    const el = $('rtCard');
+    el.classList.remove('empty');
+    el.innerHTML = `<div class="kv"><div class="row"><span class="k">Channel</span><span class="v">${esc(label)}</span></div></div>
+        <pre class="json" style="margin-top:7px">${esc(trunc(String(msg), 300))}</pre>`;
+    $('rtTag').textContent = 'live';
+    $('rtTag').classList.add('live');
+}
+
+/* ---------- TARGET ACTIONS ---------- */
 function tlog(msg, cls = '') {
-    const box = $('targetScreen');
-    const line = document.createElement('div');
-    line.className = 'tline ' + cls;
-    line.textContent = '> ' + msg;
-    box.prepend(line);
-    while (box.childElementCount > 60) box.removeChild(box.lastElementChild);
+    // Kompatibilitas: log ringkas juga masuk ke terminal utama sebagai info/err
+    log('[TARGET] ' + msg, cls === 'err' ? 'warn' : 'sys');
 }
 
-function setFeed(url) {
-    const feed = $('feed');
-    feed.classList.add('live');
-    feed.innerHTML = '';
-
-    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    dot.setAttribute('class', 'live-dot');
-    dot.setAttribute('width', '10');
-    dot.setAttribute('height', '10');
-    dot.setAttribute('viewBox', '0 0 10 10');
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', '5');
-    circle.setAttribute('cy', '5');
-    circle.setAttribute('r', '4');
-    circle.setAttribute('fill', 'currentColor');
-    dot.appendChild(circle);
-
-    const cam = document.createElement('span');
-    cam.className = 'cam';
-    cam.textContent = 'CAM FEED';
-
-    const urlSpan = document.createElement('span');
-    urlSpan.className = 'url';
-    urlSpan.textContent = trunc(url, 60);
-
-    feed.append(dot, cam, urlSpan);
-}
-
-/* ---------- 9A. TARGET API CCTV PUBLIK (HLS Playlist) ---------- */
+/* 9A. CCTV — multiple fallbacks */
 async function targetRealCCTV() {
-    tlog('Menembak API CCTV Publik (IPTV Streams)...');
-    log('[TARGET] Request API CCTV publik...', 'info');
+    setDot('cctv', 'busy');
+    log('[TARGET] Request API CCTV publik (playlist IPTV)...', 'info');
+    $('streamTag').textContent = 'mencari…';
 
     const endpoints = [
         'https://iptv-org.github.io/iptv/countries/id.m3u',
-        'https://iptv-org.github.io/iptv/index.m3u'
+        'https://iptv-org.github.io/iptv/index.m3u',
+        'https://raw.githubusercontent.com/iptv-org/iptv/master/streams/id.m3u',
+        'https://cdn.jsdelivr.net/gh/iptv-org/iptv@master/streams/id.m3u'
     ];
 
     for (const ep of endpoints) {
         try {
             const res = await fetch(ep);
-            if (!res.ok) {
-                tlog(`HTTP ${res.status} — coba endpoint cadangan...`, 'err');
-                continue;
-            }
+            if (!res.ok) { log(`[TARGET] HTTP ${res.status} di ${trunc(ep,50)} — coba cadangan...`, 'warn'); continue; }
             const text = await res.text();
             const streams = text.split('\n')
                 .map(l => l.trim())
-                .filter(l => l && !l.startsWith('#'));
+                .filter(l => l && !l.startsWith('#') && (l.includes('.m3u8') || l.startsWith('http')));
 
-            tlog(`Berhasil! Ditemukan ${streams.length} stream publik.`, 'ok');
-            log(`[TARGET] ${streams.length} stream HLS terdeteksi di playlist.`, 'success');
+            log(`[TARGET] ${streams.length} stream HLS terdeteksi.`, 'success');
 
             if (streams.length > 0) {
-                setFeed(streams[0]);
-                tlog(`Stream pertama: ${trunc(streams[0], 50)}`, 'ok');
+                playStream(streams[0]);
+                setDot('cctv', 'ok');
+            } else {
+                setDot('cctv', 'err');
             }
             return;
         } catch (e) {
-            tlog(`✖ ${e.message}`, 'err');
+            log(`[TARGET] ✖ ${trunc(ep,40)}: ${e.message}`, 'warn');
         }
     }
-    tlog('Semua endpoint gagal.', 'err');
+    setDot('cctv', 'err');
+    $('streamTag').textContent = 'gagal';
+    log('[TARGET] Semua endpoint CCTV gagal diakses.', 'danger');
 }
 
-/* ---------- 9B. FETCH REAL INTERNET (IP Public) ---------- */
+/* 9B. IP Public */
 async function targetRealFetch() {
-    tlog('Mengambil IP Publik asli dari ipify...');
-    try {
-        const res = await fetch('https://api.ipify.org?format=json');
-        const data = await res.json();
-        tlog(`IP Publik Anda: ${data.ip}`, 'ok');
-    } catch (err) {
-        tlog(`✖ Gagal: ${err.message}`, 'err');
+    setDot('ip', 'busy');
+    log('[TARGET] Mengambil IP publik asli...', 'info');
+    const endpoints = ['https://ipapi.co/json/', 'https://api.ipify.org?format=json', 'https://api64.ipify.org?format=json'];
+    for (const ep of endpoints) {
+        const t0 = performance.now();
+        try {
+            const res = await withTimeout(fetch(ep), 8000);
+            const data = await res.json();
+            const ms = Math.round(performance.now() - t0);
+            log(`[TARGET] IP Publik: ${data.ip || data.query || 'unknown'}`, 'success');
+            renderIpCard(data, ms);
+            setDot('ip', 'ok');
+            return;
+        } catch (err) { /* coba endpoint berikutnya */ }
     }
+    setDot('ip', 'err');
+    log('[TARGET] ✖ Gagal mengambil IP publik dari semua endpoint.', 'danger');
 }
 
-/* ---------- 9C. XHR API PUBLIK ---------- */
+/* 9C. XHR */
 function targetXHR() {
-    tlog('Menghubungi API publik via XHR...');
+    setDot('xhr', 'busy');
+    log('[TARGET] Menghubungi API publik via XHR...', 'info');
     const xhr = new XMLHttpRequest();
     xhr.open('GET', 'https://dummyjson.com/users/1');
+    xhr.timeout = 10000;
     xhr.setRequestHeader('X-Demo-Auth', 'Bearer eyJhbGciOiJIUzI1NiJ9.XHR-HEADER-DEMO.sig');
     xhr.onload = function () {
-        if (xhr.status === 200) tlog(`XHR 200 OK — Data user ditarik.`, 'ok');
-        else tlog(`XHR Error: ${xhr.status}`, 'err');
+        if (xhr.status === 200) {
+            log('[TARGET] XHR 200 OK — data user ditarik.', 'success');
+            try { renderXhrCard(JSON.parse(xhr.responseText)); } catch (e) { renderXhrCard(xhr.responseText); }
+            setDot('xhr', 'ok');
+        } else {
+            log(`[TARGET] XHR error: ${xhr.status}`, 'warn');
+            setDot('xhr', 'err');
+        }
     };
-    xhr.onerror = function () { tlog('XHR Network Error', 'err'); };
+    xhr.onerror = function () { log('[TARGET] XHR network error', 'danger'); setDot('xhr', 'err'); };
+    xhr.ontimeout = function () { log('[TARGET] XHR timeout', 'danger'); setDot('xhr', 'err'); };
     xhr.send();
 }
 
-/* ---------- 9D. WEBSOCKET PUBLIK ---------- */
+/* 9D. WebSocket */
 function targetWS() {
-    tlog('Membuka WebSocket Echo Publik...');
+    setDot('ws', 'busy');
+    log('[TARGET] Membuka WebSocket Echo publik...', 'info');
     try {
         const ws = new WebSocket('wss://ws.postman-echo.com/raw');
         ws.onopen = () => {
-            tlog('WS Terhubung. Mengirim token rahasia...', 'ok');
+            log('[TARGET] WS terhubung. Mengirim token demo...', 'success');
             ws.send(JSON.stringify({ command: 'STREAM', token: 'eyJhbGciOiJIUzI1NiJ9.DUMMY-SECRET.xyz' }));
         };
-        ws.onmessage = (e) => tlog(`WS Echo diterima (${String(e.data).length} byte)`, 'ok');
-        ws.onerror = () => tlog('WS Error', 'err');
-    } catch (e) { tlog(e.message, 'err'); }
+        ws.onmessage = (e) => { log(`[TARGET] WS echo diterima (${String(e.data).length} byte)`, 'success'); renderRealtime('WebSocket', e.data); setDot('ws', 'ok'); };
+        ws.onerror = () => { log('[TARGET] WS error', 'danger'); setDot('ws', 'err'); };
+        ws.onclose = () => { log('[TARGET] WS ditutup.', 'sys'); };
+        setTimeout(() => { try { ws.close(); } catch(e){} }, 4500);
+    } catch (e) { log('[TARGET] ' + e.message, 'danger'); setDot('ws', 'err'); }
 }
 
-/* ---------- 9E. LOCAL STORAGE ---------- */
+/* 9E. Storage */
 function targetStorage() {
-    tlog('Menyimpan Token Login Asli...');
+    setDot('storage', 'busy');
+    log('[TARGET] Menyimpan token sesi demo...', 'info');
     const token = 'eyJhbGciOiJIUzI1NiJ9.YWRtaW4tc2Vzc2lvbg.SECRET-KEY';
-    localStorage.setItem('auth_token', token);
-    tlog('Token (JWT) berhasil disimpan.', 'ok');
+    try {
+        localStorage.setItem('auth_token', token);
+        log('[TARGET] Token (JWT demo) berhasil disimpan.', 'success');
+        setDot('storage', 'ok');
+    } catch (e) { log('[TARGET] ✖ ' + e.message, 'danger'); setDot('storage', 'err'); }
 }
 
-/* ---------- 9F. INTEGRITY CHECK ---------- */
+/* 9F. Integrity Check */
 function targetDetect() {
-    tlog('Menjalankan Integrity Check...');
+    setDot('detect', 'busy');
+    log('[TARGET] Menjalankan Integrity Check...', 'info');
     setTimeout(() => {
         const dirty = [];
         const checks = {
@@ -1203,50 +1365,55 @@ function targetDetect() {
             if (typeof fn !== 'function') continue;
             if (!/\[native code\]/.test(String(fn))) dirty.push(name);
         }
-        if (dirty.length) tlog(`⚠ ANOMALI pada: ${dirty.join(', ')}`, 'err');
-        else tlog('✔ Lingkungan bersih.', 'ok');
-    }, 400);
+        if (dirty.length) {
+            log(`[DETECT] Hook terdeteksi pada: ${dirty.join(', ')}`, 'warn');
+            setDot('detect', 'err');
+        } else {
+            log('[DETECT] Semua API terlihat native.', 'success');
+            setDot('detect', 'ok');
+        }
+    }, 350);
 }
 
-/* ---------- 9G. WEBRTC (Public STUN) ---------- */
+/* 9G. WebRTC */
 async function targetRTC() {
-    tlog('Membuat RTCPeerConnection (STUN Google)...');
+    setDot('rtc', 'busy');
+    log('[TARGET] Membuat RTCPeerConnection (STUN Google)...', 'info');
     try {
         const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
         pc.createDataChannel('test');
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        tlog('SDP Offer dibuat. Sniffer menyadap SDP.', 'ok');
-        setTimeout(() => { try { pc.close(); } catch (e) {} }, 1000);
-    } catch (e) { tlog(e.message, 'err'); }
+        log('[TARGET] SDP Offer dibuat. Sniffer menyadap SDP.', 'success');
+        setDot('rtc', 'ok');
+        setTimeout(() => { try { pc.close(); } catch (e) {} }, 1300);
+    } catch (e) { log('[TARGET] ' + e.message, 'danger'); setDot('rtc', 'err'); }
 }
 
-/* ---------- 9H. SEND BEACON ---------- */
+/* 9H. Beacon */
 function targetBeacon() {
-    tlog('Mengirim SendBeacon ke server...');
+    setDot('beacon', 'busy');
+    log('[TARGET] Mengirim SendBeacon demo...', 'info');
     const payload = JSON.stringify({ event: 'track', pin: '1234', uid: 'admin' });
-    const ok = navigator.sendBeacon(
-        'https://jsonplaceholder.typicode.com/posts',
-        new Blob([payload], { type: 'application/json' })
-    );
-    tlog(ok ? 'Beacon terkirim.' : 'Gagal.', ok ? 'ok' : 'err');
+    const ok = navigator.sendBeacon('https://jsonplaceholder.typicode.com/posts', new Blob([payload], { type: 'application/json' }));
+    log(ok ? '[TARGET] Beacon terkirim.' : '[TARGET] Gagal mengirim beacon.', ok ? 'success' : 'warn');
+    setDot('beacon', ok ? 'ok' : 'err');
 }
 
-/* ---------- 9I. EVENT SOURCE (SSE) ---------- */
+/* 9I. SSE */
 function targetEventSource() {
-    tlog('Membuka EventSource (SSE)...');
+    setDot('sse', 'busy');
+    log('[TARGET] Membuka EventSource (SSE)...', 'info');
     try {
         const es = new EventSource('https://sse.dev/test');
-        es.onopen = () => tlog('SSE Terbuka.', 'ok');
-        es.onmessage = (e) => tlog(`SSE Data: ${trunc(e.data, 40)}`, 'ok');
-        es.onerror = () => tlog('SSE Error / ditutup.', 'err');
-        setTimeout(() => { try { es.close(); } catch (e) {} }, 3000);
-    } catch (e) { tlog(e.message, 'err'); }
+        es.onopen = () => { log('[TARGET] SSE terbuka.', 'success'); setDot('sse', 'ok'); };
+        es.onmessage = (e) => log(`[TARGET] SSE data: ${trunc(e.data, 42)}`, 'success');
+        es.onerror = () => { log('[TARGET] SSE error / ditutup.', 'warn'); setDot('sse', 'err'); };
+        setTimeout(() => { try { es.close(); } catch (e) {} }, 3800);
+    } catch (e) { log('[TARGET] ' + e.message, 'danger'); setDot('sse', 'err'); }
 }
 
-/* ============================================================
-   10. KONTROL LAB
-   ============================================================ */
+/* ---------- CONTROL LAB ---------- */
 function togglePause() {
     sniffPaused = !sniffPaused;
     $('pauseLbl').textContent = sniffPaused ? 'Pause sniffer: ON' : 'Pause sniffer: OFF';
@@ -1256,7 +1423,7 @@ function togglePause() {
 function clearVault() {
     vaultEntries.length = 0;
     vaultSet.clear();
-    $('vault').innerHTML = '';
+    clearVaultUI();
     stats.leak = 0;
     refreshStats();
     updateVaultCount();
@@ -1266,72 +1433,125 @@ function clearVault() {
 function showHistory() {
     if (!reqHistory.length) return log('[HIST] Belum ada riwayat.', 'warn');
     log(`── Riwayat ${reqHistory.length} request terakhir ──`, 'info');
-    reqHistory.slice(-30).forEach(r => log(`[HIST] ${r.kind} ${r.status} ${trunc(r.url || '', 60)}`, 'sys'));
+    reqHistory.slice(-30).forEach(r => {
+        const status = r.status !== undefined ? r.status : '-';
+        log(`[HIST] ${r.kind} ${status} ${trunc(r.url || '', 60)}`, 'sys');
+    });
 }
 
 async function fetchUrlFromBar() {
     let url = $('urlInput').value.trim();
-    if (!url) return tlog('URL kosong.', 'err');
+    if (!url) return log('[SYS] URL kosong.', 'warn');
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-    tlog('FETCH: ' + trunc(url, 40));
+    log('[SYS] FETCH manual: ' + trunc(url, 60), 'info');
     try {
         const res = await fetch(url);
         const text = await res.text();
-        tlog(`HTTP ${res.status} (${text.length} byte)`, 'ok');
-    } catch (e) { tlog(`Gagal: ${e.message}`, 'err'); }
+        log(`[SYS] HTTP ${res.status} (${text.length} byte)`, 'success');
+    } catch (e) { log(`[SYS] Gagal: ${e.message}`, 'danger'); }
+}
+
+/* Tombol yang dinonaktifkan bersama saat smoke test berjalan (robust: cegah klik ganda) */
+const ALL_ACTION_BTN_IDS = ['btnCCTV','btnIP','btnXHR','btnWS','btnStorage','btnDetect','btnRTC','btnBeacon','btnSSE','runAllBtn','fetchUrlBtn'];
+function setActionsDisabled(disabled) {
+    ALL_ACTION_BTN_IDS.forEach(id => { const el = $(id); if (el) el.disabled = disabled; });
 }
 
 async function runAllDemos() {
+    if (smokeRunning) { log('[SMOKE] Masih berjalan, tunggu selesai...', 'warn'); return; }
+    smokeRunning = true;
+    setActionsDisabled(true);
+
     log('[SMOKE] Memulai rangkaian demo…', 'info');
-    await targetRealFetch();
-    setTimeout(targetXHR, 500);
-    setTimeout(targetStorage, 1000);
-    setTimeout(targetBeacon, 1500);
-    setTimeout(targetRealCCTV, 2500);
-    setTimeout(targetRTC, 4000);
-    setTimeout(targetWS, 5000);
-    setTimeout(targetEventSource, 6000);
-    log('[SMOKE] Rangkaian demo selesai (async).', 'success');
+
+    try {
+        await targetRealFetch();
+        await new Promise(r => setTimeout(r, 650));
+        targetXHR();
+        await new Promise(r => setTimeout(r, 750));
+        targetStorage();
+        await new Promise(r => setTimeout(r, 500));
+        targetBeacon();
+        await new Promise(r => setTimeout(r, 800));
+        await targetRealCCTV();
+        await new Promise(r => setTimeout(r, 900));
+        await targetRTC();
+        await new Promise(r => setTimeout(r, 850));
+        targetWS();
+        await new Promise(r => setTimeout(r, 1100));
+        targetEventSource();
+        await new Promise(r => setTimeout(r, 4000));
+
+        log('[SMOKE] Rangkaian demo selesai.', 'success');
+    } catch (e) {
+        log(`[SMOKE] Error: ${e.message}`, 'danger');
+    } finally {
+        smokeRunning = false;
+        setActionsDisabled(false);
+    }
 }
 
-/* ============================================================
-   11. URL IFRAME LOADER
-   ============================================================ */
+/* ---------- IFRAME (dibuat on-demand agar robust & mudah dibersihkan) ---------- */
+let iframeEl = null;
+let iframeLoadTimer = null;
+
 function openUrl() {
     let url = $('urlInput').value.trim();
-    if (!url) return;
+    if (!url) return log('[SYS] URL kosong.', 'warn');
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-    $('targetFrame').src = url;
-    $('targetFrame').style.display = 'block';
-    $('targetScreen').style.display = 'none';
+
+    if (!iframeEl) {
+        iframeEl = document.createElement('iframe');
+        iframeEl.id = 'targetFrame';
+        iframeEl.referrerPolicy = 'no-referrer';
+        iframeEl.style.cssText = 'width:100%;height:260px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:4px;';
+        $('iframeHost').appendChild(iframeEl);
+    }
+    $('iframeHost').style.display = 'block';
     $('closeUrlBtn').classList.add('visible');
+
+    let loaded = false;
+    iframeEl.onload = () => { loaded = true; log('[BROWSER] Iframe berhasil dimuat.', 'success'); };
+    clearTimeout(iframeLoadTimer);
+    iframeLoadTimer = setTimeout(() => {
+        if (!loaded) log('[BROWSER] Situs tidak kunjung tampil — kemungkinan memblokir iframe (X-Frame-Options/CSP).', 'warn');
+    }, 4000);
+
+    iframeEl.src = url;
     log(`[BROWSER] Memuat iframe: ${trunc(url, 70)}`, 'warn');
 }
 function closeUrl() {
-    $('targetFrame').src = 'about:blank';
-    $('targetFrame').style.display = 'none';
-    $('targetScreen').style.display = '';
+    if (iframeEl) iframeEl.src = 'about:blank';
+    $('iframeHost').style.display = 'none';
     $('closeUrlBtn').classList.remove('visible');
 }
 
-/* ============================================================
-   12. EXPORT VAULT
-   ============================================================ */
+/* ---------- EXPORT ---------- */
 function exportVault() {
     if (!vaultEntries.length) return log('[EXPORT] Vault kosong.', 'warn');
-    const data = { export_at: new Date().toISOString(), stats, vault: vaultEntries, history: reqHistory };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `vault-${Date.now()}.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    log(`[EXPORT] ${vaultEntries.length} data diekspor.`, 'success');
+    const data = {
+        export_at: new Date().toISOString(),
+        version: 'gold-master',
+        stats,
+        vault: vaultEntries,
+        history: reqHistory
+    };
+    try {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `vault-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        log(`[EXPORT] ${vaultEntries.length} data diekspor.`, 'success');
+    } catch (e) {
+        log('[EXPORT] ✖ ' + e.message, 'danger');
+    }
 }
 
-/* ============================================================
-   13. EVENT BINDING
-   ============================================================ */
+/* ---------- BINDINGS ---------- */
 $('clearBtn').onclick = () => { termEl.innerHTML = ''; log('[SYS] Log dibersihkan.', 'sys'); };
 $('stealthBtn').onclick = () => setStealth(!stealthOn);
 $('restoreBtn').onclick = () => hooksActive ? removeHooks() : applyHooks();
@@ -1346,13 +1566,12 @@ $('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchU
 /* INIT */
 applyHooks();
 log('════════════════════════════════════════════', 'sys');
-log(' CYBER LAB ULTIMATE v4.1', 'success');
-log(' REAL TARGETS · FULL SVG · ZERO REGRESSION', 'success');
+log(' CYBER LAB GOLD MASTER', 'success');
+log(' UI dirapihkan · Live Monitor baru · lebih robust', 'success');
 log('════════════════════════════════════════════', 'sys');
-log('[SYS] v4.1: + XHR headers hook, + fetch headers scan, + pause semua hook', 'info');
-log('[SYS] v4.1: + deteksi integritas full, + timeout cleanup, + XSS-safe feed', 'info');
-log('[SYS] Tombol "Tembak API CCTV Publik" akan memanggil playlist IPTV publik.', 'info');
-log('[SYS] Link .m3u8 asli akan otomatis dicuri dan masuk ke Vault.', 'info');
+log('[SYS] Panel "Live Monitor" menampilkan hasil nyata (video/IP/JSON/WS).', 'info');
+log('[SYS] Semua tombol dinonaktifkan otomatis saat smoke test berjalan.', 'info');
+log('[SYS] Demo berjalan sepenuhnya di tab ini, memakai endpoint publik/dummy.', 'info');
 </script>
 </body>
 </html>
