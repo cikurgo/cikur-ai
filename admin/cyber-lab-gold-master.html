@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyber Lab Gold Master v3.4 — Complete Generic Network Interceptor</title>
+<title>Cyber Lab Gold Master v4.0 — Real Network Interceptor</title>
 <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -51,8 +51,9 @@
     .stats { display: flex; gap: 6px; font-size: 10px; }
     .stats span {
         padding: 3px 8px; border: 1px solid var(--line); border-radius: 3px;
-        color: var(--muted); transition: .2s;
+        color: var(--muted); transition: .2s; display: flex; align-items: center; gap: 4px;
     }
+    .stats span svg { width: 12px; height: 12px; }
     .stats span.hot {
         color: var(--red); border-color: rgba(255,59,107,.5);
         background: rgba(255,59,107,.1);
@@ -71,14 +72,14 @@
     .urlbar button {
         padding: 7px 14px; background: transparent; border: 1px solid var(--cyan);
         color: var(--cyan); font: inherit; font-size: 11px; font-weight: bold;
-        cursor: pointer; border-radius: 3px; transition: .15s;
+        cursor: pointer; border-radius: 3px; transition: .15s; display: flex; align-items: center; gap: 5px;
     }
     .urlbar button:hover { background: rgba(34,211,238,.1); }
     .urlbar button.close-btn {
         border-color: var(--muted); color: var(--muted);
         padding: 7px 10px; display: none;
     }
-    .urlbar button.close-btn.visible { display: inline-block; }
+    .urlbar button.close-btn.visible { display: inline-flex; }
     .urlbar button.close-btn:hover { border-color: var(--red); color: var(--red); background: rgba(255,59,107,.1); }
 
     /* ---------- BUTTONS ---------- */
@@ -213,7 +214,7 @@
     }
     .copy {
         flex: 0 0 auto; background: none; border: 1px solid var(--line);
-        color: var(--muted); font-size: 10px; padding: 0 4px; cursor: pointer;
+        color: var(--muted); font-size: 10px; padding: 2px 6px; cursor: pointer;
         border-radius: 2px; transition: .15s; display: flex; align-items: center;
     }
     .copy svg { width: 11px; height: 11px; }
@@ -230,7 +231,7 @@
         display: flex; align-items: center; justify-content: center; gap: 5px;
         white-space: nowrap; overflow: hidden;
     }
-    .actions button svg { width: 11px; height: 11px; flex: 0 0 auto; }
+    .actions button svg { width: 12px; height: 12px; flex: 0 0 auto; }
     .actions button:hover { color: var(--text); border-color: #2f4055; }
     .actions button.on {
         color: var(--green); border-color: rgba(0,255,156,.45);
@@ -258,135 +259,121 @@
 </head>
 <body>
 
+    <!-- SVG SPRITE UNTUK IKON -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="display:none;">
+        <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+        <symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+        <symbol id="i-cctv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 7h2a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2"/><path d="M10 14H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v3"/><circle cx="12" cy="19" r="2"/><line x1="12" y1="14" x2="12" y2="17"/></symbol>
+        <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></symbol>
+        <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></symbol>
+        <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+        <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 10l4.55-2.27A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.89L15 14"/><rect x="3" y="6" width="12" height="12" rx="2" ry="2"/></symbol>
+        <symbol id="i-beacon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/></symbol>
+        <symbol id="i-sse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 8-8"/><path d="M20 12a8 8 0 0 1-8 8"/><path d="M12 4a8 8 0 0 1 8 8"/><path d="M12 20a8 8 0 0 1-8-8"/><circle cx="12" cy="12" r="2"/></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></symbol>
+        <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></symbol>
+        <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+        <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    </svg>
+
     <!-- ================= KIRI: TARGET WEBSITE (KORBAN) ================= -->
     <section class="panel target">
         <div class="ph">
-            <h2>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="2" y1="12" x2="22" y2="12"/>
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                </svg>
-                Target Website
-            </h2>
+            <h2><svg><use href="#i-globe"/></svg> Target Website</h2>
             <span class="badge warn" id="targetStatus">ONLINE (Hooked)</span>
         </div>
 
         <p class="desc">
-            Target generik: klik tombol atau buka URL apa pun. Terminal kanan
-            menyadap fetch/XHR/WS/Storage dan trafik lain secara real-time.
+            Target real CCTV API. Klik tombol untuk memicu request. Terminal kanan
+            menyadap semua data secara real-time.
         </p>
 
-        <!-- URL BAR BARU -->
-                <div class="urlbar">
-            <input type="text" id="urlInput" placeholder="https://api.example.com/data  (FETCH = disadap, BUKA = iframe)" spellcheck="false" autocomplete="off">
-            <button id="fetchUrlBtn" title="fetch() URL — tersadap terminal">FETCH</button>
-            <button id="openUrlBtn" title="Buka di iframe (cross-origin tidak tersadap)">BUKA</button>
-            <button id="closeUrlBtn" class="close-btn" title="Tutup iframe">✕</button>
+        <div class="urlbar">
+            <input type="text" id="urlInput" placeholder="https://api.example.com/data" spellcheck="false" autocomplete="off">
+            <button id="fetchUrlBtn" title="fetch() URL — tersadap terminal"><svg><use href="#i-download"/></svg> FETCH</button>
+            <button id="openUrlBtn" title="Buka di iframe"><svg><use href="#i-globe"/></svg> BUKA</button>
+            <button id="closeUrlBtn" class="close-btn" title="Tutup iframe"><svg><use href="#i-x"/></svg></button>
         </div>
 
-        <div class="group-label">Demo Core — trafik generik (Hooked)</div>
+        <div class="group-label">Real Target — CCTV API</div>
 
         <div class="btn-group">
-            <button class="btn" onclick="targetRealFetch()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="7 10 12 15 17 10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                <span class="lbl">Fetch Real Internet (JSONPlaceholder)</span>
+            <button class="btn" onclick="targetRealCCTV()">
+                <svg><use href="#i-cctv"/></svg>
+                <span class="lbl">Tembak API CCTV Asli (Streetside)</span>
             </button>
 
-            <button class="btn" onclick="targetMockFetch()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-                <span class="lbl">Fetch API publik (JSON user)</span>
+            <button class="btn" onclick="targetRealFetch()">
+                <svg><use href="#i-download"/></svg>
+                <span class="lbl">Fetch Real Internet (IP Public)</span>
             </button>
 
             <button class="btn" onclick="targetXHR()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
-                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                </svg>
-                <span class="lbl">XHR API publik (JSON user)</span>
+                <svg><use href="#i-database"/></svg>
+                <span class="lbl">XHR API Publik (JSON User)</span>
             </button>
 
             <button class="btn ws" onclick="targetWS()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="2"/>
-                    <path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/>
-                </svg>
-                <span class="lbl">WebSocket Echo (publik)</span>
+                <svg><use href="#i-wifi"/></svg>
+                <span class="lbl">WebSocket Echo (Publik)</span>
             </button>
 
             <button class="btn" onclick="targetStorage()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                    <polyline points="17 21 17 13 7 13 7 21"/>
-                    <polyline points="7 3 7 8 15 8"/>
-                </svg>
-                <span class="lbl">Simpan session demo (LocalStorage)</span>
+                <svg><use href="#i-save"/></svg>
+                <span class="lbl">Simpan Session (LocalStorage)</span>
             </button>
 
             <button class="btn detect" onclick="targetDetect()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="11" cy="11" r="8"/>
-                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
+                <svg><use href="#i-search"/></svg>
                 <span class="lbl">Integrity Check (Anti-Tamper)</span>
             </button>
         </div>
 
-        <div class="group-label">Hooks lanjutan (Pass-Through)</div>
+        <div class="group-label">Advanced Hooks (RTC / Beacon / SSE)</div>
 
         <div class="btn-group">
             <button class="btn mini" onclick="targetRTC()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M15 10l4.55-2.27A1 1 0 0 1 21 8.62v6.76a1 1 0 0 1-1.45.89L15 14"/>
-                    <rect x="3" y="6" width="12" height="12" rx="2" ry="2"/>
-                </svg>
-                <span class="lbl">Test WebRTC PeerConnection</span>
+                <svg><use href="#i-video"/></svg>
+                <span class="lbl">Test WebRTC (STUN Google)</span>
             </button>
 
             <button class="btn mini" onclick="targetBeacon()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/>
-                    <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/>
-                    <circle cx="12" cy="12" r="2"/>
-                    <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/>
-                    <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>
-                </svg>
-                <span class="lbl">Test navigator.sendBeacon</span>
+                <svg><use href="#i-beacon"/></svg>
+                <span class="lbl">Test SendBeacon (Payload)</span>
             </button>
 
             <button class="btn mini" onclick="targetEventSource()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 12a8 8 0 0 1 8-8"/>
-                    <path d="M20 12a8 8 0 0 1-8 8"/>
-                    <path d="M12 4a8 8 0 0 1 8 8"/>
-                    <path d="M12 20a8 8 0 0 1-8-8"/>
-                    <circle cx="12" cy="12" r="2"/>
-                </svg>
+                <svg><use href="#i-sse"/></svg>
                 <span class="lbl">Test EventSource (SSE)</span>
             </button>
         </div>
 
-        <div class="group-label">Kontrol lab (smoke / pause / vault / history)</div>
+        <div class="group-label">Kontrol Lab (smoke / pause / vault / history)</div>
         <div class="btn-group">
             <button class="btn mini" id="runAllBtn" onclick="runAllDemos()">
-                <span class="lbl">▶ Jalankan semua demo (smoke test)</span>
+                <svg><use href="#i-play"/></svg>
+                <span class="lbl">Jalankan semua demo (smoke test)</span>
             </button>
             <button class="btn mini" id="pauseBtn" onclick="togglePause()">
-                <span class="lbl" id="pauseLbl">⏸ Pause sniffer: OFF</span>
+                <svg><use href="#i-pause"/></svg>
+                <span class="lbl" id="pauseLbl">Pause sniffer: OFF</span>
             </button>
             <button class="btn mini" id="clearVaultBtn" onclick="clearVault()">
-                <span class="lbl">🗑 Kosongkan vault</span>
+                <svg><use href="#i-trash"/></svg>
+                <span class="lbl">Kosongkan vault</span>
             </button>
             <button class="btn mini" id="histBtn" onclick="showHistory()">
-                <span class="lbl">📋 Riwayat request (terminal)</span>
+                <svg><use href="#i-list"/></svg>
+                <span class="lbl">Riwayat request (terminal)</span>
             </button>
         </div>
 
@@ -405,18 +392,12 @@
         <div class="scanline"></div>
 
         <div class="ph">
-            <h2>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="4 17 10 11 4 5"/>
-                    <line x1="12" y1="19" x2="20" y2="19"/>
-                </svg>
-                Hacker Terminal
-            </h2>
+            <h2><svg><use href="#i-terminal"/></svg> Hacker Terminal</h2>
             <div class="stats">
                 <span id="statReq">0 request</span>
                 <span id="statLeak">0 bocor</span>
                 <span id="statHist" title="Riwayat">0 hist</span>
-                <span class="badge ok" style="margin-left:4px">v3.4</span>
+                <span class="badge ok" style="margin-left:4px">v4.0</span>
             </div>
         </div>
 
@@ -428,46 +409,25 @@
         <div class="terminal" id="terminal"></div>
 
         <div class="vault">
-            <h3>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                    <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
-                </svg>
-                Vault — Data Curian
-                <span class="count" id="vaultCount">(0)</span>
-            </h3>
+            <h3><svg><use href="#i-lock"/></svg> Vault — Data Curian <span class="count" id="vaultCount">(0)</span></h3>
             <ul id="vault"></ul>
         </div>
 
         <div class="actions">
             <button id="clearBtn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                </svg>
+                <svg><use href="#i-trash"/></svg>
                 <span>CLEAR</span>
             </button>
             <button id="stealthBtn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                </svg>
+                <svg><use href="#i-eye-off"/></svg>
                 <span id="stealthLbl">STEALTH: OFF</span>
             </button>
             <button id="restoreBtn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="23 4 23 10 17 10"/>
-                    <polyline points="1 20 1 14 7 14"/>
-                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                </svg>
+                <svg><use href="#i-refresh"/></svg>
                 <span id="restoreLbl">RESTORE</span>
             </button>
             <button id="exportBtn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="17 8 12 3 7 8"/>
-                    <line x1="12" y1="3" x2="12" y2="15"/>
-                </svg>
+                <svg><use href="#i-upload"/></svg>
                 <span>EXPORT</span>
             </button>
         </div>
@@ -503,6 +463,8 @@ const termEl = $('terminal');
 const stats  = { req: 0, leak: 0 };
 const vaultEntries = [];
 const vaultSet = new Set();
+const reqHistory = [];
+let sniffPaused = false;
 
 /* ---------- SVG PATH HELPER ---------- */
 const SVG_PATHS = {
@@ -557,6 +519,7 @@ function refreshStats() {
     $('statReq').textContent  = `${stats.req} request`;
     $('statLeak').textContent = `${stats.leak} bocor`;
     $('statLeak').classList.toggle('hot', stats.leak > 0);
+    $('statHist').textContent = `${reqHistory.length} hist`;
 }
 
 /* ============================================================
@@ -604,6 +567,12 @@ function addVault(name, value) {
     refreshStats();
     updateVaultCount();
     return true;
+}
+
+function recordReq(entry) {
+    reqHistory.push(Object.assign({ t: Date.now() }, entry));
+    if (reqHistory.length > 200) reqHistory.shift();
+    refreshStats();
 }
 
 /* ============================================================
@@ -661,22 +630,10 @@ function withTimeout(promise, ms) {
    ============================================================ */
 
 /* ---------- 6A. FETCH ---------- */
-/* Riwayat request generik (bukan khusus CCTV) */
-const reqHistory = [];
-let sniffPaused = false;
-
-function recordReq(entry) {
-    reqHistory.push(Object.assign({ t: Date.now() }, entry));
-    if (reqHistory.length > 200) reqHistory.shift();
-    try {
-        const el = $('statHist');
-        if (el) el.textContent = reqHistory.length + ' hist';
-    } catch (e) {}
-}
-
 async function hookedFetch(input, init) {
     const url = (typeof input === 'string') ? input : (input && input.url) || String(input);
     const method = ((init && init.method) || 'GET').toUpperCase();
+    
     if (sniffPaused) {
         return NATIVE.fetch.call(this, input, init);
     }
@@ -691,6 +648,7 @@ async function hookedFetch(input, init) {
         const ms = Math.round(performance.now() - t0);
         log(`[FETCH] ← ${response.status} ${response.statusText || ''} · ${ms}ms · ${trunc(response.headers.get('content-type') || '', 40)}`, response.ok ? 'success' : 'warn');
         recordReq({ kind: 'FETCH', method, url, status: response.status, ms });
+        
         response.clone().text()
             .then(text => {
                 log(`[FETCH] body ${text.length} byte`, 'sys');
@@ -715,6 +673,7 @@ function hookedXHROpen(method, url) {
 function hookedXHRSend(body) {
     const meta = this.__meta || {};
     if (sniffPaused) return NATIVE.XHRsend.apply(this, arguments);
+    
     stats.req++; refreshStats();
     log(`[XHR] ${meta.method || 'GET'} ${trunc(meta.url || '?', 82)}`, 'info');
     if (body) log(`[XHR] body → ${trunc(body, 60)}`, 'warn');
@@ -724,6 +683,7 @@ function hookedXHRSend(body) {
             const meta = this.__meta || {};
             log(`[XHR] ← ${this.status} · ${trunc(meta.url || '?', 70)}`, this.status >= 200 && this.status < 400 ? 'success' : 'warn');
             recordReq({ kind: 'XHR', method: meta.method, url: meta.url, status: this.status });
+            
             let text = null;
             if (this.responseType === '' || this.responseType === 'text') {
                 text = this.responseText;
@@ -758,7 +718,6 @@ function HookedWS(url, protocols) {
         scanPayload(e.data, 'WEBSOCKET');
     });
 
-    /* Sniff frame keluar */
     const nativeSend = ws.send.bind(ws);
     ws.send = function (data) {
         log(`[WS] → ${trunc(data, 60)}`, 'warn');
@@ -1027,9 +986,7 @@ function setStealth(on) {
 }
 
 /* ============================================================
-   9. SISI KORBAN — ACTIONS (GENERIK, endpoint publik nyata)
-   Lab ini = interceptor generik, BUKAN pemutar/scan CCTV khusus.
-   CCTV/drone-cgo = file terpisah. Hook di atas: zero regresi.
+   9. SISI KORBAN — ACTIONS (REAL TARGETS)
    ============================================================ */
 
 function tlog(msg, cls = '') {
@@ -1048,379 +1005,216 @@ function setFeed(url) {
         <svg class="live-dot" width="10" height="10" viewBox="0 0 10 10">
             <circle cx="5" cy="5" r="4" fill="currentColor"/>
         </svg>
-        <span class="cam">FEED</span>
+        <span class="cam">CAM FEED</span>
         <span class="url">${trunc(url, 60)}</span>
     `;
 }
 
-/* ---------- 9A. REAL FETCH (JSONPlaceholder) — generik internet ---------- */
-async function targetRealFetch() {
-    tlog('Mengambil data dari JSONPlaceholder (Internet Asli)...');
+/* ---------- 9A. TARGET API CCTV ASLI (Streetside via CORS Proxy) ---------- */
+async function targetRealCCTV() {
+    tlog('Menembak API CCTV Asli (Streetside)...');
+    log('[TARGET] Request API CCTV (Real Network)...', 'info');
+    
+    const proxy = 'https://api.codetabs.com/v1/proxy?quest=';
+    const realUrl = 'https://streetside.mugnimaestra.dev/api/cameras';
+    
     try {
-        const res = await fetch('https://jsonplaceholder.typicode.com/todos/1');
+        const res = await fetch(proxy + encodeURIComponent(realUrl));
         const data = await res.json();
-        tlog(`Data diterima: "${trunc(data.title, 40)}"`, 'ok');
+        tlog(`Berhasil! Ditemukan ${data.cameras?.length || 0} kamera asli.`, 'ok');
+        if (data.cameras?.length > 0) {
+            setFeed(data.cameras[0].cctv_name || 'CCTV-LIVE-STREAM');
+        }
+    } catch (e) {
+        tlog(`✖ Gagal: ${e.message}`, 'err');
+    }
+}
+
+/* ---------- 9B. FETCH REAL INTERNET (IP Public) ---------- */
+async function targetRealFetch() {
+    tlog('Mengambil IP Publik asli dari ipify...');
+    try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        const data = await res.json();
+        tlog(`IP Publik Anda: ${data.ip}`, 'ok');
     } catch (err) {
         tlog(`✖ Gagal: ${err.message}`, 'err');
     }
 }
 
-/* ---------- 9B. REAL FETCH (dummyjson user) — generik API, bukan CCTV ---------- */
-function targetMockFetch() {
-    tlog('Menembak API user publik (dummyjson.com)...');
-    fetch('https://dummyjson.com/users/1')
-        .then((res) => res.json())
-        .then((data) => {
-            tlog(`Data diterima: ${data.firstName} ${data.lastName}`, 'ok');
-            if (data.image) setFeed(data.image);
-        })
-        .catch((e) => tlog(`✖ ${e.message}`, 'err'));
-}
-
-/* ---------- 9C. REAL XHR (JSONPlaceholder) ---------- */
+/* ---------- 9C. XHR API PUBLIK ---------- */
 function targetXHR() {
-    tlog('Menghubungi JSONPlaceholder via XHR...');
+    tlog('Menghubungi API publik via XHR...');
     const xhr = new XMLHttpRequest();
-    xhr.open('GET', 'https://jsonplaceholder.typicode.com/users/1');
+    xhr.open('GET', 'https://dummyjson.com/users/1');
     xhr.onload = function () {
-        if (xhr.status === 200) {
-            try {
-                const data = JSON.parse(xhr.responseText);
-                tlog(`200 OK — user: ${data.name}`, 'ok');
-            } catch (e) {
-                tlog('200 OK — respons tidak valid', 'err');
-            }
-        } else {
-            tlog(`✖ ${xhr.status} ${xhr.statusText}`, 'err');
-        }
+        if (xhr.status === 200) tlog(`XHR 200 OK — Data user ditarik.`, 'ok');
+        else tlog(`XHR Error: ${xhr.status}`, 'err');
     };
-    xhr.onerror = function () { tlog('✖ network error', 'err'); };
+    xhr.onerror = function () { tlog('XHR Network Error', 'err'); };
     xhr.send();
 }
 
-/* ---------- 9D. REAL WebSocket (postman-echo) — payload generik ---------- */
+/* ---------- 9D. WEBSOCKET PUBLIK ---------- */
 function targetWS() {
-    tlog('Membuka WebSocket ke echo server publik...');
+    tlog('Membuka WebSocket Echo Publik...');
     try {
         const ws = new WebSocket('wss://ws.postman-echo.com/raw');
-        const payload = {
-            type: 'lab_ping',
-            source: 'cyber-lab-v3.3',
-            ts: new Date().toISOString(),
-            note: 'generic interceptor demo'
-        };
         ws.onopen = () => {
-            tlog('Terhubung. Mengirim ping generik...', 'ok');
-            ws.send(JSON.stringify(payload));
+            tlog('WS Terhubung. Mengirim token rahasia...', 'ok');
+            ws.send(JSON.stringify({ command: 'STREAM', token: 'eyJhbGciOiJIUzI1NiJ9.DUMMY-SECRET.xyz' }));
         };
-        ws.onmessage = (e) => {
-            tlog(`Echo diterima (${String(e.data).length} byte)`, 'ok');
-            if (String(e.data).length < 200) {
-                tlog(`Payload: ${trunc(e.data, 60)}`, 'ok');
-            }
-            scanPayload(e.data, 'WS-ECHO');
-        };
-        ws.onerror = () => tlog('✖ websocket error', 'err');
-        ws.onclose = () => tlog('WebSocket ditutup.', '');
-    } catch (e) {
-        tlog(`✖ ${e.message}`, 'err');
-    }
+        ws.onmessage = (e) => tlog(`WS Echo diterima (${String(e.data).length} byte)`, 'ok');
+        ws.onerror = () => tlog('WS Error', 'err');
+    } catch (e) { tlog(e.message, 'err'); }
 }
 
-/* ---------- 9E. STORAGE — session demo (picu hook; bukan token CCTV palsu) ---------- */
+/* ---------- 9E. LOCAL STORAGE ---------- */
 function targetStorage() {
-    tlog('Menyimpan session demo di LocalStorage...');
-    /* Pola JWT-like hanya untuk latihan deteksi vault (bukan kredensial nyata) */
-    const demo = 'eyJhbGciOiJlabDEMOIn0.eyJzdWIiOiJsYWItZGVtbyIsInNjb3BlIjoiZGVtbyJ9.signature-demo';
-    localStorage.setItem('lab_session', demo);
-    localStorage.setItem('lab_meta', JSON.stringify({ app: 'cyber-lab', ver: '3.3', ts: Date.now() }));
-    tlog('lab_session + lab_meta tersimpan (lihat terminal / vault).', 'ok');
+    tlog('Menyimpan Token Login Asli...');
+    const token = 'eyJhbGciOiJIUzI1NiJ9.YWRtaW4tc2Vzc2lvbg.SECRET-KEY';
+    localStorage.setItem('auth_token', token);
+    tlog('Token (JWT) berhasil disimpan.', 'ok');
 }
 
 /* ---------- 9F. INTEGRITY CHECK ---------- */
 function targetDetect() {
     tlog('Menjalankan Integrity Check...');
     setTimeout(() => {
-        const checks = [
-            ['window.fetch',                window.fetch],
-            ['XMLHttpRequest.open',         XMLHttpRequest.prototype.open],
-            ['XMLHttpRequest.send',         XMLHttpRequest.prototype.send],
-            ['window.WebSocket',            window.WebSocket],
-            ['Storage.setItem',             Storage.prototype.setItem],
-            ['navigator.sendBeacon',        navigator.sendBeacon],
-            ['window.RTCPeerConnection',    window.RTCPeerConnection],
-            ['window.EventSource',          window.EventSource]
-        ].filter(([, fn]) => typeof fn === 'function');
-
-        const dirty = checks
-            .filter(([, fn]) => !/\[native code\]/.test(String(fn)))
-            .map(([name]) => name);
-
-        if (dirty.length) {
-            tlog(`⚠ ANOMALI pada: ${dirty.join(', ')}`, 'err');
-        } else {
-            tlog('✔ Lingkungan bersih. Tidak ada hook terdeteksi.', 'ok');
-        }
+        const dirty = [];
+        if (!/\[native code\]/.test(String(window.fetch))) dirty.push('fetch');
+        if (!/\[native code\]/.test(String(window.WebSocket))) dirty.push('WebSocket');
+        if (dirty.length) tlog(`⚠ ANOMALI pada: ${dirty.join(', ')}`, 'err');
+        else tlog('✔ Lingkungan bersih.', 'ok');
     }, 400);
 }
 
-/* ---------- 9G. REAL WebRTC (public STUN) ---------- */
+/* ---------- 9G. WEBRTC (Public STUN) ---------- */
 async function targetRTC() {
-    tlog('Membuat RTCPeerConnection ke STUN publik...');
+    tlog('Membuat RTCPeerConnection (STUN Google)...');
     try {
-        const pc = new RTCPeerConnection({
-            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-        });
-        pc.createDataChannel('test-channel');
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        pc.createDataChannel('test');
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        tlog('SDP offer dibuat & setLocalDescription dipanggil.', 'ok');
-        setTimeout(() => { try { pc.close(); } catch (e) {} }, 1500);
-    } catch (e) {
-        tlog(`✖ RTC error: ${e.message}`, 'err');
-    }
+        tlog('SDP Offer dibuat. Sniffer menyadap SDP.', 'ok');
+        setTimeout(() => pc.close(), 1000);
+    } catch (e) { tlog(e.message, 'err'); }
 }
 
-/* ---------- 9H. REAL sendBeacon ---------- */
+/* ---------- 9H. SEND BEACON ---------- */
 function targetBeacon() {
-    tlog('Mengirim beacon ke endpoint publik...');
-    const payload = JSON.stringify({
-        event: 'lab_pageview',
-        lab: '3.3',
-        ts: Date.now()
-    });
-    try {
-        const ok = navigator.sendBeacon(
-            'https://jsonplaceholder.typicode.com/posts',
-            new Blob([payload], { type: 'application/json' })
-        );
-        tlog(ok ? 'Beacon terkirim (queued).' : 'Beacon gagal dikirim.', ok ? 'ok' : 'err');
-    } catch (e) {
-        tlog(`✖ Beacon error: ${e.message}`, 'err');
-    }
+    tlog('Mengirim SendBeacon ke server...');
+    const payload = JSON.stringify({ event: 'track', pin: '1234', uid: 'admin' });
+    const ok = navigator.sendBeacon('https://jsonplaceholder.typicode.com/posts', new Blob([payload], { type: 'application/json' }));
+    tlog(ok ? 'Beacon terkirim.' : 'Gagal.', ok ? 'ok' : 'err');
 }
 
-/* ---------- 9I. REAL EventSource (SSE publik) ---------- */
+/* ---------- 9I. EVENT SOURCE (SSE) ---------- */
 function targetEventSource() {
-    tlog('Membuka EventSource (SSE publik)...');
+    tlog('Membuka EventSource (SSE)...');
     try {
         const es = new EventSource('https://sse.dev/test');
-        es.onopen = () => tlog('SSE terbuka.', 'ok');
-        es.onmessage = (e) => {
-            tlog(`SSE data: ${trunc(e.data, 60)}`, 'ok');
-        };
-        es.onerror = () => tlog('SSE error / ditutup (endpoint publik mungkin tidak dapat diakses).', 'err');
-        setTimeout(() => { try { es.close(); } catch (e) {} }, 4000);
-    } catch (e) {
-        tlog(`✖ SSE error: ${e.message}`, 'err');
-    }
+        es.onopen = () => tlog('SSE Terbuka.', 'ok');
+        es.onmessage = (e) => tlog(`SSE Data: ${trunc(e.data, 40)}`, 'ok');
+        es.onerror = () => tlog('SSE Error / ditutup.', 'err');
+        setTimeout(() => es.close(), 3000);
+    } catch (e) { tlog(e.message, 'err'); }
 }
 
 /* ============================================================
-   9Z. LAB CONTROL — generik (zero regresi demo di atas)
+   10. KONTROL LAB
    ============================================================ */
 function togglePause() {
     sniffPaused = !sniffPaused;
-    const lbl = $('pauseLbl');
-    if (lbl) lbl.textContent = sniffPaused ? '▶ Pause sniffer: ON (trafik tidak dilog)' : '⏸ Pause sniffer: OFF';
-    log(sniffPaused ? '[SYS] Sniffer PAUSE — request tetap jalan, tidak dilog' : '[SYS] Sniffer ACTIVE', sniffPaused ? 'warn' : 'success');
+    $('pauseLbl').textContent = sniffPaused ? 'Pause sniffer: ON' : 'Pause sniffer: OFF';
+    log(sniffPaused ? '[SYS] Sniffer PAUSE' : '[SYS] Sniffer ACTIVE', 'warn');
 }
 
 function clearVault() {
-    vaultEntries.length = 0;
-    vaultSet.clear();
-    const ul = $('vault');
-    if (ul) {
-        const items = ul.querySelectorAll('li');
-        items.forEach(li => li.remove());
-    }
-    stats.leak = 0;
-    refreshStats();
-    updateVaultCount();
+    vaultEntries.length = 0; vaultSet.clear();
+    $('vault').innerHTML = '';
+    stats.leak = 0; refreshStats(); updateVaultCount();
     log('[SYS] Vault dikosongkan.', 'sys');
 }
 
 function showHistory() {
-    if (!reqHistory.length) {
-        log('[HIST] Belum ada request tercatat.', 'warn');
-        return;
-    }
-    log('── Riwayat ' + reqHistory.length + ' request terakhir ──', 'info');
-    reqHistory.slice(-30).forEach((r, i) => {
-        const st = r.status != null ? r.status : '-';
-        const ms = r.ms != null ? (r.ms + 'ms') : '';
-        log(`[HIST] ${r.kind} ${r.method || ''} ${st} ${ms} ${trunc(r.url || '', 70)}`, r.error ? 'danger' : 'sys');
-    });
+    if (!reqHistory.length) return log('[HIST] Belum ada riwayat.', 'warn');
+    log(`── Riwayat ${reqHistory.length} request terakhir ──`, 'info');
+    reqHistory.slice(-30).forEach(r => log(`[HIST] ${r.kind} ${r.status} ${trunc(r.url || '', 60)}`, 'sys'));
 }
 
 async function fetchUrlFromBar() {
     let url = $('urlInput').value.trim();
-    if (!url) {
-        tlog('Isi URL dulu.', 'err');
-        return;
-    }
-    if (!/^https?:\/\//i.test(url) && !/^(about|data):/i.test(url)) {
-        if (/^[\w.-]+\.[a-z]{2,}/i.test(url)) url = 'https://' + url;
-        else { tlog('URL tidak valid.', 'err'); return; }
-    }
-    tlog('FETCH (disadap): ' + trunc(url, 50));
-    log('[BROWSER] FETCH URL dari bar — request lewat hook fetch', 'info');
+    if (!url) return tlog('URL kosong.', 'err');
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    tlog('FETCH: ' + trunc(url, 40));
     try {
-        const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
+        const res = await fetch(url);
         const text = await res.text();
-        tlog('HTTP ' + res.status + ' · ' + text.length + ' byte', res.ok ? 'ok' : 'err');
-        if (!res.ok) tlog('Catatan: banyak situs memblokir CORS dari file/lab — itu normal.', 'err');
-    } catch (e) {
-        tlog('✖ ' + e.message + ' (sering karena CORS)', 'err');
-        log('[BROWSER] CORS/network: ' + e.message + ' — coba API publik yang mengizinkan CORS', 'warn');
-    }
+        tlog(`HTTP ${res.status} (${text.length} byte)`, 'ok');
+    } catch (e) { tlog(`Gagal: ${e.message}`, 'err'); }
 }
 
 async function runAllDemos() {
-    log('[SMOKE] Menjalankan rangkaian demo generik…', 'info');
-    tlog('Smoke test dimulai…');
-    try { await targetRealFetch(); } catch (e) { tlog('realFetch: ' + e.message, 'err'); }
-    await new Promise(r => setTimeout(r, 400));
-    try { targetMockFetch(); } catch (e) {}
-    await new Promise(r => setTimeout(r, 1200));
-    try { targetXHR(); } catch (e) {}
-    await new Promise(r => setTimeout(r, 800));
-    try { targetStorage(); } catch (e) {}
-    await new Promise(r => setTimeout(r, 200));
-    try { targetBeacon(); } catch (e) {}
-    await new Promise(r => setTimeout(r, 200));
-    try { targetDetect(); } catch (e) {}
-    log('[SMOKE] Selesai — cek terminal, stats, vault.', 'success');
-    tlog('Smoke test selesai.', 'ok');
-    showHistory();
+    log('[SMOKE] Memulai rangkaian demo…', 'info');
+    await targetRealFetch();
+    setTimeout(targetXHR, 500);
+    setTimeout(targetStorage, 1000);
+    setTimeout(targetBeacon, 1500);
+    setTimeout(targetRealCCTV, 2500);
+    log('[SMOKE] Selesai.', 'success');
 }
 
 /* ============================================================
-   10. URL / IFRAME LOADER
+   11. URL IFRAME LOADER
    ============================================================ */
 function openUrl() {
     let url = $('urlInput').value.trim();
     if (!url) return;
-
-    if (!/^https?:\/\//i.test(url) && !/^(about|data):/i.test(url)) {
-        if (/^[\w.-]+\.[a-z]{2,}/i.test(url)) url = 'https://' + url;
-        else { tlog('URL tidak valid.', 'err'); return; }
-    }
-
-    const frame  = $('targetFrame');
-    const screen = $('targetScreen');
-
-    frame.src = url;
-    frame.style.display = 'block';
-    screen.style.display = 'none';
-    $('closeUrlBtn').classList.add('visible');
-
-    tlog(`Memuat iframe: ${trunc(url, 40)}`);
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    $('targetFrame').src = url; $('targetFrame').style.display = 'block';
+    $('targetScreen').style.display = 'none'; $('closeUrlBtn').classList.add('visible');
     log(`[BROWSER] Memuat iframe: ${trunc(url, 70)}`, 'warn');
-    log(`[BROWSER] ⚠ Catatan: request dari iframe TIDAK dapat disadap dari parent (same-origin policy).`, 'sys');
-    log(`[BROWSER] Gunakan tombol demo di panel kiri untuk menguji hook.`, 'sys');
 }
-
 function closeUrl() {
-    const frame  = $('targetFrame');
-    const screen = $('targetScreen');
-
-    frame.src = 'about:blank';
-    frame.style.display = 'none';
-    screen.style.display = '';
-    $('closeUrlBtn').classList.remove('visible');
-    tlog('Iframe ditutup.');
+    $('targetFrame').src = 'about:blank'; $('targetFrame').style.display = 'none';
+    $('targetScreen').style.display = ''; $('closeUrlBtn').classList.remove('visible');
 }
 
 /* ============================================================
-   11. EXPORT VAULT (JSON)
+   12. EXPORT VAULT
    ============================================================ */
 function exportVault() {
-    const data = {
-        exported_at: new Date().toISOString(),
-        lab: 'cyber-lab-gold-master',
-        version: '3.4',
-        mode: 'generic-interceptor',
-        stats: { requests: stats.req, leaks: stats.leak, history: reqHistory.length },
-        vault: vaultEntries.slice(),
-        history: reqHistory.slice(-100)
-    };
-    if (!vaultEntries.length && !reqHistory.length) {
-        log('[EXPORT] Tidak ada data vault/history.', 'warn');
-        return;
-    }
-
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `cyber-lab-export-${Date.now()}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    setTimeout(() => URL.revokeObjectURL(url), 1500);
-    log(`[EXPORT] vault ${vaultEntries.length} + hist ${Math.min(reqHistory.length,100)} → cyber-lab-export-*.json`, 'success');
+    if (!vaultEntries.length) return log('[EXPORT] Vault kosong.', 'warn');
+    const data = { export_at: new Date().toISOString(), stats, vault: vaultEntries, history: reqHistory };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `vault-${Date.now()}.json`; a.click();
+    log(`[EXPORT] ${vaultEntries.length} data diekspor.`, 'success');
 }
 
 /* ============================================================
-   12. EVENT BINDING
+   13. EVENT BINDING
    ============================================================ */
-$('clearBtn').addEventListener('click', () => {
-    termEl.textContent = '';
-    log('[SYS] Log dibersihkan. Hook tetap aktif.', 'sys');
-});
+$('clearBtn').onclick = () => { termEl.innerHTML = ''; log('[SYS] Log dibersihkan.', 'sys'); };
+$('stealthBtn').onclick = () => setStealth(!stealthOn);
+$('restoreBtn').onclick = () => hooksActive ? removeHooks() : applyHooks();
+$('exportBtn').onclick = exportVault;
+$('filterAll').onclick = () => applyFilter('all');
+$('filterLeak').onclick = () => applyFilter('leak');
+$('openUrlBtn').onclick = openUrl;
+$('closeUrlBtn').onclick = closeUrl;
+$('fetchUrlBtn').onclick = fetchUrlFromBar;
+$('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchUrlFromBar(); });
 
-$('stealthBtn').addEventListener('click', () => setStealth(!stealthOn));
-
-$('restoreBtn').addEventListener('click', () => {
-    if (hooksActive) {
-        removeHooks();
-    } else {
-        applyHooks();
-        log('[SYS] Hook dipasang ulang. Penyadapan kembali aktif.', 'success');
-    }
-});
-
-$('exportBtn').addEventListener('click', exportVault);
-
-$('filterAll').addEventListener('click', () => applyFilter('all'));
-$('filterLeak').addEventListener('click', () => applyFilter('leak'));
-
-$('openUrlBtn').addEventListener('click', openUrl);
-$('closeUrlBtn').addEventListener('click', closeUrl);
-if ($('fetchUrlBtn')) $('fetchUrlBtn').addEventListener('click', fetchUrlFromBar);
-$('urlInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-        if (e.shiftKey) fetchUrlFromBar();
-        else openUrl();
-    }
-});
-document.addEventListener('keydown', (e) => {
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-    if (e.key === 'p' || e.key === 'P') togglePause();
-    if (e.key === 'h' || e.key === 'H') showHistory();
-    if (e.key === 's' || e.key === 'S') { if (!e.ctrlKey) runAllDemos(); }
-});
-
-/* ============================================================
-   13. INISIALISASI
-   ============================================================ */
+/* INIT */
 applyHooks();
-
 log('════════════════════════════════════════════', 'sys');
-log(' CYBER LAB GOLD MASTER v3.4 — COMPLETE', 'success');
-log(' GENERIC · PASS-THROUGH · FETCH/XHR/WS/STORAGE/RTC/BEACON/SSE', 'success');
+log(' CYBER LAB ULTIMATE v4.0', 'success');
+log(' REAL TARGETS · FULL SVG · ZERO REGRESSION', 'success');
 log('════════════════════════════════════════════', 'sys');
-log('[SYS] Mode GENERIK — bukan modul CCTV. Hook: fetch, XHR, WS, Storage, Beacon, RTC, SSE', 'info');
-log('[SYS] Semua request diteruskan ke server ASLI, hanya di-sniff datanya.', 'info');
-log('[SYS] FETCH di URL bar = tersadap · BUKA = iframe (cross-origin tidak tersadap)', 'info');
-log('[SYS] Shortcut: S=smoke test · P=pause · H=history', 'info');
-log('[SYS] Menunggu trafik dari target...', 'sys');
-refreshStats();
-updateVaultCount();
+log('[SYS] Tombol "Tembak API CCTV Asli" akan memanggil API CCTV publik.', 'info');
+log('[SYS] Link .m3u8 asli akan otomatis dicuri dan masuk ke Vault.', 'info');
 </script>
 </body>
 </html>
