@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyber Lab Gold Master v4.0 — Real Network Interceptor</title>
+<title>Cyber Lab Gold Master v4.1 — Real Network Interceptor</title>
 <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -31,7 +31,7 @@
     .panel.hacker { background: #05080c; position: relative; overflow: hidden; }
 
     /* ---------- HEADER ---------- */
-    .ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
     .ph h2 {
         margin: 0; font-size: 13px; letter-spacing: 1.6px;
         text-transform: uppercase; white-space: nowrap;
@@ -48,7 +48,7 @@
     .badge.ok { color: var(--green); border-color: rgba(0,255,156,.4); background: rgba(0,255,156,.08); }
     .badge.warn { color: var(--amber); border-color: rgba(255,200,87,.4); background: rgba(255,200,87,.08); }
 
-    .stats { display: flex; gap: 6px; font-size: 10px; }
+    .stats { display: flex; gap: 6px; font-size: 10px; flex-wrap: wrap; }
     .stats span {
         padding: 3px 8px; border: 1px solid var(--line); border-radius: 3px;
         color: var(--muted); transition: .2s; display: flex; align-items: center; gap: 4px;
@@ -64,7 +64,7 @@
     /* ---------- URL BAR ---------- */
     .urlbar { display: flex; gap: 6px; }
     .urlbar input {
-        flex: 1; background: #000; border: 1px solid var(--line);
+        flex: 1; min-width: 0; background: #000; border: 1px solid var(--line);
         color: var(--text); padding: 7px 10px; font: inherit;
         font-size: 11px; border-radius: 3px; outline: none;
     }
@@ -73,6 +73,7 @@
         padding: 7px 14px; background: transparent; border: 1px solid var(--cyan);
         color: var(--cyan); font: inherit; font-size: 11px; font-weight: bold;
         cursor: pointer; border-radius: 3px; transition: .15s; display: flex; align-items: center; gap: 5px;
+        white-space: nowrap;
     }
     .urlbar button:hover { background: rgba(34,211,238,.1); }
     .urlbar button.close-btn {
@@ -147,6 +148,7 @@
         content: ''; position: absolute; inset: 0;
         background: linear-gradient(180deg, transparent, rgba(0,255,156,.09), transparent);
         animation: sweep 2.4s linear infinite;
+        pointer-events: none;
     }
     @keyframes sweep { from { transform: translateY(-100%); } to { transform: translateY(100%); } }
     .feed .live-dot { animation: blink 1.1s steps(2) infinite; }
@@ -195,10 +197,13 @@
         flex: 0 0 auto; max-height: 110px; overflow-y: auto;
         background: #080d13; border: 1px solid var(--line); padding: 7px 10px;
     }
+    .vault::-webkit-scrollbar { width: 6px; }
+    .vault::-webkit-scrollbar-thumb { background: #3a1d54; }
     .vault h3 {
         margin: 0 0 5px; font-size: 10px; letter-spacing: 1.2px;
         text-transform: uppercase; color: var(--purple);
         display: flex; align-items: center; gap: 6px;
+        position: sticky; top: 0; background: #080d13; padding-bottom: 4px;
     }
     .vault h3 svg { width: 12px; height: 12px; }
     .vault h3 .count { color: var(--muted); font-weight: normal; }
@@ -304,12 +309,12 @@
             <button id="closeUrlBtn" class="close-btn" title="Tutup iframe"><svg><use href="#i-x"/></svg></button>
         </div>
 
-        <div class="group-label">Real Target — CCTV API</div>
+        <div class="group-label">Real Target — CCTV / Stream API</div>
 
         <div class="btn-group">
             <button class="btn" onclick="targetRealCCTV()">
                 <svg><use href="#i-cctv"/></svg>
-                <span class="lbl">Tembak API CCTV Asli (Streetside)</span>
+                <span class="lbl">Tembak API CCTV Publik (HLS Streams)</span>
             </button>
 
             <button class="btn" onclick="targetRealFetch()">
@@ -397,7 +402,7 @@
                 <span id="statReq">0 request</span>
                 <span id="statLeak">0 bocor</span>
                 <span id="statHist" title="Riwayat">0 hist</span>
-                <span class="badge ok" style="margin-left:4px">v4.0</span>
+                <span class="badge ok" style="margin-left:4px">v4.1</span>
             </div>
         </div>
 
@@ -438,18 +443,19 @@
    0. SIMPAN REFERENSI FUNGSI ASLI (NATIVE)
    ============================================================ */
 const NATIVE = {
-    fetch:            window.fetch,
-    XHR:              window.XMLHttpRequest,
-    XHRopen:          window.XMLHttpRequest.prototype.open,
-    XHRsend:          window.XMLHttpRequest.prototype.send,
-    WS:               window.WebSocket,
-    StorageSet:       Storage.prototype.setItem,
-    sendBeacon:       navigator.sendBeacon,
-    RTC:              window.RTCPeerConnection,
-    ES:               window.EventSource,
-    freeze:           Object.freeze,
-    seal:             Object.seal,
-    preventExtensions: Object.preventExtensions
+    fetch:              window.fetch,
+    XHR:                window.XMLHttpRequest,
+    XHRopen:            window.XMLHttpRequest.prototype.open,
+    XHRsend:            window.XMLHttpRequest.prototype.send,
+    XHRsetReqHeader:    window.XMLHttpRequest.prototype.setRequestHeader,
+    WS:                 window.WebSocket,
+    StorageSet:         Storage.prototype.setItem,
+    sendBeacon:         navigator.sendBeacon,
+    RTC:                window.RTCPeerConnection,
+    ES:                 window.EventSource,
+    freeze:             Object.freeze,
+    seal:               Object.seal,
+    preventExtensions:  Object.preventExtensions
 };
 
 /* ============================================================
@@ -548,7 +554,7 @@ function addVault(name, value) {
     btn.innerHTML = svgHTML('copy');
     btn.title = 'Salin';
     btn.addEventListener('click', () => {
-        if (navigator.clipboard) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(value).then(() => {
                 btn.innerHTML = svgHTML('check');
                 btn.classList.add('done');
@@ -589,7 +595,12 @@ const PATTERNS = [
 function scanPayload(payload, source, verbose = false) {
     if (payload === undefined || payload === null) return 0;
 
-    const text = (typeof payload === 'string') ? payload : JSON.stringify(payload);
+    let text;
+    try {
+        text = (typeof payload === 'string') ? payload : JSON.stringify(payload);
+    } catch (e) {
+        return 0;
+    }
     if (!text) return 0;
 
     let found = 0;
@@ -616,39 +627,53 @@ function scanPayload(payload, source, verbose = false) {
 }
 
 /* ============================================================
-   5. UTIL: timeout wrapper
+   5. UTIL: timeout wrapper (dengan cleanup timer)
    ============================================================ */
 function withTimeout(promise, ms) {
-    return Promise.race([
-        promise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
-    ]);
+    let timer;
+    const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout')), ms);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
 }
 
 /* ============================================================
-   6. HOOK DEFINITIONS — PASS-THROUGH SNIFFER (NO MOCK)
+   6. HOOK DEFINITIONS — PASS-THROUGH SNIFFER
    ============================================================ */
 
 /* ---------- 6A. FETCH ---------- */
 async function hookedFetch(input, init) {
     const url = (typeof input === 'string') ? input : (input && input.url) || String(input);
     const method = ((init && init.method) || 'GET').toUpperCase();
-    
+
     if (sniffPaused) {
         return NATIVE.fetch.call(this, input, init);
     }
 
     stats.req++; refreshStats();
     const t0 = performance.now();
-    log(`[FETCH] ${method} ${trunc(url, 82)}`, 'info');
-    if (init && init.body) log(`[FETCH] body → ${trunc(init.body, 60)}`, 'warn');
+
+    try {
+        log(`[FETCH] ${method} ${trunc(url, 82)}`, 'info');
+        if (init && init.body) log(`[FETCH] body → ${trunc(init.body, 60)}`, 'warn');
+        if (init && init.headers) {
+            try {
+                const h = init.headers;
+                const hStr = (typeof h === 'string') ? h
+                    : (h instanceof Headers) ? Array.from(h.entries()).map(([k,v])=>`${k}: ${v}`).join(' | ')
+                    : JSON.stringify(h);
+                log(`[FETCH] headers → ${trunc(hStr, 80)}`, 'sys');
+                scanPayload(hStr, 'FETCH-HEADERS');
+            } catch (e) {}
+        }
+    } catch (e) {}
 
     try {
         const response = await withTimeout(NATIVE.fetch.call(this, input, init), 20000);
         const ms = Math.round(performance.now() - t0);
         log(`[FETCH] ← ${response.status} ${response.statusText || ''} · ${ms}ms · ${trunc(response.headers.get('content-type') || '', 40)}`, response.ok ? 'success' : 'warn');
         recordReq({ kind: 'FETCH', method, url, status: response.status, ms });
-        
+
         response.clone().text()
             .then(text => {
                 log(`[FETCH] body ${text.length} byte`, 'sys');
@@ -667,23 +692,38 @@ async function hookedFetch(input, init) {
 /* ---------- 6B. XHR ---------- */
 function hookedXHROpen(method, url) {
     this.__meta = { method: String(method || 'GET').toUpperCase(), url: String(url) };
+    this.__headers = {};
     return NATIVE.XHRopen.apply(this, arguments);
+}
+
+function hookedXHRSetRequestHeader(name, value) {
+    if (!this.__headers) this.__headers = {};
+    this.__headers[name] = value;
+    if (!sniffPaused) {
+        try {
+            log(`[XHR] header "${name}": ${trunc(value, 60)}`, 'sys');
+            scanPayload(`${name}: ${value}`, 'XHR-HEADER');
+        } catch (e) {}
+    }
+    return NATIVE.XHRsetReqHeader.apply(this, arguments);
 }
 
 function hookedXHRSend(body) {
     const meta = this.__meta || {};
     if (sniffPaused) return NATIVE.XHRsend.apply(this, arguments);
-    
+
     stats.req++; refreshStats();
-    log(`[XHR] ${meta.method || 'GET'} ${trunc(meta.url || '?', 82)}`, 'info');
-    if (body) log(`[XHR] body → ${trunc(body, 60)}`, 'warn');
+    try {
+        log(`[XHR] ${meta.method || 'GET'} ${trunc(meta.url || '?', 82)}`, 'info');
+        if (body) log(`[XHR] body → ${trunc(body, 60)}`, 'warn');
+    } catch (e) {}
 
     this.addEventListener('load', function () {
         try {
             const meta = this.__meta || {};
             log(`[XHR] ← ${this.status} · ${trunc(meta.url || '?', 70)}`, this.status >= 200 && this.status < 400 ? 'success' : 'warn');
             recordReq({ kind: 'XHR', method: meta.method, url: meta.url, status: this.status });
-            
+
             let text = null;
             if (this.responseType === '' || this.responseType === 'text') {
                 text = this.responseText;
@@ -702,26 +742,32 @@ function hookedXHRSend(body) {
 
 /* ---------- 6C. WEBSOCKET (murni passthrough) ---------- */
 function HookedWS(url, protocols) {
+    if (sniffPaused) {
+        return (protocols !== undefined) ? new NATIVE.WS(url, protocols) : new NATIVE.WS(url);
+    }
+
     const urlStr = String(url);
     stats.req++; refreshStats();
-    log(`[WS] handshake → ${trunc(urlStr, 82)}`, 'info');
+    try { log(`[WS] handshake → ${trunc(urlStr, 82)}`, 'info'); } catch (e) {}
 
-    const ws = (protocols !== undefined)
-        ? new NATIVE.WS(url, protocols)
-        : new NATIVE.WS(url);
+    const ws = (protocols !== undefined) ? new NATIVE.WS(url, protocols) : new NATIVE.WS(url);
 
-    ws.addEventListener('open',  () => log('[WS] terbuka', 'success'));
-    ws.addEventListener('close', () => log('[WS] ditutup', 'sys'));
-    ws.addEventListener('error', () => log('[WS] error', 'danger'));
+    ws.addEventListener('open',  () => { try { log('[WS] terbuka', 'success'); } catch (e) {} });
+    ws.addEventListener('close', () => { try { log('[WS] ditutup', 'sys'); } catch (e) {} });
+    ws.addEventListener('error', () => { try { log('[WS] error', 'danger'); } catch (e) {} });
     ws.addEventListener('message', (e) => {
-        log(`[WS] ← frame ${String(e.data).length} byte`, 'info');
-        scanPayload(e.data, 'WEBSOCKET');
+        try {
+            log(`[WS] ← frame ${String(e.data).length} byte`, 'info');
+            scanPayload(e.data, 'WEBSOCKET');
+        } catch (err) {}
     });
 
     const nativeSend = ws.send.bind(ws);
     ws.send = function (data) {
-        log(`[WS] → ${trunc(data, 60)}`, 'warn');
-        scanPayload(data, 'WS-SEND');
+        try {
+            log(`[WS] → ${trunc(data, 60)}`, 'warn');
+            scanPayload(data, 'WS-SEND');
+        } catch (err) {}
         return nativeSend(data);
     };
 
@@ -735,20 +781,27 @@ HookedWS.CLOSED = 3;
 
 /* ---------- 6D. STORAGE ---------- */
 function hookedSetItem(key, value) {
-    log(`[STORAGE] Menyimpan "${key}" (${String(value).length} byte)`, 'info');
-    scanPayload(value, 'STORAGE');
+    if (sniffPaused) return NATIVE.StorageSet.call(this, key, value);
+    try {
+        log(`[STORAGE] Menyimpan "${key}" (${String(value).length} byte)`, 'info');
+        scanPayload(value, 'STORAGE');
+    } catch (e) {}
     return NATIVE.StorageSet.call(this, key, value);
 }
 
 /* ---------- 6E. RTCPeerConnection ---------- */
 function HookedRTC(config) {
+    if (sniffPaused) return new NATIVE.RTC(config);
+
     stats.req++; refreshStats();
-    log('[RTC] PeerConnection dibuat', 'info');
+    try { log('[RTC] PeerConnection dibuat', 'info'); } catch (e) {}
 
     if (config && config.iceServers) {
-        const cfg = JSON.stringify(config.iceServers);
-        log(`[RTC] ICE servers: ${trunc(cfg, 70)}`, 'warn');
-        scanPayload(cfg, 'RTC-CONFIG');
+        try {
+            const cfg = JSON.stringify(config.iceServers);
+            log(`[RTC] ICE servers: ${trunc(cfg, 70)}`, 'warn');
+            scanPayload(cfg, 'RTC-CONFIG');
+        } catch (e) {}
     }
 
     const pc = new NATIVE.RTC(config);
@@ -756,8 +809,10 @@ function HookedRTC(config) {
     const origSetLocal = pc.setLocalDescription.bind(pc);
     pc.setLocalDescription = function (desc) {
         if (desc && desc.sdp) {
-            log(`[RTC] SDP lokal (${desc.sdp.length} byte)`, 'info');
-            scanPayload(desc.sdp, 'RTC-SDP-LOCAL');
+            try {
+                log(`[RTC] SDP lokal (${desc.sdp.length} byte)`, 'info');
+                scanPayload(desc.sdp, 'RTC-SDP-LOCAL');
+            } catch (e) {}
         }
         return origSetLocal(desc);
     };
@@ -765,8 +820,10 @@ function HookedRTC(config) {
     const origSetRemote = pc.setRemoteDescription.bind(pc);
     pc.setRemoteDescription = function (desc) {
         if (desc && desc.sdp) {
-            log(`[RTC] SDP remote (${desc.sdp.length} byte)`, 'info');
-            scanPayload(desc.sdp, 'RTC-SDP-REMOTE');
+            try {
+                log(`[RTC] SDP remote (${desc.sdp.length} byte)`, 'info');
+                scanPayload(desc.sdp, 'RTC-SDP-REMOTE');
+            } catch (e) {}
         }
         return origSetRemote(desc);
     };
@@ -774,8 +831,10 @@ function HookedRTC(config) {
     const origAddIce = pc.addIceCandidate.bind(pc);
     pc.addIceCandidate = function (candidate) {
         if (candidate && candidate.candidate) {
-            log(`[RTC] ICE candidate: ${trunc(candidate.candidate, 60)}`, 'sys');
-            scanPayload(candidate.candidate, 'RTC-ICE');
+            try {
+                log(`[RTC] ICE candidate: ${trunc(candidate.candidate, 60)}`, 'sys');
+                scanPayload(candidate.candidate, 'RTC-ICE');
+            } catch (e) {}
         }
         return origAddIce(candidate);
     };
@@ -786,44 +845,54 @@ HookedRTC.prototype = NATIVE.RTC.prototype;
 
 /* ---------- 6F. navigator.sendBeacon ---------- */
 function hookedSendBeacon(url, data) {
+    if (sniffPaused) return NATIVE.sendBeacon.call(navigator, url, data);
+
     stats.req++; refreshStats();
-    log(`[BEACON] → ${trunc(url, 82)}`, 'info');
+    try { log(`[BEACON] → ${trunc(url, 82)}`, 'info'); } catch (e) {}
 
     if (data !== undefined && data !== null) {
-        if (typeof data === 'string') {
-            log(`[BEACON] payload: ${trunc(data, 60)}`, 'warn');
-            scanPayload(data, 'BEACON');
-        } else if (data instanceof Blob) {
-            data.text().then(t => {
-                log(`[BEACON] blob payload: ${trunc(t, 60)}`, 'warn');
-                scanPayload(t, 'BEACON');
-            }).catch(() => {});
-        } else {
-            log(`[BEACON] payload: [FormData/binary]`, 'sys');
-        }
+        try {
+            if (typeof data === 'string') {
+                log(`[BEACON] payload: ${trunc(data, 60)}`, 'warn');
+                scanPayload(data, 'BEACON');
+            } else if (data instanceof Blob) {
+                data.text().then(t => {
+                    try {
+                        log(`[BEACON] blob payload: ${trunc(t, 60)}`, 'warn');
+                        scanPayload(t, 'BEACON');
+                    } catch (e) {}
+                }).catch(() => {});
+            } else {
+                log(`[BEACON] payload: [FormData/binary]`, 'sys');
+            }
+        } catch (e) {}
     }
 
     try {
         return NATIVE.sendBeacon.call(navigator, url, data);
     } catch (e) {
-        log(`[BEACON] ✖ ${e.message}`, 'danger');
+        try { log(`[BEACON] ✖ ${e.message}`, 'danger'); } catch (err) {}
         return false;
     }
 }
 
 /* ---------- 6G. EventSource (murni passthrough) ---------- */
 function HookedES(url, config) {
+    if (sniffPaused) return new NATIVE.ES(url, config);
+
     const urlStr = String(url);
     stats.req++; refreshStats();
-    log(`[SSE] koneksi → ${trunc(urlStr, 82)}`, 'info');
+    try { log(`[SSE] koneksi → ${trunc(urlStr, 82)}`, 'info'); } catch (e) {}
 
     const es = new NATIVE.ES(url, config);
 
-    es.addEventListener('open', () => log('[SSE] terbuka', 'success'));
-    es.addEventListener('error', () => log('[SSE] error / putus', 'warn'));
+    es.addEventListener('open',  () => { try { log('[SSE] terbuka', 'success'); } catch (e) {} });
+    es.addEventListener('error', () => { try { log('[SSE] error / putus', 'warn'); } catch (e) {} });
     es.addEventListener('message', (e) => {
-        log(`[SSE] ← data ${String(e.data).length} byte`, 'info');
-        scanPayload(e.data, 'SSE');
+        try {
+            log(`[SSE] ← data ${String(e.data).length} byte`, 'info');
+            scanPayload(e.data, 'SSE');
+        } catch (err) {}
     });
 
     return es;
@@ -844,6 +913,7 @@ function applyHooks() {
     window.fetch = hookedFetch;
     NATIVE.XHR.prototype.open = hookedXHROpen;
     NATIVE.XHR.prototype.send = hookedXHRSend;
+    NATIVE.XHR.prototype.setRequestHeader = hookedXHRSetRequestHeader;
     window.WebSocket = HookedWS;
     HookedWS.prototype = NATIVE.WS.prototype;
     Storage.prototype.setItem = hookedSetItem;
@@ -875,6 +945,7 @@ function removeHooks() {
     window.fetch = NATIVE.fetch;
     NATIVE.XHR.prototype.open = NATIVE.XHRopen;
     NATIVE.XHR.prototype.send = NATIVE.XHRsend;
+    NATIVE.XHR.prototype.setRequestHeader = NATIVE.XHRsetReqHeader;
     window.WebSocket = NATIVE.WS;
     Storage.prototype.setItem = NATIVE.StorageSet;
 
@@ -917,14 +988,15 @@ function setStealth(on) {
     const fakeNative = (name) => `function ${name}() { [native code] }`;
 
     const hookTargets = [
-        [window.fetch,                    'fetch'],
-        [XMLHttpRequest.prototype.open,   'open'],
-        [XMLHttpRequest.prototype.send,   'send'],
-        [window.WebSocket,                'WebSocket'],
-        [Storage.prototype.setItem,       'setItem'],
-        [navigator.sendBeacon,            'sendBeacon'],
-        [window.RTCPeerConnection,        'RTCPeerConnection'],
-        [window.EventSource,              'EventSource']
+        [window.fetch,                       'fetch'],
+        [XMLHttpRequest.prototype.open,      'open'],
+        [XMLHttpRequest.prototype.send,      'send'],
+        [XMLHttpRequest.prototype.setRequestHeader, 'setRequestHeader'],
+        [window.WebSocket,                   'WebSocket'],
+        [Storage.prototype.setItem,          'setItem'],
+        [navigator.sendBeacon,               'sendBeacon'],
+        [window.RTCPeerConnection,           'RTCPeerConnection'],
+        [window.EventSource,                 'EventSource']
     ];
 
     if (on) {
@@ -1001,33 +1073,66 @@ function tlog(msg, cls = '') {
 function setFeed(url) {
     const feed = $('feed');
     feed.classList.add('live');
-    feed.innerHTML = `
-        <svg class="live-dot" width="10" height="10" viewBox="0 0 10 10">
-            <circle cx="5" cy="5" r="4" fill="currentColor"/>
-        </svg>
-        <span class="cam">CAM FEED</span>
-        <span class="url">${trunc(url, 60)}</span>
-    `;
+    feed.innerHTML = '';
+
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    dot.setAttribute('class', 'live-dot');
+    dot.setAttribute('width', '10');
+    dot.setAttribute('height', '10');
+    dot.setAttribute('viewBox', '0 0 10 10');
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', '5');
+    circle.setAttribute('cy', '5');
+    circle.setAttribute('r', '4');
+    circle.setAttribute('fill', 'currentColor');
+    dot.appendChild(circle);
+
+    const cam = document.createElement('span');
+    cam.className = 'cam';
+    cam.textContent = 'CAM FEED';
+
+    const urlSpan = document.createElement('span');
+    urlSpan.className = 'url';
+    urlSpan.textContent = trunc(url, 60);
+
+    feed.append(dot, cam, urlSpan);
 }
 
-/* ---------- 9A. TARGET API CCTV ASLI (Streetside via CORS Proxy) ---------- */
+/* ---------- 9A. TARGET API CCTV PUBLIK (HLS Playlist) ---------- */
 async function targetRealCCTV() {
-    tlog('Menembak API CCTV Asli (Streetside)...');
-    log('[TARGET] Request API CCTV (Real Network)...', 'info');
-    
-    const proxy = 'https://api.codetabs.com/v1/proxy?quest=';
-    const realUrl = 'https://streetside.mugnimaestra.dev/api/cameras';
-    
-    try {
-        const res = await fetch(proxy + encodeURIComponent(realUrl));
-        const data = await res.json();
-        tlog(`Berhasil! Ditemukan ${data.cameras?.length || 0} kamera asli.`, 'ok');
-        if (data.cameras?.length > 0) {
-            setFeed(data.cameras[0].cctv_name || 'CCTV-LIVE-STREAM');
+    tlog('Menembak API CCTV Publik (IPTV Streams)...');
+    log('[TARGET] Request API CCTV publik...', 'info');
+
+    const endpoints = [
+        'https://iptv-org.github.io/iptv/countries/id.m3u',
+        'https://iptv-org.github.io/iptv/index.m3u'
+    ];
+
+    for (const ep of endpoints) {
+        try {
+            const res = await fetch(ep);
+            if (!res.ok) {
+                tlog(`HTTP ${res.status} — coba endpoint cadangan...`, 'err');
+                continue;
+            }
+            const text = await res.text();
+            const streams = text.split('\n')
+                .map(l => l.trim())
+                .filter(l => l && !l.startsWith('#'));
+
+            tlog(`Berhasil! Ditemukan ${streams.length} stream publik.`, 'ok');
+            log(`[TARGET] ${streams.length} stream HLS terdeteksi di playlist.`, 'success');
+
+            if (streams.length > 0) {
+                setFeed(streams[0]);
+                tlog(`Stream pertama: ${trunc(streams[0], 50)}`, 'ok');
+            }
+            return;
+        } catch (e) {
+            tlog(`✖ ${e.message}`, 'err');
         }
-    } catch (e) {
-        tlog(`✖ Gagal: ${e.message}`, 'err');
     }
+    tlog('Semua endpoint gagal.', 'err');
 }
 
 /* ---------- 9B. FETCH REAL INTERNET (IP Public) ---------- */
@@ -1047,6 +1152,7 @@ function targetXHR() {
     tlog('Menghubungi API publik via XHR...');
     const xhr = new XMLHttpRequest();
     xhr.open('GET', 'https://dummyjson.com/users/1');
+    xhr.setRequestHeader('X-Demo-Auth', 'Bearer eyJhbGciOiJIUzI1NiJ9.XHR-HEADER-DEMO.sig');
     xhr.onload = function () {
         if (xhr.status === 200) tlog(`XHR 200 OK — Data user ditarik.`, 'ok');
         else tlog(`XHR Error: ${xhr.status}`, 'err');
@@ -1082,8 +1188,21 @@ function targetDetect() {
     tlog('Menjalankan Integrity Check...');
     setTimeout(() => {
         const dirty = [];
-        if (!/\[native code\]/.test(String(window.fetch))) dirty.push('fetch');
-        if (!/\[native code\]/.test(String(window.WebSocket))) dirty.push('WebSocket');
+        const checks = {
+            'fetch':                    window.fetch,
+            'XMLHttpRequest.open':      XMLHttpRequest.prototype.open,
+            'XMLHttpRequest.send':      XMLHttpRequest.prototype.send,
+            'XMLHttpRequest.setHeader': XMLHttpRequest.prototype.setRequestHeader,
+            'WebSocket':                window.WebSocket,
+            'Storage.setItem':          Storage.prototype.setItem,
+            'sendBeacon':               navigator.sendBeacon,
+            'RTCPeerConnection':        window.RTCPeerConnection,
+            'EventSource':              window.EventSource
+        };
+        for (const [name, fn] of Object.entries(checks)) {
+            if (typeof fn !== 'function') continue;
+            if (!/\[native code\]/.test(String(fn))) dirty.push(name);
+        }
         if (dirty.length) tlog(`⚠ ANOMALI pada: ${dirty.join(', ')}`, 'err');
         else tlog('✔ Lingkungan bersih.', 'ok');
     }, 400);
@@ -1098,7 +1217,7 @@ async function targetRTC() {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         tlog('SDP Offer dibuat. Sniffer menyadap SDP.', 'ok');
-        setTimeout(() => pc.close(), 1000);
+        setTimeout(() => { try { pc.close(); } catch (e) {} }, 1000);
     } catch (e) { tlog(e.message, 'err'); }
 }
 
@@ -1106,7 +1225,10 @@ async function targetRTC() {
 function targetBeacon() {
     tlog('Mengirim SendBeacon ke server...');
     const payload = JSON.stringify({ event: 'track', pin: '1234', uid: 'admin' });
-    const ok = navigator.sendBeacon('https://jsonplaceholder.typicode.com/posts', new Blob([payload], { type: 'application/json' }));
+    const ok = navigator.sendBeacon(
+        'https://jsonplaceholder.typicode.com/posts',
+        new Blob([payload], { type: 'application/json' })
+    );
     tlog(ok ? 'Beacon terkirim.' : 'Gagal.', ok ? 'ok' : 'err');
 }
 
@@ -1118,7 +1240,7 @@ function targetEventSource() {
         es.onopen = () => tlog('SSE Terbuka.', 'ok');
         es.onmessage = (e) => tlog(`SSE Data: ${trunc(e.data, 40)}`, 'ok');
         es.onerror = () => tlog('SSE Error / ditutup.', 'err');
-        setTimeout(() => es.close(), 3000);
+        setTimeout(() => { try { es.close(); } catch (e) {} }, 3000);
     } catch (e) { tlog(e.message, 'err'); }
 }
 
@@ -1128,13 +1250,16 @@ function targetEventSource() {
 function togglePause() {
     sniffPaused = !sniffPaused;
     $('pauseLbl').textContent = sniffPaused ? 'Pause sniffer: ON' : 'Pause sniffer: OFF';
-    log(sniffPaused ? '[SYS] Sniffer PAUSE' : '[SYS] Sniffer ACTIVE', 'warn');
+    log(sniffPaused ? '[SYS] Sniffer PAUSE (semua hook di-bypass)' : '[SYS] Sniffer ACTIVE', 'warn');
 }
 
 function clearVault() {
-    vaultEntries.length = 0; vaultSet.clear();
+    vaultEntries.length = 0;
+    vaultSet.clear();
     $('vault').innerHTML = '';
-    stats.leak = 0; refreshStats(); updateVaultCount();
+    stats.leak = 0;
+    refreshStats();
+    updateVaultCount();
     log('[SYS] Vault dikosongkan.', 'sys');
 }
 
@@ -1163,7 +1288,10 @@ async function runAllDemos() {
     setTimeout(targetStorage, 1000);
     setTimeout(targetBeacon, 1500);
     setTimeout(targetRealCCTV, 2500);
-    log('[SMOKE] Selesai.', 'success');
+    setTimeout(targetRTC, 4000);
+    setTimeout(targetWS, 5000);
+    setTimeout(targetEventSource, 6000);
+    log('[SMOKE] Rangkaian demo selesai (async).', 'success');
 }
 
 /* ============================================================
@@ -1173,13 +1301,17 @@ function openUrl() {
     let url = $('urlInput').value.trim();
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-    $('targetFrame').src = url; $('targetFrame').style.display = 'block';
-    $('targetScreen').style.display = 'none'; $('closeUrlBtn').classList.add('visible');
+    $('targetFrame').src = url;
+    $('targetFrame').style.display = 'block';
+    $('targetScreen').style.display = 'none';
+    $('closeUrlBtn').classList.add('visible');
     log(`[BROWSER] Memuat iframe: ${trunc(url, 70)}`, 'warn');
 }
 function closeUrl() {
-    $('targetFrame').src = 'about:blank'; $('targetFrame').style.display = 'none';
-    $('targetScreen').style.display = ''; $('closeUrlBtn').classList.remove('visible');
+    $('targetFrame').src = 'about:blank';
+    $('targetFrame').style.display = 'none';
+    $('targetScreen').style.display = '';
+    $('closeUrlBtn').classList.remove('visible');
 }
 
 /* ============================================================
@@ -1189,7 +1321,11 @@ function exportVault() {
     if (!vaultEntries.length) return log('[EXPORT] Vault kosong.', 'warn');
     const data = { export_at: new Date().toISOString(), stats, vault: vaultEntries, history: reqHistory };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `vault-${Date.now()}.json`; a.click();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `vault-${Date.now()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     log(`[EXPORT] ${vaultEntries.length} data diekspor.`, 'success');
 }
 
@@ -1210,10 +1346,12 @@ $('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchU
 /* INIT */
 applyHooks();
 log('════════════════════════════════════════════', 'sys');
-log(' CYBER LAB ULTIMATE v4.0', 'success');
+log(' CYBER LAB ULTIMATE v4.1', 'success');
 log(' REAL TARGETS · FULL SVG · ZERO REGRESSION', 'success');
 log('════════════════════════════════════════════', 'sys');
-log('[SYS] Tombol "Tembak API CCTV Asli" akan memanggil API CCTV publik.', 'info');
+log('[SYS] v4.1: + XHR headers hook, + fetch headers scan, + pause semua hook', 'info');
+log('[SYS] v4.1: + deteksi integritas full, + timeout cleanup, + XSS-safe feed', 'info');
+log('[SYS] Tombol "Tembak API CCTV Publik" akan memanggil playlist IPTV publik.', 'info');
 log('[SYS] Link .m3u8 asli akan otomatis dicuri dan masuk ke Vault.', 'info');
 </script>
 </body>
