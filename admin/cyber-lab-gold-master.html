@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Cyber Lab Gold Master — Universal Real Probe v2</title>
+<title>Cyber Lab Gold Master — Full Interceptor + Universal Probe</title>
 <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -23,96 +23,79 @@
         display: flex; flex-direction: column; min-height: 100%;
         padding: env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);
     }
-    .topbar {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 12px; padding: 12px 18px;
-        border-bottom: 1px solid var(--line);
-        background: linear-gradient(180deg, #0b131d 0%, #060a10 100%);
-        flex-wrap: wrap;
-    }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, #0b131d 0%, #060a10 100%); flex-wrap: wrap; }
     .brand { display: flex; align-items: center; gap: 10px; }
-    .brand .mark {
-        width: 28px; height: 28px; display: grid; place-items: center;
-        border: 1px solid rgba(45,212,238,.5); border-radius: 7px; color: var(--cyan);
-        box-shadow: 0 0 14px rgba(45,212,238,.25) inset, 0 0 10px rgba(45,212,238,.18);
-    }
+    .brand .mark { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid rgba(45,212,238,.5); border-radius: 7px; color: var(--cyan); box-shadow: 0 0 14px rgba(45,212,238,.25) inset, 0 0 10px rgba(45,212,238,.18); }
     .brand .mark svg { width: 16px; height: 16px; }
-    .brand h1 {
-        font-size: 13.5px; letter-spacing: 2px; text-transform: uppercase;
-        font-weight: 800; color: var(--cyan); text-shadow: 0 0 14px rgba(45,212,238,.35);
-    }
+    .brand h1 { font-size: 13.5px; letter-spacing: 2px; text-transform: uppercase; font-weight: 800; color: var(--cyan); text-shadow: 0 0 14px rgba(45,212,238,.35); }
     .brand .sub { font-size: 9.5px; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
     .top-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .pill {
-        font-size: 10px; letter-spacing: .8px; padding: 5px 10px;
-        border-radius: 999px; border: 1px solid; white-space: nowrap;
-        font-weight: 700; display: inline-flex; align-items: center; gap: 5px;
-    }
+    .pill { font-size: 10px; letter-spacing: .8px; padding: 5px 10px; border-radius: 999px; border: 1px solid; white-space: nowrap; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
     .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
     .pill.ok { color: var(--green); border-color: rgba(25,255,168,.4); background: rgba(25,255,168,.08); }
     .pill.warn { color: var(--amber); border-color: rgba(255,200,87,.45); background: rgba(255,200,87,.09); }
     .pill.muted { color: var(--muted); border-color: var(--line); }
     .pill.ok .dot { animation: blink 1.2s steps(2) infinite; }
     @keyframes blink { 50% { opacity: .25; } }
-    .grid {
-        flex: 1 1 auto;
-        display: grid;
-        grid-template-columns: minmax(300px, 360px) minmax(380px, 1fr) minmax(300px, 380px);
-        gap: 1px; background: var(--line); overflow: hidden; min-height: 0;
-    }
+    .grid { flex: 1 1 auto; display: grid; grid-template-columns: minmax(300px, 360px) minmax(380px, 1fr) minmax(300px, 380px); gap: 1px; background: var(--line); overflow: hidden; min-height: 0; }
     @media (max-width: 1100px) {
         .grid { grid-template-columns: 1fr; overflow: visible; height: auto; }
         body { overflow-y: auto; }
     }
-    .panel {
-        background: var(--panel); display: flex; flex-direction: column;
-        gap: 12px; padding: 16px; min-width: 0; min-height: 0; overflow-y: auto;
-    }
+    .panel { background: var(--panel); display: flex; flex-direction: column; gap: 12px; padding: 16px; min-width: 0; min-height: 0; overflow-y: auto; }
     .panel::-webkit-scrollbar { width: 7px; }
     .panel::-webkit-scrollbar-thumb { background: #1b2838; border-radius: 4px; }
     .panel.control { background: linear-gradient(180deg, #0b1118 0%, #070c12 100%); }
     .panel.monitor { background: #070b11; }
     .panel.hacker  { background: #05080c; position: relative; }
     .ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-    .ph h2 {
-        margin: 0; font-size: 12px; letter-spacing: 1.6px;
-        text-transform: uppercase; white-space: nowrap;
-        display: flex; align-items: center; gap: 7px; font-weight: 800;
-    }
+    .ph h2 { margin: 0; font-size: 12px; letter-spacing: 1.6px; text-transform: uppercase; white-space: nowrap; display: flex; align-items: center; gap: 7px; font-weight: 800; }
     .ph h2 svg { flex: 0 0 auto; width: 15px; height: 15px; }
     .control .ph h2 { color: var(--cyan); }
     .monitor .ph h2 { color: var(--green); }
     .hacker  .ph h2 { color: var(--green); text-shadow: 0 0 10px rgba(25,255,168,.4); }
     .desc { margin: 0; font-size: 10.5px; line-height: 1.55; color: var(--muted); }
     .desc code { color: var(--cyan); background: rgba(45,212,238,.08); padding: 1px 5px; border-radius: 3px; }
-    .universal-input {
-        width: 100%; background: #000; border: 1px solid var(--line); color: var(--text);
-        padding: 10px 12px; font: inherit; font-size: 11.5px; line-height: 1.55;
-        border-radius: var(--radius-sm); outline: none; resize: vertical; min-height: 76px;
-        transition: border-color .15s, box-shadow .15s;
-    }
+    .urlbar { display: flex; gap: 6px; align-items: stretch; flex-wrap: wrap; }
+    .urlbar input { flex: 1 1 140px; min-width: 0; background: #000; border: 1px solid var(--line); color: var(--text); padding: 9px 12px; font: inherit; font-size: 11.5px; border-radius: var(--radius-sm); outline: none; transition: border-color .15s, box-shadow .15s; }
+    .urlbar input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px var(--cyan-dim); }
+    .urlbar input::placeholder { color: var(--muted-2); }
+    .urlbar button { padding: 9px 13px; background: transparent; border: 1px solid var(--cyan); color: var(--cyan); font: inherit; font-size: 10.5px; font-weight: 800; cursor: pointer; border-radius: var(--radius-sm); transition: .15s; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; letter-spacing: .4px; }
+    .urlbar button svg { flex: 0 0 auto; width: 14px; height: 14px; }
+    .urlbar button:hover { background: var(--cyan-dim); }
+    .urlbar button:active { transform: scale(.97); }
+    .urlbar button.close-btn { border-color: var(--muted); color: var(--muted); padding: 9px 10px; display: none; }
+    .urlbar button.close-btn.visible { display: inline-flex; }
+    .urlbar button.close-btn:hover { border-color: var(--red); color: var(--red); background: rgba(255,77,109,.1); }
+    .btn-group { display: flex; flex-direction: column; gap: 6px; }
+    .btn { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #0a1119; border: 1px solid var(--line); color: var(--cyan); font: inherit; font-size: 11px; font-weight: 700; text-align: left; cursor: pointer; transition: all .16s ease; border-radius: var(--radius-sm); position: relative; }
+    .btn svg { flex: 0 0 auto; width: 14px; height: 14px; }
+    .btn .lbl { flex: 1; }
+    .btn .status-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--muted-2); transition: background .2s, box-shadow .2s; }
+    .btn .status-dot.ok { background: var(--green); box-shadow: 0 0 6px rgba(25,255,168,.7); }
+    .btn .status-dot.err { background: var(--red); box-shadow: 0 0 6px rgba(255,77,109,.7); }
+    .btn .status-dot.busy { background: var(--amber); box-shadow: 0 0 6px rgba(255,200,87,.7); animation: blink 1s steps(2) infinite; }
+    .btn:hover:not(:disabled) { border-color: var(--cyan); background: var(--cyan-dim); box-shadow: 0 0 14px rgba(45,212,238,.15); }
+    .btn:active:not(:disabled) { transform: scale(.985); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn.ws { color: var(--purple); }
+    .btn.ws:hover:not(:disabled) { border-color: var(--purple); background: rgba(184,107,255,.1); box-shadow: 0 0 14px rgba(184,107,255,.2); }
+    .btn.detect { color: var(--amber); }
+    .btn.detect:hover:not(:disabled) { border-color: var(--amber); background: rgba(255,200,87,.1); box-shadow: 0 0 14px rgba(255,200,87,.18); }
+    .btn.mini { color: #7fb3bd; font-size: 10.5px; padding: 8px 11px; }
+    .btn.mini:hover:not(:disabled) { border-color: #3d6b78; color: #a6dde6; }
+    .group-label { font-size: 9px; letter-spacing: 1.4px; text-transform: uppercase; color: #3d4f63; margin: 2px 0 0; font-weight: 700; }
+    .universal-input { width: 100%; background: #000; border: 1px solid var(--line); color: var(--text); padding: 10px 12px; font: inherit; font-size: 11.5px; line-height: 1.55; border-radius: var(--radius-sm); outline: none; resize: vertical; min-height: 76px; transition: border-color .15s, box-shadow .15s; }
     .universal-input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px var(--cyan-dim); }
     .universal-input::placeholder { color: var(--muted-2); }
-    .profile-badge {
-        display: inline-flex; align-items: center; gap: 6px;
-        font-size: 10px; font-weight: 700; letter-spacing: .4px;
-        padding: 4px 9px; border-radius: 999px;
-        border: 1px solid var(--line); color: var(--muted);
-        background: #0a1119; transition: .2s;
-    }
+    .profile-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 700; letter-spacing: .4px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #0a1119; transition: .2s; }
     .profile-badge.detected { color: var(--cyan); border-color: rgba(45,212,238,.5); background: var(--cyan-dim); }
     .profile-badge.kind-ws { color: var(--purple); border-color: rgba(184,107,255,.5); background: rgba(184,107,255,.1); }
     .profile-badge.kind-sse { color: var(--amber); border-color: rgba(255,200,87,.5); background: rgba(255,200,87,.1); }
     .profile-badge.kind-hls { color: var(--green); border-color: rgba(25,255,168,.5); background: rgba(25,255,168,.1); }
     .profile-badge.kind-rtsp { color: var(--red); border-color: rgba(255,77,109,.5); background: rgba(255,77,109,.1); }
     .input-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-    .input-actions button {
-        flex: 1 1 auto; min-width: 88px; padding: 10px 13px;
-        background: #0a1119; border: 1px solid var(--line); color: var(--cyan);
-        font: inherit; font-size: 10.5px; font-weight: 800; cursor: pointer;
-        border-radius: var(--radius-sm); transition: .15s; letter-spacing: .4px;
-        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    }
+    .input-actions button { flex: 1 1 auto; min-width: 88px; padding: 10px 13px; background: #0a1119; border: 1px solid var(--line); color: var(--cyan); font: inherit; font-size: 10.5px; font-weight: 800; cursor: pointer; border-radius: var(--radius-sm); transition: .15s; letter-spacing: .4px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
     .input-actions button svg { width: 14px; height: 14px; }
     .input-actions button:hover:not(:disabled) { border-color: var(--cyan); background: var(--cyan-dim); box-shadow: 0 0 14px rgba(45,212,238,.15); }
     .input-actions button:active:not(:disabled) { transform: scale(.97); }
@@ -120,61 +103,46 @@
     .input-actions button.primary { color: var(--green); border-color: rgba(25,255,168,.5); }
     .input-actions button.primary:hover:not(:disabled) { background: rgba(25,255,168,.1); }
     .input-actions button.danger { color: var(--red); border-color: rgba(255,77,109,.4); }
-    .group-label { font-size: 9px; letter-spacing: 1.4px; text-transform: uppercase; color: #3d4f63; margin: 2px 0 0; font-weight: 700; }
     .presets { display: flex; flex-wrap: wrap; gap: 5px; }
-    .preset {
-        font: inherit; font-size: 9.5px; padding: 5px 10px; border-radius: 999px;
-        border: 1px solid var(--line); background: #0a1119;
-        color: var(--muted); cursor: pointer; transition: .15s;
-        font-weight: 700; letter-spacing: .3px;
-    }
+    .preset { font: inherit; font-size: 9.5px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: #0a1119; color: var(--muted); cursor: pointer; transition: .15s; font-weight: 700; letter-spacing: .3px; }
     .preset:hover { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
     .scan-toggles { display: flex; flex-wrap: wrap; gap: 5px; }
-    .chip {
-        font: inherit; font-size: 9.5px; padding: 5px 9px; border-radius: 999px;
-        border: 1px solid var(--line); background: transparent;
-        color: var(--muted); cursor: pointer; transition: .15s;
-        font-weight: 700; letter-spacing: .3px;
-    }
+    .chip { font: inherit; font-size: 9.5px; padding: 5px 9px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; transition: .15s; font-weight: 700; letter-spacing: .3px; }
     .chip.on { color: var(--cyan); border-color: rgba(45,212,238,.5); background: var(--cyan-dim); }
     .chip:hover { border-color: var(--cyan); }
     .opts { display: flex; flex-direction: column; gap: 6px; }
-    .opt {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 8px; font-size: 10.5px; color: var(--muted);
-        padding: 7px 10px; border: 1px solid var(--line);
-        border-radius: var(--radius-sm); background: #080f16;
-    }
-    .opt select, .opt input {
-        background: #000; border: 1px solid var(--line); color: var(--text);
-        font: inherit; font-size: 10.5px; padding: 4px 7px;
-        border-radius: 4px; outline: none;
-    }
+    .opt { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10.5px; color: var(--muted); padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: #080f16; }
+    .opt select, .opt input { background: #000; border: 1px solid var(--line); color: var(--text); font: inherit; font-size: 10.5px; padding: 4px 7px; border-radius: 4px; outline: none; }
     .opt select:focus, .opt input:focus { border-color: var(--cyan); }
+    .card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); overflow: hidden; }
+    .card-h { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); font-size: 10px; letter-spacing: 1.1px; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+    .card-h .tag { font-size: 9px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted-2); }
+    .card-h .tag.live { color: var(--green); border-color: rgba(25,255,168,.4); background: rgba(25,255,168,.08); }
+    .card-h .tag.busy { color: var(--amber); border-color: rgba(255,200,87,.45); background: rgba(255,200,87,.09); }
+    .card-h .tag.err  { color: var(--red); border-color: rgba(255,77,109,.5); background: rgba(255,77,109,.08); }
+    .card-body { padding: 11px 12px; font-size: 11px; }
+    .card-body.empty { color: var(--muted-2); font-style: italic; }
+    .video-box { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000 repeating-linear-gradient(135deg,#050a0f 0 10px,#070d14 10px 20px); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .video-box video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; z-index: 1; }
+    .video-box .ph-msg { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; background: #000 repeating-linear-gradient(135deg,#050a0f 0 10px,#070d14 10px 20px); color: var(--muted-2); font-size: 10.5px; line-height: 1.5; text-align: center; padding: 0 14px; overflow-y: auto; }
+    .video-box .rec { position: absolute; top: 8px; left: 8px; z-index: 3; display: none; align-items: center; gap: 5px; font-size: 9.5px; letter-spacing: 1px; color: var(--red); background: rgba(0,0,0,.55); padding: 3px 8px; border-radius: 999px; }
+    .video-box.live .rec { display: inline-flex; }
+    .video-box .rec .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--red); animation: blink 1s steps(2) infinite; }
+    .kv { display: flex; flex-direction: column; gap: 6px; }
+    .kv .row { display: flex; justify-content: space-between; gap: 10px; }
+    .kv .k { color: var(--muted); }
+    .kv .v { color: var(--text); text-align: right; word-break: break-all; }
+    pre.json { margin: 0; white-space: pre-wrap; word-break: break-word; font-size: 10.5px; color: #9fc9d6; max-height: 180px; overflow-y: auto; }
     .result-stream { display: flex; flex-direction: column; gap: 10px; }
-    .result-card {
-        border: 1px solid var(--line); border-radius: var(--radius);
-        background: var(--panel-2); overflow: hidden; transition: .2s;
-    }
+    .result-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel-2); overflow: hidden; transition: .2s; }
     .result-card.success { border-left: 3px solid var(--green); }
     .result-card.partial { border-left: 3px solid var(--amber); }
     .result-card.fail    { border-left: 3px solid var(--red); }
     .result-card.working { border-left: 3px solid var(--cyan); opacity: .85; }
-    .result-head {
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 10px; padding: 9px 12px;
-        border-bottom: 1px solid var(--line-soft); font-size: 10.5px; flex-wrap: wrap;
-    }
-    .result-head .url {
-        flex: 1 1 200px; min-width: 0; overflow: hidden;
-        text-overflow: ellipsis; white-space: nowrap;
-        color: var(--cyan); font-weight: 700;
-    }
+    .result-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); font-size: 10.5px; flex-wrap: wrap; }
+    .result-head .url { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cyan); font-weight: 700; }
     .result-head .meta { display: flex; gap: 6px; flex-wrap: wrap; font-size: 9.5px; color: var(--muted); }
-    .result-head .meta span {
-        padding: 2px 7px; border-radius: 4px;
-        background: #0a1119; border: 1px solid var(--line);
-    }
+    .result-head .meta span { padding: 2px 7px; border-radius: 4px; background: #0a1119; border: 1px solid var(--line); }
     .result-head .meta .m-ok { color: var(--green); border-color: rgba(25,255,168,.4); }
     .result-head .meta .m-err { color: var(--red); border-color: rgba(255,77,109,.4); }
     .result-head .meta .m-warn { color: var(--amber); border-color: rgba(255,200,87,.4); }
@@ -183,95 +151,39 @@
     .result-body .row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; }
     .result-body .row .k { color: var(--muted); flex: 0 0 auto; }
     .result-body .row .v { color: var(--text); text-align: right; word-break: break-all; }
-    .dns-section {
-        margin-top: 9px; padding-top: 9px;
-        border-top: 1px dashed var(--line-soft);
-    }
-    .dns-section .dns-title {
-        font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase;
-        color: var(--cyan); margin-bottom: 6px; font-weight: 700;
-    }
-    .dns-section .dns-ips {
-        display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
-    }
-    .dns-ip {
-        font-size: 9.5px; padding: 2px 7px; border-radius: 4px;
-        background: rgba(45,212,238,.08); color: var(--cyan);
-        border: 1px solid rgba(45,212,238,.3);
-        font-weight: 700;
-    }
+    .dns-section { margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--line-soft); }
+    .dns-section .dns-title { font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--cyan); margin-bottom: 6px; font-weight: 700; }
+    .dns-section .dns-ips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .dns-ip { font-size: 9.5px; padding: 2px 7px; border-radius: 4px; background: rgba(45,212,238,.08); color: var(--cyan); border: 1px solid rgba(45,212,238,.3); font-weight: 700; }
     .attempts { margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--line-soft); }
-    .attempts .att {
-        display: flex; align-items: center; gap: 7px; font-size: 9.5px;
-        padding: 3px 6px; border-radius: 4px; margin-bottom: 3px;
-    }
+    .attempts .att { display: flex; align-items: center; gap: 7px; font-size: 9.5px; padding: 3px 6px; border-radius: 4px; margin-bottom: 3px; }
     .attempts .att.ok  { color: var(--green); background: rgba(25,255,168,.05); }
     .attempts .att.err { color: var(--muted); }
     .attempts .att .name { font-weight: 700; flex: 0 0 auto; min-width: 100px; }
     .attempts .att .msg { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .findings { margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--line-soft); }
-    .findings-title {
-        font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase;
-        color: var(--muted); margin-bottom: 6px; font-weight: 700;
-    }
+    .findings-title { font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; font-weight: 700; }
     .finding-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 7px; }
-    .f-chip {
-        font-size: 9px; padding: 2px 7px; border-radius: 999px;
-        border: 1px solid var(--line); color: var(--muted);
-        background: #0a1119; font-weight: 700;
-    }
+    .f-chip { font-size: 9px; padding: 2px 7px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #0a1119; font-weight: 700; }
     .f-chip.high { color: var(--red); border-color: rgba(255,77,109,.45); background: rgba(255,77,109,.08); }
     .f-chip.medium { color: var(--amber); border-color: rgba(255,200,87,.45); background: rgba(255,200,87,.08); }
     .f-chip.info { color: var(--cyan); border-color: rgba(45,212,238,.4); background: rgba(45,212,238,.08); }
     .f-list { display: flex; flex-direction: column; gap: 3px; max-height: 130px; overflow-y: auto; }
-    .f-item {
-        display: flex; align-items: center; gap: 6px;
-        padding: 3px 6px; font-size: 9.5px;
-        border-left: 2px solid var(--cyan);
-        background: #0c141d; border-radius: 0 4px 4px 0;
-    }
+    .f-item { display: flex; align-items: center; gap: 6px; padding: 3px 6px; font-size: 9.5px; border-left: 2px solid var(--cyan); background: #0c141d; border-radius: 0 4px 4px 0; }
     .f-item.high { border-left-color: var(--red); }
     .f-item.medium { border-left-color: var(--amber); }
     .f-item .cat { flex: 0 0 auto; color: var(--purple); font-weight: 700; font-size: 9px; }
     .f-item code { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9fb4c9; }
     .preview { margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--line-soft); }
-    .preview summary {
-        cursor: pointer; font-size: 9.5px; letter-spacing: 1px;
-        text-transform: uppercase; color: var(--muted); font-weight: 700;
-        list-style: none; user-select: none;
-    }
+    .preview summary { cursor: pointer; font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); font-weight: 700; list-style: none; user-select: none; }
     .preview summary::before { content: '▸ '; color: var(--cyan); }
     .preview[open] summary::before { content: '▾ '; }
-    .preview pre {
-        margin-top: 6px; padding: 8px;
-        background: #000; border: 1px solid var(--line);
-        border-radius: 4px; font-size: 9.5px; color: #9fc9d6;
-        max-height: 240px; overflow: auto;
-        white-space: pre-wrap; word-break: break-word;
-    }
-    .video-mini {
-        position: relative; width: 100%; aspect-ratio: 16/9;
-        background: #000; border-radius: 4px; margin-top: 8px;
-        overflow: hidden; display: flex;
-        align-items: center; justify-content: center;
-    }
+    .preview pre { margin-top: 6px; padding: 8px; background: #000; border: 1px solid var(--line); border-radius: 4px; font-size: 9.5px; color: #9fc9d6; max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+    .video-mini { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 4px; margin-top: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
     .video-mini video { width: 100%; height: 100%; object-fit: contain; }
-    .video-mini .vtag {
-        position: absolute; top: 6px; left: 6px;
-        font-size: 9px; padding: 2px 7px; border-radius: 999px;
-        background: rgba(0,0,0,.7); color: var(--green);
-    }
-    .empty-state {
-        padding: 40px 20px; text-align: center;
-        color: var(--muted-2); font-size: 11px; font-style: italic;
-        border: 1px dashed var(--line); border-radius: var(--radius);
-    }
-    .terminal {
-        flex: 1 1 auto; min-height: 180px; overflow-y: auto;
-        background: #000; border: 1px solid var(--line);
-        padding: 10px 12px; font-size: 11px; line-height: 1.6;
-        border-radius: var(--radius);
-    }
+    .video-mini .vtag { position: absolute; top: 6px; left: 6px; font-size: 9px; padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,.7); color: var(--green); }
+    .empty-state { padding: 40px 20px; text-align: center; color: var(--muted-2); font-size: 11px; font-style: italic; border: 1px dashed var(--line); border-radius: var(--radius); }
+    .terminal { flex: 1 1 auto; min-height: 180px; overflow-y: auto; background: #000; border: 1px solid var(--line); padding: 10px 12px; font-size: 11px; line-height: 1.6; border-radius: var(--radius); }
     .terminal::-webkit-scrollbar { width: 7px; }
     .terminal::-webkit-scrollbar-thumb { background: #123024; border-radius: 4px; }
     .log { white-space: pre-wrap; word-break: break-word; margin-bottom: 1px; }
@@ -282,66 +194,30 @@
     .log-danger { color: var(--red); }
     .log-success { color: var(--green); text-shadow: 0 0 7px rgba(25,255,168,.3); }
     .filter-bar { display: flex; gap: 6px; flex-wrap: wrap; }
-    .filter-bar button {
-        padding: 6px 12px; background: transparent;
-        border: 1px solid var(--line); color: var(--muted);
-        font: inherit; font-size: 9.5px; letter-spacing: 1px;
-        cursor: pointer; transition: .15s;
-        border-radius: var(--radius-sm); font-weight: 700;
-    }
+    .filter-bar button { padding: 6px 12px; background: transparent; border: 1px solid var(--line); color: var(--muted); font: inherit; font-size: 9.5px; letter-spacing: 1px; cursor: pointer; transition: .15s; border-radius: var(--radius-sm); font-weight: 700; }
     .filter-bar button:hover { color: var(--text); border-color: #2f4055; }
     .filter-bar button.on { color: var(--cyan); border-color: rgba(45,212,238,.5); background: var(--cyan-dim); }
     .filter-bar button[data-filter="leak"].on { color: var(--red); border-color: rgba(255,77,109,.5); background: rgba(255,77,109,.08); }
     .filter-bar button[data-filter="scan"].on { color: var(--amber); border-color: rgba(255,200,87,.5); background: rgba(255,200,87,.08); }
-    .vault {
-        flex: 0 0 auto; max-height: 150px; overflow-y: auto;
-        background: var(--panel-2); border: 1px solid var(--line);
-        padding: 9px 11px; border-radius: var(--radius);
-    }
+    .vault { flex: 0 0 auto; max-height: 150px; overflow-y: auto; background: var(--panel-2); border: 1px solid var(--line); padding: 9px 11px; border-radius: var(--radius); }
     .vault::-webkit-scrollbar { width: 6px; }
     .vault::-webkit-scrollbar-thumb { background: #3a1d54; border-radius: 3px; }
-    .vault h3 {
-        margin: 0 0 7px; font-size: 10px; letter-spacing: 1.2px;
-        text-transform: uppercase; color: var(--purple);
-        display: flex; align-items: center; gap: 7px;
-        position: sticky; top: 0; background: var(--panel-2);
-        padding-bottom: 4px; font-weight: 800;
-    }
+    .vault h3 { margin: 0 0 7px; font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--purple); display: flex; align-items: center; gap: 7px; position: sticky; top: 0; background: var(--panel-2); padding-bottom: 4px; font-weight: 800; }
     .vault h3 svg { width: 12px; height: 12px; }
     .vault h3 .count { color: var(--muted); font-weight: 500; }
     .vault ul { list-style: none; display: flex; flex-direction: column; gap: 4px; }
-    .vault li {
-        display: flex; align-items: center; gap: 7px;
-        font-size: 10.5px; padding: 4px 7px;
-        background: #0c141d; border-left: 2px solid var(--purple);
-        border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    }
+    .vault li { display: flex; align-items: center; gap: 7px; font-size: 10.5px; padding: 4px 7px; background: #0c141d; border-left: 2px solid var(--purple); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
     .vtag { flex: 0 0 auto; color: var(--purple); font-weight: 700; font-size: 9.5px; }
     .vault code { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #9fb4c9; font-size: 10.5px; }
-    .vault button.copy {
-        flex: 0 0 auto; background: transparent; border: none;
-        color: var(--muted); cursor: pointer; padding: 3px;
-        display: flex; border-radius: 4px;
-    }
+    .vault button.copy { flex: 0 0 auto; background: transparent; border: none; color: var(--muted); cursor: pointer; padding: 3px; display: flex; border-radius: 4px; }
     .vault button.copy:hover { color: var(--cyan); background: rgba(45,212,238,.1); }
     .vault button.copy.done { color: var(--green); }
     .actions { display: flex; gap: 6px; flex-wrap: wrap; }
-    .actions button {
-        flex: 1 1 auto; min-width: 74px;
-        display: flex; flex-direction: column; align-items: center; gap: 4px;
-        padding: 9px 6px; background: transparent;
-        border: 1px solid var(--line); color: var(--muted);
-        font: inherit; font-size: 9px; letter-spacing: .8px;
-        cursor: pointer; border-radius: var(--radius-sm);
-        transition: .15s; font-weight: 700;
-    }
+    .actions button { flex: 1 1 auto; min-width: 74px; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 9px 6px; background: transparent; border: 1px solid var(--line); color: var(--muted); font: inherit; font-size: 9px; letter-spacing: .8px; cursor: pointer; border-radius: var(--radius-sm); transition: .15s; font-weight: 700; }
     .actions button svg { width: 15px; height: 15px; }
     .actions button:hover { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-dim); }
     .actions button.on { border-color: var(--purple); color: var(--purple); background: rgba(184,107,255,.1); }
-    .scanline {
-        position: absolute; inset: 0; pointer-events: none; opacity: .5;
-        background: repeating-linear-gradient(0deg, rgba(255,255,255,.015) 0, rgba(255,255,255,.015) 1px, transparent 1px, transparent 3px);
-    }
+    .scanline { position: absolute; inset: 0; pointer-events: none; opacity: .5; background: repeating-linear-gradient(0deg, rgba(255,255,255,.015) 0, rgba(255,255,255,.015) 1px, transparent 1px, transparent 3px); }
     ::-webkit-scrollbar { width: 7px; height: 7px; }
     @media (prefers-reduced-motion: reduce) {
         *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
@@ -351,20 +227,31 @@
 <body>
 
 <svg width="0" height="0" style="position:absolute">
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
     <symbol id="i-terminal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></symbol>
     <symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></symbol>
+    <symbol id="i-cctv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 10l4-2v8l-4-2"/><rect x="2" y="6" width="15" height="12" rx="2"/><circle cx="7" cy="12" r="2"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></symbol>
+    <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></symbol>
+    <symbol id="i-beacon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49M7.76 16.24a6 6 0 0 1 0-8.49M19.07 4.93a10 10 0 0 1 0 14.14M4.93 19.07a10 10 0 0 1 0-14.14"/></symbol>
+    <symbol id="i-sse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></symbol>
     <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></symbol>
     <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></symbol>
     <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></symbol>
     <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
     <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
     <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
     <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
     <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
-    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
 </svg>
 
 <header class="topbar">
@@ -372,7 +259,7 @@
         <div class="mark"><svg><use href="#i-zap"/></svg></div>
         <div>
             <h1>Cyber Lab Gold Master</h1>
-            <div class="sub">Universal Real Probe · 7 Proxy Chain · DNS Verifikasi · Real Results</div>
+            <div class="sub">Full Interceptor · Universal Probe · Real Results</div>
         </div>
     </div>
     <div class="top-right">
@@ -380,22 +267,81 @@
         <span class="pill muted" id="statReq">0 request</span>
         <span class="pill muted" id="statLeak">0 sensitif</span>
         <span class="pill muted" id="statScan">0 temuan</span>
-        <span class="pill muted" id="statProbe">0 probe</span>
-        <span class="pill ok">UNIVERSAL</span>
+        <span class="pill muted" id="statHist">0 hist</span>
+        <span class="pill ok">GOLD MASTER</span>
     </div>
 </header>
 
 <main class="grid">
 
+    <!-- ================= KIRI: KONTROL ================= -->
     <section class="panel control">
         <p class="desc">
-            Tempel <strong>URL / protokol APAPUN</strong>. Sistem otomatis mendeteksi jenis, lalu
-            <strong>mencoba 7 jalur akses berlapis</strong> (direct → proxy CORS → Jina Reader → Wayback → Microlink),
-            plus <strong>verifikasi DNS</strong> via Cloudflare DoH yang tidak butuh CORS. Setiap URL akan
-            menghasilkan data nyata — minimal IP host-nya.
+            Simulasi aman di tab ini: endpoint publik/demo dipanggil, lalu fetch/XHR/WebSocket/RTC
+            "disadap" untuk menunjukkan interception di sisi klien. Hasil nyata tampil di
+            <strong>Live Monitor</strong> tengah. Tombol demo = target siap pakai;
+            Universal Probe = input bebas apa pun.
         </p>
 
-        <div class="group-label">Universal Input — URL Tunggal atau Batch List</div>
+        <div class="urlbar">
+            <input type="text" id="urlInput" placeholder="https://api.example.com/data" spellcheck="false" autocomplete="off" inputmode="url">
+            <button id="fetchUrlBtn" title="fetch() URL — tersadap terminal"><svg><use href="#i-download"/></svg>FETCH</button>
+            <button id="openUrlBtn" title="Buka di iframe"><svg><use href="#i-globe"/></svg>BUKA</button>
+            <button id="closeUrlBtn" class="close-btn" title="Tutup iframe"><svg><use href="#i-x"/></svg></button>
+        </div>
+
+        <div class="group-label">Real Targets — CCTV / Stream / API</div>
+        <div class="btn-group">
+            <button class="btn" id="btnCCTV" onclick="targetRealCCTV()">
+                <svg><use href="#i-cctv"/></svg><span class="lbl">Tembak API CCTV Publik (HLS)</span><span class="status-dot" data-dot="cctv"></span>
+            </button>
+            <button class="btn" id="btnIP" onclick="targetRealFetch()">
+                <svg><use href="#i-download"/></svg><span class="lbl">Fetch Real Internet (IP Publik)</span><span class="status-dot" data-dot="ip"></span>
+            </button>
+            <button class="btn" id="btnXHR" onclick="targetXHR()">
+                <svg><use href="#i-database"/></svg><span class="lbl">XHR API Publik (JSON User)</span><span class="status-dot" data-dot="xhr"></span>
+            </button>
+            <button class="btn ws" id="btnWS" onclick="targetWS()">
+                <svg><use href="#i-wifi"/></svg><span class="lbl">WebSocket Echo (Publik)</span><span class="status-dot" data-dot="ws"></span>
+            </button>
+            <button class="btn" id="btnStorage" onclick="targetStorage()">
+                <svg><use href="#i-save"/></svg><span class="lbl">Simpan Session (LocalStorage)</span><span class="status-dot" data-dot="storage"></span>
+            </button>
+            <button class="btn detect" id="btnDetect" onclick="targetDetect()">
+                <svg><use href="#i-search"/></svg><span class="lbl">Integrity Check (Anti-Tamper)</span><span class="status-dot" data-dot="detect"></span>
+            </button>
+        </div>
+
+        <div class="group-label">Advanced Hooks (RTC / Beacon / SSE)</div>
+        <div class="btn-group">
+            <button class="btn mini" id="btnRTC" onclick="targetRTC()">
+                <svg><use href="#i-video"/></svg><span class="lbl">Test WebRTC (STUN Google)</span><span class="status-dot" data-dot="rtc"></span>
+            </button>
+            <button class="btn mini" id="btnBeacon" onclick="targetBeacon()">
+                <svg><use href="#i-beacon"/></svg><span class="lbl">Test SendBeacon (Payload)</span><span class="status-dot" data-dot="beacon"></span>
+            </button>
+            <button class="btn mini" id="btnSSE" onclick="targetEventSource()">
+                <svg><use href="#i-sse"/></svg><span class="lbl">Test EventSource (SSE)</span><span class="status-dot" data-dot="sse"></span>
+            </button>
+        </div>
+
+        <div class="group-label">Kontrol Lab</div>
+        <div class="btn-group">
+            <button class="btn mini" id="runAllBtn" onclick="runAllDemos()">
+                <svg><use href="#i-play"/></svg><span class="lbl">Jalankan semua demo (smoke test)</span>
+            </button>
+            <button class="btn mini" id="pauseBtn" onclick="togglePause()">
+                <svg><use href="#i-pause"/></svg><span class="lbl" id="pauseLbl">Pause sniffer: OFF</span>
+            </button>
+            <button class="btn mini" id="clearVaultBtn" onclick="clearVault()">
+                <svg><use href="#i-trash"/></svg><span class="lbl">Kosongkan vault</span>
+            </button>
+            <button class="btn mini" id="histBtn" onclick="showHistory()">
+                <svg><use href="#i-list"/></svg><span class="lbl">Riwayat request (terminal)</span>
+            </button>
+        </div>
+
+        <div class="group-label">Universal Probe — URL / Protokol APAPUN</div>
         <textarea id="universalInput" class="universal-input"
             placeholder="https://api.github.com/users/torvalds&#10;wss://stream.binance.com:9443/ws/btcusdt@trade&#10;https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8&#10;https://stream.wikimedia.org/v2/stream/recentchange&#10;https://example.com"
             spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
@@ -424,39 +370,79 @@
             <div class="opt"><span>Chain proxy jika direct gagal</span><input type="checkbox" id="optProxy" checked></div>
             <div class="opt"><span>Fallback ke Wayback / Microlink</span><input type="checkbox" id="optFallback" checked></div>
             <div class="opt"><span>Selalu cek DNS (Cloudflare DoH)</span><input type="checkbox" id="optDns" checked></div>
+            <div class="opt"><span>Kirim credentials (cookie same-origin)</span><input type="checkbox" id="optCreds"></div>
+            <div class="opt"><span>Follow redirect</span><input type="checkbox" id="optRedirect" checked></div>
         </div>
     </section>
 
+    <!-- ================= TENGAH: LIVE MONITOR ================= -->
     <section class="panel monitor">
         <div class="ph">
-            <h2><svg><use href="#i-monitor"/></svg>Hasil Probe</h2>
-            <span class="pill muted" id="monitorStatus">Belum ada probe</span>
+            <h2><svg><use href="#i-monitor"/></svg>Live Monitor</h2>
+            <span class="pill muted" id="monitorStatus">Menunggu hasil…</span>
         </div>
-        <p class="desc">
-            Setiap URL dapat kartu sendiri: DNS nyata, jalur akses yang berhasil, ringkasan respons,
-            temuan terklasifikasi, dan preview mentah. Kalau body tidak terbaca, DNS tetap tampil.
-        </p>
+        <p class="desc">Hasil nyata tiap tes muncul di sini — bukan cuma baris log. Demo targets → kartu tetap; universal probe → kartu per-URL.</p>
+
+        <div class="card">
+            <div class="card-h"><span>Stream Monitor (HLS/MP4/WebM)</span><span class="tag" id="streamTag">idle</span></div>
+            <div class="video-box" id="videoBox">
+                <div class="rec"><span class="dot"></span>LIVE</div>
+                <video id="monitorVideo" playsinline muted controls></video>
+                <div class="ph-msg" id="videoPlaceholder">Jalankan "Tembak API CCTV Publik", atau tempel URL stream di bawah lalu PUTAR.</div>
+            </div>
+            <div class="urlbar" style="padding:9px 12px; border-top:1px solid var(--line-soft);">
+                <input type="text" id="streamUrlInput" placeholder="https://.../stream.m3u8 atau video.mp4" spellcheck="false" autocomplete="off" inputmode="url">
+                <button id="streamPlayBtn" title="Putar URL stream apa pun">PUTAR</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-h"><span>Network Info (IP Publik)</span><span class="tag" id="ipTag">idle</span></div>
+            <div class="card-body empty" id="ipCard">Belum ada data. Jalankan "Fetch Real Internet".</div>
+        </div>
+
+        <div class="card">
+            <div class="card-h"><span>API Response (XHR User)</span><span class="tag" id="xhrTag">idle</span></div>
+            <div class="card-body empty" id="xhrCard">Belum ada data. Jalankan "XHR API Publik".</div>
+        </div>
+
+        <div class="card">
+            <div class="card-h"><span>Realtime Channel (WS / SSE / RTC)</span><span class="tag" id="rtTag">idle</span></div>
+            <div class="card-body empty" id="rtCard">Belum ada data. Jalankan WebSocket / EventSource / RTC.</div>
+        </div>
+
+        <div class="card">
+            <div class="card-h"><span>Scan Hasil (Vault Summary)</span><span class="tag" id="scanTag">idle</span></div>
+            <div class="card-body empty" id="scanCard">Belum ada temuan. Jalankan target atau probe URL apa pun.</div>
+        </div>
+
+        <div class="group-label" style="margin-top:6px;">Universal Probe Results</div>
         <div class="result-stream" id="resultStream">
             <div class="empty-state">
                 Tempel URL di kiri lalu klik <strong style="color:var(--cyan)">PROBE</strong> — atau pilih preset.
-                Sistem akan mendeteksi jenis otomatis dan menampilkan hasil nyata.
+                Sistem mendeteksi jenis otomatis dan menampilkan hasil nyata.
             </div>
         </div>
     </section>
 
+    <!-- ================= KANAN: TERMINAL & VAULT ================= -->
     <section class="panel hacker">
         <div class="scanline"></div>
         <div class="ph"><h2><svg><use href="#i-terminal"/></svg>Hacker Terminal</h2></div>
+
         <div class="filter-bar">
             <button id="filterAll" class="on" data-filter="all">SEMUA</button>
             <button id="filterLeak" data-filter="leak">LEAK</button>
             <button id="filterScan" data-filter="scan">SCAN</button>
         </div>
+
         <div class="terminal" id="terminal"></div>
+
         <div class="vault">
             <h3><svg><use href="#i-lock"/></svg>Vault — Temuan <span class="count" id="vaultCount">(0)</span></h3>
             <ul id="vault"></ul>
         </div>
+
         <div class="actions">
             <button id="clearBtn"><svg><use href="#i-trash"/></svg><span>CLEAR</span></button>
             <button id="stealthBtn"><svg><use href="#i-eye-off"/></svg><span id="stealthLbl">STEALTH: OFF</span></button>
@@ -467,13 +453,16 @@
 
 </main>
 
+<div id="iframeHost" style="display:none"></div>
+
 <script>
 /* ============================================================
-   UNIVERSAL REAL PROBE v2
-   Setiap URL/protokol diproses dengan rantai akses berlapis:
-   1. HTTP: direct → 6 proxy CORS → Jina Reader → Wayback → Microlink
-   2. WS/SSE/HLS/Media: verifikasi event nyata
-   3. DNS: selalu jalan via Cloudflare DoH (bebas CORS)
+   CYBER LAB GOLD MASTER — FULL INTERCEPTOR + UNIVERSAL PROBE
+   - Semua fitur demo asli dipertahankan (CCTV/IP/XHR/WS/Storage/
+     Detect/RTC/Beacon/SSE + smoke test + pause + history + vault)
+   - Ditambah Universal Probe: input URL apa pun → auto-detect →
+     jalur berlapis (direct/proxy/reader/wayback/microlink) → DNS
+     via Cloudflare DoH → kartu hasil per-target.
    ============================================================ */
 
 const NATIVE = {
@@ -481,9 +470,11 @@ const NATIVE = {
     XHR:             window.XMLHttpRequest,
     XHRopen:         window.XMLHttpRequest.prototype.open,
     XHRsend:         window.XMLHttpRequest.prototype.send,
+    XHRsetReqHeader: window.XMLHttpRequest.prototype.setRequestHeader,
     WS:              window.WebSocket,
     StorageSet:      Storage.prototype.setItem,
     sendBeacon:      navigator.sendBeacon,
+    RTC:             window.RTCPeerConnection,
     ES:              window.EventSource,
     fnToString:      Function.prototype.toString
 };
@@ -495,17 +486,18 @@ const now   = () => new Date().toLocaleTimeString('id-ID', { hour12: false });
 
 const termEl    = $('terminal');
 const resultsEl = $('resultStream');
-const stats     = { req: 0, leak: 0, scan: 0, probe: 0 };
+const stats     = { req: 0, leak: 0, scan: 0 };
 const vaultEntries = [];
 const vaultSet = new Set();
 const reqHistory = [];
 const activeProbes = new Set();
 let sniffPaused = false;
+let smokeRunning = false;
+let batchRunning = false;
 let stealthOn = false;
 let currentFilter = 'all';
-let batchRunning = false;
 
-/* ---------- SVG ---------- */
+/* ---------- SVG HELPER ---------- */
 const SVG_PATHS = {
     copy:  '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>',
     check: '<polyline points="20 6 9 17 4 12"/>'
@@ -514,20 +506,31 @@ function svgHTML(name, size = 12) {
     return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${SVG_PATHS[name] || ''}</svg>`;
 }
 
-/* ---------- LOG ---------- */
+/* ---------- STATUS DOTS ---------- */
+function setDot(key, state) {
+    const el = document.querySelector(`[data-dot="${key}"]`);
+    if (!el) return;
+    el.classList.remove('ok', 'err', 'busy');
+    if (state) el.classList.add(state);
+}
+
+/* ---------- LOG & FILTER ---------- */
 function log(msg, type = 'sys', opts = {}) {
     const row = document.createElement('div');
     row.className = `log log-${type}`;
     if (opts.leak) row.dataset.leak = '1';
     if (opts.scan) row.dataset.scan = '1';
+
     const stamp = document.createElement('span');
     stamp.className = 'ts';
     stamp.textContent = `[${now()}] `;
     row.appendChild(stamp);
     row.appendChild(document.createTextNode(msg));
+
     applyRowFilter(row);
     termEl.appendChild(row);
     termEl.scrollTop = termEl.scrollHeight;
+
     while (termEl.childElementCount > 800) termEl.removeChild(termEl.firstElementChild);
 }
 
@@ -551,10 +554,10 @@ function refreshStats() {
     $('statLeak').classList.toggle('hot', stats.leak > 0);
     $('statScan').textContent  = `${stats.scan} temuan`;
     $('statScan').classList.toggle('hot', stats.scan > 0);
-    $('statProbe').textContent = `${stats.probe} probe`;
+    $('statHist').textContent  = `${reqHistory.length} hist`;
 }
 
-/* ---------- SCAN RULES ---------- */
+/* ---------- SCAN RULES (super-set) ---------- */
 const SCAN_RULES = [
     { id: 'jwt',      label: 'JWT',         risk: 'high',   re: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g },
     { id: 'secret',   label: 'Secret Field',risk: 'high',   re: /"(?:pin|password|passwd|secret|token|ssn|api[_-]?key|apikey|auth[_-]?token|access[_-]?token|refresh[_-]?token)"\s*:\s*"([^"]{4,})"/gi },
@@ -578,10 +581,12 @@ function renderScanToggles() {
         const btn = document.createElement('button');
         btn.className = 'chip on';
         btn.textContent = rule.label;
+        btn.dataset.rule = rule.id;
         btn.addEventListener('click', () => {
             if (scanEnabled.has(rule.id)) scanEnabled.delete(rule.id);
             else scanEnabled.add(rule.id);
             btn.classList.toggle('on', scanEnabled.has(rule.id));
+            renderScanCard();
             log(`[FILTER] ${rule.label}: ${scanEnabled.has(rule.id) ? 'ON' : 'OFF'}`, 'sys');
         });
         host.appendChild(btn);
@@ -589,14 +594,20 @@ function renderScanToggles() {
 }
 
 /* ---------- VAULT ---------- */
-function updateVaultCount() { $('vaultCount').textContent = `(${vaultEntries.length})`; }
+function updateVaultCount() {
+    $('vaultCount').textContent = `(${vaultEntries.length})`;
+}
 
 function addVault(ruleId, label, value, risk, source) {
     const key = ruleId + '::' + value;
     if (vaultSet.has(key)) return false;
-    if (vaultEntries.length >= 400) return false;
+    if (vaultEntries.length >= 400) {
+        log('[VAULT] Batas 400 temuan tercapai. Kosongkan vault untuk melanjutkan.', 'warn');
+        return false;
+    }
     vaultSet.add(key);
     vaultEntries.push({ ruleId, label, value, risk, source, time: Date.now() });
+
     const li = document.createElement('li');
     const tag = document.createElement('span');
     tag.className = 'vtag';
@@ -604,9 +615,11 @@ function addVault(ruleId, label, value, risk, source) {
     const code = document.createElement('code');
     code.textContent = trunc(value, 58);
     code.title = value;
+
     const btn = document.createElement('button');
     btn.className = 'copy';
     btn.innerHTML = svgHTML('copy');
+    btn.title = 'Salin';
     btn.addEventListener('click', () => {
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(value).then(() => {
@@ -618,10 +631,12 @@ function addVault(ruleId, label, value, risk, source) {
     });
     li.append(tag, code, btn);
     $('vault').prepend(li);
+
     stats.scan++;
     if (risk === 'high' || risk === 'medium') stats.leak++;
     refreshStats();
     updateVaultCount();
+    renderScanCard();
     return true;
 }
 
@@ -633,6 +648,7 @@ function clearVault() {
     stats.scan = 0;
     refreshStats();
     updateVaultCount();
+    renderScanCard();
     log('[SYS] Vault dikosongkan.', 'sys');
 }
 
@@ -642,7 +658,7 @@ function recordReq(entry) {
     refreshStats();
 }
 
-/* ---------- SCAN ---------- */
+/* ---------- SCAN ENGINE ---------- */
 function shouldInspect(url, contentType = '') {
     if (!url) return false;
     if (/\.(ts|m4s|mp4|webm|ogg|mp3|aac|jpg|jpeg|png|gif|webp|svg|woff2?|ttf|wasm)(\?|#|$)/i.test(url)) return false;
@@ -654,6 +670,7 @@ function shouldInspect(url, contentType = '') {
 function scanText(text, source) {
     if (!text || typeof text !== 'string') return [];
     if (text.length > 2_500_000) text = text.slice(0, 2_500_000);
+
     const findings = [];
     for (const rule of SCAN_RULES) {
         if (!scanEnabled.has(rule.id)) continue;
@@ -673,7 +690,42 @@ function scanText(text, source) {
     return findings;
 }
 
-/* ---------- URL PROFILE ---------- */
+/* ---------- RENDER SCAN CARD ---------- */
+function renderScanCard() {
+    const card = $('scanCard');
+    const tag = $('scanTag');
+    if (!vaultEntries.length) {
+        card.className = 'card-body empty';
+        card.textContent = 'Belum ada temuan. Jalankan target atau probe URL apa pun.';
+        tag.textContent = 'idle';
+        tag.className = 'tag';
+        return;
+    }
+
+    card.className = 'card-body';
+    const counts = {};
+    for (const e of vaultEntries) counts[e.ruleId] = (counts[e.ruleId] || 0) + 1;
+
+    const badges = SCAN_RULES.map(r => {
+        const n = counts[r.id] || 0;
+        if (!n) return '';
+        const hot = r.risk === 'high' || r.risk === 'medium';
+        return `<span class="f-chip ${hot ? r.risk : 'info'}">${esc(r.label)}: ${n}</span>`;
+    }).join('');
+
+    const latest = vaultEntries.slice(-10).reverse().map(e => `
+        <div class="f-item ${esc(e.risk)}">
+            <span class="cat">${esc(e.label)}</span>
+            <code title="${esc(e.value)}">${esc(trunc(e.value, 100))}</code>
+        </div>
+    `).join('');
+
+    card.innerHTML = `<div class="finding-chips">${badges}</div><div class="f-list">${latest}</div>`;
+    tag.textContent = `${vaultEntries.length} temuan`;
+    tag.className = 'tag live';
+}
+
+/* ---------- URL PROFILE (auto-detect) ---------- */
 function normalizeUrl(raw) {
     let url = (raw || '').trim();
     if (!url) return null;
@@ -733,7 +785,7 @@ const FETCH_STRATEGIES = [
     { name: 'codetabs',       wrap: u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`, note: 'CORS proxy' },
     { name: 'thingproxy',     wrap: u => `https://thingproxy.freeboard.io/fetch/${u}`,                   note: 'CORS proxy' },
     { name: 'isomorphic',     wrap: u => `https://cors.isomorphic-git.org/${u}`,                         note: 'CORS proxy' },
-    { name: 'jina-reader',    wrap: u => `https://r.jina.ai/${u}`,                                       note: 'server-side reader (markdown)' }
+    { name: 'jina-reader',    wrap: u => `https://r.jina.ai/${u}`,                                       note: 'server-side reader' }
 ];
 
 const FALLBACK_SERVICES = [
@@ -745,7 +797,7 @@ const FALLBACK_SERVICES = [
             const snap = j && j.archived_snapshots && j.archived_snapshots.closest;
             if (!snap || !snap.url) return { ok: false };
             const body = await NATIVE.fetch(snap.url, { cache: 'no-store' }).then(x => x.text());
-            return { ok: true, source: 'wayback', url: snap.url, body, meta: j };
+            return { ok: true, source: 'wayback', url: snap.url, body };
         }
     },
     {
@@ -754,7 +806,7 @@ const FALLBACK_SERVICES = [
             const r = await NATIVE.fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`, { cache: 'no-store' });
             const j = await r.json();
             if (!j || j.status !== 'success') return { ok: false };
-            return { ok: true, source: 'microlink', url, body: JSON.stringify(j.data, null, 2), meta: j.data };
+            return { ok: true, source: 'microlink', url, body: JSON.stringify(j.data, null, 2) };
         }
     }
 ];
@@ -763,8 +815,8 @@ function buildFetchOpts() {
     return {
         method: 'GET',
         cache: 'no-store',
-        redirect: 'follow',
-        credentials: 'same-origin'
+        redirect: $('optRedirect').checked ? 'follow' : 'manual',
+        credentials: $('optCreds').checked ? 'include' : 'same-origin'
     };
 }
 
@@ -789,24 +841,578 @@ async function rawFetch(url, extraHeaders = {}) {
     }
 }
 
-/* ---------- DNS (Cloudflare DoH) ---------- */
+async function timedFetch(url, ms = 10000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(new DOMException('timeout', 'AbortError')), ms);
+    try {
+        return await NATIVE.fetch(url, { signal: ctrl.signal, cache: 'no-store', redirect: 'follow' });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function withTimeout(promise, ms) {
+    let timer;
+    const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout ' + ms + 'ms')), ms);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+}
+
+/* ---------- DNS ---------- */
 async function probeDns(host) {
     try {
         const r = await NATIVE.fetch(
             `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(host)}&type=A`,
             { headers: { 'Accept': 'application/dns-json' }, cache: 'no-store' }
         );
-        const j = await r.json();
-        return j;
+        return await r.json();
     } catch (e) { return null; }
 }
 
-/* ---------- PROCESS RESPONSE ---------- */
+/* ---------- HLS / MEDIA PLAYBACK ---------- */
+let hlsInstance = null;
+let hlsLoadPromise = null;
+
+function ensureHls() {
+    if (window.Hls) return Promise.resolve(window.Hls);
+    if (hlsLoadPromise) return hlsLoadPromise;
+    const urls = [
+        'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js',
+        'https://unpkg.com/hls.js@1.5.13/dist/hls.min.js'
+    ];
+    hlsLoadPromise = new Promise((resolve, reject) => {
+        let i = 0;
+        const tryNext = () => {
+            if (i >= urls.length) return reject(new Error('hls.js gagal dimuat'));
+            const s = document.createElement('script');
+            s.src = urls[i++];
+            s.onload = () => window.Hls ? resolve(window.Hls) : tryNext();
+            s.onerror = tryNext;
+            document.head.appendChild(s);
+        };
+        tryNext();
+    });
+    return hlsLoadPromise;
+}
+
+function destroyHls() {
+    if (hlsInstance) { try { hlsInstance.destroy(); } catch (e) {} hlsInstance = null; }
+}
+
+function isHlsUrl(url) { return /\.m3u8(\?|#|$)/i.test(url); }
+
+function videoErrorMessage(err) {
+    if (!err) return 'kesalahan media tidak diketahui';
+    const map = {
+        1: 'dibatalkan (MEDIA_ERR_ABORTED)',
+        2: 'jaringan gagal — kemungkinan diblokir CORS/region (MEDIA_ERR_NETWORK)',
+        3: 'gagal decode — format/codec tidak didukung (MEDIA_ERR_DECODE)',
+        4: 'sumber tidak didukung / URL salah (MEDIA_ERR_SRC_NOT_SUPPORTED)'
+    };
+    return map[err.code] || ('kode error ' + err.code);
+}
+
+function setStreamState(state, text) {
+    const tag = $('streamTag');
+    tag.textContent = text;
+    tag.className = 'tag' + (state ? ' ' + state : '');
+    $('videoBox').classList.toggle('live', state === 'live');
+}
+
+function attemptPlayback(url, { timeoutMs = 9000 } = {}) {
+    return new Promise((resolve) => {
+        const video = $('monitorVideo');
+        destroyHls();
+        try { video.pause(); } catch (e) {}
+        video.removeAttribute('src');
+        try { video.load(); } catch (e) {}
+
+        let settled = false;
+        const finish = (ok, reason) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            video.removeEventListener('playing', onPlaying);
+            video.removeEventListener('error', onError);
+            if (!ok) destroyHls();
+            resolve({ ok, reason });
+        };
+
+        const onPlaying = () => finish(true, 'playing');
+        const onError = () => finish(false, videoErrorMessage(video.error));
+
+        video.addEventListener('playing', onPlaying);
+        video.addEventListener('error', onError);
+
+        const timer = setTimeout(() => finish(false, `timeout ${Math.round(timeoutMs / 1000)}s`), timeoutMs);
+
+        (async () => {
+            try {
+                if (isHlsUrl(url)) {
+                    const native = video.canPlayType('application/vnd.apple.mpegurl');
+                    if (native === 'probably' || native === 'maybe') {
+                        video.src = url;
+                        video.play().catch(() => {});
+                    } else {
+                        const Hls = await ensureHls();
+                        if (!Hls.isSupported()) return finish(false, 'HLS tidak didukung browser ini');
+                        hlsInstance = new Hls({ maxBufferLength: 15, enableWorker: true });
+                        hlsInstance.on(Hls.Events.ERROR, (evt, data) => {
+                            if (data && data.fatal) finish(false, `hls.js: ${data.type}${data.details ? ' / ' + data.details : ''}`);
+                        });
+                        hlsInstance.loadSource(url);
+                        hlsInstance.attachMedia(video);
+                        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
+                    }
+                } else {
+                    video.src = url;
+                    video.play().catch(() => {});
+                }
+            } catch (e) { finish(false, e.message); }
+        })();
+    });
+}
+
+async function playStream(url) {
+    $('videoPlaceholder').style.display = 'none';
+    setStreamState('busy', 'menyambung…');
+    const { ok, reason } = await attemptPlayback(url, { timeoutMs: 9000 });
+    if (ok) {
+        setStreamState('live', isHlsUrl(url) ? 'live (terkonfirmasi)' : 'live');
+        return true;
+    }
+    setStreamState('err', 'gagal diputar');
+    $('videoPlaceholder').textContent = `Gagal diputar: ${reason}. Link tetap tersimpan di Vault / riwayat.`;
+    $('videoPlaceholder').style.display = 'flex';
+    log(`[MONITOR] Gagal memutar: ${reason}`, 'warn');
+    return false;
+}
+
+async function playStreamManual() {
+    const input = $('streamUrlInput');
+    let url = input.value.trim();
+    if (!url) { log('[MONITOR] URL stream kosong.', 'warn'); return; }
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    $('streamPlayBtn').disabled = true;
+    log(`[MONITOR] Mencoba memutar manual: ${trunc(url, 70)}`, 'info');
+    const ok = await playStream(url);
+    log(ok ? '[MONITOR] Berhasil — video benar-benar tampil (event "playing" terkonfirmasi).' : '[MONITOR] Tidak berhasil diputar langsung di sini.', ok ? 'success' : 'warn');
+    $('streamPlayBtn').disabled = false;
+}
+
+/* ---------- RENDER CARDS (demo targets) ---------- */
+function renderIpCard(data, ms, source) {
+    const el = $('ipCard');
+    el.classList.remove('empty');
+    const rows = [
+        ['IP', data.ip || data.query || '—'],
+        ['Kota', data.city || data.cityName || '—'],
+        ['Region', data.region || data.regionName || (data.location && data.location.state) || '—'],
+        ['Negara', data.country_name || data.country || data.countryName || (data.location && data.location.country) || '—'],
+        ['ISP/Org', data.org || data.isp || (data.asn && data.asn.org) || '—'],
+        ['Latensi', ms ? ms + ' ms' : '—'],
+        ['Sumber', source || '—']
+    ];
+    el.innerHTML = `<div class="kv">${rows.map(([k, v]) =>
+        `<div class="row"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`
+    ).join('')}</div>`;
+    $('ipTag').textContent = 'live';
+    $('ipTag').className = 'tag live';
+}
+
+function renderXhrCard(data, meta = '') {
+    const el = $('xhrCard');
+    el.classList.remove('empty');
+    let pretty;
+    try { pretty = JSON.stringify(data, null, 2); } catch (e) { pretty = String(data); }
+    el.innerHTML = `${meta ? `<div class="kv" style="margin-bottom:7px"><div class="row"><span class="k">Meta</span><span class="v">${esc(meta)}</span></div></div>` : ''}<pre class="json">${esc(trunc(pretty, 1400))}</pre>`;
+    $('xhrTag').textContent = 'live';
+    $('xhrTag').className = 'tag live';
+}
+
+function renderRealtime(label, msg) {
+    const el = $('rtCard');
+    el.classList.remove('empty');
+    el.innerHTML = `<div class="kv"><div class="row"><span class="k">Channel</span><span class="v">${esc(label)}</span></div></div>
+        <pre class="json" style="margin-top:7px">${esc(trunc(String(msg), 500))}</pre>`;
+    $('rtTag').textContent = 'live';
+    $('rtTag').className = 'tag live';
+}
+
+/* ---------- DEMO TARGETS ---------- */
+async function targetRealCCTV() {
+    setDot('cctv', 'busy');
+    log('[TARGET] Request API CCTV publik (playlist IPTV)...', 'info');
+    setStreamState('busy', 'mencari…');
+    $('videoPlaceholder').style.display = 'none';
+
+    const known = [
+        'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+        'https://bitdash-a.akamaihd.net/content/sintel/hls/playlist.m3u8',
+        'https://ntv1.akamaized.net/hls/live/2014075/NASA-NTV1-HLS/master.m3u8',
+        'https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8'
+    ];
+
+    let streams = [...known];
+    try {
+        const res = await fetch('https://iptv-org.github.io/iptv/countries/id.m3u');
+        if (res.ok) {
+            const text = await res.text();
+            const found = text.split('\n').map(l => l.trim())
+                .filter(l => l && !l.startsWith('#') && l.includes('.m3u8')).slice(0, 3);
+            streams = [...known, ...found];
+            log(`[TARGET] ${found.length} link tambahan dari iptv-org.`, 'sys');
+        }
+    } catch (e) {
+        log(`[TARGET] iptv-org gagal: ${e.message} — pakai daftar tetap.`, 'warn');
+    }
+
+    const MAX_TRY = Math.min(8, streams.length);
+    let success = false;
+    for (let i = 0; i < MAX_TRY; i++) {
+        const url = streams[i];
+        setStreamState('busy', `coba ${i + 1}/${MAX_TRY}…`);
+        log(`[TARGET] Stream #${i + 1}: ${trunc(url, 60)}`, 'sys');
+        const { ok, reason } = await attemptPlayback(url, { timeoutMs: 6500 });
+        if (ok) {
+            setStreamState('live', 'live (terkonfirmasi)');
+            $('streamUrlInput').value = url;
+            log(`[TARGET] Stream #${i + 1} terkonfirmasi tampil.`, 'success');
+            addVault('hls', 'HLS URL', url, 'info', 'CCTV-TARGET');
+            success = true;
+            break;
+        }
+        log(`[TARGET] ✖ #${i + 1} gagal: ${reason}`, 'warn');
+    }
+
+    if (success) setDot('cctv', 'ok');
+    else {
+        setDot('cctv', 'err');
+        setStreamState('err', 'tidak ada yang hidup');
+        $('videoPlaceholder').textContent = `${MAX_TRY} kandidat gagal diputar (CORS/region). Kandidat tetap tercatat di log — coba manual di kolom bawah.`;
+        $('videoPlaceholder').style.display = 'flex';
+        log('[TARGET] Tidak ada stream CCTV berhasil diputar.', 'danger');
+    }
+}
+
+async function targetRealFetch() {
+    setDot('ip', 'busy');
+    log('[TARGET] Mengambil IP publik...', 'info');
+    const sources = [
+        { url: 'https://ipapi.co/json/', map: d => ({ ip: d.ip, city: d.city, region: d.region, country_name: d.country_name, org: d.org }) },
+        { url: 'https://api.ipapi.is/', map: d => ({ ip: d.ip, city: d.location && d.location.city, region: d.location && d.location.state, country_name: d.location && d.location.country, org: d.asn && d.asn.org }) },
+        { url: 'https://freeipapi.com/api/json', map: d => ({ ip: d.ipAddress, cityName: d.cityName, regionName: d.regionName, countryName: d.countryName }) },
+        { url: 'https://api.ipify.org?format=json', map: d => ({ ip: d.ip }) }
+    ];
+    for (const s of sources) {
+        const t0 = performance.now();
+        try {
+            const res = await timedFetch(s.url, 8000);
+            if (!res.ok) { log(`[TARGET] HTTP ${res.status} di ${s.url}`, 'warn'); continue; }
+            const data = await res.json();
+            const ms = Math.round(performance.now() - t0);
+            const mapped = s.map(data);
+            if (!mapped.ip) continue;
+            renderIpCard(mapped, ms, s.url);
+            setDot('ip', 'ok');
+            log(`[TARGET] IP publik: ${mapped.ip} (via ${s.url})`, 'success');
+            return;
+        } catch (e) {
+            log(`[TARGET] ✖ ${s.url}: ${e.message}`, 'warn');
+        }
+    }
+    setDot('ip', 'err');
+    log('[TARGET] Semua endpoint IP gagal.', 'danger');
+}
+
+function targetXHR() {
+    setDot('xhr', 'busy');
+    log('[TARGET] Menghubungi API publik via XHR...', 'info');
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', 'https://dummyjson.com/users/1');
+    xhr.timeout = 12000;
+    xhr.setRequestHeader('X-Demo-Auth', 'Bearer eyJhbGciOiJIUzI1NiJ9.XHR-HEADER-DEMO.sig');
+    xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+            let data;
+            try { data = JSON.parse(xhr.responseText); } catch (e) { data = xhr.responseText; }
+            renderXhrCard(data, `XHR 200 · dummyjson.com/users/1`);
+            setDot('xhr', 'ok');
+            log('[TARGET] XHR 200 OK — user ditarik.', 'success');
+        } else {
+            setDot('xhr', 'err');
+            log(`[TARGET] XHR ${xhr.status}`, 'warn');
+        }
+    };
+    xhr.onerror = () => { setDot('xhr', 'err'); log('[TARGET] XHR network error', 'danger'); };
+    xhr.ontimeout = () => { setDot('xhr', 'err'); log('[TARGET] XHR timeout', 'danger'); };
+    xhr.send();
+}
+
+function targetWS() {
+    setDot('ws', 'busy');
+    log('[TARGET] Membuka WebSocket Echo publik...', 'info');
+
+    const candidates = [
+        'wss://echo.websocket.org',
+        'wss://ws.postman-echo.com/raw',
+        'wss://socketsbay.com/wss/v2/1/demo/'
+    ];
+
+    let i = 0;
+    const tryNext = () => {
+        if (i >= candidates.length) { setDot('ws', 'err'); log('[TARGET] Semua WS gagal.', 'danger'); return; }
+        const url = candidates[i++];
+        try {
+            const ws = new WebSocket(url);
+            let opened = false;
+            const timer = setTimeout(() => { try { ws.close(); } catch (e) {} ; if (!opened) tryNext(); }, 4000);
+            ws.onopen = () => {
+                opened = true;
+                clearTimeout(timer);
+                log(`[TARGET] WS OK → ${url}`, 'success');
+                ws.send(JSON.stringify({ command: 'STREAM', token: 'eyJhbGciOiJIUzI1NiJ9.DUMMY-SECRET.xyz' }));
+            };
+            ws.onmessage = (e) => {
+                log(`[TARGET] WS echo diterima (${String(e.data).length} byte)`, 'success');
+                renderRealtime('WebSocket', e.data);
+                setDot('ws', 'ok');
+            };
+            ws.onerror = () => { clearTimeout(timer); if (!opened) tryNext(); else { setDot('ws', 'err'); log('[TARGET] WS error', 'danger'); } };
+            ws.onclose = () => { log('[TARGET] WS ditutup.', 'sys'); };
+            setTimeout(() => { try { ws.close(); } catch (e) {} }, 5000);
+        } catch (e) { log(`[TARGET] WS ✖ ${url}: ${e.message}`, 'warn'); tryNext(); }
+    };
+    tryNext();
+}
+
+function targetStorage() {
+    setDot('storage', 'busy');
+    log('[TARGET] Menyimpan token sesi demo...', 'info');
+    const token = 'eyJhbGciOiJIUzI1NiJ9.YWRtaW4tc2Vzc2lvbg.SECRET-KEY';
+    try {
+        localStorage.setItem('auth_token', token);
+        localStorage.setItem('demo_session', JSON.stringify({ user: 'admin', token, ts: Date.now() }));
+        log('[TARGET] Token (JWT demo) berhasil disimpan.', 'success');
+        setDot('storage', 'ok');
+    } catch (e) { log('[TARGET] ✖ ' + e.message, 'danger'); setDot('storage', 'err'); }
+}
+
+function targetDetect() {
+    setDot('detect', 'busy');
+    log('[TARGET] Integrity Check...', 'info');
+    setTimeout(() => {
+        const dirty = [];
+        const checks = {
+            'fetch':                    window.fetch,
+            'XMLHttpRequest.open':      XMLHttpRequest.prototype.open,
+            'XMLHttpRequest.send':      XMLHttpRequest.prototype.send,
+            'XMLHttpRequest.setHeader': XMLHttpRequest.prototype.setRequestHeader,
+            'WebSocket':                window.WebSocket,
+            'Storage.setItem':          Storage.prototype.setItem,
+            'sendBeacon':               navigator.sendBeacon,
+            'RTCPeerConnection':        window.RTCPeerConnection,
+            'EventSource':              window.EventSource
+        };
+        for (const [name, fn] of Object.entries(checks)) {
+            if (typeof fn !== 'function') continue;
+            const src = NATIVE.fnToString.call(fn);
+            if (!/\[native code\]/.test(src)) dirty.push(name);
+        }
+        if (dirty.length) {
+            log(`[DETECT] Hook terdeteksi: ${dirty.join(', ')}`, 'warn');
+            setDot('detect', 'err');
+        } else {
+            log('[DETECT] Semua API terlihat native.', 'success');
+            setDot('detect', 'ok');
+        }
+        log('[DETECT] Catatan: deteksi string-based, bukan hash SRI.', 'sys');
+    }, 350);
+}
+
+async function targetRTC() {
+    setDot('rtc', 'busy');
+    log('[TARGET] RTCPeerConnection (STUN Google)...', 'info');
+    try {
+        const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        pc.createDataChannel('test');
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        await new Promise((resolve) => {
+            if (pc.iceGatheringState === 'complete') return resolve();
+            const t = setTimeout(resolve, 5000);
+            pc.addEventListener('icegatheringstatechange', () => {
+                if (pc.iceGatheringState === 'complete') { clearTimeout(t); resolve(); }
+            });
+        });
+
+        const sdp = (pc.localDescription && pc.localDescription.sdp) || '';
+        const n = (sdp.match(/a=candidate:/g) || []).length;
+        renderRealtime('WebRTC', `ICE: ${pc.iceGatheringState} · candidates: ${n}`);
+        log(`[TARGET] RTC OK — ${n} ICE candidate terkumpul.`, n > 0 ? 'success' : 'warn');
+        setDot('rtc', n > 0 ? 'ok' : 'err');
+        setTimeout(() => { try { pc.close(); } catch (e) {} }, 800);
+    } catch (e) { log('[TARGET] ' + e.message, 'danger'); setDot('rtc', 'err'); }
+}
+
+function targetBeacon() {
+    setDot('beacon', 'busy');
+    log('[TARGET] SendBeacon demo...', 'info');
+    const payload = JSON.stringify({ event: 'track', pin: '1234', uid: 'admin', token: 'eyJhbGciOiJIUzI1NiJ9.BEACON-DEMO.sig' });
+    try {
+        const ok = navigator.sendBeacon('https://jsonplaceholder.typicode.com/posts', new Blob([payload], { type: 'application/json' }));
+        setDot('beacon', ok ? 'ok' : 'err');
+        log(ok ? '[TARGET] Beacon diantrikan (fire-and-forget, no-cors).' : '[TARGET] Gagal mengirim beacon.', ok ? 'success' : 'warn');
+    } catch (e) { log('[TARGET] ✖ ' + e.message, 'danger'); setDot('beacon', 'err'); }
+}
+
+function targetEventSource() {
+    setDot('sse', 'busy');
+    log('[TARGET] Membuka EventSource (SSE)...', 'info');
+    const candidates = [
+        'https://stream.wikimedia.org/v2/stream/recentchange',
+        'https://sse.dev/test'
+    ];
+    let i = 0, got = 0;
+    const tryNext = () => {
+        if (i >= candidates.length) {
+            setDot('sse', got ? 'ok' : 'err');
+            log(got ? `[TARGET] SSE OK — ${got} event` : '[TARGET] SSE semua gagal.', got ? 'success' : 'danger');
+            return;
+        }
+        const url = candidates[i++];
+        try {
+            const es = new EventSource(url);
+            let opened = false;
+            const timer = setTimeout(() => { try { es.close(); } catch (e) {} ; if (!opened) tryNext(); }, 5000);
+            es.onopen = () => { opened = true; log(`[TARGET] SSE terbuka → ${url}`, 'success'); };
+            es.onmessage = (e) => {
+                got++;
+                log(`[TARGET] SSE data: ${trunc(e.data, 42)}`, 'success');
+                renderRealtime('SSE', e.data);
+                if (got >= 3) { try { es.close(); } catch (x) {} ; clearTimeout(timer); setDot('sse', 'ok'); }
+            };
+            es.onerror = () => { clearTimeout(timer); if (!opened) tryNext(); };
+            setTimeout(() => { try { es.close(); } catch (e) {} }, 6000);
+        } catch (e) { log(`[TARGET] SSE ✖ ${url}: ${e.message}`, 'warn'); tryNext(); }
+    };
+    tryNext();
+}
+
+/* ---------- LAB CONTROLS ---------- */
+function togglePause() {
+    sniffPaused = !sniffPaused;
+    $('pauseLbl').textContent = sniffPaused ? 'Pause sniffer: ON' : 'Pause sniffer: OFF';
+    log(sniffPaused ? '[SYS] Sniffer PAUSE (hook di-bypass).' : '[SYS] Sniffer ACTIVE.', 'warn');
+}
+
+function showHistory() {
+    if (!reqHistory.length) return log('[HIST] Belum ada riwayat.', 'warn');
+    log(`── Riwayat ${reqHistory.length} request terakhir ──`, 'info');
+    reqHistory.slice(-40).forEach(r => {
+        const st = r.status !== undefined ? r.status : '-';
+        log(`[HIST] ${r.kind} ${st} ${trunc(r.url || '', 70)}`, 'sys');
+    });
+}
+
+const ALL_ACTION_BTN_IDS = [
+    'btnCCTV','btnIP','btnXHR','btnWS','btnStorage','btnDetect','btnRTC','btnBeacon','btnSSE',
+    'runAllBtn','fetchUrlBtn','streamPlayBtn','probeBtn','probeBatchBtn'
+];
+function setActionsDisabled(disabled) {
+    ALL_ACTION_BTN_IDS.forEach(id => { const el = $(id); if (el) el.disabled = disabled; });
+}
+
+async function runAllDemos() {
+    if (smokeRunning) { log('[SMOKE] Masih berjalan...', 'warn'); return; }
+    smokeRunning = true;
+    setActionsDisabled(true);
+
+    log('[SMOKE] Memulai rangkaian demo...', 'info');
+    try {
+        await targetRealFetch();
+        await new Promise(r => setTimeout(r, 500));
+        targetXHR();
+        await new Promise(r => setTimeout(r, 700));
+        targetStorage();
+        await new Promise(r => setTimeout(r, 400));
+        targetBeacon();
+        await new Promise(r => setTimeout(r, 700));
+        await targetRealCCTV();
+        await new Promise(r => setTimeout(r, 700));
+        await targetRTC();
+        await new Promise(r => setTimeout(r, 700));
+        targetWS();
+        await new Promise(r => setTimeout(r, 1000));
+        targetEventSource();
+        await new Promise(r => setTimeout(r, 4000));
+        log('[SMOKE] Rangkaian demo selesai.', 'success');
+    } catch (e) {
+        log(`[SMOKE] Error: ${e.message}`, 'danger');
+    } finally {
+        smokeRunning = false;
+        setActionsDisabled(false);
+    }
+}
+
+async function fetchUrlFromBar() {
+    let url = $('urlInput').value.trim();
+    if (!url) return log('[SYS] URL kosong.', 'warn');
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    log('[SYS] FETCH manual: ' + trunc(url, 60), 'info');
+    try {
+        const res = await fetch(url);
+        const text = await res.text();
+        log(`[SYS] HTTP ${res.status} (${text.length} byte)`, 'success');
+    } catch (e) { log(`[SYS] Gagal: ${e.message}`, 'danger'); }
+}
+
+/* ---------- IFRAME ---------- */
+let iframeEl = null;
+let iframeLoadTimer = null;
+
+function openUrl() {
+    let url = $('urlInput').value.trim();
+    if (!url) return log('[SYS] URL kosong.', 'warn');
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+
+    if (!iframeEl) {
+        iframeEl = document.createElement('iframe');
+        iframeEl.id = 'targetFrame';
+        iframeEl.referrerPolicy = 'no-referrer';
+        iframeEl.style.cssText = 'width:100%;height:260px;border:1px solid var(--line);border-radius:8px;background:#fff;margin-top:4px;';
+        $('iframeHost').appendChild(iframeEl);
+    }
+    $('iframeHost').style.display = 'block';
+    $('closeUrlBtn').classList.add('visible');
+
+    let loaded = false;
+    iframeEl.onload = () => { loaded = true; log('[BROWSER] Iframe berhasil dimuat.', 'success'); };
+    clearTimeout(iframeLoadTimer);
+    iframeLoadTimer = setTimeout(() => {
+        if (!loaded) log('[BROWSER] Situs tidak tampil — mungkin memblokir iframe (X-Frame-Options/CSP).', 'warn');
+    }, 4000);
+
+    iframeEl.src = url;
+    log(`[BROWSER] Memuat iframe: ${trunc(url, 70)}`, 'warn');
+}
+
+function closeUrl() {
+    if (iframeEl) iframeEl.src = 'about:blank';
+    $('iframeHost').style.display = 'none';
+    $('closeUrlBtn').classList.remove('visible');
+}
+
+/* ---------- PROCESS HTTP RESPONSE (universal) ---------- */
 function processHttpResponse(attempt, result) {
     result.meta = {
         status: attempt.status,
         statusText: attempt.statusText || '',
-        contentType: attempt.headers['content-type'] || attempt.headers['Content-Type'] || '',
+        contentType: (attempt.headers && (attempt.headers['content-type'] || attempt.headers['Content-Type'])) || '',
         bytes: attempt.bytes || 0,
         ms: attempt.ms || 0,
         method: attempt.method || '?'
@@ -821,7 +1427,7 @@ function processHttpResponse(attempt, result) {
         try { result.parsed = { type: 'json', data: JSON.parse(body) }; } catch (e) {}
     } else if (/html/i.test(ct) || /<html|<!doctype html/i.test(body.slice(0, 300))) {
         result.parsed = { type: 'html', data: parseHtmlSummary(body) };
-    } else if (/markdown|plain/i.test(ct)) {
+    } else if (/markdown|plain|text\/plain/i.test(ct)) {
         result.parsed = { type: 'text', data: { bytes: body.length, lines: body.split('\n').length } };
     } else if (/xml/i.test(ct) || /^<\?xml|<rss|<feed/i.test(body.trim().slice(0, 100))) {
         result.parsed = { type: 'xml', data: parseXmlSummary(body) };
@@ -851,8 +1457,6 @@ function parseHtmlSummary(html) {
         s.links = Array.from(doc.querySelectorAll('a[href]')).slice(0, 50).map(a => a.href);
         s.scripts = Array.from(doc.querySelectorAll('script[src]')).slice(0, 30).map(x => x.src);
         s.images = Array.from(doc.querySelectorAll('img[src]')).slice(0, 30).map(x => x.src);
-        s.metaTags = Array.from(doc.querySelectorAll('meta[name],meta[property]'))
-            .slice(0, 30).map(m => `${m.getAttribute('name') || m.getAttribute('property')}=${m.content}`);
     } catch (e) {}
     return s;
 }
@@ -874,35 +1478,25 @@ function parseXmlSummary(xml) {
 
 /* ---------- PROBE HTTP ---------- */
 async function probeHttp(profile, result, cancelled) {
-    if ($('optProxy').checked) {
-        for (const strategy of FETCH_STRATEGIES) {
-            if (cancelled()) return false;
-            log(`[PROBE] HTTP via ${strategy.name} (${strategy.note})…`, 'sys');
-            const att = await rawFetch(strategy.wrap(profile.href));
-            att.method = strategy.name;
-            result.attempts.push(att);
-            stats.req++; refreshStats();
-            recordReq({ kind: 'HTTP:' + strategy.name, url: profile.href, status: att.status, ms: att.ms });
+    const strategies = $('optProxy').checked
+        ? FETCH_STRATEGIES
+        : [FETCH_STRATEGIES[0]];
 
-            const gotResponse = att.status >= 200 && att.status < 500;
-            if (gotResponse) {
-                processHttpResponse(att, result);
-                log(`[PROBE] ${strategy.name} OK ${att.status} (${att.bytes} byte, ${att.ms}ms)`, 'success');
-                return att.ok;
-            }
-            log(`[PROBE] ${strategy.name} gagal: ${att.error || ('HTTP ' + att.status)}`, 'warn');
-        }
-    } else {
+    for (const strategy of strategies) {
         if (cancelled()) return false;
-        log('[PROBE] HTTP direct saja (proxy OFF)', 'sys');
-        const att = await rawFetch(profile.href);
-        att.method = 'direct';
+        log(`[PROBE] HTTP via ${strategy.name} (${strategy.note})…`, 'sys');
+        const att = await rawFetch(strategy.wrap(profile.href));
+        att.method = strategy.name;
         result.attempts.push(att);
         stats.req++; refreshStats();
-        if (att.status >= 200 && att.status < 500) {
+        recordReq({ kind: 'HTTP:' + strategy.name, url: profile.href, status: att.status, ms: att.ms });
+
+        if (att.status >= 200 && att.status < 500 && att.body && att.body.length > 0 && !att.body.startsWith('[binary:')) {
             processHttpResponse(att, result);
-            return att.ok;
+            log(`[PROBE] ${strategy.name} OK ${att.status} (${att.bytes}B, ${att.ms}ms)`, 'success');
+            return true;
         }
+        log(`[PROBE] ${strategy.name} gagal: ${att.error || ('HTTP ' + att.status)}`, 'warn');
     }
 
     if ($('optFallback').checked) {
@@ -923,7 +1517,7 @@ async function probeHttp(profile, result, cancelled) {
                         ms: 0,
                         method: 'fallback:' + svc.name
                     }, result);
-                    log(`[PROBE] ${svc.name} OK (${r.body.length} byte)`, 'success');
+                    log(`[PROBE] ${svc.name} OK (${r.body.length}B)`, 'success');
                     return true;
                 }
             } catch (e) {
@@ -933,15 +1527,13 @@ async function probeHttp(profile, result, cancelled) {
     }
 
     if (result.dns && result.dns.Answer && result.dns.Answer.length) {
-        log(`[PROBE] Body tidak terbaca, tapi DNS resolved — host ${profile.host} HIDUP.`, 'warn');
+        log(`[PROBE] Body tidak terbaca, DNS resolved — host HIDUP.`, 'warn');
         result.previewRaw = `[DNS-only result]\nHost: ${profile.host}\nIP: ${result.dns.Answer.map(a => a.data).join(', ')}\n\nSemua jalur HTTP diblokir server, tapi host terbukti hidup via DNS.`;
         return false;
     }
-
     return false;
 }
 
-/* ---------- PROBE DNS ---------- */
 async function probeDnsInto(profile, result) {
     if (!$('optDns').checked) return;
     log(`[PROBE] DNS check → ${profile.host}`, 'sys');
@@ -951,9 +1543,7 @@ async function probeDnsInto(profile, result) {
         const ips = dns.Answer.filter(a => a.type === 1 || a.type === 28 || a.type === 5).map(a => `${a.data}${a.type === 5 ? ' (CNAME)' : ''}`);
         log(`[DNS] ${profile.host} → ${ips.join(', ')}`, 'success');
     } else if (dns && dns.Status === 3) {
-        log(`[DNS] ${profile.host} NXDOMAIN — host tidak ada.`, 'warn');
-    } else {
-        log(`[DNS] ${profile.host} tidak resolve / gagal.`, 'warn');
+        log(`[DNS] ${profile.host} NXDOMAIN.`, 'warn');
     }
 }
 
@@ -974,8 +1564,7 @@ async function probeWs(profile, result, cancelled) {
                 contentType: 'websocket',
                 bytes: messages.reduce((s, m) => s + m.length, 0),
                 ms: Math.round(performance.now() - t0),
-                method: 'ws',
-                reason, messageCount: messages.length,
+                method: 'ws', reason, messageCount: messages.length,
                 closeCode: closeInfo.code, closeReason: closeInfo.reason
             };
             result.previewRaw = messages.join('\n---\n').slice(0, 6000);
@@ -1042,42 +1631,7 @@ async function probeSse(profile, result, cancelled) {
     });
 }
 
-/* ---------- PROBE MEDIA / HLS ---------- */
-let hlsInstance = null;
-function destroyHls() {
-    if (hlsInstance) { try { hlsInstance.destroy(); } catch (e) {} hlsInstance = null; }
-}
-function ensureHls() {
-    if (window.Hls) return Promise.resolve(window.Hls);
-    return new Promise((resolve, reject) => {
-        const urls = [
-            'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js',
-            'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js',
-            'https://unpkg.com/hls.js@1.5.13/dist/hls.min.js'
-        ];
-        let i = 0;
-        const tryNext = () => {
-            if (i >= urls.length) return reject(new Error('hls.js gagal dimuat'));
-            const s = document.createElement('script');
-            s.src = urls[i++];
-            s.onload = () => window.Hls ? resolve(window.Hls) : tryNext();
-            s.onerror = tryNext;
-            document.head.appendChild(s);
-        };
-        tryNext();
-    });
-}
-function videoErrorMessage(err) {
-    if (!err) return 'error media tidak diketahui';
-    const map = {
-        1: 'dibatalkan (MEDIA_ERR_ABORTED)',
-        2: 'jaringan gagal — CORS/region (MEDIA_ERR_NETWORK)',
-        3: 'gagal decode — codec tidak didukung (MEDIA_ERR_DECODE)',
-        4: 'sumber tidak didukung / URL salah (MEDIA_ERR_SRC_NOT_SUPPORTED)'
-    };
-    return map[err.code] || ('kode error ' + err.code);
-}
-
+/* ---------- PROBE MEDIA ---------- */
 async function probeMedia(profile, result, cancelled) {
     const ms = parseInt($('optTimeout').value, 10) || 10000;
     log(`[PROBE] Media → ${trunc(profile.href, 80)}`, 'info');
@@ -1134,9 +1688,9 @@ async function probeMedia(profile, result, cancelled) {
     });
 }
 
-/* ---------- PROBE RTSP (DNS + note) ---------- */
+/* ---------- PROBE RTSP ---------- */
 async function probeRtsp(profile, result) {
-    log(`[PROBE] RTSP tidak bisa langsung di browser. Cek DNS + beri catatan…`, 'sys');
+    log(`[PROBE] RTSP tidak bisa langsung di browser. Cek DNS + catatan…`, 'sys');
     result.meta = {
         status: 'browser-unsupported',
         contentType: 'rtsp',
@@ -1167,10 +1721,8 @@ async function probeUrl(rawUrl) {
 
     const cardId = 'card-' + Math.random().toString(36).slice(2, 10);
     renderResultCard(cardId, result, 'working');
-    stats.probe++; refreshStats();
     log(`[PROBE] === ${profile.kind.toUpperCase()} · ${trunc(profile.href, 70)} ===`, 'info');
 
-    // DNS in parallel (real result even if body fails)
     const dnsPromise = probeDnsInto(profile, result);
 
     let ok = false;
@@ -1329,11 +1881,11 @@ function renderResultCard(cardId, result, state) {
         const last = resultsEl.querySelectorAll('.result-card')[count - 1];
         if (last) last.remove();
     }
-    $('monitorStatus').textContent = `${count} hasil`;
+    $('monitorStatus').textContent = `${count} hasil probe`;
     $('monitorStatus').className = 'pill ok';
 }
 
-/* ---------- CONTROLS ---------- */
+/* ---------- PROBE CONTROLS ---------- */
 async function probeOne() {
     const raw = $('universalInput').value.trim();
     if (!raw) { log('[SYS] Input kosong.', 'warn'); return; }
@@ -1394,27 +1946,26 @@ function clearResults() {
     resultsEl.innerHTML = `<div class="empty-state">
         Tempel URL di kiri lalu klik <strong style="color:var(--cyan)">PROBE</strong> — atau pilih preset.
     </div>`;
-    $('monitorStatus').textContent = 'Belum ada probe';
+    $('monitorStatus').textContent = 'Menunggu hasil…';
     $('monitorStatus').className = 'pill muted';
-    log('[SYS] Hasil dibersihkan.', 'sys');
+    log('[SYS] Hasil probe dibersihkan.', 'sys');
 }
 
 /* ---------- PRESETS ---------- */
 const PRESETS = [
-    { label: 'GitHub API',        url: 'https://api.github.com/users/torvalds' },
-    { label: 'DummyJSON',         url: 'https://dummyjson.com/products/1' },
-    { label: 'IP Check',          url: 'https://api.ipify.org?format=json' },
-    { label: 'CoinDesk BTC',      url: 'https://api.coindesk.com/v1/bpi/currentprice.json' },
-    { label: 'Binance Ticker',    url: 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT' },
-    { label: 'HLS Stream',        url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8' },
-    { label: 'Binance WS',        url: 'wss://stream.binance.com:9443/ws/btcusdt@trade' },
-    { label: 'Wikimedia SSE',     url: 'https://stream.wikimedia.org/v2/stream/recentchange' },
-    { label: 'HTML example.com',  url: 'https://example.com' },
-    { label: 'RSS HN',            url: 'https://hnrss.org/frontpage' },
-    { label: 'Dog API',           url: 'https://dog.ceo/api/breeds/image/random' },
-    { label: 'HTTPBin',           url: 'https://httpbin.org/get' },
-    { label: 'Wikipedia',         url: 'https://en.wikipedia.org/wiki/HTTP' },
-    { label: 'JSONPlaceholder',   url: 'https://jsonplaceholder.typicode.com/posts/1' }
+    { label: 'GitHub API',       url: 'https://api.github.com/users/torvalds' },
+    { label: 'DummyJSON',        url: 'https://dummyjson.com/products/1' },
+    { label: 'IP Check',         url: 'https://api.ipify.org?format=json' },
+    { label: 'CoinDesk BTC',     url: 'https://api.coindesk.com/v1/bpi/currentprice.json' },
+    { label: 'Binance Ticker',   url: 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT' },
+    { label: 'HLS Mux',          url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8' },
+    { label: 'Binance WS',       url: 'wss://stream.binance.com:9443/ws/btcusdt@trade' },
+    { label: 'Wikimedia SSE',    url: 'https://stream.wikimedia.org/v2/stream/recentchange' },
+    { label: 'HTML example.com', url: 'https://example.com' },
+    { label: 'RSS HN',           url: 'https://hnrss.org/frontpage' },
+    { label: 'Dog API',          url: 'https://dog.ceo/api/breeds/image/random' },
+    { label: 'HTTPBin',          url: 'https://httpbin.org/get' },
+    { label: 'Wikipedia',        url: 'https://en.wikipedia.org/wiki/HTTP' }
 ];
 
 function renderPresets() {
@@ -1442,85 +1993,249 @@ function updateProfileBadge() {
 }
 
 /* ---------- HOOKS ---------- */
-function hookedFetch(input, init) {
+async function hookedFetch(input, init) {
     const url = (typeof input === 'string') ? input : (input && input.url) || String(input);
     const method = ((init && init.method) || 'GET').toUpperCase();
     if (sniffPaused) return NATIVE.fetch(input, init);
     stats.req++; refreshStats();
     const t0 = performance.now();
-    try { log(`[FETCH] ${method} ${trunc(url, 84)}`, 'info'); } catch (e) {}
+    try {
+        log(`[FETCH] ${method} ${trunc(url, 84)}`, 'info');
+        if (init && init.body) log(`[FETCH] body → ${trunc(init.body, 70)}`, 'warn');
+        if (init && init.headers) {
+            try {
+                const h = init.headers;
+                const hStr = (typeof h === 'string') ? h
+                    : (h instanceof Headers) ? Array.from(h.entries()).map(([k, v]) => `${k}: ${v}`).join(' | ')
+                    : JSON.stringify(h);
+                log(`[FETCH] headers → ${trunc(hStr, 84)}`, 'sys');
+                scanText(hStr, 'FETCH-HEADERS ' + trunc(url, 50));
+            } catch (e) {}
+        }
+    } catch (e) {}
+
     return NATIVE.fetch(input, init).then(response => {
         const ms = Math.round(performance.now() - t0);
-        log(`[FETCH] ← ${response.status} · ${ms}ms`, response.ok ? 'success' : 'warn');
+        log(`[FETCH] ← ${response.status} ${response.statusText || ''} · ${ms}ms · ${trunc(response.headers.get('content-type') || '', 40)}`,
+            response.ok ? 'success' : 'warn');
         recordReq({ kind: 'FETCH', method, url, status: response.status, ms });
         const ct = response.headers.get('content-type') || '';
         if (shouldInspect(url, ct)) {
-            response.clone().text().then(text => { scanText(text, 'FETCH ' + trunc(url, 60)); }).catch(() => {});
+            response.clone().text().then(text => {
+                log(`[FETCH] body ${text.length} byte`, 'sys');
+                scanText(text, 'FETCH ' + trunc(url, 60));
+            }).catch(() => {});
         }
         return response;
     }).catch(err => {
-        log(`[FETCH] ✖ ${err.message}`, 'danger');
-        recordReq({ kind: 'FETCH', method, url, status: 0, error: err.message });
+        const ms = Math.round(performance.now() - t0);
+        log(`[FETCH] ✖ ${err.message} · ${ms}ms`, 'danger');
+        recordReq({ kind: 'FETCH', method, url, status: 0, ms, error: err.message });
         throw err;
     });
 }
 
-function hookedXHROpen(method, url) { this.__meta = { method: String(method || 'GET').toUpperCase(), url: String(url) }; return NATIVE.XHRopen.apply(this, arguments); }
+function hookedXHROpen(method, url) {
+    this.__meta = { method: String(method || 'GET').toUpperCase(), url: String(url) };
+    this.__headers = {};
+    return NATIVE.XHRopen.apply(this, arguments);
+}
+
+function hookedXHRSetRequestHeader(name, value) {
+    if (!this.__headers) this.__headers = {};
+    this.__headers[name] = value;
+    if (!sniffPaused) {
+        try {
+            log(`[XHR] header "${name}": ${trunc(value, 64)}`, 'sys');
+            scanText(`${name}: ${value}`, 'XHR-HEADER');
+        } catch (e) {}
+    }
+    return NATIVE.XHRsetReqHeader.apply(this, arguments);
+}
+
 function hookedXHRSend(body) {
     const meta = this.__meta || {};
     if (sniffPaused) return NATIVE.XHRsend.apply(this, arguments);
+
     stats.req++; refreshStats();
-    try { log(`[XHR] ${meta.method} ${trunc(meta.url, 84)}`, 'info'); } catch (e) {}
+    try {
+        log(`[XHR] ${meta.method || 'GET'} ${trunc(meta.url || '?', 84)}`, 'info');
+        if (body) log(`[XHR] body → ${trunc(body, 70)}`, 'warn');
+    } catch (e) {}
+
     this.addEventListener('load', function () {
         try {
-            recordReq({ kind: 'XHR', method: meta.method, url: meta.url, status: this.status });
+            const m = this.__meta || {};
+            log(`[XHR] ← ${this.status} · ${trunc(m.url || '?', 72)}`,
+                this.status >= 200 && this.status < 400 ? 'success' : 'warn');
+            recordReq({ kind: 'XHR', method: m.method, url: m.url, status: this.status });
             const ct = this.getResponseHeader('content-type') || '';
-            if (!shouldInspect(meta.url, ct)) return;
+            if (!shouldInspect(m.url, ct)) return;
             let text = null;
             if (this.responseType === '' || this.responseType === 'text') text = this.responseText;
             else if (this.responseType === 'json') text = this.response ? JSON.stringify(this.response) : null;
-            if (text) scanText(text, 'XHR ' + trunc(meta.url, 60));
+            if (text) {
+                log(`[XHR] body ${text.length} byte`, 'sys');
+                scanText(text, 'XHR ' + trunc(m.url || '', 60));
+            }
         } catch (e) {}
     });
+    this.addEventListener('timeout', function () {
+        try { log(`[XHR] ✖ timeout · ${trunc((this.__meta || {}).url || '?', 72)}`, 'danger'); } catch (e) {}
+    });
+    this.addEventListener('error', function () {
+        try { log(`[XHR] ✖ network error · ${trunc((this.__meta || {}).url || '?', 72)}`, 'danger'); } catch (e) {}
+    });
+    if (!this.timeout) { try { this.timeout = 20000; } catch (e) {} }
     return NATIVE.XHRsend.apply(this, arguments);
 }
 
 function HookedWS(url, protocols) {
     if (sniffPaused) return (protocols !== undefined) ? new NATIVE.WS(url, protocols) : new NATIVE.WS(url);
+    const urlStr = String(url);
+    stats.req++; refreshStats();
+    try { log(`[WS] handshake → ${trunc(urlStr, 84)}`, 'info'); } catch (e) {}
     const ws = (protocols !== undefined) ? new NATIVE.WS(url, protocols) : new NATIVE.WS(url);
+    ws.addEventListener('open',  () => { try { log('[WS] terbuka', 'success'); } catch (e) {} });
+    ws.addEventListener('close', () => { try { log('[WS] ditutup', 'sys'); } catch (e) {} });
+    ws.addEventListener('error', () => { try { log('[WS] error', 'danger'); } catch (e) {} });
     ws.addEventListener('message', (e) => {
-        if (typeof e.data === 'string') scanText(e.data, 'WS ' + trunc(String(url), 50));
+        try {
+            if (typeof e.data === 'string') {
+                log(`[WS] ← frame ${e.data.length} byte`, 'info');
+                scanText(e.data, 'WS ' + trunc(urlStr, 50));
+            } else {
+                log(`[WS] ← binary frame`, 'sys');
+            }
+        } catch (err) {}
     });
+    const nativeSend = ws.send.bind(ws);
+    ws.send = function (data) {
+        try {
+            if (typeof data === 'string') {
+                log(`[WS] → ${trunc(data, 70)}`, 'warn');
+                scanText(data, 'WS-SEND');
+            }
+        } catch (err) {}
+        return nativeSend(data);
+    };
     return ws;
 }
 HookedWS.prototype = NATIVE.WS.prototype;
+HookedWS.CONNECTING = 0; HookedWS.OPEN = 1; HookedWS.CLOSING = 2; HookedWS.CLOSED = 3;
 
 function hookedSetItem(key, value) {
     if (sniffPaused) return NATIVE.StorageSet.call(this, key, value);
-    try { scanText(String(value), 'STORAGE'); } catch (e) {}
+    try {
+        log(`[STORAGE] Menyimpan "${key}" (${String(value).length} byte)`, 'info');
+        scanText(String(value), 'STORAGE');
+    } catch (e) {}
     return NATIVE.StorageSet.call(this, key, value);
 }
+
+function HookedRTC(config) {
+    if (sniffPaused) return new NATIVE.RTC(config);
+    stats.req++; refreshStats();
+    try { log('[RTC] PeerConnection dibuat', 'info'); } catch (e) {}
+    if (config && config.iceServers) {
+        try {
+            const cfg = JSON.stringify(config.iceServers);
+            log(`[RTC] ICE servers: ${trunc(cfg, 70)}`, 'warn');
+            scanText(cfg, 'RTC-CONFIG');
+        } catch (e) {}
+    }
+    const pc = new NATIVE.RTC(config);
+    const origSetLocal = pc.setLocalDescription.bind(pc);
+    pc.setLocalDescription = function (desc) {
+        if (desc && desc.sdp) {
+            try {
+                log(`[RTC] SDP lokal (${desc.sdp.length} byte)`, 'info');
+                scanText(desc.sdp, 'RTC-SDP-LOCAL');
+            } catch (e) {}
+        }
+        return origSetLocal(desc);
+    };
+    const origSetRemote = pc.setRemoteDescription.bind(pc);
+    pc.setRemoteDescription = function (desc) {
+        if (desc && desc.sdp) {
+            try {
+                log(`[RTC] SDP remote (${desc.sdp.length} byte)`, 'info');
+                scanText(desc.sdp, 'RTC-SDP-REMOTE');
+            } catch (e) {}
+        }
+        return origSetRemote(desc);
+    };
+    const origAddIce = pc.addIceCandidate.bind(pc);
+    pc.addIceCandidate = function (candidate) {
+        if (candidate && candidate.candidate) {
+            try {
+                log(`[RTC] ICE candidate: ${trunc(candidate.candidate, 60)}`, 'sys');
+                scanText(candidate.candidate, 'RTC-ICE');
+            } catch (e) {}
+        }
+        return origAddIce(candidate);
+    };
+    return pc;
+}
+HookedRTC.prototype = NATIVE.RTC ? NATIVE.RTC.prototype : undefined;
+
 function hookedSendBeacon(url, data) {
     if (sniffPaused) return NATIVE.sendBeacon.call(navigator, url, data);
-    if (typeof data === 'string') scanText(data, 'BEACON');
-    try { return NATIVE.sendBeacon.call(navigator, url, data); } catch (e) { return false; }
+    stats.req++; refreshStats();
+    try { log(`[BEACON] → ${trunc(url, 84)}`, 'info'); } catch (e) {}
+    if (data !== undefined && data !== null) {
+        try {
+            if (typeof data === 'string') {
+                log(`[BEACON] payload: ${trunc(data, 70)}`, 'warn');
+                scanText(data, 'BEACON');
+            } else if (data instanceof Blob) {
+                data.text().then(t => {
+                    try {
+                        log(`[BEACON] blob payload: ${trunc(t, 70)}`, 'warn');
+                        scanText(t, 'BEACON');
+                    } catch (e) {}
+                }).catch(() => {});
+            } else {
+                log('[BEACON] payload: [FormData/binary]', 'sys');
+            }
+        } catch (e) {}
+    }
+    try { return NATIVE.sendBeacon.call(navigator, url, data); }
+    catch (e) { try { log(`[BEACON] ✖ ${e.message}`, 'danger'); } catch (err) {} return false; }
 }
+
 function HookedES(url, config) {
     if (sniffPaused) return new NATIVE.ES(url, config);
+    const urlStr = String(url);
+    stats.req++; refreshStats();
+    try { log(`[SSE] koneksi → ${trunc(urlStr, 84)}`, 'info'); } catch (e) {}
     const es = new NATIVE.ES(url, config);
-    es.addEventListener('message', (e) => scanText(String(e.data), 'SSE'));
+    es.addEventListener('open',  () => { try { log('[SSE] terbuka', 'success'); } catch (e) {} });
+    es.addEventListener('error', () => { try { log('[SSE] error / putus', 'warn'); } catch (e) {} });
+    es.addEventListener('message', (e) => {
+        try {
+            log(`[SSE] ← data ${String(e.data).length} byte`, 'info');
+            scanText(String(e.data), 'SSE');
+        } catch (err) {}
+    });
     return es;
 }
 HookedES.prototype = NATIVE.ES ? NATIVE.ES.prototype : undefined;
+HookedES.CONNECTING = 0; HookedES.OPEN = 1; HookedES.CLOSED = 2;
 
+/* ---------- APPLY / REMOVE HOOKS ---------- */
 let hooksActive = false;
+
 function applyHooks() {
     if (hooksActive) return;
     window.fetch = hookedFetch;
     NATIVE.XHR.prototype.open = hookedXHROpen;
     NATIVE.XHR.prototype.send = hookedXHRSend;
+    NATIVE.XHR.prototype.setRequestHeader = hookedXHRSetRequestHeader;
     window.WebSocket = HookedWS;
+    HookedWS.prototype = NATIVE.WS.prototype;
     Storage.prototype.setItem = hookedSetItem;
+    if (NATIVE.RTC) window.RTCPeerConnection = HookedRTC;
     if (NATIVE.sendBeacon) {
         try { Object.defineProperty(navigator, 'sendBeacon', { value: hookedSendBeacon, writable: true, configurable: true }); }
         catch (e) { try { navigator.sendBeacon = hookedSendBeacon; } catch (e2) {} }
@@ -1531,35 +2246,47 @@ function applyHooks() {
     $('targetStatus').className = 'pill warn';
     $('restoreLbl').textContent = 'RESTORE';
 }
+
 function removeHooks() {
     if (!hooksActive) return;
     if (stealthOn) setStealth(false);
     window.fetch = NATIVE.fetch;
     NATIVE.XHR.prototype.open = NATIVE.XHRopen;
     NATIVE.XHR.prototype.send = NATIVE.XHRsend;
+    NATIVE.XHR.prototype.setRequestHeader = NATIVE.XHRsetReqHeader;
     window.WebSocket = NATIVE.WS;
     Storage.prototype.setItem = NATIVE.StorageSet;
+    if (NATIVE.RTC) window.RTCPeerConnection = NATIVE.RTC;
     if (NATIVE.sendBeacon) {
         try { Object.defineProperty(navigator, 'sendBeacon', { value: NATIVE.sendBeacon, writable: true, configurable: true }); }
         catch (e) { try { navigator.sendBeacon = NATIVE.sendBeacon; } catch (e2) {} }
     }
     if (NATIVE.ES) window.EventSource = NATIVE.ES;
+    if (window.__stealthBackup) {
+        Object.freeze = window.__stealthBackup.freeze;
+        Object.seal = window.__stealthBackup.seal;
+        Object.preventExtensions = window.__stealthBackup.preventExtensions;
+        delete window.__stealthBackup;
+    }
     hooksActive = false;
     $('targetStatus').innerHTML = '<span class="dot"></span>ONLINE (Native)';
     $('targetStatus').className = 'pill ok';
     $('restoreLbl').textContent = 'REAPPLY';
-    log('[SYS] Hook dilepas.', 'success');
+    log('[SYS] Semua hook dilepas. Sistem kembali normal.', 'success');
 }
 
+/* ---------- STEALTH ---------- */
 function setStealth(on) {
     stealthOn = on;
     const pairs = [
         [window.fetch, 'fetch'],
         [XMLHttpRequest.prototype.open, 'open'],
         [XMLHttpRequest.prototype.send, 'send'],
+        [XMLHttpRequest.prototype.setRequestHeader, 'setRequestHeader'],
         [window.WebSocket, 'WebSocket'],
         [Storage.prototype.setItem, 'setItem'],
         [navigator.sendBeacon, 'sendBeacon'],
+        [window.RTCPeerConnection, 'RTCPeerConnection'],
         [window.EventSource, 'EventSource']
     ];
     if (on) {
@@ -1568,20 +2295,47 @@ function setStealth(on) {
                 try { Object.defineProperty(fn, 'toString', { value: () => `function ${name}() { [native code] }`, configurable: true }); } catch (e) {}
             }
         }
-        log('[SYS] Stealth COSMETIC aktif.', 'warn');
+        if (!window.__stealthBackup) {
+            window.__stealthBackup = { freeze: Object.freeze, seal: Object.seal, preventExtensions: Object.preventExtensions };
+        }
+        const bk = window.__stealthBackup;
+        Object.freeze = function (obj) {
+            if (obj === window || obj === navigator) { log('[STEALTH] Object.freeze() pada global diblokir', 'warn'); return obj; }
+            return bk.freeze.call(Object, obj);
+        };
+        Object.seal = function (obj) {
+            if (obj === window || obj === navigator) { log('[STEALTH] Object.seal() pada global diblokir', 'warn'); return obj; }
+            return bk.seal.call(Object, obj);
+        };
+        Object.preventExtensions = function (obj) {
+            if (obj === window || obj === navigator) { log('[STEALTH] preventExtensions() pada global diblokir', 'warn'); return obj; }
+            return bk.preventExtensions.call(Object, obj);
+        };
+        log('[SYS] Stealth COSMETIC aktif — hook disamarkan. Deteksi via Function.prototype.toString.call() tetap tembus.', 'warn');
     } else {
-        for (const [fn] of pairs) { if (typeof fn === 'function') { try { delete fn.toString; } catch (e) {} } }
-        log('[SYS] Stealth nonaktif.', 'sys');
+        for (const [fn] of pairs) {
+            if (typeof fn === 'function') {
+                try { delete fn.toString; } catch (e) {}
+            }
+        }
+        if (window.__stealthBackup) {
+            Object.freeze = window.__stealthBackup.freeze;
+            Object.seal = window.__stealthBackup.seal;
+            Object.preventExtensions = window.__stealthBackup.preventExtensions;
+            delete window.__stealthBackup;
+        }
+        log('[SYS] Stealth NONAKTIF.', 'sys');
     }
     $('stealthLbl').textContent = `STEALTH: ${on ? 'ON' : 'OFF'}`;
     $('stealthBtn').classList.toggle('on', on);
 }
 
+/* ---------- EXPORT ---------- */
 function exportVault() {
     if (!vaultEntries.length) return log('[EXPORT] Vault kosong.', 'warn');
     const data = {
         export_at: new Date().toISOString(),
-        version: 'universal-probe-v2',
+        version: 'gold-master-full-probe',
         stats,
         filters: Array.from(scanEnabled),
         vault: vaultEntries,
@@ -1591,11 +2345,15 @@ function exportVault() {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `vault-probe-${Date.now()}.json`;
-        document.body.appendChild(a); a.click(); a.remove();
+        a.download = `vault-gold-master-${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 1500);
         log(`[EXPORT] ${vaultEntries.length} temuan diekspor.`, 'success');
-    } catch (e) { log(`[EXPORT] ✖ ${e.message}`, 'danger'); }
+    } catch (e) {
+        log(`[EXPORT] ✖ ${e.message}`, 'danger');
+    }
 }
 
 /* ---------- BINDINGS ---------- */
@@ -1606,6 +2364,12 @@ $('exportBtn').onclick = exportVault;
 $('filterAll').onclick = () => applyFilter('all');
 $('filterLeak').onclick = () => applyFilter('leak');
 $('filterScan').onclick = () => applyFilter('scan');
+$('openUrlBtn').onclick = openUrl;
+$('closeUrlBtn').onclick = closeUrl;
+$('fetchUrlBtn').onclick = fetchUrlFromBar;
+$('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchUrlFromBar(); });
+$('streamPlayBtn').onclick = playStreamManual;
+$('streamUrlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') playStreamManual(); });
 $('universalInput').addEventListener('input', updateProfileBadge);
 $('universalInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); probeOne(); }
@@ -1616,17 +2380,17 @@ applyHooks();
 renderScanToggles();
 renderPresets();
 updateProfileBadge();
+renderScanCard();
 refreshStats();
 updateVaultCount();
 
 log('════════════════════════════════════════════', 'sys');
-log(' CYBER LAB — UNIVERSAL REAL PROBE v2', 'success');
-log(' 7 jalur HTTP · DNS selalu · WS/SSE/HLS verifikasi event', 'success');
+log(' CYBER LAB GOLD MASTER — FULL + UNIVERSAL PROBE', 'success');
+log(' Demo targets (asli) + Universal probe (baru)', 'success');
 log('════════════════════════════════════════════', 'sys');
-log('[SYS] Setiap URL akan menghasilkan hasil nyata minimal DNS.', 'info');
-log('[SYS] Jalur: direct → 5 proxy → Jina Reader → Wayback → Microlink', 'info');
-log('[SYS] DNS via Cloudflare DoH — tidak butuh CORS, selalu jalan.', 'info');
-log('[SYS] Ctrl+Enter di input = probe cepat. BATCH = semua baris.', 'info');
+log('[SYS] Demo targets: CCTV · IP · XHR · WS · Storage · Detect · RTC · Beacon · SSE', 'info');
+log('[SYS] Universal probe: URL apa pun → auto-detect → 7 jalur → DNS → kartu hasil.', 'info');
+log('[SYS] Ctrl+Enter di universal input = probe cepat. BATCH = semua baris.', 'info');
 </script>
 </body>
 </html>
