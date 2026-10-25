@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cyber Lab v3.3: Real-World Network Interceptor</title>
+<title>Cyber Lab Gold Master v3.4 — Complete Generic Network Interceptor</title>
 <style>
     *, *::before, *::after { box-sizing: border-box; }
 
@@ -278,13 +278,14 @@
         </p>
 
         <!-- URL BAR BARU -->
-        <div class="urlbar">
-            <input type="text" id="urlInput" placeholder="https://example.com" spellcheck="false" autocomplete="off">
-            <button id="openUrlBtn">BUKA</button>
+                <div class="urlbar">
+            <input type="text" id="urlInput" placeholder="https://api.example.com/data  (FETCH = disadap, BUKA = iframe)" spellcheck="false" autocomplete="off">
+            <button id="fetchUrlBtn" title="fetch() URL — tersadap terminal">FETCH</button>
+            <button id="openUrlBtn" title="Buka di iframe (cross-origin tidak tersadap)">BUKA</button>
             <button id="closeUrlBtn" class="close-btn" title="Tutup iframe">✕</button>
         </div>
 
-        <div class="group-label">Demo Core (Hooked)</div>
+        <div class="group-label">Demo Core — trafik generik (Hooked)</div>
 
         <div class="btn-group">
             <button class="btn" onclick="targetRealFetch()">
@@ -339,7 +340,7 @@
             </button>
         </div>
 
-        <div class="group-label">New Hooks (Pass-Through Sniffer)</div>
+        <div class="group-label">Hooks lanjutan (Pass-Through)</div>
 
         <div class="btn-group">
             <button class="btn mini" onclick="targetRTC()">
@@ -373,6 +374,22 @@
             </button>
         </div>
 
+        <div class="group-label">Kontrol lab (smoke / pause / vault / history)</div>
+        <div class="btn-group">
+            <button class="btn mini" id="runAllBtn" onclick="runAllDemos()">
+                <span class="lbl">▶ Jalankan semua demo (smoke test)</span>
+            </button>
+            <button class="btn mini" id="pauseBtn" onclick="togglePause()">
+                <span class="lbl" id="pauseLbl">⏸ Pause sniffer: OFF</span>
+            </button>
+            <button class="btn mini" id="clearVaultBtn" onclick="clearVault()">
+                <span class="lbl">🗑 Kosongkan vault</span>
+            </button>
+            <button class="btn mini" id="histBtn" onclick="showHistory()">
+                <span class="lbl">📋 Riwayat request (terminal)</span>
+            </button>
+        </div>
+
         <div class="screen-wrap">
             <div class="screen" id="targetScreen">
                 <div class="tline">Menunggu interaksi...</div>
@@ -398,6 +415,8 @@
             <div class="stats">
                 <span id="statReq">0 request</span>
                 <span id="statLeak">0 bocor</span>
+                <span id="statHist" title="Riwayat">0 hist</span>
+                <span class="badge ok" style="margin-left:4px">v3.4</span>
             </div>
         </div>
 
@@ -642,22 +661,47 @@ function withTimeout(promise, ms) {
    ============================================================ */
 
 /* ---------- 6A. FETCH ---------- */
+/* Riwayat request generik (bukan khusus CCTV) */
+const reqHistory = [];
+let sniffPaused = false;
+
+function recordReq(entry) {
+    reqHistory.push(Object.assign({ t: Date.now() }, entry));
+    if (reqHistory.length > 200) reqHistory.shift();
+    try {
+        const el = $('statHist');
+        if (el) el.textContent = reqHistory.length + ' hist';
+    } catch (e) {}
+}
+
 async function hookedFetch(input, init) {
     const url = (typeof input === 'string') ? input : (input && input.url) || String(input);
-    const method = (init && init.method) || 'GET';
+    const method = ((init && init.method) || 'GET').toUpperCase();
+    if (sniffPaused) {
+        return NATIVE.fetch.call(this, input, init);
+    }
 
     stats.req++; refreshStats();
+    const t0 = performance.now();
     log(`[FETCH] ${method} ${trunc(url, 82)}`, 'info');
     if (init && init.body) log(`[FETCH] body → ${trunc(init.body, 60)}`, 'warn');
 
     try {
-        const response = await withTimeout(NATIVE.fetch.call(this, input, init), 15000);
+        const response = await withTimeout(NATIVE.fetch.call(this, input, init), 20000);
+        const ms = Math.round(performance.now() - t0);
+        log(`[FETCH] ← ${response.status} ${response.statusText || ''} · ${ms}ms · ${trunc(response.headers.get('content-type') || '', 40)}`, response.ok ? 'success' : 'warn');
+        recordReq({ kind: 'FETCH', method, url, status: response.status, ms });
         response.clone().text()
-            .then(text => scanPayload(text, 'FETCH', true))
+            .then(text => {
+                log(`[FETCH] body ${text.length} byte`, 'sys');
+                scanPayload(text, 'FETCH', true);
+            })
             .catch(() => {});
         return response;
     } catch (err) {
-        log(`[FETCH] ✖ ${err.message}`, 'danger');
+        const ms = Math.round(performance.now() - t0);
+        log(`[FETCH] ✖ ${err.message} · ${ms}ms`, 'danger');
+        recordReq({ kind: 'FETCH', method, url, status: 0, ms, error: err.message });
         throw err;
     }
 }
@@ -670,19 +714,26 @@ function hookedXHROpen(method, url) {
 
 function hookedXHRSend(body) {
     const meta = this.__meta || {};
+    if (sniffPaused) return NATIVE.XHRsend.apply(this, arguments);
     stats.req++; refreshStats();
     log(`[XHR] ${meta.method || 'GET'} ${trunc(meta.url || '?', 82)}`, 'info');
     if (body) log(`[XHR] body → ${trunc(body, 60)}`, 'warn');
 
     this.addEventListener('load', function () {
         try {
+            const meta = this.__meta || {};
+            log(`[XHR] ← ${this.status} · ${trunc(meta.url || '?', 70)}`, this.status >= 200 && this.status < 400 ? 'success' : 'warn');
+            recordReq({ kind: 'XHR', method: meta.method, url: meta.url, status: this.status });
             let text = null;
             if (this.responseType === '' || this.responseType === 'text') {
                 text = this.responseText;
             } else if (this.responseType === 'json') {
                 text = this.response ? JSON.stringify(this.response) : null;
             }
-            if (text) scanPayload(text, 'XHR', true);
+            if (text) {
+                log(`[XHR] body ${text.length} byte`, 'sys');
+                scanPayload(text, 'XHR', true);
+            }
         } catch (e) {}
     });
 
@@ -1166,6 +1217,85 @@ function targetEventSource() {
 }
 
 /* ============================================================
+   9Z. LAB CONTROL — generik (zero regresi demo di atas)
+   ============================================================ */
+function togglePause() {
+    sniffPaused = !sniffPaused;
+    const lbl = $('pauseLbl');
+    if (lbl) lbl.textContent = sniffPaused ? '▶ Pause sniffer: ON (trafik tidak dilog)' : '⏸ Pause sniffer: OFF';
+    log(sniffPaused ? '[SYS] Sniffer PAUSE — request tetap jalan, tidak dilog' : '[SYS] Sniffer ACTIVE', sniffPaused ? 'warn' : 'success');
+}
+
+function clearVault() {
+    vaultEntries.length = 0;
+    vaultSet.clear();
+    const ul = $('vault');
+    if (ul) {
+        const items = ul.querySelectorAll('li');
+        items.forEach(li => li.remove());
+    }
+    stats.leak = 0;
+    refreshStats();
+    updateVaultCount();
+    log('[SYS] Vault dikosongkan.', 'sys');
+}
+
+function showHistory() {
+    if (!reqHistory.length) {
+        log('[HIST] Belum ada request tercatat.', 'warn');
+        return;
+    }
+    log('── Riwayat ' + reqHistory.length + ' request terakhir ──', 'info');
+    reqHistory.slice(-30).forEach((r, i) => {
+        const st = r.status != null ? r.status : '-';
+        const ms = r.ms != null ? (r.ms + 'ms') : '';
+        log(`[HIST] ${r.kind} ${r.method || ''} ${st} ${ms} ${trunc(r.url || '', 70)}`, r.error ? 'danger' : 'sys');
+    });
+}
+
+async function fetchUrlFromBar() {
+    let url = $('urlInput').value.trim();
+    if (!url) {
+        tlog('Isi URL dulu.', 'err');
+        return;
+    }
+    if (!/^https?:\/\//i.test(url) && !/^(about|data):/i.test(url)) {
+        if (/^[\w.-]+\.[a-z]{2,}/i.test(url)) url = 'https://' + url;
+        else { tlog('URL tidak valid.', 'err'); return; }
+    }
+    tlog('FETCH (disadap): ' + trunc(url, 50));
+    log('[BROWSER] FETCH URL dari bar — request lewat hook fetch', 'info');
+    try {
+        const res = await fetch(url, { method: 'GET', mode: 'cors', credentials: 'omit' });
+        const text = await res.text();
+        tlog('HTTP ' + res.status + ' · ' + text.length + ' byte', res.ok ? 'ok' : 'err');
+        if (!res.ok) tlog('Catatan: banyak situs memblokir CORS dari file/lab — itu normal.', 'err');
+    } catch (e) {
+        tlog('✖ ' + e.message + ' (sering karena CORS)', 'err');
+        log('[BROWSER] CORS/network: ' + e.message + ' — coba API publik yang mengizinkan CORS', 'warn');
+    }
+}
+
+async function runAllDemos() {
+    log('[SMOKE] Menjalankan rangkaian demo generik…', 'info');
+    tlog('Smoke test dimulai…');
+    try { await targetRealFetch(); } catch (e) { tlog('realFetch: ' + e.message, 'err'); }
+    await new Promise(r => setTimeout(r, 400));
+    try { targetMockFetch(); } catch (e) {}
+    await new Promise(r => setTimeout(r, 1200));
+    try { targetXHR(); } catch (e) {}
+    await new Promise(r => setTimeout(r, 800));
+    try { targetStorage(); } catch (e) {}
+    await new Promise(r => setTimeout(r, 200));
+    try { targetBeacon(); } catch (e) {}
+    await new Promise(r => setTimeout(r, 200));
+    try { targetDetect(); } catch (e) {}
+    log('[SMOKE] Selesai — cek terminal, stats, vault.', 'success');
+    tlog('Smoke test selesai.', 'ok');
+    showHistory();
+}
+
+/* ============================================================
    10. URL / IFRAME LOADER
    ============================================================ */
 function openUrl() {
@@ -1206,16 +1336,19 @@ function closeUrl() {
    11. EXPORT VAULT (JSON)
    ============================================================ */
 function exportVault() {
-    if (vaultEntries.length === 0) {
-        log('[EXPORT] Vault kosong — tidak ada yang diekspor.', 'warn');
-        return;
-    }
-
     const data = {
         exported_at: new Date().toISOString(),
-        total: vaultEntries.length,
-        entries: vaultEntries
+        lab: 'cyber-lab-gold-master',
+        version: '3.4',
+        mode: 'generic-interceptor',
+        stats: { requests: stats.req, leaks: stats.leak, history: reqHistory.length },
+        vault: vaultEntries.slice(),
+        history: reqHistory.slice(-100)
     };
+    if (!vaultEntries.length && !reqHistory.length) {
+        log('[EXPORT] Tidak ada data vault/history.', 'warn');
+        return;
+    }
 
     const json = JSON.stringify(data, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
@@ -1223,13 +1356,13 @@ function exportVault() {
 
     const a = document.createElement('a');
     a.href = url;
-    a.download = `vault-${Date.now()}.json`;
+    a.download = `cyber-lab-export-${Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
 
     setTimeout(() => URL.revokeObjectURL(url), 1500);
-    log(`[EXPORT] ${vaultEntries.length} entri diekspor ke vault-*.json`, 'success');
+    log(`[EXPORT] vault ${vaultEntries.length} + hist ${Math.min(reqHistory.length,100)} → cyber-lab-export-*.json`, 'success');
 }
 
 /* ============================================================
@@ -1258,8 +1391,18 @@ $('filterLeak').addEventListener('click', () => applyFilter('leak'));
 
 $('openUrlBtn').addEventListener('click', openUrl);
 $('closeUrlBtn').addEventListener('click', closeUrl);
+if ($('fetchUrlBtn')) $('fetchUrlBtn').addEventListener('click', fetchUrlFromBar);
 $('urlInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') openUrl();
+    if (e.key === 'Enter') {
+        if (e.shiftKey) fetchUrlFromBar();
+        else openUrl();
+    }
+});
+document.addEventListener('keydown', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.key === 'p' || e.key === 'P') togglePause();
+    if (e.key === 'h' || e.key === 'H') showHistory();
+    if (e.key === 's' || e.key === 'S') { if (!e.ctrlKey) runAllDemos(); }
 });
 
 /* ============================================================
@@ -1268,11 +1411,13 @@ $('urlInput').addEventListener('keydown', (e) => {
 applyHooks();
 
 log('════════════════════════════════════════════', 'sys');
-log(' ADVANCED INTERCEPTOR v3.3 — GENERIC SNIFFER', 'success');
-log(' REAL-WORLD PASS-THROUGH SNIFFER MODE', 'success');
+log(' CYBER LAB GOLD MASTER v3.4 — COMPLETE', 'success');
+log(' GENERIC · PASS-THROUGH · FETCH/XHR/WS/STORAGE/RTC/BEACON/SSE', 'success');
 log('════════════════════════════════════════════', 'sys');
 log('[SYS] Mode GENERIK — bukan modul CCTV. Hook: fetch, XHR, WS, Storage, Beacon, RTC, SSE', 'info');
 log('[SYS] Semua request diteruskan ke server ASLI, hanya di-sniff datanya.', 'info');
+log('[SYS] FETCH di URL bar = tersadap · BUKA = iframe (cross-origin tidak tersadap)', 'info');
+log('[SYS] Shortcut: S=smoke test · P=pause · H=history', 'info');
 log('[SYS] Menunggu trafik dari target...', 'sys');
 refreshStats();
 updateVaultCount();
