@@ -263,6 +263,8 @@
         border: 1px solid var(--line); color: var(--muted-2);
     }
     .card-h .tag.live { color: var(--green); border-color: rgba(25,255,168,.4); background: rgba(25,255,168,.08); }
+    .card-h .tag.busy { color: var(--amber); border-color: rgba(255,200,87,.45); background: rgba(255,200,87,.09); }
+    .card-h .tag.err  { color: var(--red); border-color: rgba(255,77,109,.5); background: rgba(255,77,109,.08); }
     .card-body { padding: 11px 12px; font-size: 11px; }
     .card-body.empty { color: var(--muted-2); font-style: italic; }
 
@@ -500,11 +502,15 @@
         <p class="desc">Hasil nyata dari tiap tes muncul di sini — bukan cuma baris log.</p>
 
         <div class="card">
-            <div class="card-h"><span>Stream Monitor (HLS)</span><span class="tag" id="streamTag">idle</span></div>
+            <div class="card-h"><span>Stream Monitor (generik — HLS/MP4/WebM)</span><span class="tag" id="streamTag">idle</span></div>
             <div class="video-box" id="videoBox">
                 <div class="rec"><span class="dot"></span>LIVE</div>
                 <video id="monitorVideo" playsinline muted controls></video>
-                <div class="ph-msg" id="videoPlaceholder">Jalankan "Tembak API CCTV Publik" untuk memuat stream publik di sini.</div>
+                <div class="ph-msg" id="videoPlaceholder">Jalankan "Tembak API CCTV Publik", atau tempel URL stream apa pun di bawah lalu PUTAR.</div>
+            </div>
+            <div class="urlbar" style="padding:9px 12px; border-top:1px solid var(--line-soft);">
+                <input type="text" id="streamUrlInput" placeholder="https://.../stream.m3u8 atau video.mp4" spellcheck="false" autocomplete="off" inputmode="url">
+                <button id="streamPlayBtn" title="Coba putar URL stream apa pun secara langsung">PUTAR</button>
             </div>
         </div>
 
@@ -1136,59 +1142,123 @@ function setStealth(on) {
     $('stealthBtn').classList.toggle('on', on);
 }
 
-/* ---------- LIVE MONITOR (BARU) ---------- */
+/* ---------- LIVE MONITOR (BARU) ----------
+   Playback diverifikasi lewat event nyata (playing/error/timeout), bukan
+   diasumsikan "LIVE" begitu play() dipanggil — supaya status yang tampil
+   selalu mencerminkan kondisi sebenarnya, bukan dummy. Generik: menerima
+   URL HLS (.m3u8) maupun file media langsung (mp4/webm/ogg/dll). */
 let hlsInstance = null;
 
-function playStream(url) {
-    const video = $('monitorVideo');
-    const placeholder = $('videoPlaceholder');
-    const box = $('videoBox');
-    const tag = $('streamTag');
-
-    placeholder.style.display = 'none';
-    box.classList.add('live');
-    tag.textContent = 'menyambung…';
-    tag.className = 'tag';
-
-    try {
-        if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
-
-        if (video.canPlayType('application/vnd.apple.mpegurl')) {
-            // Safari/iOS: dukungan HLS native
-            video.src = url;
-            video.play().catch(() => {});
-            tag.textContent = 'live (native)';
-            tag.className = 'tag live';
-        } else if (window.Hls && window.Hls.isSupported()) {
-            hlsInstance = new window.Hls({ maxBufferLength: 15 });
-            hlsInstance.loadSource(url);
-            hlsInstance.attachMedia(video);
-            hlsInstance.on(window.Hls.Events.MANIFEST_PARSED, () => {
-                video.play().catch(() => {});
-                tag.textContent = 'live (hls.js)';
-                tag.className = 'tag live';
-            });
-            hlsInstance.on(window.Hls.Events.ERROR, (evt, data) => {
-                if (data && data.fatal) {
-                    tag.textContent = 'gagal diputar';
-                    placeholder.textContent = 'Stream ditemukan tapi gagal diputar (kemungkinan diblokir CORS/region). Link tetap tersimpan di Vault.';
-                    placeholder.style.display = 'flex';
-                    box.classList.remove('live');
-                    log(`[MONITOR] hls.js error: ${data.type}`, 'warn');
-                }
-            });
-        } else {
-            tag.textContent = 'player tidak tersedia';
-            placeholder.textContent = 'Browser/jaringan ini tidak mendukung pemutaran HLS langsung. Link stream tetap tersimpan di Vault.';
-            placeholder.style.display = 'flex';
-            box.classList.remove('live');
-        }
-    } catch (e) {
-        tag.textContent = 'error';
-        placeholder.textContent = 'Gagal memuat player: ' + e.message;
-        placeholder.style.display = 'flex';
-        box.classList.remove('live');
+function destroyHls() {
+    if (hlsInstance) {
+        try { hlsInstance.destroy(); } catch (e) {}
+        hlsInstance = null;
     }
+}
+
+function isHlsUrl(url) {
+    return /\.m3u8(\?|#|$)/i.test(url);
+}
+
+function videoErrorMessage(err) {
+    if (!err) return 'kesalahan media tidak diketahui';
+    const map = {
+        1: 'dibatalkan (MEDIA_ERR_ABORTED)',
+        2: 'jaringan gagal — kemungkinan diblokir CORS/region (MEDIA_ERR_NETWORK)',
+        3: 'gagal decode — format/codec tidak didukung (MEDIA_ERR_DECODE)',
+        4: 'sumber tidak didukung / URL salah (MEDIA_ERR_SRC_NOT_SUPPORTED)'
+    };
+    return map[err.code] || ('kode error ' + err.code);
+}
+
+function setStreamState(state, text) {
+    const tag = $('streamTag');
+    tag.textContent = text;
+    tag.className = 'tag' + (state ? ' ' + state : '');
+    $('videoBox').classList.toggle('live', state === 'live');
+}
+
+/* Mencoba memutar satu URL dan menunggu konfirmasi NYATA (event 'playing')
+   sebelum dianggap berhasil. Mengembalikan { ok, reason }. */
+function attemptPlayback(url, { timeoutMs = 9000 } = {}) {
+    return new Promise((resolve) => {
+        const video = $('monitorVideo');
+        destroyHls();
+        try { video.pause(); } catch (e) {}
+        video.removeAttribute('src');
+        try { video.load(); } catch (e) {}
+
+        let settled = false;
+        const finish = (ok, reason) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            video.removeEventListener('playing', onPlaying);
+            video.removeEventListener('error', onError);
+            resolve({ ok, reason });
+        };
+
+        const onPlaying = () => finish(true, 'playing');
+        const onError = () => finish(false, videoErrorMessage(video.error));
+
+        video.addEventListener('playing', onPlaying);
+        video.addEventListener('error', onError);
+
+        const timer = setTimeout(() => finish(false, `timeout ${Math.round(timeoutMs / 1000)}s (tidak ada respons)`), timeoutMs);
+
+        try {
+            if (isHlsUrl(url)) {
+                const native = video.canPlayType('application/vnd.apple.mpegurl');
+                if (native === 'probably' || native === 'maybe') {
+                    video.src = url;
+                    video.play().catch(() => {});
+                } else if (window.Hls && window.Hls.isSupported()) {
+                    hlsInstance = new window.Hls({ maxBufferLength: 15 });
+                    hlsInstance.on(window.Hls.Events.ERROR, (evt, data) => {
+                        if (data && data.fatal) finish(false, `hls.js: ${data.type}${data.details ? ' / ' + data.details : ''}`);
+                    });
+                    hlsInstance.loadSource(url);
+                    hlsInstance.attachMedia(video);
+                    hlsInstance.on(window.Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
+                } else {
+                    finish(false, 'HLS tidak didukung di browser ini');
+                }
+            } else {
+                // Generik: mp4/webm/ogg/audio/URL tak dikenal — coba langsung sebagai media src
+                video.src = url;
+                video.play().catch(() => {});
+            }
+        } catch (e) {
+            finish(false, e.message);
+        }
+    });
+}
+
+async function playStream(url) {
+    $('videoPlaceholder').style.display = 'none';
+    setStreamState('busy', 'menyambung…');
+    const { ok, reason } = await attemptPlayback(url, { timeoutMs: 9000 });
+    if (ok) {
+        setStreamState('live', isHlsUrl(url) ? 'live (terkonfirmasi)' : 'live');
+        return true;
+    }
+    setStreamState('err', 'gagal diputar');
+    $('videoPlaceholder').textContent = `Gagal diputar: ${reason}. Link tetap tersimpan di Vault / riwayat.`;
+    $('videoPlaceholder').style.display = 'flex';
+    log(`[MONITOR] Gagal memutar: ${reason}`, 'warn');
+    return false;
+}
+
+async function playStreamManual() {
+    const input = $('streamUrlInput');
+    let url = input.value.trim();
+    if (!url) { log('[MONITOR] URL stream kosong.', 'warn'); return; }
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    $('streamPlayBtn').disabled = true;
+    log(`[MONITOR] Mencoba memutar manual: ${trunc(url, 70)}`, 'info');
+    const ok = await playStream(url);
+    log(ok ? '[MONITOR] Berhasil — video benar-benar tampil (event "playing" terkonfirmasi).' : '[MONITOR] Tidak berhasil diputar langsung di sini.', ok ? 'success' : 'warn');
+    $('streamPlayBtn').disabled = false;
 }
 
 function renderIpCard(data, ms) {
@@ -1231,11 +1301,13 @@ function tlog(msg, cls = '') {
     log('[TARGET] ' + msg, cls === 'err' ? 'warn' : 'sys');
 }
 
-/* 9A. CCTV — multiple fallbacks */
+/* 9A. CCTV — multiple fallbacks, lalu coba putar beberapa kandidat sampai
+   benar-benar terkonfirmasi nyala (event 'playing'), bukan cuma label. */
 async function targetRealCCTV() {
     setDot('cctv', 'busy');
     log('[TARGET] Request API CCTV publik (playlist IPTV)...', 'info');
-    $('streamTag').textContent = 'mencari…';
+    setStreamState('busy', 'mencari…');
+    $('videoPlaceholder').style.display = 'none';
 
     const endpoints = [
         'https://iptv-org.github.io/iptv/countries/id.m3u',
@@ -1244,31 +1316,61 @@ async function targetRealCCTV() {
         'https://cdn.jsdelivr.net/gh/iptv-org/iptv@master/streams/id.m3u'
     ];
 
+    let streams = [];
     for (const ep of endpoints) {
         try {
             const res = await fetch(ep);
             if (!res.ok) { log(`[TARGET] HTTP ${res.status} di ${trunc(ep,50)} — coba cadangan...`, 'warn'); continue; }
             const text = await res.text();
-            const streams = text.split('\n')
+            streams = text.split('\n')
                 .map(l => l.trim())
                 .filter(l => l && !l.startsWith('#') && (l.includes('.m3u8') || l.startsWith('http')));
-
-            log(`[TARGET] ${streams.length} stream HLS terdeteksi.`, 'success');
-
-            if (streams.length > 0) {
-                playStream(streams[0]);
-                setDot('cctv', 'ok');
-            } else {
-                setDot('cctv', 'err');
+            if (streams.length) {
+                log(`[TARGET] ${streams.length} link stream terdaftar dari ${trunc(ep,45)}.`, 'success');
+                break;
             }
-            return;
         } catch (e) {
             log(`[TARGET] ✖ ${trunc(ep,40)}: ${e.message}`, 'warn');
         }
     }
-    setDot('cctv', 'err');
-    $('streamTag').textContent = 'gagal';
-    log('[TARGET] Semua endpoint CCTV gagal diakses.', 'danger');
+
+    if (!streams.length) {
+        setDot('cctv', 'err');
+        setStreamState('err', 'gagal');
+        $('videoPlaceholder').textContent = 'Semua endpoint playlist gagal diakses (cek koneksi internet perangkat).';
+        $('videoPlaceholder').style.display = 'flex';
+        log('[TARGET] Semua endpoint CCTV gagal diakses.', 'danger');
+        return;
+    }
+
+    // Banyak stream publik gratis sudah mati/geo-lock/CORS-block — coba
+    // beberapa kandidat berturut-turut sampai ada yang BENAR-BENAR tampil.
+    const MAX_TRY = Math.min(6, streams.length);
+    let success = false;
+    for (let i = 0; i < MAX_TRY; i++) {
+        const url = streams[i];
+        setStreamState('busy', `mencoba ${i + 1}/${MAX_TRY}…`);
+        log(`[TARGET] Mencoba stream #${i + 1}: ${trunc(url, 60)}`, 'sys');
+        const { ok, reason } = await attemptPlayback(url, { timeoutMs: 7000 });
+        if (ok) {
+            log(`[TARGET] Stream #${i + 1} terkonfirmasi tampil di Live Monitor.`, 'success');
+            setStreamState('live', 'live (terkonfirmasi)');
+            $('streamUrlInput').value = url;
+            success = true;
+            break;
+        }
+        log(`[TARGET] ✖ Stream #${i + 1} gagal: ${reason}`, 'warn');
+    }
+
+    if (success) {
+        setDot('cctv', 'ok');
+    } else {
+        setDot('cctv', 'err');
+        setStreamState('err', 'tidak ada yang hidup');
+        $('videoPlaceholder').textContent = `${streams.length} link ditemukan & tercatat di Vault, tapi ${MAX_TRY} kandidat pertama gagal diputar langsung (umumnya CORS/region-lock pada stream publik gratis). Salin salah satu link dari Vault ke kolom di atas untuk coba manual, atau tempel URL stream lain yang kamu punya.`;
+        $('videoPlaceholder').style.display = 'flex';
+        log(`[TARGET] ${MAX_TRY} kandidat pertama gagal diputar langsung dari browser.`, 'danger');
+    }
 }
 
 /* 9B. IP Public */
@@ -1452,7 +1554,7 @@ async function fetchUrlFromBar() {
 }
 
 /* Tombol yang dinonaktifkan bersama saat smoke test berjalan (robust: cegah klik ganda) */
-const ALL_ACTION_BTN_IDS = ['btnCCTV','btnIP','btnXHR','btnWS','btnStorage','btnDetect','btnRTC','btnBeacon','btnSSE','runAllBtn','fetchUrlBtn'];
+const ALL_ACTION_BTN_IDS = ['btnCCTV','btnIP','btnXHR','btnWS','btnStorage','btnDetect','btnRTC','btnBeacon','btnSSE','runAllBtn','fetchUrlBtn','streamPlayBtn'];
 function setActionsDisabled(disabled) {
     ALL_ACTION_BTN_IDS.forEach(id => { const el = $(id); if (el) el.disabled = disabled; });
 }
@@ -1562,6 +1664,8 @@ $('openUrlBtn').onclick = openUrl;
 $('closeUrlBtn').onclick = closeUrl;
 $('fetchUrlBtn').onclick = fetchUrlFromBar;
 $('urlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') fetchUrlFromBar(); });
+$('streamPlayBtn').onclick = playStreamManual;
+$('streamUrlInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') playStreamManual(); });
 
 /* INIT */
 applyHooks();
