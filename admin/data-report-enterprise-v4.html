@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Enterprise Data Report Studio</title>
+<title>Enterprise Data Report Studio · Lab Profile</title>
 <style>
 :root{
   color-scheme:dark;
@@ -146,6 +146,21 @@ button:focus-visible,.theme-toggle:focus-visible,summary:focus-visible{outline:2
   th{background:#eee!important;color:#000!important;position:static}
   .chart{height:280px;page-break-inside:avoid;border:none}
 }
+
+/* Data Lab profile: additive upgrade, existing component styles preserved. */
+.lab-profile-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin:12px 0}
+.lab-profile-kpi{padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--p);min-width:0}
+.lab-profile-kpi small{display:block;color:var(--muted);font-size:12px}
+.lab-profile-kpi strong{display:block;font-size:clamp(18px,2vw,25px);overflow-wrap:anywhere}
+.lab-profile-table{max-height:420px}
+.lab-profile-table table{white-space:normal;min-width:680px}
+.lab-profile-table td,.lab-profile-table th{vertical-align:top}
+.lab-profile-table td:first-child{font-weight:650;overflow-wrap:anywhere;max-width:220px}
+.lab-note{padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--input);color:var(--muted);font-size:13px}
+.lab-badge{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:2px 8px;font-size:12px;white-space:nowrap}
+.lab-profile-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+@media print{#labProfileCard,.lab-profile-actions{display:none!important}}
+
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
@@ -428,6 +443,20 @@ button:focus-visible,.theme-toggle:focus-visible,summary:focus-visible{outline:2
   <div id="quality" class="status">Belum diperiksa.</div>
 </section>
 
+<section class="card no-print" id="labProfileCard">
+  <h2>🧪 10A. Lab Data Profile & Audit</h2>
+  <p class="muted">Pemeriksaan profil dataset secara lokal: kelengkapan, nilai unik, tipe data, duplikasi baris, rentang numerik, dan kandidat pencilan IQR. Pemeriksaan ini tidak mengubah data sumber.</p>
+  <div class="lab-profile-actions">
+    <button id="labProfileRun" class="secondary" disabled>Jalankan Profil Data</button>
+    <button id="labProfileJson" class="secondary" disabled>Ekspor Profil JSON</button>
+    <button id="labProfileCsv" class="secondary" disabled>Ekspor Profil CSV</button>
+  </div>
+  <div id="labProfileStatus" class="lab-note" role="status" aria-live="polite">Muat dataset terlebih dahulu, lalu jalankan profil data.</div>
+  <div id="labProfileKpis" class="lab-profile-grid" aria-live="polite"></div>
+  <div id="labProfileTable" class="tablewrap lab-profile-table"><p class="muted" style="padding:10px">Belum ada hasil profil.</p></div>
+  <p class="muted" style="font-size:12px;margin-top:8px">Catatan: pencilan IQR adalah penanda statistik, bukan bukti bahwa suatu nilai salah. Nilai kosong dihitung setelah trim spasi. Profil dibuat dari dataset kerja aktif.</p>
+</section>
+
 <section class="card half no-print">
   <h2>11. Ekspor & Bagikan</h2>
   <p class="muted">Unduh hasil dalam berbagai format atau bagikan langsung.</p>
@@ -450,7 +479,7 @@ button:focus-visible,.theme-toggle:focus-visible,summary:focus-visible{outline:2
 </section>
 
 </div>
-<footer>Enterprise Data Report Studio — presisi Kahan sum, percentile interpolasi, insight periode, preset filter, rekonsiliasi total. Client-side 100%.</footer>
+<footer>Enterprise Data Report Studio · Lab Profile — presisi Kahan sum, percentile interpolasi, audit profil kolom, insight periode, preset filter, rekonsiliasi total. Client-side 100%.</footer>
 </main>
 
 <script>
@@ -480,7 +509,8 @@ button:focus-visible,.theme-toggle:focus-visible,summary:focus-visible{outline:2
     advFilterLogic: "and",   // and | or
     undoStack: [],           // snapshots of raw/headers/types
     calcCols: [],            // [{name, expr}]
-    pivotShare: "none"       // none | grand | row | col
+    pivotShare: "none",      // none | grand | row | col
+    labProfile: null
   };
 
   const MAX_UNDO = 8;
@@ -935,6 +965,13 @@ button:focus-visible,.theme-toggle:focus-visible,summary:focus-visible{outline:2
     renderColumnToggles();
     renderPreview();
     quality(S.raw);
+    S.labProfile = null;
+    if ($("labProfileRun")) $("labProfileRun").disabled = false;
+    if ($("labProfileJson")) $("labProfileJson").disabled = true;
+    if ($("labProfileCsv")) $("labProfileCsv").disabled = true;
+    if ($("labProfileStatus")) $("labProfileStatus").textContent = "Dataset berubah atau baru dimuat. Jalankan profil ulang agar hasil sesuai data aktif.";
+    if ($("labProfileKpis")) $("labProfileKpis").innerHTML = "";
+    if ($("labProfileTable")) $("labProfileTable").innerHTML = '<p class="muted" style="padding:10px">Belum ada hasil profil.</p>';
 
     const typeCount = { number: numCols.length, date: dateCols.length, text: textCols.length };
     let loadMsg =
@@ -1158,6 +1195,7 @@ button:focus-visible,.theme-toggle:focus-visible,summary:focus-visible{outline:2
 
   // ---------- UNDO STACK ----------
   function pushUndo(label) {
+    markLabProfileStale();
     try {
       S.undoStack.push({
         label: label || "ubah",
@@ -2648,6 +2686,149 @@ ${note}
     status("exportStatus", "Grafik PNG diunduh.", "good");
   }
 
+
+  // ---------- DATA LAB PROFILE (read-only dataset audit) ----------
+  function buildLabProfile() {
+    if (!S.headers.length || !S.raw.length) throw new Error("Dataset belum memiliki baris dan kolom untuk diperiksa.");
+    const rows = S.raw;
+    const headers = S.headers.slice();
+    const totalRows = rows.length;
+    const duplicateSeen = new Set();
+    let duplicateRows = 0;
+    for (const row of rows) {
+      // JSON array encoding avoids delimiter collisions between adjacent cell values.
+      const key = JSON.stringify(headers.map(header => row[header] ?? ""));
+      if (duplicateSeen.has(key)) duplicateRows++;
+      else duplicateSeen.add(key);
+    }
+    const columns = headers.map(header => {
+      let missing = 0, nonEmpty = 0, invalid = 0, whitespaceOnly = 0;
+      const distinct = new Set();
+      const numeric = [];
+      const type = S.columnTypes[header] || "text";
+      for (const row of rows) {
+        const value = row[header];
+        const rawValue = value == null ? "" : String(value);
+        const trimmed = rawValue.trim();
+        if (!trimmed) {
+          missing++;
+          if (rawValue.length) whitespaceOnly++;
+          continue;
+        }
+        nonEmpty++;
+        distinct.add(rawValue);
+        if (type === "number") {
+          const parsed = num(value);
+          if (parsed === null || !Number.isFinite(parsed)) invalid++;
+          else numeric.push(parsed);
+        } else if (type === "date" && !dateVal(value)) {
+          invalid++;
+        }
+      }
+      numeric.sort((a,b) => a-b);
+      const q1 = numeric.length ? percentile(numeric, .25) : null;
+      const q3 = numeric.length ? percentile(numeric, .75) : null;
+      const iqr = q1 === null || q3 === null ? null : q3 - q1;
+      let outliers = 0;
+      if (iqr !== null) {
+        const low = q1 - 1.5 * iqr, high = q3 + 1.5 * iqr;
+        for (const n of numeric) if (n < low || n > high) outliers++;
+      }
+      return {
+        name: header, type, total: totalRows, missing, missingPct: totalRows ? missing / totalRows * 100 : 0,
+        nonEmpty, distinct: distinct.size, invalid, whitespaceOnly,
+        numericCount: numeric.length, min: numeric.length ? numeric[0] : null,
+        max: numeric.length ? numeric[numeric.length - 1] : null,
+        q1, q3, outliers, outlierLow: iqr === null ? null : q1 - 1.5 * iqr,
+        outlierHigh: iqr === null ? null : q3 + 1.5 * iqr
+      };
+    });
+    const totalCells = totalRows * headers.length;
+    const missingCells = columns.reduce((n,c) => n + c.missing, 0);
+    const invalidCells = columns.reduce((n,c) => n + c.invalid, 0);
+    const completeness = totalCells ? (totalCells - missingCells) / totalCells * 100 : 100;
+    return {
+      schemaVersion: 1, generatedAt: new Date().toISOString(),
+      source: S.name || "dataset", rowCount: totalRows, columnCount: headers.length,
+      totalCells, missingCells, invalidCells, duplicateRows,
+      completenessPct: Number(completeness.toFixed(4)), columns
+    };
+  }
+
+  function renderLabProfile() {
+    if (!S.ready || !S.raw.length) {
+      if ($("labProfileStatus")) $("labProfileStatus").textContent = "Muat dataset terlebih dahulu.";
+      return;
+    }
+    const runBtn = $("labProfileRun");
+    if (runBtn) runBtn.disabled = true;
+    try {
+      const profile = buildLabProfile();
+      S.labProfile = profile;
+      const kpis = [
+        ["Baris", profile.rowCount.toLocaleString("id-ID")],
+        ["Kolom", profile.columnCount.toLocaleString("id-ID")],
+        ["Kelengkapan", profile.completenessPct.toLocaleString("id-ID", {maximumFractionDigits:2}) + "%"],
+        ["Sel kosong", profile.missingCells.toLocaleString("id-ID")],
+        ["Nilai tak valid", profile.invalidCells.toLocaleString("id-ID")],
+        ["Baris duplikat", profile.duplicateRows.toLocaleString("id-ID")]
+      ];
+      $("labProfileKpis").innerHTML = kpis.map(([label,value]) =>
+        `<div class="lab-profile-kpi"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`
+      ).join("");
+      $("labProfileTable").innerHTML = `<table><thead><tr>
+        <th>Kolom</th><th>Tipe</th><th>Kosong</th><th>Kosong %</th><th>Nilai unik</th>
+        <th>Tak valid</th><th>Min</th><th>Maks</th><th>Pencilan IQR</th><th>Spasi saja</th>
+      </tr></thead><tbody>${profile.columns.map(c => `<tr>
+        <td>${esc(c.name)}</td><td><span class="lab-badge">${esc(c.type)}</span></td>
+        <td>${c.missing.toLocaleString("id-ID")}</td><td>${c.missingPct.toLocaleString("id-ID",{maximumFractionDigits:2})}%</td>
+        <td>${c.distinct.toLocaleString("id-ID")}</td><td>${c.invalid.toLocaleString("id-ID")}</td>
+        <td>${c.min === null ? "—" : esc(fmt(c.min))}</td><td>${c.max === null ? "—" : esc(fmt(c.max))}</td>
+        <td>${c.outliers.toLocaleString("id-ID")}</td><td>${c.whitespaceOnly.toLocaleString("id-ID")}</td>
+      </tr>`).join("")}</tbody></table>`;
+      $("labProfileStatus").textContent = `Profil selesai: ${profile.rowCount.toLocaleString("id-ID")} baris × ${profile.columnCount.toLocaleString("id-ID")} kolom. Analisis read-only; data sumber tidak diubah.`;
+      $("labProfileStatus").className = "lab-note";
+      $("labProfileJson").disabled = false;
+      $("labProfileCsv").disabled = false;
+    } catch (error) {
+      $("labProfileStatus").textContent = "Profil gagal: " + (error && error.message ? error.message : String(error));
+      $("labProfileStatus").className = "lab-note bad";
+      $("labProfileJson").disabled = true;
+      $("labProfileCsv").disabled = true;
+    } finally {
+      if (runBtn) runBtn.disabled = !S.ready;
+    }
+  }
+
+  function exportLabProfileJson() {
+    if (!S.labProfile) { status("labProfileStatus", "Jalankan profil data sebelum ekspor.", "warn"); return; }
+    download(new Blob([JSON.stringify(S.labProfile, null, 2)], {type:"application/json;charset=utf-8"}),
+      `Profil_Data_${safe(S.name)}.json`);
+    status("labProfileStatus", "Profil JSON berhasil diunduh.", "good");
+  }
+
+  function exportLabProfileCsv() {
+    if (!S.labProfile) { status("labProfileStatus", "Jalankan profil data sebelum ekspor.", "warn"); return; }
+    const keys = ["name","type","total","missing","missingPct","nonEmpty","distinct","invalid","whitespaceOnly","numericCount","min","max","q1","q3","outliers","outlierLow","outlierHigh"];
+    const quote = value => {
+      let v = value == null ? "" : String(value);
+      if (/^[\t\r\n ]*[=+@]/.test(v) || /^[\t\r\n ]*-(?!\\d+(?:[.,]\\d+)?(?:[eE][+-]?\\d+)?$)/.test(v)) v = "'" + v;
+      return '"' + v.replace(/"/g,'""') + '"';
+    };
+    const lines = [keys.map(quote).join(",")];
+    for (const col of S.labProfile.columns) lines.push(keys.map(k => quote(col[k])).join(","));
+    download(new Blob(["\ufeff" + lines.join("\r\n")], {type:"text/csv;charset=utf-8"}),
+      `Profil_Data_${safe(S.name)}.csv`);
+    status("labProfileStatus", "Profil CSV berhasil diunduh.", "good");
+  }
+
+  function markLabProfileStale() {
+    S.labProfile = null;
+    if ($("labProfileJson")) $("labProfileJson").disabled = true;
+    if ($("labProfileCsv")) $("labProfileCsv").disabled = true;
+    if ($("labProfileStatus") && S.ready) $("labProfileStatus").textContent = "Data kerja berubah. Jalankan profil ulang agar laporan tidak memakai hasil lama.";
+  }
+
   // ---------- SAMPLE ----------
   function sample() {
     loadTable("Contoh_Data.csv", [
@@ -2678,6 +2859,11 @@ ${note}
     S.globalSearch = "";
     S.advFilters = []; S.calcCols = []; S.undoStack = []; S.pivotShare = "none";
     $("file").value = ""; $("docText").value = "";
+    S.labProfile = null;
+    ["labProfileRun","labProfileJson","labProfileCsv"].forEach(id => { if ($(id)) $(id).disabled = true; });
+    if ($("labProfileStatus")) $("labProfileStatus").textContent = "Muat dataset terlebih dahulu, lalu jalankan profil data.";
+    if ($("labProfileKpis")) $("labProfileKpis").innerHTML = "";
+    if ($("labProfileTable")) $("labProfileTable").innerHTML = '<p class="muted" style="padding:10px">Belum ada hasil profil.</p>';
     ["sheet","group","value","agg","date","filter","needle","from","to","analyze","clear",
      "xlsx","report","csv","print","pdf","copy","globalSearch","shareBtn","emailBtn",
      "pivotRow","pivotCol","pivotValue","pivotAgg","pivotLimit","pivotShare","pivotRun","cleanDup","cleanEmpty",
@@ -2750,6 +2936,9 @@ ${note}
   $("file").onchange = () => { if ($("file").files[0]) handleFileSelect($("file").files[0]); };
   $("sample").onclick = sample;
   $("reset").onclick = reset;
+  if ($("labProfileRun")) $("labProfileRun").onclick = renderLabProfile;
+  if ($("labProfileJson")) $("labProfileJson").onclick = () => { try { exportLabProfileJson(); } catch(e) { status("labProfileStatus", "Ekspor JSON gagal: " + e.message, "bad"); } };
+  if ($("labProfileCsv")) $("labProfileCsv").onclick = () => { try { exportLabProfileCsv(); } catch(e) { status("labProfileStatus", "Ekspor CSV gagal: " + e.message, "bad"); } };
   $("analyze").onclick = analyze;
   $("cleanDup").onclick = cleanDuplicates;
   $("cleanEmpty").onclick = cleanEmptyRows;
