@@ -1,6 +1,7 @@
 /**
- * CGO-CYBER PROXY v2.2.0 — Cloudflare Worker
- * Cyber Lab Gold Master companion
+ * CGO-CYBER PROXY v2.2.1 — Cloudflare Worker
+ * Cyber Lab Gold Master v3.4 companion
+ * Zero functional regression from v2.2.0
  *
  * v2.2.0 upgrades:
  *  - CORS: reflect Origin + Access-Control-Allow-Credentials: true (no *)
@@ -779,4 +780,4 @@ function errorResponse(msg, status, targetUrl, wantJson, cors) {
 }
 
 const HELP_HTML =
-  "<!DOCTYPE html>\n<html lang=\"id\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>CGO-CYBER PROXY v2.2</title></head>\n<body style=\"background:#05080f;color:#00ff9c;font-family:monospace;padding:20px;line-height:1.6;max-width:760px;\">\n<h2>🛡️ CGO-CYBER PROXY v2.2.0 AKTIF</h2>\n<p>CORS credentials · Cookie sanitize · CSS/HLS/XML rewrite · SSRF-safe</p>\n<hr style=\"border-color:#1e293b;\">\n<pre style=\"background:#0a1220;padding:12px;border-radius:8px;overflow:auto;\">?url=https://api.github.com\n?url=https://example.com/stream.m3u8\n?b64=...\n/https://api.github.com</pre>\n<p><a href=\"?url=https://api.github.com\" style=\"color:#22d3ee;\">Test GitHub API</a></p>\n</body></html>";
+  "<!DOCTYPE html>\n<html lang=\"id\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>CGO-CYBER PROXY v2.2.1</title></head>\n<body style=\"background:#05080f;color:#00ff9c;font-family:monospace;padding:20px;line-height:1.6;max-width:760px;\">\n<h2>🛡️ CGO-CYBER PROXY v2.2.1 AKTIF</h2>\n<p>CORS credentials · Cookie sanitize · CSS/HLS/XML rewrite · SSRF-safe</p>\n<hr style=\"border-color:#1e293b;\">\n<pre style=\"background:#0a1220;padding:12px;border-radius:8px;overflow:auto;\">?url=https://api.github.com\n?url=https://example.com/stream.m3u8\n?b64=...\n/https://api.github.com</pre>\n<p><a href=\"?url=https://api.github.com\" style=\"color:#22d3ee;\">Test GitHub API</a></p>\n</body></html>";
