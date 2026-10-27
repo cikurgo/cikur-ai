@@ -1336,9 +1336,17 @@ function setStreamState(state, text) {
     $('videoBox').classList.toggle('live', state === 'live');
 }
 
-function attemptPlayback(url, { timeoutMs = 9000 } = {}) {
-    return new Promise((resolve) => {
-        const video = $('monitorVideo');
+function buildProxyMediaUrl(rawUrl) {
+    try {
+        const base = (typeof getCgoProxyBase === 'function') ? getCgoProxyBase() : 'https://cgo-cyber.cikurgo.workers.dev';
+        return base.replace(/\/+$/, '') + '/?url=' + encodeURIComponent(rawUrl);
+    } catch (_) {
+        return 'https://cgo-cyber.cikurgo.workers.dev/?url=' + encodeURIComponent(rawUrl);
+    }
+}
+
+function playMediaSource(video, url) {
+    return new Promise(async (resolve) => {
         destroyHls();
         try { video.pause(); } catch (e) {}
         video.removeAttribute('src');
@@ -1354,40 +1362,80 @@ function attemptPlayback(url, { timeoutMs = 9000 } = {}) {
             if (!ok) destroyHls();
             resolve({ ok, reason });
         };
-
         const onPlaying = () => finish(true, 'playing');
         const onError = () => finish(false, videoErrorMessage(video.error));
-
         video.addEventListener('playing', onPlaying);
         video.addEventListener('error', onError);
+        const timer = setTimeout(() => finish(false, 'timeout'), 9000);
 
-        const timer = setTimeout(() => finish(false, `timeout ${Math.round(timeoutMs / 1000)}s`), timeoutMs);
-
-        (async () => {
-            try {
-                if (isHlsUrl(url)) {
-                    const native = video.canPlayType('application/vnd.apple.mpegurl');
-                    if (native === 'probably' || native === 'maybe') {
-                        video.src = url;
-                        video.play().catch(() => {});
-                    } else {
-                        const Hls = await ensureHls();
-                        if (!Hls.isSupported()) return finish(false, 'HLS tidak didukung browser ini');
-                        hlsInstance = new Hls({ maxBufferLength: 15, enableWorker: true });
-                        hlsInstance.on(Hls.Events.ERROR, (evt, data) => {
-                            if (data && data.fatal) finish(false, `hls.js: ${data.type}${data.details ? ' / ' + data.details : ''}`);
-                        });
-                        hlsInstance.loadSource(url);
-                        hlsInstance.attachMedia(video);
-                        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
-                    }
-                } else {
+        try {
+            if (isHlsUrl(url) || /\.m3u8(\?|#|$)/i.test(url) || /[?&]url=.*m3u8/i.test(url)) {
+                const native = video.canPlayType('application/vnd.apple.mpegurl');
+                // Prefer hls.js for proxied playlists (rewrite works better)
+                const preferHlsJs = /cgo-cyber|workers\.dev\/\?url=/i.test(url);
+                if (!preferHlsJs && (native === 'probably' || native === 'maybe')) {
                     video.src = url;
                     video.play().catch(() => {});
+                } else {
+                    const Hls = await ensureHls();
+                    if (!Hls.isSupported()) {
+                        if (native === 'probably' || native === 'maybe') {
+                            video.src = url;
+                            video.play().catch(() => {});
+                            return;
+                        }
+                        return finish(false, 'HLS tidak didukung browser ini');
+                    }
+                    hlsInstance = new Hls({ maxBufferLength: 15, enableWorker: true });
+                    hlsInstance.on(Hls.Events.ERROR, (evt, data) => {
+                        if (data && data.fatal) finish(false, `hls.js: ${data.type}${data.details ? ' / ' + data.details : ''}`);
+                    });
+                    hlsInstance.loadSource(url);
+                    hlsInstance.attachMedia(video);
+                    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => { video.play().catch(() => {}); });
                 }
-            } catch (e) { finish(false, e.message); }
-        })();
+            } else {
+                video.src = url;
+                video.play().catch(() => {});
+            }
+        } catch (e) {
+            finish(false, e.message || String(e));
+        }
     });
+}
+
+async function attemptPlayback(url, { timeoutMs = 9000 } = {}) {
+    const video = $('monitorVideo');
+    // 1) Direct
+    let r = await playMediaSource(video, url);
+    if (r.ok) return { ok: true, reason: r.reason || 'playing', via: 'direct' };
+
+    // 2) Auto-fallback via CGO proxy (CORS / region)
+    const alreadyProxied = /workers\.dev\/\?url=/i.test(url) || /cgo-cyber/i.test(url);
+    if (!alreadyProxied) {
+        const proxyUrl = buildProxyMediaUrl(url);
+        log('[STREAM] Direct gagal (' + (r.reason || '?') + ') — Memutar via Proxy...', 'warn');
+        setStreamState('busy', 'Memutar via Proxy...');
+        try {
+            const ph = $('videoPlaceholder');
+            if (ph) {
+                ph.style.display = 'flex';
+                ph.textContent = 'Memutar via Proxy...';
+            }
+        } catch (_) {}
+        r = await playMediaSource(video, proxyUrl);
+        if (r.ok) {
+            try {
+                const ph = $('videoPlaceholder');
+                if (ph) ph.style.display = 'none';
+            } catch (_) {}
+            setStreamState('live', 'live (via proxy)');
+            log('[STREAM] Berhasil via Proxy CGO', 'success');
+            return { ok: true, reason: 'playing-via-proxy', via: 'proxy' };
+        }
+        log('[STREAM] Proxy juga gagal: ' + (r.reason || '?'), 'warn');
+    }
+    return { ok: false, reason: r.reason || 'failed', via: 'none' };
 }
 
 async function playStream(url) {
@@ -1917,9 +1965,11 @@ function processHttpResponse(attempt, result) {
     try {
         const h = attempt.headers || {};
         const missing = [];
-        if (!h['x-frame-options'] && !h['X-Frame-Options']) missing.push('X-Frame-Options');
-        if (!h['content-security-policy'] && !h['Content-Security-Policy']) missing.push('Content-Security-Policy');
-        if (!h['strict-transport-security'] && !h['Strict-Transport-Security']) missing.push('Strict-Transport-Security');
+        const has = (name) => !!(h[name] || h[name.toLowerCase()] || h[name.toUpperCase()]);
+        if (!has('x-frame-options')) missing.push('X-Frame-Options');
+        if (!has('content-security-policy')) missing.push('Content-Security-Policy');
+        if (!has('strict-transport-security')) missing.push('Strict-Transport-Security');
+        if (!has('x-content-type-options')) missing.push('X-Content-Type-Options');
         result.securityHeaders = { missing: missing, ok: missing.length === 0 };
         if (missing.length) {
             log('[SEC] ⚠️ Missing Security Headers: ' + missing.join(', '), 'warn');
@@ -2285,6 +2335,25 @@ async function probeUrl(rawUrl) {
     return result;
 }
 
+
+function highlightPreview(text) {
+    let out = esc(String(text || ''));
+    try {
+        const rules = (typeof SCAN_RULES !== 'undefined' && Array.isArray(SCAN_RULES)) ? SCAN_RULES : [];
+        for (const rule of rules) {
+            if (!rule || !rule.re) continue;
+            // Only highlight higher-signal findings
+            if (rule.risk !== 'high' && rule.risk !== 'medium' && rule.id !== 'jwt' && rule.id !== 'bearer' && rule.id !== 'api_key') continue;
+            const src = rule.re.source;
+            const flags = rule.re.flags.replace('g', '') + 'g';
+            let re;
+            try { re = new RegExp(src, flags); } catch (_) { continue; }
+            out = out.replace(re, (m) => '<mark style="background:var(--amber);color:#000;">' + m + '</mark>');
+        }
+    } catch (_) {}
+    return out;
+}
+
 /* ---------- RENDER RESULT CARD ---------- */
 function renderResultCard(cardId, result, state) {
     let card = document.getElementById(cardId);
@@ -2397,7 +2466,7 @@ function renderResultCard(cardId, result, state) {
 
     const rawPreview = result.previewRaw
         ? `<details class="preview"><summary>Preview mentah (${result.previewRaw.length} byte)</summary>
-           <pre>${esc(trunc(result.previewRaw, 4000))}</pre></details>`
+           <pre>${highlightPreview(trunc(result.previewRaw, 4000))}</pre></details>`
         : '';
 
     card.innerHTML = `
