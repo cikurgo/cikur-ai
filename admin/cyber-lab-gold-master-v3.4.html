@@ -513,15 +513,15 @@
 
 <script>
 /* ============================================================
-   CYBER LAB GOLD MASTER v3.4
-   UPGRADES vs v2.1:
-   1. HTTP Methods (GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS) +
-      Request Body + Custom Headers JSON (validated, graceful).
-   2. robustFetch: direct → multi-route proxy fallback (3 tier).
-   3. SQLi Detector (regex error-signature) → Vault.
-   4. Custom Regex Builder (user-input regex → Vault).
-   5. Network Monitor Loop (HEAD ping tiap 5s, start/stop).
-   6. Vault Pagination (50/page) + Copy All.
+   CYBER LAB GOLD MASTER v3.4 — ROBUST FULL
+   UPGRADES:
+   1. HTTP Methods + Body + Custom Headers/Cookies (JSON).
+   2. robustFetch: direct → CGO proxy → public fallbacks.
+   3. Configurable CGO Proxy Base (UI + localStorage).
+   4. SQLi Detector + Custom Regex → Vault.
+   5. Network Monitor · Vault Pagination · Copy All.
+   6. DirBuster concurrent · Fuzz SQLi/XSS wired to Vault.
+   7. FETCH bar uses robustFetch + scan; probe accepts empty body.
    ZERO REGRESSION — all v3.3 features retained + hardened.
    ============================================================ */
 
@@ -2885,7 +2885,7 @@ function exportVault() {
     if (!vaultEntries.length && !reqHistory.length) return log('[EXPORT] Vault & history kosong.', 'warn');
     const data = {
         export_at: new Date().toISOString(),
-        version: 'gold-master-v3.2-full-probe-http-methods',
+        version: 'gold-master-v3.4-robust-full-probe-http-methods',
         stats,
         filters: Array.from(scanEnabled),
         vault: vaultEntries,
@@ -2895,7 +2895,7 @@ function exportVault() {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `vault-gold-master-v3-${Date.now()}.json`;
+        a.download = `vault-gold-master-v3.4-${Date.now()}.json`;
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -2970,7 +2970,7 @@ log('[SYS] Vault & history persistent (localStorage). Ctrl+Enter = probe cepat.'
 log('[SYS] Proxy base bisa diganti di Opsi Probe (simpan otomatis).', 'info');
 log('[SYS] Default CGO: https://cgo-cyber.cikurgo.workers.dev — fallback publik aktif untuk GET.', 'sys');
 
-/* ===== v3.2 UPGRADE HELPERS: JWT Decode, DirBuster, Fuzz, Raw Request ===== */
+/* ===== v3.4 HELPERS: JWT Decode, DirBuster, Fuzz, Raw Request ===== */
 function decodeJwtParts(token) {
     try {
         const parts = String(token).split('.');
