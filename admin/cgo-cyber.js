@@ -1,29 +1,20 @@
 /**
- * CGO-CYBER PROXY v2.1.2 — Cloudflare Worker (deploy-ready)
- * Robust CORS proxy for Cyber Lab Gold Master
+ * CGO-CYBER PROXY v2.2.0 — Cloudflare Worker
+ * Cyber Lab Gold Master companion
  *
- * v2.1.2 deploy fixes (zero regression on v2.1 features):
- *  - HTMLRewriter untuk HTML; XML/RSS/Atom pass-through + URL rewrite teks
- *  - content-encoding hanya di-strip saat body di-transform
- *  - WebSocket: await upstream handshake, 101 hanya jika upstream OK
- *  - WebSocketPair index [0]/[1] (lebih stabil daripada Object.values)
- *  - Path-style tidak menempelkan query proxy ke target
- *  - SSRF, redirect, diagnostic headers, custom ua/referer/origin tetap
- *
- * Deploy: wrangler deploy (modules format)
- * URL:    https://cgo-cyber.cikurgo.workers.dev/?url=https://api.github.com
+ * v2.2.0 upgrades:
+ *  - CORS: reflect Origin + Access-Control-Allow-Credentials: true (no *)
+ *  - Cookie sanitize: strip Domain, Secure, SameSite, Partitioned
+ *  - CSS url() rewrite in <style> and style=""
+ *  - HLS: rewrite #EXT-X-MAP and #EXT-X-KEY URI= for AES-128 playback
+ *  - XML/RSS: skip CDATA and <enclosure> when rewriting URLs
+ *  - Zero regression: SSRF, redirects, method+body, WS, b64, path-style
  */
 
 export default {
   async fetch(request, env, ctx) {
-    const CORS_HEADERS = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD",
-      "Access-Control-Allow-Headers": "*",
-      "Access-Control-Expose-Headers":
-        "*, X-Proxy-Final-Url, X-Proxy-Status, X-Proxy-Redirects",
-      "Access-Control-Max-Age": "86400",
-    };
+    const reqOrigin = request.headers.get("Origin") || "";
+    const CORS_HEADERS = buildCorsHeaders(reqOrigin);
 
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -34,7 +25,6 @@ export default {
       reqUrl.searchParams.get("format") === "json" ||
       (request.headers.get("accept") || "").toLowerCase().includes("application/json");
 
-    // ----- RESOLVE TARGET: ?url= → ?b64= → path-style -----
     let targetUrl = reqUrl.searchParams.get("url");
 
     if (!targetUrl) {
@@ -48,13 +38,7 @@ export default {
           for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
           targetUrl = new TextDecoder().decode(bytes);
         } catch {
-          return errorResponse(
-            "Parameter ?b64= bukan Base64 yang valid",
-            400,
-            "",
-            wantJson,
-            CORS_HEADERS
-          );
+          return errorResponse("Parameter ?b64= bukan Base64 yang valid", 400, "", wantJson, CORS_HEADERS);
         }
       }
     }
@@ -164,6 +148,10 @@ export default {
         }
       }
 
+      // Forward Cookie if client sent via custom header X-Proxy-Cookie
+      const proxyCookie = request.headers.get("X-Proxy-Cookie");
+      if (proxyCookie) upstreamHeaders.set("Cookie", proxyCookie);
+
       const methodUpper = request.method.toUpperCase();
 
       upstreamHeaders.set(
@@ -261,6 +249,7 @@ export default {
       newHeaders.set("X-Proxy-Status", String(response.status));
       newHeaders.set("X-Proxy-Redirects", String(redirectCount));
 
+      // ----- COOKIE SANITIZE (Domain, Secure, SameSite, Partitioned) -----
       let cookies = [];
       try {
         if (typeof response.headers.getSetCookie === "function") {
@@ -270,10 +259,11 @@ export default {
       if (cookies.length) {
         newHeaders.delete("set-cookie");
         for (const c of cookies) {
-          const cleaned = c
+          const cleaned = String(c)
             .replace(/;\s*domain=[^;]*/gi, "")
             .replace(/;\s*secure/gi, "")
-            .replace(/;\s*samesite=[^;]*/gi, "");
+            .replace(/;\s*samesite=[^;]*/gi, "")
+            .replace(/;\s*partitioned/gi, "");
           newHeaders.append("set-cookie", cleaned);
         }
       }
@@ -281,36 +271,67 @@ export default {
       const contentType = (newHeaders.get("content-type") || "").toLowerCase();
       const isHTML =
         contentType.includes("text/html") || contentType.includes("application/xhtml");
-      // XML/RSS/Atom: konten harus utuh agar probe lab berfungsi (bukan HTMLRewriter)
       const isXML =
         contentType.includes("text/xml") ||
         contentType.includes("application/xml") ||
         contentType.includes("application/rss+xml") ||
         contentType.includes("application/atom+xml") ||
         contentType.includes("+xml");
+      const isHLS =
+        contentType.includes("application/vnd.apple.mpegurl") ||
+        contentType.includes("application/x-mpegurl") ||
+        contentType.includes("audio/mpegurl") ||
+        /\.m3u8(\?|$)/i.test(finalUrl);
       const isHead = request.method === "HEAD";
 
-      // ----- XML / RSS / ATOM: pass-through + rewrite URL same-origin (teks, aman) -----
+      const rewriteAbsToProxy = (raw, base) => {
+        if (!raw) return raw;
+        const trimmed = String(raw).trim();
+        if (
+          !trimmed ||
+          trimmed.startsWith("#") ||
+          trimmed.startsWith("data:") ||
+          trimmed.startsWith("blob:") ||
+          trimmed.startsWith("javascript:") ||
+          trimmed.startsWith("mailto:") ||
+          trimmed.startsWith("tel:")
+        ) {
+          return raw;
+        }
+        try {
+          const abs = new URL(trimmed, base || finalUrl);
+          const finalOrigin = new URL(finalUrl).origin;
+          if (abs.origin === targetOrigin || abs.origin === finalOrigin) {
+            return proxyBase + "/?url=" + encodeURIComponent(abs.href);
+          }
+          return abs.href;
+        } catch {
+          return raw;
+        }
+      };
+
+      // ----- HLS playlist rewrite (MAP + KEY + URI) -----
+      if (isHLS && !isHead && response.body) {
+        newHeaders.delete("content-encoding");
+        newHeaders.delete("content-length");
+        let text = await response.text();
+        text = rewriteHlsPlaylist(text, finalUrl, proxyBase, targetOrigin);
+        if (!newHeaders.has("content-type")) {
+          newHeaders.set("content-type", "application/vnd.apple.mpegurl");
+        }
+        return new Response(text, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: newHeaders,
+        });
+      }
+
+      // ----- XML / RSS / ATOM (skip CDATA + enclosure) -----
       if (isXML && !isHead && response.body) {
         newHeaders.delete("content-encoding");
         newHeaders.delete("content-length");
         let xmlText = await response.text();
-        try {
-          const finalOrigin = new URL(finalUrl).origin;
-          // Rewrite http(s) same-origin URLs di dalam feed ke lewat proxy
-          xmlText = xmlText.replace(
-            /(https?:\/\/[^\s"'<>]+)/gi,
-            function (match) {
-              try {
-                const u = new URL(match);
-                if (u.origin === targetOrigin || u.origin === finalOrigin) {
-                  return proxyBase + "/?url=" + encodeURIComponent(u.href);
-                }
-              } catch (_) {}
-              return match;
-            }
-          );
-        } catch (_) {}
+        xmlText = rewriteXmlSafe(xmlText, finalUrl, proxyBase, targetOrigin);
         return new Response(xmlText, {
           status: response.status,
           statusText: response.statusText,
@@ -318,6 +339,7 @@ export default {
         });
       }
 
+      // ----- HTML + CSS url() -----
       if (isHTML && !isHead && response.body) {
         newHeaders.delete("content-encoding");
         newHeaders.delete("content-length");
@@ -328,49 +350,13 @@ export default {
             .replace(/"/g, "&quot;")
             .replace(/</g, "&lt;");
 
-        const rewriteToProxy = (raw) => {
-          if (!raw) return raw;
-          const trimmed = String(raw).trim();
-          if (
-            !trimmed ||
-            trimmed.startsWith("#") ||
-            trimmed.startsWith("data:") ||
-            trimmed.startsWith("blob:") ||
-            trimmed.startsWith("javascript:") ||
-            trimmed.startsWith("mailto:") ||
-            trimmed.startsWith("tel:")
-          ) {
-            return raw;
-          }
-          try {
-            const abs = new URL(trimmed, finalUrl);
-            const finalOrigin = new URL(finalUrl).origin;
-            if (abs.origin === targetOrigin || abs.origin === finalOrigin) {
-              return proxyBase + "/?url=" + encodeURIComponent(abs.href);
-            }
-            return abs.href;
-          } catch {
-            return raw;
-          }
-        };
-
-        const rewriteSrcset = (srcset) => {
-          if (!srcset) return srcset;
-          const results = [];
-          const re = /(data:[^\s,]+|https?:\/\/\S+?|\/\S+?)(\s+[\d.]+[wx])?(?:\s*,\s*|$)/gi;
-          let m;
-          while ((m = re.exec(srcset)) !== null) {
-            if (!m[0]) {
-              re.lastIndex++;
-              continue;
-            }
-            let url = m[1];
-            const desc = m[2] || "";
-            while (url.endsWith(",")) url = url.slice(0, -1);
-            if (!url) continue;
-            results.push(rewriteToProxy(url) + desc);
-          }
-          return results.length ? results.join(", ") : srcset;
+        const rewriteCssUrls = (css) => {
+          if (!css) return css;
+          return String(css).replace(/url\(\s*(['"]?)([^)'"]+)\1\s*\)/gi, (full, q, u) => {
+            const rewritten = rewriteAbsToProxy(u.trim(), finalUrl);
+            const quote = q || "";
+            return "url(" + quote + rewritten + quote + ")";
+          });
         };
 
         const rewriter = new HTMLRewriter()
@@ -393,7 +379,7 @@ export default {
           .on("a[href], link[href], area[href]", {
             element(el) {
               const href = el.getAttribute("href");
-              if (href) el.setAttribute("href", rewriteToProxy(href));
+              if (href) el.setAttribute("href", rewriteAbsToProxy(href, finalUrl));
             },
           })
           .on(
@@ -401,20 +387,46 @@ export default {
             {
               element(el) {
                 const src = el.getAttribute("src");
-                if (src) el.setAttribute("src", rewriteToProxy(src));
+                if (src) el.setAttribute("src", rewriteAbsToProxy(src, finalUrl));
               },
             }
           )
           .on("form[action]", {
             element(el) {
               const action = el.getAttribute("action");
-              if (action) el.setAttribute("action", rewriteToProxy(action));
+              if (action) el.setAttribute("action", rewriteAbsToProxy(action, finalUrl));
             },
           })
           .on("img[srcset], source[srcset]", {
             element(el) {
               const srcset = el.getAttribute("srcset");
-              if (srcset) el.setAttribute("srcset", rewriteSrcset(srcset));
+              if (!srcset) return;
+              const parts = [];
+              const re = /(data:[^\s,]+|https?:\/\/\S+?|\/\S+?)(\s+[\d.]+[wx])?(?:\s*,\s*|$)/gi;
+              let m;
+              while ((m = re.exec(srcset)) !== null) {
+                if (!m[0]) {
+                  re.lastIndex++;
+                  continue;
+                }
+                let url = m[1];
+                const desc = m[2] || "";
+                while (url.endsWith(",")) url = url.slice(0, -1);
+                if (!url) continue;
+                parts.push(rewriteAbsToProxy(url, finalUrl) + desc);
+              }
+              if (parts.length) el.setAttribute("srcset", parts.join(", "));
+            },
+          })
+          .on("style", {
+            text(text) {
+              if (text.text) text.replace(rewriteCssUrls(text.text), { html: false });
+            },
+          })
+          .on("*[style]", {
+            element(el) {
+              const st = el.getAttribute("style");
+              if (st) el.setAttribute("style", rewriteCssUrls(st));
             },
           });
 
@@ -444,6 +456,99 @@ export default {
   },
 };
 
+function buildCorsHeaders(reqOrigin) {
+  const headers = {
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD",
+    "Access-Control-Allow-Headers": "*",
+    "Access-Control-Expose-Headers":
+      "*, X-Proxy-Final-Url, X-Proxy-Status, X-Proxy-Redirects",
+    "Access-Control-Max-Age": "86400",
+  };
+  if (reqOrigin) {
+    headers["Access-Control-Allow-Origin"] = reqOrigin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+    headers["Vary"] = "Origin";
+  } else {
+    // No Origin (curl / same-origin / non-browser) — wildcard OK without credentials
+    headers["Access-Control-Allow-Origin"] = "*";
+  }
+  return headers;
+}
+
+function rewriteHlsPlaylist(text, finalUrl, proxyBase, targetOrigin) {
+  const finalOrigin = new URL(finalUrl).origin;
+  const toProxy = (u) => {
+    try {
+      const abs = new URL(u.trim(), finalUrl);
+      if (abs.origin === targetOrigin || abs.origin === finalOrigin) {
+        return proxyBase + "/?url=" + encodeURIComponent(abs.href);
+      }
+      return abs.href;
+    } catch {
+      return u;
+    }
+  };
+
+  // #EXT-X-MAP:URI="..."
+  text = text.replace(/#EXT-X-MAP:([^\r\n]*)/gi, (line, attrs) => {
+    const next = attrs.replace(/URI="([^"]+)"/i, (_, u) => 'URI="' + toProxy(u) + '"');
+    return "#EXT-X-MAP:" + next;
+  });
+  // #EXT-X-KEY:...URI="..."
+  text = text.replace(/#EXT-X-KEY:([^\r\n]*)/gi, (line, attrs) => {
+    const next = attrs.replace(/URI="([^"]+)"/i, (_, u) => 'URI="' + toProxy(u) + '"');
+    return "#EXT-X-KEY:" + next;
+  });
+  // #EXT-X-MEDIA:...URI="..."
+  text = text.replace(/#EXT-X-MEDIA:([^\r\n]*)/gi, (line, attrs) => {
+    const next = attrs.replace(/URI="([^"]+)"/i, (_, u) => 'URI="' + toProxy(u) + '"');
+    return "#EXT-X-MEDIA:" + next;
+  });
+  // plain segment / playlist relative lines (non-comment)
+  text = text
+    .split("\n")
+    .map((line) => {
+      const t = line.trim();
+      if (!t || t.startsWith("#")) return line;
+      if (/^https?:\/\//i.test(t) || t.startsWith("/") || !t.includes("://")) {
+        try {
+          return toProxy(t);
+        } catch {
+          return line;
+        }
+      }
+      return line;
+    })
+    .join("\n");
+  return text;
+}
+
+function rewriteXmlSafe(xmlText, finalUrl, proxyBase, targetOrigin) {
+  const finalOrigin = new URL(finalUrl).origin;
+  // Protect CDATA and <enclosure ...> blocks from URL rewrite
+  const holders = [];
+  const park = (m) => {
+    holders.push(m);
+    return "\u0000XMLHOLD" + (holders.length - 1) + "\u0000";
+  };
+  let text = xmlText
+    .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, park)
+    .replace(/<enclosure\b[^>]*>/gi, park);
+
+  text = text.replace(/(https?:\/\/[^\s"'<>]+)/gi, (match) => {
+    try {
+      const u = new URL(match);
+      if (u.origin === targetOrigin || u.origin === finalOrigin) {
+        return proxyBase + "/?url=" + encodeURIComponent(u.href);
+      }
+    } catch (_) {}
+    return match;
+  });
+
+  text = text.replace(/\u0000XMLHOLD(\d+)\u0000/g, (_, i) => holders[Number(i)] || "");
+  return text;
+}
+
 async function handleWebSocket(request, targetUrl, targetUrlObj, CORS_HEADERS) {
   try {
     if (typeof WebSocketPair === "undefined") {
@@ -459,7 +564,6 @@ async function handleWebSocket(request, targetUrl, targetUrlObj, CORS_HEADERS) {
     else if (proto === "wss:") fetchUrl = "https://" + targetUrl.slice(6);
 
     const fetchOrigin = new URL(fetchUrl).origin;
-
     const upstreamHeaders = new Headers();
     for (const [k, v] of request.headers) {
       const lk = k.toLowerCase();
@@ -478,10 +582,7 @@ async function handleWebSocket(request, targetUrl, targetUrlObj, CORS_HEADERS) {
     upstreamHeaders.set("Sec-Fetch-Mode", "websocket");
     upstreamHeaders.set("Sec-Fetch-Site", "cross-site");
 
-    const upstreamResponse = await fetch(fetchUrl, {
-      headers: upstreamHeaders,
-    });
-
+    const upstreamResponse = await fetch(fetchUrl, { headers: upstreamHeaders });
     const upstreamWs = upstreamResponse.webSocket;
     if (!upstreamWs || upstreamResponse.status !== 101) {
       const status =
@@ -497,7 +598,6 @@ async function handleWebSocket(request, targetUrl, targetUrlObj, CORS_HEADERS) {
     const pair = new WebSocketPair();
     const client = pair[0];
     const server = pair[1];
-
     server.accept();
     upstreamWs.accept();
 
@@ -570,7 +670,6 @@ async function fetchWithRedirects(url, init, maxRedirects) {
       const loc = res.headers.get("location");
       currentUrl = new URL(loc, currentUrl).toString();
       redirectCount++;
-
       if (
         res.status === 303 ||
         ((res.status === 301 || res.status === 302) &&
@@ -581,7 +680,6 @@ async function fetchWithRedirects(url, init, maxRedirects) {
         currentHeaders.delete("content-type");
         currentHeaders.delete("content-length");
       }
-
       try {
         if (res.body) await res.body.cancel();
       } catch (_) {}
@@ -605,7 +703,10 @@ function isPrivateHost(hostname) {
     const b = Number(v4[2]);
     const c = Number(v4[3]);
     const d = Number(v4[4]);
-    if ([a, b, c, d].some(function (n) { return n > 255; })) return true;
+    if ([a, b, c, d].some(function (n) {
+      return n > 255;
+    }))
+      return true;
     if (a === 0 || a === 10 || a === 127) return true;
     if (a === 169 && b === 254) return true;
     if (a === 172 && b >= 16 && b <= 31) return true;
@@ -637,7 +738,10 @@ function errorResponse(msg, status, targetUrl, wantJson, cors) {
   if (wantJson === undefined) wantJson = false;
   if (cors === undefined) cors = {};
 
-  const headers = Object.assign({ "Access-Control-Allow-Origin": "*" }, cors || {});
+  const headers = Object.assign({}, cors || {});
+  if (!headers["Access-Control-Allow-Origin"]) {
+    headers["Access-Control-Allow-Origin"] = "*";
+  }
 
   if (wantJson) {
     headers["Content-Type"] = "application/json; charset=utf-8";
@@ -675,4 +779,4 @@ function errorResponse(msg, status, targetUrl, wantJson, cors) {
 }
 
 const HELP_HTML =
-  "<!DOCTYPE html>\n<html lang=\"id\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>CGO-CYBER PROXY v2.1.2</title></head>\n<body style=\"background:#05080f;color:#00ff9c;font-family:monospace;padding:20px;line-height:1.6;max-width:760px;\">\n<h2>🛡️ CGO-CYBER PROXY v2.1.2 AKTIF</h2>\n<p>Proxy CORS + SSRF-safe untuk <b>Cyber Lab Gold Master</b>.</p>\n<hr style=\"border-color:#1e293b;\">\n<p><b>Query:</b></p>\n<pre style=\"background:#0a1220;padding:12px;border-radius:8px;overflow:auto;\">?url=https://api.github.com/users/torvalds\n?url=https://httpbin.org/get&amp;timeout=20000&amp;format=json\n?b64=aHR0cHM6Ly9hcGkuZ2l0aHViLmNvbQ==</pre>\n<p><b>Path:</b></p>\n<pre style=\"background:#0a1220;padding:12px;border-radius:8px;overflow:auto;\">/https://api.github.com/users/torvalds</pre>\n<p><b>Custom:</b> <code>?ua=</code> <code>?referer=</code> <code>?origin=</code> <code>?timeout=</code></p>\n<p><b>WebSocket:</b> <code>Upgrade: websocket</code> + <code>?url=wss://...</code></p>\n<p><a href=\"?url=https://api.github.com\" style=\"color:#22d3ee;\">Test: ?url=https://api.github.com</a></p>\n<hr style=\"border-color:#1e293b;\">\n<p style=\"color:#64748b;font-size:12px;\">\n  SSRF · CORS · HTML rewrite · Redirect · Method+Body · Chrome hints · WS · b64<br>\n  X-Proxy-Final-Url · X-Proxy-Status · X-Proxy-Redirects\n</p>\n</body></html>";
+  "<!DOCTYPE html>\n<html lang=\"id\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>CGO-CYBER PROXY v2.2</title></head>\n<body style=\"background:#05080f;color:#00ff9c;font-family:monospace;padding:20px;line-height:1.6;max-width:760px;\">\n<h2>🛡️ CGO-CYBER PROXY v2.2.0 AKTIF</h2>\n<p>CORS credentials · Cookie sanitize · CSS/HLS/XML rewrite · SSRF-safe</p>\n<hr style=\"border-color:#1e293b;\">\n<pre style=\"background:#0a1220;padding:12px;border-radius:8px;overflow:auto;\">?url=https://api.github.com\n?url=https://example.com/stream.m3u8\n?b64=...\n/https://api.github.com</pre>\n<p><a href=\"?url=https://api.github.com\" style=\"color:#22d3ee;\">Test GitHub API</a></p>\n</body></html>";
