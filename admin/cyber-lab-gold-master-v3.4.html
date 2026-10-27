@@ -413,7 +413,7 @@
             <div class="opt"><span>Timeout (ms)</span><input type="number" id="optTimeout" value="10000" min="2000" max="30000" step="1000" style="width:90px"></div>
             <div class="opt" style="flex-direction:column;align-items:stretch;gap:6px;">
                 <span>CGO Proxy Base URL (kosongkan = default)</span>
-                <input type="text" id="optProxyBase" class="mini-input" placeholder="https://cgo-cyber.cikurgo.workers.dev" value="" spellcheck="false" style="width:100%">
+                <input type="text" id="optProxyBase" class="mini-input" placeholder="https://cgo-cyber-lab.cikurgo.workers.dev" value="" spellcheck="false" style="width:100%">
             </div>
             <div class="opt"><span>Chain proxy jika direct gagal</span><input type="checkbox" id="optProxy" checked></div>
             <div class="opt"><span>Fallback ke Wayback / Microlink</span><input type="checkbox" id="optFallback" checked></div>
@@ -1056,15 +1056,20 @@ function getHttpConfig() {
 
 /* ---------- UPGRADE 2: ROBUST FETCH (multi-route proxy) ---------- */
 /* CGO-CYBER = proxy utama (method+body+timeout). Lainnya = fallback GET-only. */
+const CGO_PROXY_DEFAULT = 'https://cgo-cyber-lab.cikurgo.workers.dev';
+const CGO_PROXY_LEGACY = 'https://cgo-cyber.cikurgo.workers.dev'; // proxy lama: otomatis dialihkan ke default baru
+function isLegacyProxyBase(v) {
+    return String(v || '').trim().replace(/\/+$/, '').toLowerCase() === CGO_PROXY_LEGACY;
+}
 function getCgoProxyBase() {
     try {
         const el = document.getElementById('optProxyBase');
         const fromUi = el && el.value ? el.value.trim().replace(/\/+$/, '') : '';
-        if (fromUi && /^https?:\/\//i.test(fromUi)) return fromUi;
+        if (fromUi && /^https?:\/\//i.test(fromUi) && !isLegacyProxyBase(fromUi)) return fromUi;
         const saved = localStorage.getItem('cyberlab_proxy_base_v1');
-        if (saved && /^https?:\/\//i.test(saved)) return saved.replace(/\/+$/, '');
+        if (saved && /^https?:\/\//i.test(saved) && !isLegacyProxyBase(saved)) return saved.replace(/\/+$/, '');
     } catch (_) {}
-    return 'https://cgo-cyber.cikurgo.workers.dev';
+    return CGO_PROXY_DEFAULT;
 }
 
 const PROXY_LIST = [
@@ -1338,10 +1343,10 @@ function setStreamState(state, text) {
 
 function buildProxyMediaUrl(rawUrl) {
     try {
-        const base = (typeof getCgoProxyBase === 'function') ? getCgoProxyBase() : 'https://cgo-cyber.cikurgo.workers.dev';
+        const base = (typeof getCgoProxyBase === 'function') ? getCgoProxyBase() : CGO_PROXY_DEFAULT;
         return base.replace(/\/+$/, '') + '/?url=' + encodeURIComponent(rawUrl);
     } catch (_) {
-        return 'https://cgo-cyber.cikurgo.workers.dev/?url=' + encodeURIComponent(rawUrl);
+        return CGO_PROXY_DEFAULT + '/?url=' + encodeURIComponent(rawUrl);
     }
 }
 
@@ -3010,7 +3015,11 @@ renderVaultPage(1);
 
 // Load saved proxy base into UI
 try {
-    const savedProxy = localStorage.getItem('cyberlab_proxy_base_v1');
+    let savedProxy = localStorage.getItem('cyberlab_proxy_base_v1');
+    if (savedProxy && isLegacyProxyBase(savedProxy)) {
+        localStorage.removeItem('cyberlab_proxy_base_v1'); // bersihkan setelan proxy lama
+        savedProxy = null;
+    }
     const el = document.getElementById('optProxyBase');
     if (el && savedProxy) el.value = savedProxy;
     if (el) {
@@ -3037,7 +3046,7 @@ log('[SYS] Universal probe: URL apa pun → auto-detect → robustFetch → DNS 
 log('[SYS] HTTP Method dropdown + Request Body + Custom Headers aktif di panel kiri.', 'info');
 log('[SYS] Vault & history persistent (localStorage). Ctrl+Enter = probe cepat.', 'info');
 log('[SYS] Proxy base bisa diganti di Opsi Probe (simpan otomatis).', 'info');
-log('[SYS] Default CGO: https://cgo-cyber.cikurgo.workers.dev — fallback publik aktif untuk GET.', 'sys');
+log('[SYS] Default CGO: https://cgo-cyber-lab.cikurgo.workers.dev — fallback publik aktif untuk GET.', 'sys');
 
 /* ===== v3.4 HELPERS: JWT Decode, DirBuster, Fuzz, Raw Request ===== */
 function decodeJwtParts(token) {
