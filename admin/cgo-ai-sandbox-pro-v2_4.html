@@ -3,14 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CGO AI Core - Pro Sandbox v2.4</title>
-    
+    <title>CGO Operator Chat · AI Sandbox v2.5</title>
+    <!-- Tailwind untuk markup chat operator (sama dengan bcgo); sandbox Pollinations tetap pakai CSS sendiri -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Fira+Code:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -993,16 +994,16 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
          Mengubah isi slot = mengubah chat di bcgo.html. Naikkan data-version + query ?v=
          di loader bcgo.html agar cache browser ikut diperbarui.
          ══════════════════════════════════════════════════════════════════════════ -->
-    <template id="cgo-chat-module" data-version="1.1.0-ZR-20261028" data-origin="bcgo.html">
+    <template id="cgo-chat-module" data-version="1.2.0-ZR-PAGEHOST" data-origin="bcgo.html">
     <template data-slot="core"><!-- core JS chat -->
 <script>
 /* ════════════════════════════════════════════════════════════════════════
-   CGO CHAT CORE · v1.1.0-ZR-20261028
+   CGO CHAT CORE · v1.2.0-ZR-PAGEHOST
    Otak UI chat operator (addChat · setChatBusy · sendQuestion · router Mesin ABC ·
    listener form & quick-q). Dipindah UTUH dari <script type="module"> bcgo.html —
    logika tidak diubah; satu-satunya perbedaan: state live BCGO kini dibaca lewat
    ctx.getLiveState() yang disuplai bcgo.html (module BCGO tetap pemilik liveState).
-   Dipanggil dari bcgo.html:  window.CGOChatCore.init({ getLiveState })
+   Dipanggil dari bcgo.html ATAU self-host di halaman ini:  window.CGOChatCore.init({ getLiveState })
    ════════════════════════════════════════════════════════════════════════ */
 (function (global) {
   'use strict';
@@ -1869,7 +1870,7 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
     };
     return API;
   }
-  global.CGOChatCore = { version: '1.1.0-ZR-20261028', init: init };
+  global.CGOChatCore = { version: '1.2.0-ZR-PAGEHOST', init: init };
 })(window);
 </script>
     </template>
@@ -4680,5 +4681,225 @@ body.cgo-future-shell .chat-scroll::-webkit-scrollbar-thumb{background:rgba(103,
 </script>
     </template>
     </template>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CGO CHAT SELF-HOST · v1.2.0-ZR-PAGEHOST
+     Saat file ini dibuka sebagai halaman (bukan hanya diambil XHR oleh bcgo),
+     pasang modul chat operator ke UI halaman ini. bcgo.html tidak terpengaruh:
+     loader XHR-nya hanya membaca <template id="cgo-chat-module">, skrip ini
+     tidak ikut dieksekusi di sana.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style id="cgo-selfhost-shell-css">
+  body.cgo-operator-host {
+    display: block !important;
+    height: auto !important;
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    justify-content: initial !important;
+    background: radial-gradient(ellipse at 12% -5%, rgba(14,116,144,.19), transparent 36%),
+                radial-gradient(ellipse at 95% 18%, rgba(79,70,229,.15), transparent 32%),
+                linear-gradient(160deg, #070c18 0%, #050914 54%, #080b19 100%) !important;
+    color: #e5edf8;
+    padding: clamp(12px, 2.4vw, 28px);
+  }
+  #cgo-operator-page { width: min(100%, 720px); margin: 0 auto; }
+  #cgo-operator-page .cgo-op-top {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 14px;
+  }
+  #cgo-operator-page .cgo-op-brand {
+    font-family: 'Share Tech Mono', monospace; font-size: 1rem; color: #67e8f9;
+    letter-spacing: .04em; display: flex; align-items: center; gap: 8px;
+  }
+  #cgo-operator-page .cgo-op-brand i {
+    width: 9px; height: 9px; border-radius: 50%; background: #10b981;
+    box-shadow: 0 0 8px #10b981; display: inline-block;
+  }
+  #cgo-operator-page .cgo-op-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  #cgo-operator-page .cgo-op-btn {
+    font-size: 11px; font-weight: 600; padding: 7px 12px; border-radius: 9px;
+    border: 1px solid rgba(100,190,255,.25); background: rgba(15,23,42,.85);
+    color: #94a3b8; cursor: pointer; transition: .15s;
+  }
+  #cgo-operator-page .cgo-op-btn:hover { border-color: #22d3ee; color: #e0f2fe; }
+  #cgo-operator-page .cgo-op-btn.on {
+    border-color: #22d3ee; color: #67e8f9; background: rgba(8,47,73,.45);
+  }
+  #cgo-pollinations-hud[hidden] { display: none !important; }
+  #cgo-pollinations-hud:not([hidden]) {
+    display: flex !important; max-width: 940px; margin: 18px auto 0;
+    height: min(88vh, 820px); border-radius: 16px; overflow: hidden;
+    border: 1px solid rgba(56,189,248,.25);
+  }
+  body.cgo-operator-host #cgo-pollinations-hud:not([hidden]) {
+    position: relative; width: 100%;
+  }
+</style>
+<script id="cgo-chat-selfhost">
+(function () {
+  'use strict';
+  if (window.__CGO_CHAT_SELFHOST__) return;
+  window.__CGO_CHAT_SELFHOST__ = { version: '1.2.0-ZR-PAGEHOST', ok: false, mounted: [] };
+
+  function mountSlot(slotTpl, parent, before) {
+    if (!slotTpl || !parent) return false;
+    var kids = slotTpl.content ? slotTpl.content.childNodes : [];
+    for (var i = 0; i < kids.length; i++) {
+      var n = kids[i];
+      if (n.nodeType === 8) continue;
+      if (n.nodeType === 3 && !(n.nodeValue || '').trim()) continue;
+      if (n.nodeType === 1 && n.tagName === 'SCRIPT') {
+        var s = document.createElement('script');
+        for (var a = 0; a < n.attributes.length; a++) {
+          s.setAttribute(n.attributes[a].name, n.attributes[a].value);
+        }
+        s.text = n.textContent;
+        if (before) parent.insertBefore(s, before);
+        else parent.appendChild(s);
+      } else {
+        var node = document.importNode(n, true);
+        if (before) parent.insertBefore(node, before);
+        else parent.appendChild(node);
+      }
+    }
+    return true;
+  }
+
+  function boot() {
+    var root = document.getElementById('cgo-chat-module');
+    if (!root || !root.content) {
+      console.warn('[CGO-SELFHOST] template #cgo-chat-module tidak ada');
+      return;
+    }
+    var slots = {};
+    Array.prototype.forEach.call(root.content.querySelectorAll('template[data-slot]'), function (t) {
+      slots[t.getAttribute('data-slot')] = t;
+    });
+    var need = ['core', 'css-main', 'css-future', 'markup', 'R1', 'R2', 'R3', 'R4'];
+    for (var i = 0; i < need.length; i++) {
+      if (!slots[need[i]]) {
+        console.error('[CGO-SELFHOST] slot hilang:', need[i]);
+        return;
+      }
+    }
+
+    /* 1) Sembunyikan HUD Pollinations (tetap bisa dibuka lewat tombol) */
+    var hud = document.querySelector('.hud-container');
+    if (hud) {
+      hud.id = 'cgo-pollinations-hud';
+      hud.setAttribute('hidden', '');
+    }
+
+    /* 2) Mode body operator */
+    document.body.classList.add('cgo-operator-host', 'cgo-future-shell');
+
+    /* 3) Kerangka halaman operator */
+    var page = document.createElement('div');
+    page.id = 'cgo-operator-page';
+    page.innerHTML =
+      '<div class="cgo-op-top">' +
+        '<div class="cgo-op-brand"><i></i>CGO OPERATOR CHAT · v1.2</div>' +
+        '<div class="cgo-op-actions">' +
+          '<button type="button" class="cgo-op-btn on" id="cgo-mode-operator" title="Chat operator BCGO">Chat Operator</button>' +
+          '<button type="button" class="cgo-op-btn" id="cgo-mode-sandbox" title="Sandbox Pollinations (AI teks)">Sandbox AI</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="cgo-chat-mount-point"></div>' +
+      '<p style="margin-top:12px;font-size:10px;color:#64748b;line-height:1.45">' +
+        'Halaman ini adalah rumah chat operator (modul dari template). ' +
+        'bcgo.html tetap memuat modul yang sama lewat loader — zero regresi. ' +
+        'Mode Sandbox AI membuka antarmuka Pollinations lama tanpa menghapusnya.' +
+      '</p>';
+    var anchor = root;
+    document.body.insertBefore(page, anchor);
+
+    var mountPoint = document.getElementById('cgo-chat-mount-point');
+    var head = document.head;
+    var body = document.body;
+    var SH = window.__CGO_CHAT_SELFHOST__;
+
+    /* 4) CSS ke head (urutan sama bcgo) */
+    if (mountSlot(slots['css-main'], head)) SH.mounted.push('css-main');
+    if (mountSlot(slots['css-future'], head)) SH.mounted.push('css-future');
+
+    /* 5) Core JS dulu (mendefinisikan CGOChatCore) */
+    if (mountSlot(slots['core'], body, page.nextSibling)) SH.mounted.push('core');
+
+    /* 6) Markup chat ke mount point */
+    if (mountSlot(slots['markup'], mountPoint)) SH.mounted.push('markup');
+
+    /* 7) R1–R4 setelah DOM chat ada */
+    ['R1', 'R2', 'R3', 'R4'].forEach(function (name) {
+      if (mountSlot(slots[name], body)) SH.mounted.push(name);
+    });
+
+    SH.ok = SH.mounted.length === 8;
+    SH.versionModule = root.getAttribute('data-version') || '';
+    try {
+      console.log('%c[CGO-SELFHOST] v' + SH.version + ' · module=' + SH.versionModule +
+        ' · mounted=' + SH.mounted.join(','),
+        'background:#7c3aed;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold');
+    } catch (_) {}
+
+    /* 8) Init core dengan liveState fallback (standalone tanpa BCGO_STATE) */
+    function getLiveState() {
+      try {
+        if (window.BCGO_STATE) return window.BCGO_STATE;
+        if (window.__cgoLatestLiveState) return window.__cgoLatestLiveState;
+      } catch (_) {}
+      return {
+        connection: { status: 'STANDALONE', lastServerAt: null },
+        cycle: { number: 0, mode: 'STANDALONE' },
+        agentPresence: { items: [], status: 'STANDALONE' },
+        sourceScan: null,
+        telemetry: { source: 'selfhost' }
+      };
+    }
+
+    function tryInit() {
+      if (!window.CGOChatCore || typeof window.CGOChatCore.init !== 'function') {
+        console.warn('[CGO-SELFHOST] CGOChatCore belum siap');
+        return;
+      }
+      try {
+        window.CGOChatCore.init({ getLiveState: getLiveState });
+        console.log('[CGO-SELFHOST] CGOChatCore.init OK · core=' + (window.CGOChatCore.version || '?'));
+      } catch (err) {
+        console.error('[CGO-SELFHOST] init gagal:', err);
+      }
+    }
+    /* core script sinkron sudah dieksekusi saat append; init segera */
+    tryInit();
+
+    /* 9) Toggle Operator ↔ Sandbox AI (Pollinations tidak dihapus) */
+    var btnOp = document.getElementById('cgo-mode-operator');
+    var btnSb = document.getElementById('cgo-mode-sandbox');
+    function showOperator() {
+      if (mountPoint) mountPoint.style.display = '';
+      if (hud) hud.setAttribute('hidden', '');
+      if (btnOp) btnOp.classList.add('on');
+      if (btnSb) btnSb.classList.remove('on');
+    }
+    function showSandbox() {
+      if (mountPoint) mountPoint.style.display = 'none';
+      if (hud) {
+        hud.removeAttribute('hidden');
+        try { hud.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) {}
+      }
+      if (btnSb) btnSb.classList.add('on');
+      if (btnOp) btnOp.classList.remove('on');
+    }
+    if (btnOp) btnOp.addEventListener('click', showOperator);
+    if (btnSb) btnSb.addEventListener('click', showSandbox);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();
+</script>
 </body>
 </html>
