@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CGO AI Core - Pro Sandbox v2.2</title>
+    <title>CGO AI Core - Pro Sandbox v2.3</title>
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
@@ -360,6 +360,7 @@
             text-align: center;
         }
         .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .toast.warning { border-color: var(--warning); color: var(--warning); }
 
         .copy-btn {
             position: absolute;
@@ -386,7 +387,7 @@
         <header class="hud-header">
             <div class="hud-title">
                 <div class="status-dot" id="status-dot"></div>
-                CGO NEURAL INTERFACE v2.2
+                CGO NEURAL INTERFACE v2.3
             </div>
             <div class="header-right">
                 <div class="system-badge" id="engine-badge">ENGINE: CLASSIC (FREE)</div>
@@ -445,7 +446,7 @@
         // ==========================================
         // 1. CONSTANTS & STATE
         // ==========================================
-        const STORAGE_KEY = 'cgo_ai_pro_v22';
+        const STORAGE_KEY = 'cgo_ai_pro_v23'; // Ubah versi storage
         const MAX_HISTORY = 14;
 
         const chatContainer = document.getElementById('chat-container');
@@ -553,9 +554,9 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
         // ==========================================
         // 3. UI HELPERS
         // ==========================================
-        function showToast(msg, duration = 2400) {
+        function showToast(msg, duration = 2400, isWarning = false) {
             toastEl.textContent = msg;
-            toastEl.classList.add('show');
+            toastEl.className = 'toast show' + (isWarning ? ' warning' : '');
             setTimeout(() => toastEl.classList.remove('show'), duration);
         }
 
@@ -624,8 +625,10 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
             bubbleDiv.classList.add('bubble');
             
             if (role === 'ai') {
-                const displayText = isTyping ? (text || '') + '<span class="typing-indicator"></span>' : (text || '');
-                bubbleDiv.innerHTML = DOMPurify.sanitize(marked.parse(displayText || ' '));
+                // Perbaikan: render Markdown dulu, baru tambahkan kursor (agar format tidak rusak)
+                const displayText = isTyping ? (text || '') : (text || ' ');
+                bubbleDiv.innerHTML = DOMPurify.sanitize(marked.parse(displayText));
+                if (isTyping) bubbleDiv.innerHTML += '<span class="typing-indicator"></span>';
             } else {
                 bubbleDiv.innerText = text;
             }
@@ -707,6 +710,10 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
                     } else {
                         element.appendChild(canvasContainer);
                     }
+
+                    // Mencegah memory leak (jika chart dirender ulang)
+                    const existingChart = Chart.getChart(canvas);
+                    if (existingChart) existingChart.destroy();
 
                     new Chart(canvas, chartConfig);
                 } catch (e) {
@@ -794,7 +801,7 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
 
             // Decide endpoint & headers
             const hasKey = !!(settings.apiKey && settings.apiKey.trim());
-            const endpoint = hasKey 
+            let endpoint = hasKey 
                 ? 'https://gen.pollinations.ai/v1/chat/completions'
                 : 'https://text.pollinations.ai/openai';
 
@@ -816,25 +823,50 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
             };
 
             try {
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(body),
-                    signal: currentAbortController.signal
-                });
+                let response;
+                
+                try {
+                    // Tembak Endpoint Utama
+                    response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify(body),
+                        signal: currentAbortController.signal
+                    });
 
-                if (!response.ok) {
-                    let errMsg = `HTTP ${response.status}`;
-                    if (response.status === 401 || response.status === 403) {
-                        errMsg = 'API Key tidak valid atau tidak memiliki akses. Periksa key Anda.';
-                    } else if (response.status === 402) {
-                        errMsg = hasKey 
-                            ? 'Saldo Pollen habis atau model berbayar. Coba model lain / isi ulang.'
-                            : 'Rate limit tercapai (402). Tunggu ~30 detik atau masukkan API Key.';
-                    } else if (response.status === 429) {
-                        errMsg = 'Terlalu banyak permintaan. Tunggu sebentar.';
+                    if (!response.ok) {
+                        let errMsg = `HTTP ${response.status}`;
+                        if (response.status === 401 || response.status === 403) {
+                            errMsg = 'API Key tidak valid atau tidak memiliki akses. Periksa key Anda.';
+                        } else if (response.status === 402) {
+                            errMsg = hasKey 
+                                ? 'Saldo Pollen habis atau model berbayar. Coba model lain / isi ulang.'
+                                : 'Rate limit tercapai (402). Tunggu ~30 detik atau masukkan API Key.';
+                        } else if (response.status === 429) {
+                            errMsg = 'Terlalu banyak permintaan. Tunggu sebentar.';
+                        }
+                        throw new Error(errMsg);
                     }
-                    throw new Error(errMsg);
+                } catch (fetchError) {
+                    // CORS FALLBACK: Jika pakai API Key tapi koneksi diblokir browser
+                    if (hasKey && (fetchError.name === 'TypeError' || fetchError.message.includes('Failed to fetch'))) {
+                        showToast("Koneksi API Key terblokir (CORS). Beralih ke Mode Gratis...", 4000, true);
+                        console.warn("CORS diblokir pada gen.pollinations.ai, melakukan fallback ke text.pollinations.ai");
+                        
+                        endpoint = 'https://text.pollinations.ai/openai';
+                        delete headers['Authorization'];
+                        
+                        response = await fetch(endpoint, {
+                            method: 'POST',
+                            headers,
+                            body: JSON.stringify(body),
+                            signal: currentAbortController.signal
+                        });
+                        
+                        if (!response.ok) throw new Error(`HTTP Error Fallback: ${response.status}`);
+                    } else {
+                        throw fetchError;
+                    }
                 }
 
                 const reader = response.body.getReader();
@@ -845,9 +877,9 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
                     
                     if (content) {
                         fullAiResponse += content;
-                        aiBubble.innerHTML = DOMPurify.sanitize(
-                            marked.parse(fullAiResponse + '<span class="typing-indicator"></span>')
-                        );
+                        // Perbaikan: Render text dulu, baru tambahkan kursor
+                        const sanitizedHtml = DOMPurify.sanitize(marked.parse(fullAiResponse));
+                        aiBubble.innerHTML = sanitizedHtml + '<span class="typing-indicator"></span>';
                         scrollToBottom();
                     }
                 }
@@ -880,7 +912,6 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
                     console.error(error);
                     aiBubble.innerHTML = `<span class="error-text">⚠️ Neural link terputus: ${error.message || 'Gagal menghubungi server AI.'}</span>`;
                     setStatus('error');
-                    // Rollback user message from history if failed completely
                     if (chatHistory.length && chatHistory[chatHistory.length - 1].role === 'user') {
                         chatHistory.pop();
                         saveToStorage();
