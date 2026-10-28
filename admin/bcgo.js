@@ -60,7 +60,6 @@ async function __loadCgoCloud() {
   }
 }
 
-
 /*
  * BCGO MASTER NERVE SYSTEM v4.4.0-SCANNER-V2 (di atas 4.3.1-BOOT-NO-HANG-HUB-ALIGNED)
  *  - Scanner v2: analisis statis (syntax, impor-ekspor, global, urutan muat, versi ?v=), antrean perbaikan untuk Mesin ABC
