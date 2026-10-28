@@ -36,6 +36,8 @@
             display: flex;
             justify-content: center;
             height: 100vh;
+            height: 100dvh;
+            max-height: 100dvh;
             overflow: hidden;
             background-image: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.05) 0%, transparent 50%);
         }
@@ -44,9 +46,13 @@
             width: 100%;
             max-width: 940px;
             height: 100vh;
+            height: 100dvh;
+            max-height: 100dvh;
             display: flex;
             flex-direction: column;
             position: relative;
+            overflow: hidden;
+            min-height: 0;
         }
 
         /* HEADER */
@@ -1101,44 +1107,65 @@
   @media(max-width:480px){#cgo-live-maps-overlay .m-btn span.t{font-size:13px}}
   @media(prefers-reduced-motion:reduce){#cgo-live-maps-overlay,#cgo-live-maps-overlay *{animation:none!important;transition:none!important}}
 
-        /* ============ UNIFIED · satu chat Orb · hybrid otomatis (tanpa saklar manual) ============ */
+        /* ============ UNIFIED · satu chat Orb · hybrid otomatis · layout app-shell ============ */
         .mode-bar { display: none !important; }
         #cgo-ai-panel { display: none !important; }
+
+        /* Kolom utama: header tetap, isi mengisi sisa, input selalu terlihat */
         .cgo-op {
             display: flex !important;
             flex: 1 1 auto;
             min-height: 0;
-            overflow-y: auto;
+            overflow: hidden; /* scroll di dalam feed, bukan seluruh halaman */
             flex-direction: column;
-            gap: 8px;
-            padding: 8px 10px 10px;
+            gap: 6px;
+            padding: 6px 8px 8px;
+        }
+        .cgo-op > .flex.flex-wrap { /* quick-q */
+            flex: none;
+            gap: 6px;
+            padding: 0 2px 2px;
         }
         .cgo-op .cgo-chat-shell {
             flex: 1 1 auto;
             display: flex;
             flex-direction: column;
             min-height: 0;
+            overflow: hidden;
         }
-        .cgo-op .cgo-orb-stage-host { flex: none; }
+        .cgo-op .cgo-chat-head,
+        .cgo-op .cgo-think,
+        .cgo-op .cgo-think-stages {
+            flex: none;
+        }
+        /* Orb dibatasi supaya tidak menelan viewport mobile */
+        .cgo-op .cgo-orb-stage-host {
+            flex: 0 0 auto;
+            max-height: min(38vh, 320px);
+            overflow: hidden;
+            padding: 10px 10px 8px !important;
+        }
         .cgo-op #chat-feed {
-            flex: 1 1 auto;
-            height: auto;
-            min-height: 140px;
-            max-height: none;
+            flex: 1 1 auto !important;
+            height: auto !important;          /* override kelas h-80 */
+            min-height: 72px !important;
+            max-height: none !important;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch;
         }
         .cgo-op #chat-form {
-            position: sticky;
-            bottom: 0;
+            position: relative;
+            bottom: auto;
             z-index: 5;
             background: #070b16;
-            flex: none;
-            padding-bottom: max(0px, env(safe-area-inset-bottom));
+            flex: none !important;
+            padding-bottom: max(6px, env(safe-area-inset-bottom));
         }
         .cgo-op-link {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 6px 10px;
+            padding: 5px 8px;
             border-radius: 8px;
             border: 1px solid #1e3a5f;
             background: rgba(2,6,23,.6);
@@ -1163,17 +1190,53 @@
             white-space: nowrap;
         }
         .cgo-op-link a:hover { background: rgba(8,145,178,.15); }
+
+        /* Mobile: Orb kompak, feed + input wajib terlihat */
         @media (max-width: 720px) {
-            .hud-header { padding: 10px 12px; gap: 8px; }
-            .hud-title { font-size: 0.95rem; }
-            .cgo-op { padding: 6px 8px 8px; gap: 6px; }
-            .cgo-op #chat-feed { min-height: 120px; }
-            .cgo-op-link { font-size: 9px; padding: 5px 8px; flex-wrap: wrap; }
-            .system-badge { font-size: 0.6rem; padding: 2px 6px; }
+            .hud-header { padding: 8px 10px; gap: 6px; flex: none; }
+            .hud-title { font-size: 0.88rem; }
+            .system-badge { font-size: 0.58rem; padding: 2px 6px; }
+            .cgo-op { padding: 4px 6px 6px; gap: 4px; }
+            .cgo-op-link { font-size: 9px; padding: 4px 6px; flex-wrap: wrap; gap: 4px; }
+            .cgo-op .cgo-orb-stage-host {
+                max-height: min(34vh, 260px);
+                padding: 6px 6px 4px !important;
+            }
+            .cgo-op .cgo-orb-stage { gap: 8px !important; }
+            .cgo-orb-wrap,
+            #cgo-orb-wrap {
+                width: 148px !important;
+                height: 148px !important;
+            }
+            .cgo-orb-core { width: 42px !important; height: 42px !important; }
+            .cgo-orb-core svg { width: 18px !important; height: 18px !important; }
+            .cgo-orb-core .cgo-orb-core-label { font-size: 7px !important; }
+            .cgo-orb-right {
+                padding: 8px !important;
+                max-width: 100%;
+            }
+            .cgo-orb-right .cgo-orb-right-title { font-size: 10px !important; }
+            .cgo-orb-right .cgo-orb-right-body { font-size: 10px !important; line-height: 1.35 !important; }
+            .cgo-orb-step-list { gap: 4px 10px !important; font-size: 10px !important; }
+            .cgo-orb-status { font-size: 10px !important; letter-spacing: .12em !important; }
+            .cgo-op #chat-feed { min-height: 64px !important; }
+            .cgo-chat-head { padding: 6px 10px !important; }
+            #chat-form { padding: 8px !important; gap: 6px !important; }
+            #chat-input { font-size: 14px !important; padding: 8px 10px !important; }
+            #cgo-send-btn { padding: 8px 12px !important; }
+            .cgo-op > .flex.flex-wrap.gap-2 { max-height: 52px; overflow-x: auto; flex-wrap: nowrap !important; }
+        }
+        @media (max-width: 380px) {
+            .cgo-orb-wrap,
+            #cgo-orb-wrap {
+                width: 128px !important;
+                height: 128px !important;
+            }
+            .cgo-op .cgo-orb-stage-host { max-height: min(32vh, 220px); }
         }
         @media (min-width: 900px) {
             .hud-container { max-width: 980px; }
-            .cgo-op #chat-feed { min-height: 200px; }
+            .cgo-op .cgo-orb-stage-host { max-height: min(42vh, 360px); }
         }
 
     </style>
@@ -1350,7 +1413,7 @@
             </div>
           </div>
 
-          <div id="chat-feed" class="chat-scroll p-3 h-80 overflow-y-auto space-y-3 bg-slate-950/80">
+          <div id="chat-feed" class="chat-scroll p-3 overflow-y-auto space-y-3 bg-slate-950/80">
             <div class="text-xs text-slate-500">Kanal CGO siap · ketik atau bicara · suara event = operator wanita (MP3)</div>
           </div>
           <div class="cgo-wave" id="cgo-voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
@@ -2243,33 +2306,71 @@ async function sendQuestion(question, opts) {
             }
         }
 
-        // HYBRID OTOMATIS: jika Otak/timeout/cadangan kosong → AI Pro LLM (tanpa saklar manual)
-        if (!answer || brainSource === 'CGO_OTAK_TIMEOUT' || brainSource === 'SAFE_LOCAL') {
+        // ── HYBRID OTOMATIS · LLM disuntik ke jalur Otak (bukan saklar manual) ──
+        // Ops lokal (status/radar/scanner/ABC) → utamakan Otak.
+        // Pertanyaan umum / jawaban lemah / timeout → AI Pro LLM + konteks BCGO_STATE (jawaban real).
+        function __cgoIsOpsIntent(q) {
+            return /\b(status\s*sistem|scanner|source\s*scan|radar|agent\s*cgo|presence|gps|radius|organ|siklus|cycle\s*mode|mesin\s*abc|\babc\b|telemetry|anomali|error\s*log|file\s*saraf|modul\s*otak|bcgo\s*state|verifikasi\s*radar)\b/i.test(String(q || ''));
+        }
+        function __cgoIsWeakAnswer(ans, src) {
+            if (!ans || !String(ans).trim()) return true;
+            var s = String(src || '');
+            if (s === 'CGO_OTAK_TIMEOUT' || s === 'SAFE_LOCAL' || s === 'none') return true;
+            var a = String(ans);
+            if (/CGO menerima pertanyaan Anda/i.test(a)) return true;
+            if (/Otak masih memproses terlalu lama/i.test(a)) return true;
+            if (/Satu Otak belum penuh/i.test(a)) return true;
+            if (/BCGO Engine masih inisialisasi/i.test(a)) return true;
+            if (/Saya paham\.\s*Untuk\s+/i.test(a)) return true;
+            if (/belum bisa menjawab dengan aman/i.test(a)) return true;
+            if (a.trim().length < 12) return true;
+            return false;
+        }
+        var __needLlm = false;
+        try {
+            if (!abcCommandRequested) {
+                var ops = __cgoIsOpsIntent(text);
+                var weak = __cgoIsWeakAnswer(answer, brainSource);
+                // 1) Jawaban lemah / timeout / kosong → LLM
+                if (weak) __needLlm = true;
+                // 2) Pertanyaan umum (bukan status/radar/scanner/ABC) → suntik LLM
+                //    (Otak lokal bagus untuk ops; AI Pro untuk penalaran/bahasa umum yang presisi)
+                else if (!ops) __needLlm = true;
+                // 3) Ops tapi jawaban ragu
+                else if (ops && answer && /menunggu|belum|coba lagi|tidak tahu|tidak yakin|tidak yakin/i.test(String(answer))) __needLlm = true;
+            }
+        } catch (_) { __needLlm = !answer; }
+
+        if (__needLlm) {
             try {
                 if (typeof window.__CGO_LLM_ASK__ === 'function') {
-                    try { setChatLiveStatus('Hybrid · AI Pro LLM…', 'working'); } catch (_) {}
-                    const llmAns = await window.__CGO_LLM_ASK__(text);
+                    try { setChatLiveStatus('Hybrid · menyuntik AI Pro ke Otak…', 'working'); } catch (_) {}
+                    var llmAns = await window.__CGO_LLM_ASK__(text, {
+                        liveState: liveSnap || window.BCGO_STATE || null,
+                        priorAnswer: answer || null,
+                        brainSource: brainSource
+                    });
                     if (llmAns && String(llmAns).trim()) {
                         answer = String(llmAns).trim();
                         brainSource = 'AI_PRO_LLM_HYBRID';
                         try {
-                          if (window.engineBadge || document.getElementById('engine-badge')) {
                             var eb = document.getElementById('engine-badge');
                             if (eb) {
-                              eb.textContent = 'ENGINE: HYBRID · LLM';
-                              eb.style.borderColor = '#818cf8';
-                              eb.style.color = '#a5b4fc';
+                                eb.textContent = 'ENGINE: HYBRID · LLM';
+                                eb.style.borderColor = '#818cf8';
+                                eb.style.color = '#a5b4fc';
                             }
-                          }
                         } catch (_) {}
                     }
+                } else {
+                    console.warn('[CGO-HYBRID] __CGO_LLM_ASK__ belum siap');
                 }
             } catch (hybridErr) {
-                console.warn('[CGO-HYBRID] LLM fallback:', hybridErr);
+                console.warn('[CGO-HYBRID] LLM inject:', hybridErr);
             }
         }
 
-        // Jawaban aman jika Otak/engine belum siap (jangan lempar error yang membuat UI terasa stuck)
+        // Jawaban aman jika Otak + LLM belum siap (jangan lempar error yang membuat UI terasa stuck)
         if (!answer) {
             const mode = (liveSnap && liveSnap.cycleMode) || (window.BCGO_STATE && window.BCGO_STATE.cycleMode) || 'BOOT';
             answer = 'CGO menerima pertanyaan Anda. Saat ini mode ' + mode +
@@ -5099,59 +5200,156 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
         // ==========================================
         // 6. MAIN SEND LOGIC (ZERO REGRESSION)
         // ==========================================
-        // Hybrid otomatis: dipanggil dari sendQuestion Operator jika Otak kosong/timeout
-        window.__CGO_LLM_ASK__ = async function (userText) {
+        // Hybrid: LLM disuntik ke jalur Otak — konteks BCGO_STATE agar jawaban real, bukan ngaco
+        window.__CGO_LLM_ASK__ = async function (userText, opts) {
+            opts = opts || {};
             if (!userText || !String(userText).trim()) return null;
-            const hasKey = !!(settings.apiKey && settings.apiKey.trim());
-            let endpoint = hasKey
+
+            // Settings mandiri (panel AI tersembunyi; jangan andalkan UI)
+            var apiKey = '';
+            var model = 'openai';
+            try {
+                if (typeof settings !== 'undefined' && settings) {
+                    apiKey = (settings.apiKey || '').trim();
+                    model = settings.model || 'openai';
+                }
+            } catch (_) {}
+            try {
+                if (!apiKey) {
+                    var raw = localStorage.getItem(STORAGE_KEY || 'cgo_ai_pro_v24');
+                    if (raw) {
+                        var data = JSON.parse(raw);
+                        if (data && data.settings) {
+                            apiKey = (data.settings.apiKey || '').trim();
+                            model = data.settings.model || model;
+                        }
+                    }
+                }
+            } catch (_) {}
+
+            var live = opts.liveState || (typeof window !== 'undefined' && window.BCGO_STATE) || null;
+            var stateBlock = '';
+            try {
+                if (live && typeof live === 'object') {
+                    var bits = [];
+                    if (live.cycle != null) bits.push('siklus=' + live.cycle);
+                    if (live.cycleMode) bits.push('mode=' + live.cycleMode);
+                    if (live.step) bits.push('tahap=' + live.step);
+                    if (live.message) bits.push('pesan=' + String(live.message).slice(0, 160));
+                    if (live.connection && live.connection.status) bits.push('koneksi=' + live.connection.status);
+                    if (live.metrics) {
+                        bits.push('organ_total=' + (live.metrics.total ?? '?'));
+                        bits.push('anomali=' + (live.metrics.active ?? '?'));
+                        bits.push('stabil=' + (live.metrics.healthy ?? '?'));
+                    }
+                    if (live.sourceScan && live.sourceScan.status) bits.push('source_scan=' + live.sourceScan.status);
+                    if (live.agentPresence) {
+                        var ap = live.agentPresence;
+                        var n = (ap.items && ap.items.length) || (ap.radar && ap.radar.agents && ap.radar.agents.length) || 0;
+                        bits.push('agent_presence=' + n);
+                    }
+                    if (live.abcLiveLink) bits.push('abc=' + (live.abcLiveLink.status || live.abcLiveLink.audit || 'link'));
+                    stateBlock = bits.length
+                        ? ('\n\nKONTEKS LIVE BCGO_STATE (fakta operasional, wajib dihormati):\n- ' + bits.join('\n- '))
+                        : '';
+                }
+            } catch (_) {}
+
+            var sys = (typeof SYSTEM_PROMPT === 'string' ? SYSTEM_PROMPT : '') + stateBlock +
+                '\n\nATURAN HYBRID OTAK:\n' +
+                '- Jawab sebagai CGO Operator, bahasa Indonesia natural, presisi, tanpa mengada-ada.\n' +
+                '- Jika fakta ada di KONTEKS LIVE, pakai itu. Jangan mengarang status sistem.\n' +
+                '- Jika di luar konteks live, jawab dari pengetahuan umum dengan jelas.\n' +
+                '- Jangan bilang "mode BOOT" generik kecuali memang itu fakta di konteks.';
+
+            var hasKey = !!apiKey;
+            var endpoint = hasKey
                 ? 'https://gen.pollinations.ai/v1/chat/completions'
                 : 'https://text.pollinations.ai/openai';
-            const headers = { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' };
-            if (hasKey) headers['Authorization'] = 'Bearer ' + settings.apiKey.trim();
-            let modelToUse = settings.model || 'openai';
-            if (!hasKey && !['openai', 'openai-fast'].includes(modelToUse)) modelToUse = 'openai';
-            const msgs = [
-                { role: 'system', content: SYSTEM_PROMPT },
-                ...chatHistory.slice(-MAX_HISTORY),
-                { role: 'user', content: String(userText) }
-            ];
-            const body = { model: modelToUse, stream: true, messages: msgs };
-            let full = '';
-            const ac = new AbortController();
-            const timer = setTimeout(function () { try { ac.abort(); } catch (_) {} }, 28000);
+            var headers = { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' };
+            if (hasKey) headers['Authorization'] = 'Bearer ' + apiKey;
+            var modelToUse = model || 'openai';
+            if (!hasKey && modelToUse !== 'openai' && modelToUse !== 'openai-fast') modelToUse = 'openai';
+
+            var hist = [];
             try {
-                let response;
+                if (typeof chatHistory !== 'undefined' && Array.isArray(chatHistory)) {
+                    hist = chatHistory.slice(-Math.min(8, (typeof MAX_HISTORY === 'number' ? MAX_HISTORY : 8)));
+                }
+            } catch (_) {}
+
+            var msgs = [{ role: 'system', content: sys }].concat(hist).concat([{ role: 'user', content: String(userText) }]);
+            var body = { model: modelToUse, stream: true, messages: msgs };
+            var full = '';
+            var ac = new AbortController();
+            var timer = setTimeout(function () { try { ac.abort(); } catch (_) {} }, 28000);
+            try {
+                var response;
                 try {
                     response = await fetch(endpoint, {
-                        method: 'POST', headers, body: JSON.stringify(body), signal: ac.signal
+                        method: 'POST', headers: headers, body: JSON.stringify(body), signal: ac.signal
                     });
                     if (!response.ok) throw new Error('HTTP ' + response.status);
                 } catch (fetchError) {
+                    // Auto fallback GEN → Classic (hybrid internal)
                     if (hasKey && (fetchError.name === 'TypeError' ||
-                        (fetchError.message && fetchError.message.indexOf('Failed to fetch') >= 0))) {
+                        (fetchError.message && String(fetchError.message).indexOf('Failed to fetch') >= 0))) {
                         endpoint = 'https://text.pollinations.ai/openai';
-                        delete headers['Authorization'];
+                        try { delete headers['Authorization']; } catch (_) {}
                         body.model = 'openai';
                         response = await fetch(endpoint, {
-                            method: 'POST', headers, body: JSON.stringify(body), signal: ac.signal
+                            method: 'POST', headers: headers, body: JSON.stringify(body), signal: ac.signal
                         });
                         if (!response.ok) throw new Error('HTTP Fallback ' + response.status);
-                        try { updateEngineBadge('fallback'); } catch (_) {}
-                    } else {
+                        try { if (typeof updateEngineBadge === 'function') updateEngineBadge('fallback'); } catch (_) {}
+                    } else if (!response || !response.ok) {
+                        // Tanpa key: coba non-stream JSON sekali jika stream gagal
                         throw fetchError;
                     }
                 }
-                const reader = response.body.getReader();
-                for await (const data of parseSSE(reader)) {
-                    const delta = data && data.choices && data.choices[0] && data.choices[0].delta;
-                    const content = (delta && (delta.content || delta.text)) || '';
-                    if (content) full += content;
+                if (!response || !response.body) return null;
+                var reader = response.body.getReader();
+                if (typeof parseSSE === 'function') {
+                    for await (var data of parseSSE(reader)) {
+                        var delta = data && data.choices && data.choices[0] && data.choices[0].delta;
+                        var content = (delta && (delta.content || delta.text)) || '';
+                        if (content) full += content;
+                    }
+                } else {
+                    // Fallback parse manual
+                    var decoder = new TextDecoder('utf-8');
+                    var buf = '';
+                    while (true) {
+                        var chunk = await reader.read();
+                        if (chunk.done) break;
+                        buf += decoder.decode(chunk.value, { stream: true });
+                        var lines = buf.split('\n');
+                        buf = lines.pop() || '';
+                        for (var li = 0; li < lines.length; li++) {
+                            var line = lines[li].trim();
+                            if (!line || line === 'data: [DONE]') continue;
+                            if (line.indexOf('data: ') === 0) {
+                                try {
+                                    var j = JSON.parse(line.slice(6));
+                                    var d2 = j && j.choices && j.choices[0] && j.choices[0].delta;
+                                    var c2 = (d2 && (d2.content || d2.text)) || '';
+                                    if (c2) full += c2;
+                                } catch (_) {}
+                            }
+                        }
+                    }
                 }
                 if (!full.trim()) return null;
-                chatHistory.push({ role: 'user', content: String(userText) });
-                chatHistory.push({ role: 'assistant', content: full });
-                if (chatHistory.length > MAX_HISTORY) chatHistory = chatHistory.slice(-MAX_HISTORY);
-                try { saveToStorage(); } catch (_) {}
+                try {
+                    if (typeof chatHistory !== 'undefined' && Array.isArray(chatHistory)) {
+                        chatHistory.push({ role: 'user', content: String(userText) });
+                        chatHistory.push({ role: 'assistant', content: full });
+                        if (typeof MAX_HISTORY === 'number' && chatHistory.length > MAX_HISTORY) {
+                            chatHistory = chatHistory.slice(-MAX_HISTORY);
+                        }
+                        if (typeof saveToStorage === 'function') saveToStorage();
+                    }
+                } catch (_) {}
                 return full;
             } catch (e) {
                 console.warn('[CGO-HYBRID] __CGO_LLM_ASK__', e);
