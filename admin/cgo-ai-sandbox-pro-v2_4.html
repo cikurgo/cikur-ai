@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CGO AI Core - Pro Sandbox v2.4 · Operator · Orb · Hybrid</title>
+    <title>CGO AI Core - Pro Sandbox v3.0 · Operator + AI</title>
     
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
@@ -36,8 +36,6 @@
             display: flex;
             justify-content: center;
             height: 100vh;
-            height: 100dvh;
-            max-height: 100dvh;
             overflow: hidden;
             background-image: radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.05) 0%, transparent 50%);
         }
@@ -46,13 +44,9 @@
             width: 100%;
             max-width: 940px;
             height: 100vh;
-            height: 100dvh;
-            max-height: 100dvh;
             display: flex;
             flex-direction: column;
             position: relative;
-            overflow: hidden;
-            min-height: 0;
         }
 
         /* HEADER */
@@ -1107,141 +1101,143 @@
   @media(max-width:480px){#cgo-live-maps-overlay .m-btn span.t{font-size:13px}}
   @media(prefers-reduced-motion:reduce){#cgo-live-maps-overlay,#cgo-live-maps-overlay *{animation:none!important;transition:none!important}}
 
-        /* ============ UNIFIED · satu chat Orb · hybrid otomatis · layout app-shell ============ */
-        .mode-bar { display: none !important; }
-        #cgo-ai-panel { display: none !important; }
-
-        /* Kolom utama: header tetap, isi mengisi sisa, input selalu terlihat */
-        .cgo-op {
-            display: flex !important;
-            flex: 1 1 auto;
-            min-height: 0;
-            overflow: hidden; /* scroll di dalam feed, bukan seluruh halaman */
-            flex-direction: column;
-            gap: 6px;
-            padding: 6px 8px 8px;
-        }
-        .cgo-op > .flex.flex-wrap { /* quick-q */
-            flex: none;
-            gap: 6px;
-            padding: 0 2px 2px;
-        }
-        .cgo-op .cgo-chat-shell {
-            flex: 1 1 auto;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-            overflow: hidden;
-        }
-        .cgo-op .cgo-chat-head,
-        .cgo-op .cgo-think,
-        .cgo-op .cgo-think-stages {
-            flex: none;
-        }
-        /* Orb dibatasi supaya tidak menelan viewport mobile */
-        .cgo-op .cgo-orb-stage-host {
-            flex: 0 0 auto;
-            max-height: min(38vh, 320px);
-            overflow: hidden;
-            padding: 10px 10px 8px !important;
-        }
-        .cgo-op #chat-feed {
-            flex: 1 1 auto !important;
-            height: auto !important;          /* override kelas h-80 */
-            min-height: 72px !important;
-            max-height: none !important;
-            overflow-y: auto !important;
-            -webkit-overflow-scrolling: touch;
-        }
-        .cgo-op #chat-form {
-            position: relative;
-            bottom: auto;
-            z-index: 5;
-            background: #070b16;
-            flex: none !important;
-            padding-bottom: max(6px, env(safe-area-inset-bottom));
-        }
-        .cgo-op-link {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 5px 8px;
-            border-radius: 8px;
-            border: 1px solid #1e3a5f;
-            background: rgba(2,6,23,.6);
-            font: 10px 'Fira Code', monospace;
-            color: #94a3b8;
-            flex: none;
-        }
-        .cgo-op-link .dot { width: 7px; height: 7px; border-radius: 50%; background: #64748b; flex: none; }
-        .cgo-op-link[data-kind="link"] { border-color: #065f46; color: #6ee7b7; }
-        .cgo-op-link[data-kind="link"] .dot { background: #34d399; box-shadow: 0 0 8px #34d399; }
-        .cgo-op-link[data-kind="local"] { border-color: #78350f; color: #fcd34d; }
-        .cgo-op-link[data-kind="local"] .dot { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
-        .cgo-op-link[data-kind="off"] { border-color: #7f1d1d; color: #fca5a5; }
-        .cgo-op-link[data-kind="off"] .dot { background: #ef4444; }
-        .cgo-op-link a {
-            margin-left: auto;
-            color: #67e8f9;
-            text-decoration: none;
-            border: 1px solid #155e75;
-            border-radius: 6px;
-            padding: 2px 8px;
-            white-space: nowrap;
-        }
-        .cgo-op-link a:hover { background: rgba(8,145,178,.15); }
-
-        /* Mobile: Orb kompak, feed + input wajib terlihat */
-        @media (max-width: 720px) {
-            .hud-header { padding: 8px 10px; gap: 6px; flex: none; }
-            .hud-title { font-size: 0.88rem; }
-            .system-badge { font-size: 0.58rem; padding: 2px 6px; }
-            .cgo-op { padding: 4px 6px 6px; gap: 4px; }
-            .cgo-op-link { font-size: 9px; padding: 4px 6px; flex-wrap: wrap; gap: 4px; }
-            .cgo-op .cgo-orb-stage-host {
-                max-height: min(34vh, 260px);
-                padding: 6px 6px 4px !important;
-            }
-            .cgo-op .cgo-orb-stage { gap: 8px !important; }
-            .cgo-orb-wrap,
-            #cgo-orb-wrap {
-                width: 148px !important;
-                height: 148px !important;
-            }
-            .cgo-orb-core { width: 42px !important; height: 42px !important; }
-            .cgo-orb-core svg { width: 18px !important; height: 18px !important; }
-            .cgo-orb-core .cgo-orb-core-label { font-size: 7px !important; }
-            .cgo-orb-right {
-                padding: 8px !important;
-                max-width: 100%;
-            }
-            .cgo-orb-right .cgo-orb-right-title { font-size: 10px !important; }
-            .cgo-orb-right .cgo-orb-right-body { font-size: 10px !important; line-height: 1.35 !important; }
-            .cgo-orb-step-list { gap: 4px 10px !important; font-size: 10px !important; }
-            .cgo-orb-status { font-size: 10px !important; letter-spacing: .12em !important; }
-            .cgo-op #chat-feed { min-height: 64px !important; }
-            .cgo-chat-head { padding: 6px 10px !important; }
-            #chat-form { padding: 8px !important; gap: 6px !important; }
-            #chat-input { font-size: 14px !important; padding: 8px 10px !important; }
-            #cgo-send-btn { padding: 8px 12px !important; }
-            .cgo-op > .flex.flex-wrap.gap-2 { max-height: 52px; overflow-x: auto; flex-wrap: nowrap !important; }
-        }
-        @media (max-width: 380px) {
-            .cgo-orb-wrap,
-            #cgo-orb-wrap {
-                width: 128px !important;
-                height: 128px !important;
-            }
-            .cgo-op .cgo-orb-stage-host { max-height: min(32vh, 220px); }
-        }
-        @media (min-width: 900px) {
-            .hud-container { max-width: 980px; }
-            .cgo-op .cgo-orb-stage-host { max-height: min(42vh, 360px); }
-        }
+        /* ============ MODE BAR + OPERATOR (dimutasi dari bcgo.html) ============ */
+        .mode-bar { display:flex; gap:6px; padding:6px 14px; background:rgba(13,21,38,.9); border-bottom:1px solid var(--border-color); flex:none; }
+        .mode-tab { flex:1; max-width:220px; padding:7px 10px; border-radius:8px; border:1px solid var(--border-color); background:transparent; color:#94a3b8;
+                    font-family:'Share Tech Mono',monospace; font-size:.78rem; letter-spacing:.06em; cursor:pointer; transition:all .2s; }
+        .mode-tab:hover { color:var(--text-main); border-color:var(--accent); }
+        .mode-tab.active { color:var(--accent); border-color:var(--accent); background:rgba(56,189,248,.08); box-shadow:0 0 12px var(--accent-glow); }
+        #cgo-ai-panel { display:contents; }
+        body[data-mode="op"] #cgo-ai-panel { display:none; }
+        .cgo-op { display:none; flex:1 1 auto; min-height:0; overflow-y:auto; flex-direction:column; gap:8px; padding:8px 10px 10px; }
+        body[data-mode="op"] .cgo-op { display:flex; }
+        .cgo-op .cgo-chat-shell { flex:1 0 auto; display:flex; flex-direction:column; min-height:0; }
+        .cgo-op .cgo-orb-stage-host { flex:none; }
+        .cgo-op #chat-feed { flex:1 1 auto; height:auto; min-height:170px; }
+        .cgo-op #chat-form { position:sticky; bottom:0; z-index:5; background:#070b16; }
+        .cgo-op-link { display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:8px; border:1px solid #1e3a5f; background:rgba(2,6,23,.6);
+                       font:10px 'Fira Code',monospace; color:#94a3b8; flex:none; }
+        .cgo-op-link .dot { width:7px; height:7px; border-radius:50%; background:#64748b; flex:none; }
+        .cgo-op-link[data-kind="link"] { border-color:#065f46; color:#6ee7b7; } .cgo-op-link[data-kind="link"] .dot { background:#34d399; box-shadow:0 0 8px #34d399; }
+        .cgo-op-link[data-kind="local"] { border-color:#78350f; color:#fcd34d; } .cgo-op-link[data-kind="local"] .dot { background:#fbbf24; box-shadow:0 0 8px #fbbf24; }
+        .cgo-op-link[data-kind="off"] { border-color:#7f1d1d; color:#fca5a5; } .cgo-op-link[data-kind="off"] .dot { background:#ef4444; }
+        .cgo-op-link a { margin-left:auto; color:#67e8f9; text-decoration:none; border:1px solid #155e75; border-radius:6px; padding:2px 8px; white-space:nowrap; }
+        .cgo-op-link a:hover { background:rgba(8,145,178,.15); }
 
     </style>
+<style id="cgo-ai-pro-stream-css">
+
+/* ===== UNIFIED ORB · AI Pro pure stream (bukan hybrid Otak) ===== */
+.mode-bar { display: none !important; }
+#cgo-ai-panel { display: none !important; }
+body { height: 100vh; height: 100dvh; max-height: 100dvh; overflow: hidden; }
+.hud-container { height: 100vh; height: 100dvh; max-height: 100dvh; overflow: hidden; min-height: 0; }
+.cgo-op {
+  display: flex !important;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px 8px;
+}
+.cgo-op .cgo-chat-shell {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.cgo-op .cgo-orb-stage-host {
+  flex: 0 0 auto;
+  max-height: min(36vh, 300px);
+  overflow: hidden;
+}
+.cgo-op #chat-feed {
+  flex: 1 1 auto !important;
+  height: auto !important;
+  min-height: 80px !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+}
+.cgo-op #chat-form {
+  flex: none !important;
+  position: relative;
+  z-index: 5;
+  background: #070b16;
+  padding-bottom: max(4px, env(safe-area-inset-bottom));
+}
+/* AI Pro bubble style di feed Operator */
+#chat-feed .cgo-ai-msg { display: flex; flex-direction: column; max-width: 92%; animation: cgoAiSlide .25s ease-out both; }
+#chat-feed .cgo-ai-msg.user { align-self: flex-end; margin-left: auto; }
+#chat-feed .cgo-ai-msg.ai { align-self: flex-start; }
+#chat-feed .cgo-ai-msg .sender {
+  font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; color: #94a3b8; margin-bottom: 4px;
+}
+#chat-feed .cgo-ai-msg.user .sender { text-align: right; }
+#chat-feed .cgo-ai-msg .bubble {
+  padding: 12px 14px; border-radius: 10px; line-height: 1.55; font-size: 0.9rem;
+  word-wrap: break-word; overflow-x: auto;
+}
+#chat-feed .cgo-ai-msg.user .bubble {
+  background: #1e3a8a; border: 1px solid #3b82f6; border-bottom-right-radius: 2px; color: #e2e8f0;
+}
+#chat-feed .cgo-ai-msg.ai .bubble {
+  background: #111827; border: 1px solid #1e293b; border-bottom-left-radius: 2px;
+  box-shadow: inset 0 0 20px rgba(0,0,0,.4);
+}
+#chat-feed .cgo-ai-msg .bubble p { margin-bottom: 8px; }
+#chat-feed .cgo-ai-msg .bubble p:last-child { margin-bottom: 0; }
+#chat-feed .cgo-ai-msg .bubble strong { color: #38bdf8; }
+#chat-feed .cgo-ai-msg .bubble ul, #chat-feed .cgo-ai-msg .bubble ol { margin: 0 0 8px 18px; }
+#chat-feed .cgo-ai-msg .bubble pre {
+  background: #000; padding: 10px 12px; border-radius: 8px; border: 1px solid #1e293b;
+  overflow-x: auto; margin: 8px 0; font-family: 'Fira Code', 'Share Tech Mono', monospace; font-size: 0.82rem;
+  position: relative;
+}
+#chat-feed .cgo-ai-msg .bubble code {
+  font-family: 'Fira Code', 'Share Tech Mono', monospace;
+  background: rgba(255,255,255,.08); padding: 1px 4px; border-radius: 4px; font-size: 0.86em;
+}
+#chat-feed .cgo-ai-msg .bubble pre code { background: transparent; padding: 0; }
+#chat-feed .cgo-ai-msg .bubble table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.86em; }
+#chat-feed .cgo-ai-msg .bubble th, #chat-feed .cgo-ai-msg .bubble td {
+  border: 1px solid #1e293b; padding: 6px 8px; text-align: left;
+}
+#chat-feed .cgo-ai-msg .bubble th { background: rgba(56,189,248,.12); color: #38bdf8; }
+#chat-feed .cgo-ai-msg .bubble blockquote {
+  border-left: 3px solid #38bdf8; padding-left: 10px; margin: 8px 0; color: #94a3b8;
+}
+#chat-feed .cgo-ai-msg .chart-container {
+  margin-top: 10px; background: #0f172a; padding: 12px; border-radius: 10px;
+  border: 1px solid #1e293b; height: 260px; position: relative;
+}
+#chat-feed .cgo-ai-msg .copy-btn {
+  position: absolute; top: 6px; right: 6px; background: rgba(255,255,255,.08);
+  border: 1px solid #1e293b; color: #94a3b8; font-size: 0.68rem; padding: 2px 6px;
+  border-radius: 4px; cursor: pointer; opacity: 0; transition: .15s;
+}
+#chat-feed .cgo-ai-msg .bubble pre:hover .copy-btn { opacity: 1; }
+#chat-feed .cgo-ai-msg .typing-indicator {
+  display: inline-block; width: 6px; height: 13px; background: #38bdf8;
+  animation: cgoBlink 1s step-end infinite; vertical-align: middle; margin-left: 3px;
+}
+@keyframes cgoBlink { 50% { opacity: 0; } }
+@keyframes cgoAiSlide { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+#cgo-stop-btn {
+  display: none; padding: 8px 14px; border-radius: 10px; border: none;
+  background: #ef4444; color: #fff; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+}
+#cgo-stop-btn:hover { background: #dc2626; }
+@media (max-width: 720px) {
+  .cgo-orb-wrap, #cgo-orb-wrap { width: 148px !important; height: 148px !important; }
+  .cgo-op .cgo-orb-stage-host { max-height: min(32vh, 240px); padding: 6px !important; }
+  .hud-header { padding: 8px 10px; }
+}
+
+</style>
 </head>
-<body data-mode="op" class="cgo-unified-hybrid">
+<body data-mode="op">
 
     <div class="hud-container">
         <!-- HEADER -->
@@ -1251,13 +1247,17 @@
                 CGO NEURAL INTERFACE v3.0
             </div>
             <div class="header-right">
-                <div class="system-badge" id="engine-badge">ENGINE: HYBRID · OTAK</div>
+                <div class="system-badge" id="engine-badge">ENGINE: AI PRO · STREAM</div>
                 <button class="btn-icon" id="settings-btn" title="Pengaturan">⚙</button>
                 <button class="btn-icon" id="clear-btn" title="Bersihkan riwayat">🗑</button>
             </div>
         </header>
 
-        <!-- dual mode-bar dihapus · hybrid otomatis satu chat Orb -->
+        <!-- MODE BAR -->
+        <nav class="mode-bar" id="mode-bar" aria-label="Mode chat">
+            <button type="button" class="mode-tab active" data-mode="op" aria-selected="true">OPERATOR · ORB</button>
+            <button type="button" class="mode-tab" data-mode="ai" aria-selected="false">AI PRO · LLM</button>
+        </nav>
 
         <!-- SETTINGS PANEL -->
         <div class="settings-panel" id="settings-panel">
@@ -1283,14 +1283,13 @@
                 <button class="btn btn-send" id="save-settings-btn" style="height:36px;padding:0 14px;font-size:0.82rem;">SIMPAN</button>
             </div>
             <div class="settings-hint">
-                Hybrid otomatis: Otak/Operator dulu, AI Pro LLM ikut jika Otak belum siap atau timeout.
-                API Key opsional (LLM) — kosong = gratis (~30 dtk). Key:
+                Kosongkan API Key = mode gratis (rate limit ~30 dtk). Dapatkan key gratis di 
                 <a href="https://enter.pollinations.ai" target="_blank" rel="noopener">enter.pollinations.ai</a>.
+                Model selain openai/openai-fast biasanya membutuhkan API Key.
             </div>
         </div>
 
-        <!-- AI Pro digabung hybrid otomatis · panel UI disembunyikan, engine + settings tetap -->
-        <div id="cgo-ai-panel" aria-hidden="true">
+        <div id="cgo-ai-panel">
         <!-- CHAT AREA -->
         <main class="chat-container" id="chat-container">
             <!-- Boot / history injected by JS -->
@@ -1413,7 +1412,7 @@
             </div>
           </div>
 
-          <div id="chat-feed" class="chat-scroll p-3 overflow-y-auto space-y-3 bg-slate-950/80">
+          <div id="chat-feed" class="chat-scroll p-3 h-80 overflow-y-auto space-y-3 bg-slate-950/80">
             <div class="text-xs text-slate-500">Kanal CGO siap · ketik atau bicara · suara event = operator wanita (MP3)</div>
           </div>
           <div class="cgo-wave" id="cgo-voice-wave" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
@@ -1443,6 +1442,7 @@
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
               </button>
             </div>
+            <button type="button" id="cgo-stop-btn" title="Hentikan stream">STOP</button>
             <button type="submit" id="cgo-send-btn" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold">Kirim</button>
           </form>
           <div class="cgo-ambient-line" aria-hidden="true"></div>
@@ -2306,71 +2306,7 @@ async function sendQuestion(question, opts) {
             }
         }
 
-        // ── HYBRID OTOMATIS · LLM disuntik ke jalur Otak (bukan saklar manual) ──
-        // Ops lokal (status/radar/scanner/ABC) → utamakan Otak.
-        // Pertanyaan umum / jawaban lemah / timeout → AI Pro LLM + konteks BCGO_STATE (jawaban real).
-        function __cgoIsOpsIntent(q) {
-            return /\b(status\s*sistem|scanner|source\s*scan|radar|agent\s*cgo|presence|gps|radius|organ|siklus|cycle\s*mode|mesin\s*abc|\babc\b|telemetry|anomali|error\s*log|file\s*saraf|modul\s*otak|bcgo\s*state|verifikasi\s*radar)\b/i.test(String(q || ''));
-        }
-        function __cgoIsWeakAnswer(ans, src) {
-            if (!ans || !String(ans).trim()) return true;
-            var s = String(src || '');
-            if (s === 'CGO_OTAK_TIMEOUT' || s === 'SAFE_LOCAL' || s === 'none') return true;
-            var a = String(ans);
-            if (/CGO menerima pertanyaan Anda/i.test(a)) return true;
-            if (/Otak masih memproses terlalu lama/i.test(a)) return true;
-            if (/Satu Otak belum penuh/i.test(a)) return true;
-            if (/BCGO Engine masih inisialisasi/i.test(a)) return true;
-            if (/Saya paham\.\s*Untuk\s+/i.test(a)) return true;
-            if (/belum bisa menjawab dengan aman/i.test(a)) return true;
-            if (a.trim().length < 12) return true;
-            return false;
-        }
-        var __needLlm = false;
-        try {
-            if (!abcCommandRequested) {
-                var ops = __cgoIsOpsIntent(text);
-                var weak = __cgoIsWeakAnswer(answer, brainSource);
-                // 1) Jawaban lemah / timeout / kosong → LLM
-                if (weak) __needLlm = true;
-                // 2) Pertanyaan umum (bukan status/radar/scanner/ABC) → suntik LLM
-                //    (Otak lokal bagus untuk ops; AI Pro untuk penalaran/bahasa umum yang presisi)
-                else if (!ops) __needLlm = true;
-                // 3) Ops tapi jawaban ragu
-                else if (ops && answer && /menunggu|belum|coba lagi|tidak tahu|tidak yakin|tidak yakin/i.test(String(answer))) __needLlm = true;
-            }
-        } catch (_) { __needLlm = !answer; }
-
-        if (__needLlm) {
-            try {
-                if (typeof window.__CGO_LLM_ASK__ === 'function') {
-                    try { setChatLiveStatus('Hybrid · menyuntik AI Pro ke Otak…', 'working'); } catch (_) {}
-                    var llmAns = await window.__CGO_LLM_ASK__(text, {
-                        liveState: liveSnap || window.BCGO_STATE || null,
-                        priorAnswer: answer || null,
-                        brainSource: brainSource
-                    });
-                    if (llmAns && String(llmAns).trim()) {
-                        answer = String(llmAns).trim();
-                        brainSource = 'AI_PRO_LLM_HYBRID';
-                        try {
-                            var eb = document.getElementById('engine-badge');
-                            if (eb) {
-                                eb.textContent = 'ENGINE: HYBRID · LLM';
-                                eb.style.borderColor = '#818cf8';
-                                eb.style.color = '#a5b4fc';
-                            }
-                        } catch (_) {}
-                    }
-                } else {
-                    console.warn('[CGO-HYBRID] __CGO_LLM_ASK__ belum siap');
-                }
-            } catch (hybridErr) {
-                console.warn('[CGO-HYBRID] LLM inject:', hybridErr);
-            }
-        }
-
-        // Jawaban aman jika Otak + LLM belum siap (jangan lempar error yang membuat UI terasa stuck)
+        // Jawaban aman jika Otak/engine belum siap (jangan lempar error yang membuat UI terasa stuck)
         if (!answer) {
             const mode = (liveSnap && liveSnap.cycleMode) || (window.BCGO_STATE && window.BCGO_STATE.cycleMode) || 'BOOT';
             answer = 'CGO menerima pertanyaan Anda. Saat ini mode ' + mode +
@@ -4816,11 +4752,8 @@ function startBus() {
     };
     const ask = function (type) { try { bus.postMessage({ type: type, from: 'cgo-ai' }); } catch (_) {} };
     ask('CGO_STATE_REQUEST');
-    setInterval(function () { ask('CGO_STATE_PING'); }, 8000);
+    setInterval(function () { ask('CGO_STATE_PING'); }, 10000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) ask('CGO_STATE_REQUEST'); });
-    window.addEventListener('focus', function () { try { ask('CGO_STATE_REQUEST'); } catch (_) {} });
-    /* retry awal bila bcgo belum siap */
-    [1500, 4000, 9000].forEach(function (ms) { setTimeout(function () { ask('CGO_STATE_REQUEST'); }, ms); });
     /* hasil perintah Mesin ABC dari chat → disalin ke dashboard bcgo.html agar panel hasil tetap sinkron */
     window.addEventListener('cgo:abc-command-result', function (e) {
       try { bus.postMessage({ type: 'CGO_ABC_COMMAND_RESULT', from: 'cgo-ai', detail: JSON.parse(JSON.stringify(e.detail || {})) }); } catch (_) {}
@@ -4994,20 +4927,20 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
             });
         }
 
-        if (chatInput) chatInput.addEventListener('input', function() {
+        chatInput.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 150) + 'px';
         });
 
-        if (chatInput) chatInput.addEventListener('keydown', (e) => {
+        chatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 if (!isGenerating) sendMessage();
             }
         });
 
-        if (sendBtn) sendBtn.addEventListener('click', () => { if (!isGenerating) sendMessage(); });
-        if (stopBtn) stopBtn.addEventListener('click', () => {
+        sendBtn.addEventListener('click', () => { if (!isGenerating) sendMessage(); });
+        stopBtn.addEventListener('click', () => {
             if (currentAbortController) currentAbortController.abort();
         });
 
@@ -5200,165 +5133,6 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
         // ==========================================
         // 6. MAIN SEND LOGIC (ZERO REGRESSION)
         // ==========================================
-        // Hybrid: LLM disuntik ke jalur Otak — konteks BCGO_STATE agar jawaban real, bukan ngaco
-        window.__CGO_LLM_ASK__ = async function (userText, opts) {
-            opts = opts || {};
-            if (!userText || !String(userText).trim()) return null;
-
-            // Settings mandiri (panel AI tersembunyi; jangan andalkan UI)
-            var apiKey = '';
-            var model = 'openai';
-            try {
-                if (typeof settings !== 'undefined' && settings) {
-                    apiKey = (settings.apiKey || '').trim();
-                    model = settings.model || 'openai';
-                }
-            } catch (_) {}
-            try {
-                if (!apiKey) {
-                    var raw = localStorage.getItem(STORAGE_KEY || 'cgo_ai_pro_v24');
-                    if (raw) {
-                        var data = JSON.parse(raw);
-                        if (data && data.settings) {
-                            apiKey = (data.settings.apiKey || '').trim();
-                            model = data.settings.model || model;
-                        }
-                    }
-                }
-            } catch (_) {}
-
-            var live = opts.liveState || (typeof window !== 'undefined' && window.BCGO_STATE) || null;
-            var stateBlock = '';
-            try {
-                if (live && typeof live === 'object') {
-                    var bits = [];
-                    if (live.cycle != null) bits.push('siklus=' + live.cycle);
-                    if (live.cycleMode) bits.push('mode=' + live.cycleMode);
-                    if (live.step) bits.push('tahap=' + live.step);
-                    if (live.message) bits.push('pesan=' + String(live.message).slice(0, 160));
-                    if (live.connection && live.connection.status) bits.push('koneksi=' + live.connection.status);
-                    if (live.metrics) {
-                        bits.push('organ_total=' + (live.metrics.total ?? '?'));
-                        bits.push('anomali=' + (live.metrics.active ?? '?'));
-                        bits.push('stabil=' + (live.metrics.healthy ?? '?'));
-                    }
-                    if (live.sourceScan && live.sourceScan.status) bits.push('source_scan=' + live.sourceScan.status);
-                    if (live.agentPresence) {
-                        var ap = live.agentPresence;
-                        var n = (ap.items && ap.items.length) || (ap.radar && ap.radar.agents && ap.radar.agents.length) || 0;
-                        bits.push('agent_presence=' + n);
-                    }
-                    if (live.abcLiveLink) bits.push('abc=' + (live.abcLiveLink.status || live.abcLiveLink.audit || 'link'));
-                    stateBlock = bits.length
-                        ? ('\n\nKONTEKS LIVE BCGO_STATE (fakta operasional, wajib dihormati):\n- ' + bits.join('\n- '))
-                        : '';
-                }
-            } catch (_) {}
-
-            var sys = (typeof SYSTEM_PROMPT === 'string' ? SYSTEM_PROMPT : '') + stateBlock +
-                '\n\nATURAN HYBRID OTAK:\n' +
-                '- Jawab sebagai CGO Operator, bahasa Indonesia natural, presisi, tanpa mengada-ada.\n' +
-                '- Jika fakta ada di KONTEKS LIVE, pakai itu. Jangan mengarang status sistem.\n' +
-                '- Jika di luar konteks live, jawab dari pengetahuan umum dengan jelas.\n' +
-                '- Jangan bilang "mode BOOT" generik kecuali memang itu fakta di konteks.';
-
-            var hasKey = !!apiKey;
-            var endpoint = hasKey
-                ? 'https://gen.pollinations.ai/v1/chat/completions'
-                : 'https://text.pollinations.ai/openai';
-            var headers = { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' };
-            if (hasKey) headers['Authorization'] = 'Bearer ' + apiKey;
-            var modelToUse = model || 'openai';
-            if (!hasKey && modelToUse !== 'openai' && modelToUse !== 'openai-fast') modelToUse = 'openai';
-
-            var hist = [];
-            try {
-                if (typeof chatHistory !== 'undefined' && Array.isArray(chatHistory)) {
-                    hist = chatHistory.slice(-Math.min(8, (typeof MAX_HISTORY === 'number' ? MAX_HISTORY : 8)));
-                }
-            } catch (_) {}
-
-            var msgs = [{ role: 'system', content: sys }].concat(hist).concat([{ role: 'user', content: String(userText) }]);
-            var body = { model: modelToUse, stream: true, messages: msgs };
-            var full = '';
-            var ac = new AbortController();
-            var timer = setTimeout(function () { try { ac.abort(); } catch (_) {} }, 28000);
-            try {
-                var response;
-                try {
-                    response = await fetch(endpoint, {
-                        method: 'POST', headers: headers, body: JSON.stringify(body), signal: ac.signal
-                    });
-                    if (!response.ok) throw new Error('HTTP ' + response.status);
-                } catch (fetchError) {
-                    // Auto fallback GEN → Classic (hybrid internal)
-                    if (hasKey && (fetchError.name === 'TypeError' ||
-                        (fetchError.message && String(fetchError.message).indexOf('Failed to fetch') >= 0))) {
-                        endpoint = 'https://text.pollinations.ai/openai';
-                        try { delete headers['Authorization']; } catch (_) {}
-                        body.model = 'openai';
-                        response = await fetch(endpoint, {
-                            method: 'POST', headers: headers, body: JSON.stringify(body), signal: ac.signal
-                        });
-                        if (!response.ok) throw new Error('HTTP Fallback ' + response.status);
-                        try { if (typeof updateEngineBadge === 'function') updateEngineBadge('fallback'); } catch (_) {}
-                    } else if (!response || !response.ok) {
-                        // Tanpa key: coba non-stream JSON sekali jika stream gagal
-                        throw fetchError;
-                    }
-                }
-                if (!response || !response.body) return null;
-                var reader = response.body.getReader();
-                if (typeof parseSSE === 'function') {
-                    for await (var data of parseSSE(reader)) {
-                        var delta = data && data.choices && data.choices[0] && data.choices[0].delta;
-                        var content = (delta && (delta.content || delta.text)) || '';
-                        if (content) full += content;
-                    }
-                } else {
-                    // Fallback parse manual
-                    var decoder = new TextDecoder('utf-8');
-                    var buf = '';
-                    while (true) {
-                        var chunk = await reader.read();
-                        if (chunk.done) break;
-                        buf += decoder.decode(chunk.value, { stream: true });
-                        var lines = buf.split('\n');
-                        buf = lines.pop() || '';
-                        for (var li = 0; li < lines.length; li++) {
-                            var line = lines[li].trim();
-                            if (!line || line === 'data: [DONE]') continue;
-                            if (line.indexOf('data: ') === 0) {
-                                try {
-                                    var j = JSON.parse(line.slice(6));
-                                    var d2 = j && j.choices && j.choices[0] && j.choices[0].delta;
-                                    var c2 = (d2 && (d2.content || d2.text)) || '';
-                                    if (c2) full += c2;
-                                } catch (_) {}
-                            }
-                        }
-                    }
-                }
-                if (!full.trim()) return null;
-                try {
-                    if (typeof chatHistory !== 'undefined' && Array.isArray(chatHistory)) {
-                        chatHistory.push({ role: 'user', content: String(userText) });
-                        chatHistory.push({ role: 'assistant', content: full });
-                        if (typeof MAX_HISTORY === 'number' && chatHistory.length > MAX_HISTORY) {
-                            chatHistory = chatHistory.slice(-MAX_HISTORY);
-                        }
-                        if (typeof saveToStorage === 'function') saveToStorage();
-                    }
-                } catch (_) {}
-                return full;
-            } catch (e) {
-                console.warn('[CGO-HYBRID] __CGO_LLM_ASK__', e);
-                return null;
-            } finally {
-                clearTimeout(timer);
-            }
-        };
-
         async function sendMessage() {
             const userText = chatInput.value.trim();
             if (!userText || isGenerating) return;
@@ -5538,78 +5312,505 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
         // 7. INIT
         // ==========================================
         loadSettings();
-        try { if (chatContainer) restoreHistoryUI(); } catch (_) {}
-        try { if (chatInput) chatInput.focus(); } catch (_) {}
-        console.log('[CGO-AI] LLM hybrid helper __CGO_LLM_ASK__ siap');
+        restoreHistoryUI();
+        chatInput.focus();
     </script>
-        <script id="cgo-unified-hybrid">
-/* Satu chat Orb · hybrid otomatis · tanpa saklar Operator/AI manual */
+    <script id="cgo-mode-switch">
+(function () {
+  /* Sakelar mode OPERATOR (Orb · Otak · BCGO) ↔ AI PRO (LLM Pollinations). Tidak mengubah logika keduanya. */
+  var KEY = 'cgo_ai_pro_mode', mode = 'op';
+  try { var s = localStorage.getItem(KEY); if (s === 'ai' || s === 'op') mode = s; } catch (_) {}
+  var tabs = document.querySelectorAll('#mode-bar .mode-tab');
+  function paintBadge(m) {
+    try {
+      if (m === 'op') {
+        engineBadge.textContent = 'ENGINE: OTAK · OPERATOR';
+        engineBadge.style.borderColor = '#22d3ee'; engineBadge.style.color = '#22d3ee';
+      } else { updateEngineBadge(); }
+    } catch (_) {}
+  }
+  function setMode(m, fromUser) {
+    mode = m; document.body.dataset.mode = m;
+    tabs.forEach(function (t) { var on = t.dataset.mode === m; t.classList.toggle('active', on); t.setAttribute('aria-selected', String(on)); });
+    paintBadge(m);
+    try { localStorage.setItem(KEY, m); } catch (_) {}
+    if (!fromUser) return;   /* fokus hanya saat pengguna menekan tab (hindari keyboard/scroll otomatis saat buka) */
+    try { if (m === 'ai') { chatInput.focus(); scrollToBottom(); } else { var i = document.getElementById('chat-input'); i && i.focus && i.focus(); } } catch (_) {}
+  }
+  tabs.forEach(function (t) { t.addEventListener('click', function () { setMode(t.dataset.mode, true); }); });
+  /* tombol hapus: pada mode OPERATOR membersihkan percakapan operator (handler AI tidak ikut jalan) */
+  clearBtn.addEventListener('click', function (e) {
+    if (mode !== 'op') return;
+    e.stopImmediatePropagation();
+    var feed = document.getElementById('chat-feed');
+    if (feed) {
+      feed.innerHTML = '<div class="text-xs text-slate-500">Kanal CGO siap · ketik atau bicara · suara event = operator wanita (MP3)</div>';
+      delete feed.dataset.ready;
+    }
+    showToast('Percakapan operator dibersihkan');
+  }, true);
+  window.CGO_AI_SET_MODE = setMode;
+  setMode(mode);
+})();
+    </script>
+
+<script id="cgo-ai-pro-pure-stream">
+/* ============================================================================
+ * AI PRO MURNI · loading + streaming ke chat-feed Operator
+ * Orb / mic / radar / voice / stages TETAP.
+ * Hanya mengganti proses jawab form: pure SSE + markdown + STOP + chart.
+ * ============================================================================
 (function () {
   'use strict';
-  document.body.dataset.mode = 'op';
+  const STORAGE_KEY = 'cgo_ai_pro_v24';
+  const MAX_HISTORY = 14;
+  const SYSTEM_PROMPT = `Kamu adalah CGO (Cyber Guardian Operator), asisten AI cerdas yang terintegrasi dengan sistem keamanan dan operasional drone.
+Jawab dengan tegas, futuristik, dan bahasa Indonesia yang natural. Gunakan format Markdown untuk penekanan dan struktur.
 
-  function paintBadgeHybrid(source) {
+ATURAN KHUSUS UNTUK GRAFIK:
+Jika user meminta grafik, chart, atau visualisasi data, kamu WAJIB mengeluarkan format JSON di dalam blok kode seperti ini (tanpa teks lain di dalam blok tersebut):
+\`\`\`chart
+{
+  "type": "bar",
+  "data": {
+    "labels": ["Jan", "Feb", "Mar"],
+    "datasets": [{"label": "Trafik", "data": [10, 20, 30], "backgroundColor": "#38bdf8"}]
+  },
+  "options": {
+    "responsive": true,
+    "maintainAspectRatio": false,
+    "plugins": { "legend": { "labels": { "color": "#e2e8f0" } } },
+    "scales": {
+      "x": { "ticks": { "color": "#94a3b8" }, "grid": { "color": "#1e293b" } },
+      "y": { "ticks": { "color": "#94a3b8" }, "grid": { "color": "#1e293b" } }
+    }
+  }
+}
+\`\`\`
+Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Hanya keluarkan JSON murni di dalam blok \`\`\`chart.`;
+
+  let chatHistory = [];
+  let settings = { apiKey: '', model: 'openai' };
+  let isGenerating = false;
+  let currentAbortController = null;
+
+  if (typeof marked !== 'undefined') {
+    try { marked.setOptions({ gfm: true, breaks: true }); } catch (_) {}
+  }
+
+  function loadSettings() {
     try {
-      var eb = document.getElementById('engine-badge');
-      if (!eb) return;
-      if (source === 'AI_PRO_LLM_HYBRID' || source === 'llm') {
-        eb.textContent = 'ENGINE: HYBRID · LLM';
-        eb.style.borderColor = '#818cf8';
-        eb.style.color = '#a5b4fc';
-      } else {
-        eb.textContent = 'ENGINE: HYBRID · OTAK';
-        eb.style.borderColor = '#22d3ee';
-        eb.style.color = '#22d3ee';
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (data.settings) {
+          settings.apiKey = data.settings.apiKey || '';
+          settings.model = data.settings.model || 'openai';
+        }
+        if (Array.isArray(data.history)) chatHistory = data.history.slice(-MAX_HISTORY);
+      }
+    } catch (_) {}
+    try {
+      const ak = document.getElementById('api-key-input');
+      const ms = document.getElementById('model-select');
+      if (ak) ak.value = settings.apiKey;
+      if (ms) ms.value = settings.model;
+    } catch (_) {}
+    updateEngineBadge();
+  }
+  function saveToStorage() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        settings: { ...settings },
+        history: chatHistory.slice(-MAX_HISTORY)
+      }));
+    } catch (_) {}
+  }
+  function updateEngineBadge(mode) {
+    const badge = document.getElementById('engine-badge');
+    if (!badge) return;
+    const hasKey = !!(settings.apiKey && settings.apiKey.trim());
+    if (mode === 'fallback') {
+      badge.textContent = 'ENGINE: FALLBACK (FREE)';
+      badge.style.borderColor = '#f59e0b';
+      badge.style.color = '#f59e0b';
+    } else if (mode === 'stream') {
+      badge.textContent = 'ENGINE: AI PRO · STREAM';
+      badge.style.borderColor = '#818cf8';
+      badge.style.color = '#a5b4fc';
+    } else if (hasKey) {
+      badge.textContent = 'ENGINE: GEN (API KEY)';
+      badge.style.borderColor = '#10b981';
+      badge.style.color = '#10b981';
+    } else {
+      badge.textContent = 'ENGINE: AI PRO · CLASSIC';
+      badge.style.borderColor = '#38bdf8';
+      badge.style.color = '#38bdf8';
+    }
+  }
+
+  function feedEl() { return document.getElementById('chat-feed'); }
+  function scrollFeed() {
+    const f = feedEl();
+    if (!f) return;
+    requestAnimationFrame(() => { f.scrollTop = f.scrollHeight; });
+  }
+
+  function setOrbBusy(on) {
+    try {
+      if (typeof window.setStage === 'function') {
+        window.setStage(on ? 'process' : 'idle');
+      }
+    } catch (_) {}
+    try {
+      const st = document.getElementById('status-dot');
+      if (st) {
+        st.classList.toggle('busy', !!on);
+        if (!on) st.classList.remove('error');
       }
     } catch (_) {}
   }
 
-  var clearBtn = document.getElementById('clear-btn');
-  if (clearBtn) {
-    clearBtn.addEventListener('click', function (e) {
-      e.stopImmediatePropagation();
-      var feed = document.getElementById('chat-feed');
-      if (feed) {
-        feed.innerHTML = '<div class="text-xs text-slate-500">Kanal CGO siap · hybrid otomatis · Orb + Otak + AI Pro</div>';
-        delete feed.dataset.ready;
-      }
+  function addProMessage(role, text, isTyping) {
+    const feed = feedEl();
+    if (!feed) return null;
+    const msg = document.createElement('div');
+    msg.className = 'cgo-ai-msg ' + (role === 'user' ? 'user' : 'ai');
+    const sender = document.createElement('div');
+    sender.className = 'sender';
+    sender.textContent = role === 'user' ? 'ANDA (Operator)' : 'CGO';
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    if (role === 'ai') {
+      let html = ' ';
       try {
-        if (typeof chatHistory !== 'undefined' && Array.isArray(chatHistory)) {
-          chatHistory.length = 0;
-          if (typeof saveToStorage === 'function') saveToStorage();
+        if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+          html = DOMPurify.sanitize(marked.parse(text || ' '));
+        } else {
+          bubble.textContent = text || '';
+          html = null;
         }
-      } catch (_) {}
-      if (typeof showToast === 'function') showToast('Percakapan dibersihkan');
-      paintBadgeHybrid('op');
-    }, true);
+      } catch (_) { bubble.textContent = text || ''; html = null; }
+      if (html != null) bubble.innerHTML = html + (isTyping ? '<span class="typing-indicator"></span>' : '');
+      else if (isTyping) bubble.innerHTML = (bubble.textContent || '') + '<span class="typing-indicator"></span>';
+    } else {
+      bubble.textContent = text || '';
+    }
+    msg.appendChild(sender);
+    msg.appendChild(bubble);
+    feed.appendChild(msg);
+    scrollFeed();
+    return bubble;
   }
 
-  /* Badge mengikuti sumber jawaban terakhir */
-  try {
-    var _last = null;
-    setInterval(function () {
+  function renderChartsInElement(element) {
+    if (!element || typeof Chart === 'undefined') return;
+    element.querySelectorAll('pre code.language-chart').forEach((codeBlock) => {
       try {
-        var s = window.__CGO_LAST_BRAIN_SOURCE;
-        if (s && s !== _last) {
-          _last = s;
-          paintBadgeHybrid(s === 'AI_PRO_LLM_HYBRID' ? 'llm' : 'op');
+        const chartConfig = JSON.parse(codeBlock.innerText.trim());
+        if (!chartConfig.options) chartConfig.options = {};
+        chartConfig.options.responsive = true;
+        chartConfig.options.maintainAspectRatio = false;
+        const canvasContainer = document.createElement('div');
+        canvasContainer.className = 'chart-container';
+        const canvas = document.createElement('canvas');
+        canvasContainer.appendChild(canvas);
+        const pre = codeBlock.parentElement;
+        if (pre) {
+          pre.style.display = 'none';
+          if (pre.parentElement) pre.parentElement.insertBefore(canvasContainer, pre.nextSibling);
+        } else element.appendChild(canvasContainer);
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        new Chart(canvas, chartConfig);
+      } catch (e) {
+        console.error('chart', e);
+      }
+    });
+    element.querySelectorAll('pre code:not(.language-chart)').forEach((el) => {
+      try { if (window.hljs) hljs.highlightElement(el); } catch (_) {}
+      const pre = el.parentElement;
+      if (pre && !pre.querySelector('.copy-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.type = 'button';
+        btn.textContent = 'Copy';
+        btn.onclick = () => {
+          navigator.clipboard.writeText(el.innerText).then(() => {
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+          }).catch(() => {});
+        };
+        pre.style.position = 'relative';
+        pre.appendChild(btn);
+      }
+    });
+  }
+
+  async function* parseSSE(reader) {
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+        if (trimmed.startsWith('data: ')) {
+          try { yield JSON.parse(trimmed.slice(6)); } catch (_) {}
+        }
+      }
+    }
+  }
+
+  async function streamAIPro(userText) {
+    if (!userText || isGenerating) return;
+    isGenerating = true;
+    setOrbBusy(true);
+    updateEngineBadge('stream');
+
+    const input = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('cgo-send-btn');
+    const stopBtn = document.getElementById('cgo-stop-btn');
+    if (input) { input.value = ''; input.disabled = true; }
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.style.display = 'none'; }
+    if (stopBtn) stopBtn.style.display = 'inline-flex';
+
+    addProMessage('user', userText);
+    chatHistory.push({ role: 'user', content: userText });
+    saveToStorage();
+
+    const aiBubble = addProMessage('ai', '', true);
+    let fullAiResponse = '';
+    let usedFallback = false;
+    currentAbortController = new AbortController();
+
+    const hasKey = !!(settings.apiKey && settings.apiKey.trim());
+    let endpoint = hasKey
+      ? 'https://gen.pollinations.ai/v1/chat/completions'
+      : 'https://text.pollinations.ai/openai';
+    const headers = { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' };
+    if (hasKey) headers['Authorization'] = 'Bearer ' + settings.apiKey.trim();
+
+    let modelToUse = settings.model || 'openai';
+    if (!hasKey && modelToUse !== 'openai' && modelToUse !== 'openai-fast') modelToUse = 'openai';
+
+    let systemContent = SYSTEM_PROMPT;
+    try {
+      const live = window.BCGO_STATE;
+      if (live && typeof live === 'object') {
+        const bits = [];
+        if (live.cycle != null) bits.push('siklus=' + live.cycle);
+        if (live.cycleMode) bits.push('mode=' + live.cycleMode);
+        if (live.step) bits.push('tahap=' + live.step);
+        if (live.message) bits.push('pesan=' + String(live.message).slice(0, 140));
+        if (live.metrics) {
+          bits.push('organ=' + (live.metrics.total ?? '?'));
+          bits.push('anomali=' + (live.metrics.active ?? '?'));
+        }
+        if (live.sourceScan && live.sourceScan.status) bits.push('scan=' + live.sourceScan.status);
+        if (bits.length) {
+          systemContent += '\n\nKONTEKS LIVE BCGO_STATE (fakta operasional, hormati jika relevan):\n- ' + bits.join('\n- ');
+        }
+      }
+    } catch (_) {}
+
+    const body = {
+      model: modelToUse,
+      stream: true,
+      messages: [{ role: 'system', content: systemContent }, ...chatHistory]
+    };
+
+    try {
+      let response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST', headers, body: JSON.stringify(body), signal: currentAbortController.signal
+        });
+        if (!response.ok) {
+          let errMsg = 'HTTP ' + response.status;
+          if (response.status === 401 || response.status === 403) errMsg = 'API Key tidak valid atau tidak memiliki akses.';
+          else if (response.status === 402) errMsg = hasKey ? 'Saldo Pollen habis atau model berbayar.' : 'Rate limit (402). Tunggu ~30 dtk atau isi API Key.';
+          else if (response.status === 429) errMsg = 'Terlalu banyak permintaan. Tunggu sebentar.';
+          throw new Error(errMsg);
+        }
+      } catch (fetchError) {
+        if (hasKey && (fetchError.name === 'TypeError' ||
+            (fetchError.message && String(fetchError.message).indexOf('Failed to fetch') >= 0))) {
+          usedFallback = true;
+          updateEngineBadge('fallback');
+          endpoint = 'https://text.pollinations.ai/openai';
+          try { delete headers['Authorization']; } catch (_) {}
+          body.model = 'openai';
+          response = await fetch(endpoint, {
+            method: 'POST', headers, body: JSON.stringify(body), signal: currentAbortController.signal
+          });
+          if (!response.ok) throw new Error('HTTP Fallback ' + response.status);
+        } else {
+          throw fetchError;
+        }
+      }
+
+      const reader = response.body.getReader();
+      for await (const data of parseSSE(reader)) {
+        const delta = data && data.choices && data.choices[0] && data.choices[0].delta;
+        const content = (delta && (delta.content || delta.text)) || '';
+        if (content) {
+          fullAiResponse += content;
+          if (aiBubble && typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+            aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse)) +
+              '<span class="typing-indicator"></span>';
+          } else if (aiBubble) {
+            aiBubble.textContent = fullAiResponse;
+          }
+          scrollFeed();
+        }
+      }
+
+      if (!fullAiResponse.trim()) fullAiResponse = '_Tidak ada respons dari model._';
+      if (aiBubble) {
+        if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+          aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse));
+        } else {
+          aiBubble.textContent = fullAiResponse;
+        }
+        renderChartsInElement(aiBubble);
+      }
+      chatHistory.push({ role: 'assistant', content: fullAiResponse });
+      if (chatHistory.length > MAX_HISTORY) chatHistory = chatHistory.slice(-MAX_HISTORY);
+      saveToStorage();
+      if (!usedFallback) updateEngineBadge();
+
+      // Voice opsional (Operator voice) — tidak memutus stream
+      try {
+        if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === 'function') {
+          const plain = fullAiResponse.replace(/```[\s\S]*?```/g, ' ').replace(/[#>*_`]/g, ' ').slice(0, 400);
+          if (plain.trim()) window.CGOOperatorVoice.speakAnswer(plain, { force: false });
         }
       } catch (_) {}
-    }, 800);
-  } catch (_) {}
 
-  window.CGO_AI_SET_MODE = function () { /* no-op: hybrid otomatis, tanpa mode manual */ };
-  paintBadgeHybrid('op');
+    } catch (error) {
+      if (error && error.name === 'AbortError') {
+        const note = fullAiResponse
+          ? '<br><br><em style="color:#ef4444">[Dihentikan oleh Operator]</em>'
+          : '<em style="color:#ef4444">[Dihentikan oleh Operator]</em>';
+        if (aiBubble) {
+          const base = (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined')
+            ? DOMPurify.sanitize(marked.parse(fullAiResponse || ''))
+            : (fullAiResponse || '');
+          aiBubble.innerHTML = base + note;
+        }
+        if (fullAiResponse) {
+          chatHistory.push({ role: 'assistant', content: fullAiResponse });
+          saveToStorage();
+        }
+      } else {
+        console.error('[CGO-AI-PRO]', error);
+        if (aiBubble) {
+          aiBubble.innerHTML = '<span style="color:#ef4444">⚠️ Neural link terputus: ' +
+            (error && error.message ? error.message : 'Gagal menghubungi server AI.') + '</span>';
+        }
+        if (chatHistory.length && chatHistory[chatHistory.length - 1].role === 'user') {
+          chatHistory.pop();
+          saveToStorage();
+        }
+      }
+    } finally {
+      isGenerating = false;
+      currentAbortController = null;
+      setOrbBusy(false);
+      if (input) { input.disabled = false; try { input.focus(); } catch (_) {} }
+      if (sendBtn) { sendBtn.disabled = false; sendBtn.style.display = ''; }
+      if (stopBtn) stopBtn.style.display = 'none';
+      scrollFeed();
+    }
+  }
 
-  try {
-    var ci = document.getElementById('chat-input');
-    if (ci) setTimeout(function () {
-      try { ci.focus({ preventScroll: true }); } catch (_) { try { ci.focus(); } catch (_2) {} }
-    }, 150);
-  } catch (_) {}
+  // Public: ganti jalur form Operator
+  window.__CGO_AI_PRO_STREAM__ = streamAIPro;
+  window.__CGO_AI_PRO_ABORT__ = function () {
+    if (currentAbortController) currentAbortController.abort();
+  };
 
-  console.log('[CGO-UNIFIED] hybrid otomatis · satu chat Orb · tanpa saklar manual');
+  function bindForm() {
+    const form = document.getElementById('chat-form');
+    if (!form || form.__cgoAiProBound) return;
+    form.__cgoAiProBound = true;
+    // Capture phase: blokir sendQuestion lama, pakai stream murni
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const input = document.getElementById('chat-input');
+      const text = input ? input.value.trim() : '';
+      if (!text || isGenerating) return;
+      void streamAIPro(text);
+    }, true);
+
+    document.querySelectorAll('.quick-q').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const q = btn.getAttribute('data-q') || btn.dataset.q;
+        if (q && !isGenerating) void streamAIPro(q);
+      }, true);
+    });
+
+    const stopBtn = document.getElementById('cgo-stop-btn');
+    if (stopBtn) {
+      stopBtn.addEventListener('click', function () {
+        if (currentAbortController) currentAbortController.abort();
+      });
+    }
+
+    // Settings (panel yang sama)
+    const saveBtn = document.getElementById('save-settings-btn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', function () {
+        const ak = document.getElementById('api-key-input');
+        const ms = document.getElementById('model-select');
+        settings.apiKey = ak ? ak.value.trim() : '';
+        settings.model = ms ? ms.value : 'openai';
+        saveToStorage();
+        updateEngineBadge();
+        try {
+          const panel = document.getElementById('settings-panel');
+          const sbtn = document.getElementById('settings-btn');
+          if (panel) panel.classList.remove('open');
+          if (sbtn) sbtn.classList.remove('active');
+        } catch (_) {}
+      });
+    }
+    const clearBtn = document.getElementById('clear-btn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', function () {
+        if (isGenerating) return;
+        chatHistory = [];
+        saveToStorage();
+        const feed = feedEl();
+        if (feed) {
+          feed.innerHTML = '<div class="text-xs text-slate-500">Riwayat dibersihkan · kanal AI Pro siap.</div>';
+        }
+      });
+    }
+  }
+
+  function boot() {
+    loadSettings();
+    bindForm();
+    // Body selalu mode op
+    try { document.body.setAttribute('data-mode', 'op'); } catch (_) {}
+    console.log('[CGO] AI Pro pure stream terpasang ke Orb chat-form');
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  // re-bind jika form di-render lambat
+  setTimeout(bindForm, 800);
+  setTimeout(bindForm, 2500);
 })();
-    </script>
+</script>
+
 </body>
 </html>
