@@ -469,17 +469,20 @@ body.cgo-future-shell :where(button,a,input,select,textarea):focus-visible{scrol
 
     <div class="bg-slate-900 border border-indigo-900 rounded-xl p-5 space-y-3" id="cgo-chat-launcher">
         <div class="flex justify-between items-center gap-3">
-            <div>
+            <div class="min-w-0">
                 <div class="text-xs font-semibold text-indigo-300 uppercase tracking-wider">Komunikasi dengan CGO</div>
-                <div class="text-[10px] text-slate-500 mt-1">Chat Operator + Orb kini berada di halaman CGO AI. Dashboard ini tetap menjadi mesin BCGO dan menyiarkan state live ke chat secara otomatis.</div>
+                <div class="text-[10px] text-slate-500 mt-1">Chat Operator + Orb + hybrid otomatis (Otak → AI Pro bila perlu) di <span class="code-font text-indigo-300">cgo-ai-sandbox-pro-v2_4.html</span>. Dashboard ini mesin BCGO: siarkan <span class="code-font">BCGO_STATE</span> live lewat bus ke chat.</div>
             </div>
-            <span class="text-[10px] code-font text-indigo-400">CGO::CHAT → cgo-ai</span>
+            <span id="cgo-chat-link-status" class="text-[10px] code-font text-indigo-400 shrink-0" data-kind="idle">CGO::CHAT · siaga</span>
         </div>
-        <a id="cgo-chat-open" href="cgo-ai-sandbox-pro-v2_4.html" target="_blank" rel="noopener"
-           class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            Buka CGO Chat (Orb)
-        </a>
+        <div class="flex flex-wrap items-center gap-2">
+          <a id="cgo-chat-open" href="cgo-ai-sandbox-pro-v2_4.html" target="_blank" rel="noopener"
+             class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Buka CGO Chat (Orb)
+          </a>
+          <span class="text-[9px] text-slate-500">Buka di tab sama-origin agar BroadcastChannel <span class="code-font">CGO_STATE_BUS</span> hidup.</span>
+        </div>
     </div>
 
 </section>
@@ -540,34 +543,102 @@ window.CGO_SVG = {
 </script>
 
 <script id="cgo-state-bus-publisher">
-/* Penyiar state BCGO → CGO Chat (cgo-ai). Hanya menyiarkan bila ada pendengar (REQUEST/PING ≤45 dtk). Tidak mengubah mesin. */
+/* Penyiar state BCGO → CGO Chat (cgo-ai-sandbox-pro-v2_4.html).
+   Hybrid otomatis di sisi chat; bus ini hanya state + hasil ABC command.
+   Hanya siaran aktif bila ada pendengar (REQUEST/PING/from cgo-ai ≤45 dtk). Zero regresi mesin. */
 (function () { try {
-  if (typeof BroadcastChannel === 'undefined') return;
-  var bus = new BroadcastChannel('CGO_STATE_BUS'), latest = null, lastSent = 0, listenUntil = 0, SEND_MS = 1500;
-  function clone(s) { try { return structuredClone(s); } catch (_) {} try { return JSON.parse(JSON.stringify(s)); } catch (_) {} return null; }
+  if (typeof BroadcastChannel === 'undefined') {
+    window.__CGO_STATE_BUS_PUBLISH = function () {};
+    window.__CGO_STATE_BUS_STATUS = function () { return { ok: false, reason: 'no_BroadcastChannel' }; };
+    return;
+  }
+  var bus = new BroadcastChannel('CGO_STATE_BUS');
+  var latest = null, lastSent = 0, listenUntil = 0, lastRx = 0, SEND_MS = 1200;
+  function clone(s) {
+    try { return structuredClone(s); } catch (_) {}
+    try { return JSON.parse(JSON.stringify(s)); } catch (_) {}
+    return null;
+  }
+  function paintLinkUi(kind, text) {
+    try {
+      var el = document.getElementById('cgo-chat-link-status');
+      if (!el) return;
+      el.textContent = text || '';
+      el.dataset.kind = kind || 'idle';
+      el.className = 'text-[10px] code-font ' + (
+        kind === 'live' ? 'text-emerald-400' :
+        kind === 'wait' ? 'text-amber-300' :
+        kind === 'off' ? 'text-rose-300' : 'text-indigo-400'
+      );
+    } catch (_) {}
+  }
   function send(force) {
     var now = Date.now();
-    if (now > listenUntil) return;
-    if (!latest) { try { bus.postMessage({ type: 'CGO_STATE_STANDBY', from: 'bcgo' }); } catch (_) {} return; }
+    if (now > listenUntil) {
+      paintLinkUi('idle', 'CGO::CHAT · siaga (buka chat untuk LINK)');
+      return;
+    }
+    if (!latest) {
+      try { bus.postMessage({ type: 'CGO_STATE_STANDBY', from: 'bcgo', at: now }); } catch (_) {}
+      paintLinkUi('wait', 'CGO::CHAT · LINK · menunggu snapshot');
+      return;
+    }
     if (!force && now - lastSent < SEND_MS) return;
-    var c = clone(latest); if (!c) return;
+    var c = clone(latest);
+    if (!c) return;
     lastSent = now;
-    try { bus.postMessage({ type: 'CGO_STATE', from: 'bcgo', at: now, state: c }); } catch (_) {}
+    try {
+      bus.postMessage({ type: 'CGO_STATE', from: 'bcgo', at: now, state: c });
+      paintLinkUi('live', 'CGO::CHAT · LINK LIVE · siklus #' + (c.cycle ?? 0));
+    } catch (_) {
+      paintLinkUi('off', 'CGO::CHAT · bus error');
+    }
   }
-  window.__CGO_STATE_BUS_PUBLISH = function (state) { latest = state; send(false); };
+  window.__CGO_STATE_BUS_PUBLISH = function (state) {
+    latest = state;
+    send(false);
+  };
+  window.__CGO_STATE_BUS_STATUS = function () {
+    return {
+      ok: true,
+      listening: Date.now() <= listenUntil,
+      lastSent: lastSent,
+      lastRx: lastRx,
+      hasState: !!latest,
+      cycle: latest && latest.cycle
+    };
+  };
   bus.onmessage = function (ev) {
-    var d = ev && ev.data; if (!d || typeof d !== 'object') return;
-    if (d.type === 'CGO_STATE_REQUEST') { listenUntil = Date.now() + 45000; send(true); }
-    else if (d.type === 'CGO_STATE_PING') { listenUntil = Date.now() + 45000; send(false); }
-    else if (d.type === 'CGO_ABC_COMMAND_RESULT' && d.detail) {
+    var d = ev && ev.data;
+    if (!d || typeof d !== 'object') return;
+    lastRx = Date.now();
+    /* Perpanjang jendela siaran untuk setiap aktivitas dari cgo-ai */
+    if (d.from === 'cgo-ai' || d.type === 'CGO_STATE_REQUEST' || d.type === 'CGO_STATE_PING') {
+      listenUntil = Date.now() + 45000;
+    }
+    if (d.type === 'CGO_STATE_REQUEST') {
+      send(true);
+    } else if (d.type === 'CGO_STATE_PING') {
+      send(false);
+    } else if (d.type === 'CGO_ABC_COMMAND_RESULT' && d.detail) {
       try {
         window.dispatchEvent(new CustomEvent('cgo:abc-command-result', { detail: d.detail }));
-        if (typeof window.__BCGO_PAINT_ABC_COMMAND__ === 'function') window.__BCGO_PAINT_ABC_COMMAND__(d.detail.command, d.detail.response);
+        if (typeof window.__BCGO_PAINT_ABC_COMMAND__ === 'function') {
+          window.__BCGO_PAINT_ABC_COMMAND__(d.detail.command, d.detail.response);
+        }
       } catch (_) {}
     }
   };
-  try { bus.postMessage({ type: 'CGO_STATE_HELLO', from: 'bcgo' }); } catch (_) {}
+  try { bus.postMessage({ type: 'CGO_STATE_HELLO', from: 'bcgo', at: Date.now() }); } catch (_) {}
+  paintLinkUi('idle', 'CGO::CHAT · siaga (buka chat untuk LINK)');
+  /* Heartbeat UI: jika listener expired, kembalikan label siaga */
+  setInterval(function () {
+    try {
+      if (Date.now() > listenUntil) paintLinkUi('idle', 'CGO::CHAT · siaga (buka chat untuk LINK)');
+    } catch (_) {}
+  }, 5000);
   window.addEventListener('beforeunload', function () { try { bus.close(); } catch (_) {} }, { once: true });
+  console.log('[BCGO] state bus → cgo-ai-sandbox-pro-v2_4.html siap');
 } catch (e) { console.warn('[BCGO] state bus:', e); } })();
 </script>
 
@@ -1549,8 +1620,13 @@ await runAutonomousEngine(state => {
       }
       if (voiceEl) {
         const vOn = !!(window.CGOOperatorVoice && window.CGOOperatorVoice.isEnabled && window.CGOOperatorVoice.isEnabled());
-        const mic = document.getElementById('chat-mic');
-        voiceEl.textContent = (vOn ? 'suara ON' : 'suara OFF') + ' · mic ' + (mic && !mic.disabled ? 'OK' : '—');
+        /* Mic chat ada di cgo-ai-sandbox-pro-v2_4.html — dashboard hanya status suara lokal */
+        let link = 'chat di cgo-ai';
+        try {
+          const st = window.__CGO_STATE_BUS_STATUS && window.__CGO_STATE_BUS_STATUS();
+          if (st && st.listening) link = 'LINK LIVE';
+        } catch (_) {}
+        voiceEl.textContent = (vOn ? 'suara ON' : 'suara OFF') + ' · ' + link;
       }
     } catch (_) {}
 
@@ -2117,15 +2193,10 @@ await runAutonomousEngine(state => {
 /* Mobile header & controls polish */
 @media (max-width:640px){
   body.cgo-future-shell header h1{font-size:1rem}
-  #chat-form{flex-wrap:wrap;gap:8px}
-  #chat-form #chat-input{order:1;width:100%;flex:1 1 100%}
-  #chat-form #chat-mic{order:2}
-  #chat-form .chat-audio-ctrl{order:3}
-  #chat-form #cgo-send-btn{order:4;margin-left:auto}
   .cgo-command-kpis{grid-template-columns:repeat(2,1fr)!important}
+  #cgo-chat-launcher{padding:14px}
+  #cgo-chat-open{width:100%;justify-content:center}
 }
-/* Prevent empty mic flash already handled; ensure SVG centers */
-#chat-mic svg{display:block;margin:auto;pointer-events:none}
 /* Soft missing-module notice */
 #bcgo-deps-banner{display:none;max-width:42rem;margin:0 auto 12px;padding:10px 14px;border-radius:12px;border:1px solid rgba(251,191,36,.35);background:rgba(69,26,3,.55);color:#fde68a;font-size:12px;line-height:1.45}
 #bcgo-deps-banner.on{display:block}
