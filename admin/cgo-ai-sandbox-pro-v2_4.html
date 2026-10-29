@@ -1127,6 +1127,71 @@
     </style>
 
 <style id="cgo-unify-ai-pro-css">
+
+/* Markdown AI Pro di bubble Operator (bukan structured cards) */
+#chat-feed .cgo-bubble-text[data-fmt="md"] {
+  white-space: normal;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #e2e8f0;
+}
+#chat-feed .cgo-bubble-text[data-fmt="md"] p { margin: 0 0 8px; }
+#chat-feed .cgo-bubble-text[data-fmt="md"] p:last-child { margin: 0; }
+#chat-feed .cgo-bubble-text[data-fmt="md"] strong { color: #38bdf8; font-weight: 600; }
+#chat-feed .cgo-bubble-text[data-fmt="md"] em { color: #cbd5e1; }
+#chat-feed .cgo-bubble-text[data-fmt="md"] ul,
+#chat-feed .cgo-bubble-text[data-fmt="md"] ol { margin: 0 0 8px 1.2rem; padding: 0; }
+#chat-feed .cgo-bubble-text[data-fmt="md"] li { margin: 3px 0; }
+#chat-feed .cgo-bubble-text[data-fmt="md"] pre {
+  background: #000;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #1e293b;
+  overflow-x: auto;
+  margin: 8px 0;
+  position: relative;
+  font-family: 'Fira Code', 'Share Tech Mono', monospace;
+  font-size: 0.82rem;
+  white-space: pre;
+}
+#chat-feed .cgo-bubble-text[data-fmt="md"] code {
+  font-family: 'Fira Code', 'Share Tech Mono', monospace;
+  background: rgba(255,255,255,.08);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-size: 0.86em;
+  color: #7dd3fc;
+}
+#chat-feed .cgo-bubble-text[data-fmt="md"] pre code {
+  background: transparent;
+  padding: 0;
+  color: #e2e8f0;
+}
+#chat-feed .cgo-bubble-text[data-fmt="md"] table {
+  width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.86em;
+}
+#chat-feed .cgo-bubble-text[data-fmt="md"] th,
+#chat-feed .cgo-bubble-text[data-fmt="md"] td {
+  border: 1px solid #1e293b; padding: 6px 8px; text-align: left;
+}
+#chat-feed .cgo-bubble-text[data-fmt="md"] th {
+  background: rgba(56,189,248,.12); color: #38bdf8;
+}
+#chat-feed .cgo-bubble-text[data-fmt="md"] blockquote {
+  border-left: 3px solid #38bdf8; padding-left: 10px; margin: 8px 0; color: #94a3b8;
+}
+#chat-feed .cgo-bubble-text[data-fmt="md"] .copy-btn {
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(255,255,255,.08); border: 1px solid #1e293b;
+  color: #94a3b8; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px;
+  cursor: pointer; opacity: 0;
+}
+#chat-feed .cgo-bubble-text[data-fmt="md"] pre:hover .copy-btn { opacity: 1; }
+#chat-feed .cgo-bubble-text[data-fmt="md"] .chart-container {
+  margin-top: 10px; background: #0f172a; padding: 12px; border-radius: 10px;
+  border: 1px solid #1e293b; height: 260px; position: relative;
+}
+
 /* Satu halaman Orb · panel AI PRO disembunyikan (mesin stream disuntik ke form Orb) */
 .mode-bar { display: none !important; }
 #cgo-ai-panel { display: none !important; }
@@ -1700,8 +1765,62 @@ function addChat(role, text, meta) {
       } catch(_){}
       return true;
     })();
-    const canStream = role !== 'user' && streamPref && fullText.length >= 20 && !meta.noStream;
-    if (!canStream) {
+    const useMarkdown = role !== 'user' && !!(meta.aiPro || meta.fmt === 'markdown' ||
+      /AI_PRO/i.test(String(meta.brainSource || meta.source || '')));
+    const renderMd = function (el, text) {
+      try {
+        if (typeof marked === 'undefined' || typeof DOMPurify === 'undefined') return false;
+        el.innerHTML = DOMPurify.sanitize(marked.parse(String(text || '')));
+        el.setAttribute('data-fmt', 'md');
+        el.classList.add('cgo-md-pro');
+        try {
+          el.querySelectorAll('pre code.language-chart').forEach(function (codeBlock) {
+            try {
+              if (typeof Chart === 'undefined') return;
+              var cfg = JSON.parse(codeBlock.innerText.trim());
+              if (!cfg.options) cfg.options = {};
+              cfg.options.responsive = true;
+              cfg.options.maintainAspectRatio = false;
+              var box = document.createElement('div');
+              box.className = 'chart-container';
+              var canvas = document.createElement('canvas');
+              box.appendChild(canvas);
+              var pre = codeBlock.parentElement;
+              if (pre && pre.parentElement) {
+                pre.style.display = 'none';
+                pre.parentElement.insertBefore(box, pre.nextSibling);
+              }
+              var oldC = Chart.getChart(canvas);
+              if (oldC) oldC.destroy();
+              new Chart(canvas, cfg);
+            } catch (e) { console.warn('chart', e); }
+          });
+          el.querySelectorAll('pre code:not(.language-chart)').forEach(function (codeEl) {
+            try { if (window.hljs) hljs.highlightElement(codeEl); } catch (_) {}
+            var pre = codeEl.parentElement;
+            if (pre && !pre.querySelector('.copy-btn')) {
+              var btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'copy-btn';
+              btn.textContent = 'Copy';
+              btn.onclick = function () {
+                navigator.clipboard.writeText(codeEl.innerText).then(function () {
+                  btn.textContent = 'Copied!';
+                  setTimeout(function () { btn.textContent = 'Copy'; }, 1400);
+                }).catch(function () {});
+              };
+              pre.style.position = 'relative';
+              pre.appendChild(btn);
+            }
+          });
+        } catch (_) {}
+        return true;
+      } catch (_) { return false; }
+    };
+    const canStream = role !== 'user' && streamPref && fullText.length >= 20 && !meta.noStream && !useMarkdown;
+    if (useMarkdown) {
+      if (!renderMd(content, fullText)) content.textContent = fullText;
+    } else if (!canStream) {
       var structured = (role !== 'user') ? cgoStructureAnswerHtml(fullText) : null;
       if (structured) { content.innerHTML = structured; content.setAttribute('data-structured','1'); content.setAttribute('data-fmt','1'); }
       else content.textContent = fullText;
@@ -2364,7 +2483,11 @@ async function sendQuestion(question, opts) {
           confidence: (emosi && emosi.intensitas != null) ? emosi.intensitas : 0.72,
           trace: (window.CGO_OTAK && window.CGO_OTAK.status && window.CGO_OTAK.status().modules)
             ? window.CGO_OTAK.status().modules.filter(function(m){return m.ready;}).map(function(m){return m.id;})
-            : null
+            : null,
+          brainSource: brainSource,
+          aiPro: /AI_PRO/i.test(String(brainSource || '')),
+          fmt: /AI_PRO/i.test(String(brainSource || '')) ? 'markdown' : undefined,
+          noStream: /AI_PRO/i.test(String(brainSource || ''))
         });
 
         // TTS wanita — jangan tunggu selesai untuk unlock chat
