@@ -1128,6 +1128,35 @@
 
 <style id="cgo-unify-ai-pro-css">
 
+/* Mini-wave Orb dikuasai AI · level real */
+.cgo-orb-mini-wave.ai-live span {
+  opacity: 1;
+  animation-duration: 0.55s;
+  background: linear-gradient(180deg, #67e8f9, #34d399);
+}
+.cgo-orb-mini-wave.ai-warn span {
+  background: linear-gradient(180deg, #fbbf24, #f59e0b);
+  animation-duration: 0.4s;
+}
+.cgo-orb-mini-wave.ai-alert span {
+  background: linear-gradient(180deg, #f87171, #ef4444);
+  animation-duration: 0.32s;
+}
+.cgo-orb-mini-wave[data-level="1"] span:nth-child(n+3) { opacity: .25; height: 3px !important; }
+.cgo-orb-mini-wave[data-level="2"] span:nth-child(n+5) { opacity: .3; }
+.cgo-orb-mini-wave[data-level="3"] span:nth-child(n+7) { opacity: .35; }
+.cgo-orb-mini-wave[data-level="4"] span:nth-child(n+9) { opacity: .4; }
+.cgo-orb-mini-wave[data-level="5"] span { opacity: 1; }
+.cgo-orb-step.ai-on .cgo-orb-lamp {
+  background: #38bdf8 !important;
+  box-shadow: 0 0 10px #38bdf8;
+}
+.cgo-orb-step.ai-done .cgo-orb-lamp {
+  background: #34d399 !important;
+  box-shadow: 0 0 8px #34d399;
+}
+
+
 /* Markdown AI Pro di bubble Operator (bukan structured cards) */
 #chat-feed .cgo-bubble-text[data-fmt="md"] {
   white-space: normal;
@@ -5758,6 +5787,7 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
     isGenerating = true;
     setBusy(true);
     paintBadge('stream');
+    try { if (window.__CGO_ORB_DRIVE__) window.__CGO_ORB_DRIVE__.start(userText); } catch (_od) {}
 
     var input = document.getElementById('chat-input');
     var sendBtn = document.getElementById('cgo-send-btn');
@@ -5859,6 +5889,7 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
             } catch (_) { aiBubble.textContent = full; }
             scrollFeed();
           }
+          try { if (window.__CGO_ORB_DRIVE__) window.__CGO_ORB_DRIVE__.chunk(); } catch (_oc) {}
         }
       }
 
@@ -5877,6 +5908,7 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
       if (chatHistory.length > MAX_HISTORY) chatHistory = chatHistory.slice(-MAX_HISTORY);
       saveStorage();
       if (!usedFallback) paintBadge(null);
+      try { if (window.__CGO_ORB_DRIVE__) window.__CGO_ORB_DRIVE__.done(full, userText); } catch (_od2) {}
 
       try {
         if (window.CGOOperatorVoice && typeof window.CGOOperatorVoice.speakAnswer === 'function') {
@@ -5909,6 +5941,7 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
           aiBubble.innerHTML = '<span style="color:#ef4444">⚠️ Neural link terputus: ' +
             ((error && error.message) ? error.message : 'Gagal menghubungi server AI.') + '</span>';
         }
+        try { if (window.__CGO_ORB_DRIVE__) window.__CGO_ORB_DRIVE__.error(error && error.message); } catch (_oe) {}
         if (chatHistory.length && chatHistory[chatHistory.length - 1].role === 'user') {
           chatHistory.pop();
           saveStorage();
@@ -6102,6 +6135,226 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
   else bind();
   setTimeout(bind, 800);
   setTimeout(bind, 2500);
+})();
+</script>
+
+
+<script id="cgo-orb-ai-drive">
+/* Orb dikuasai AI Pro: warna, stages, mini-wave, panel kanan dari jawaban + BCGO_STATE */
+(function () {
+  'use strict';
+  var stageTimer = null;
+  var stageIdx = 0;
+  var STAGE_KEYS = ['mendengar', 'memahami', 'menalar', 'memproses', 'memberi'];
+
+  function wrap() { return document.getElementById('cgo-orb-wrap'); }
+  function miniWave() { return document.querySelector('.cgo-orb-mini-wave'); }
+  function stepList() { return document.getElementById('cgo-orb-step-list'); }
+
+  function setPalette(name) {
+    try {
+      var w = wrap();
+      if (!w) return;
+      if (!name || name === 'cyan' || name === 'default') w.removeAttribute('data-palette');
+      else w.setAttribute('data-palette', name);
+    } catch (_) {}
+  }
+
+  function setMiniWave(mode, level) {
+    try {
+      var mw = miniWave();
+      if (!mw) return;
+      mw.classList.remove('ai-live', 'ai-warn', 'ai-alert');
+      if (mode === 'live') mw.classList.add('ai-live');
+      else if (mode === 'warn') mw.classList.add('ai-warn');
+      else if (mode === 'alert') mw.classList.add('ai-alert');
+      var lv = Math.max(1, Math.min(5, level || 3));
+      mw.setAttribute('data-level', String(lv));
+      var spans = mw.querySelectorAll('span');
+      spans.forEach(function (sp, i) {
+        var h = 4 + ((i + lv) % 5) * (mode === 'live' ? 3.2 : 2) + (lv * 1.5);
+        if (mode === 'idle') h = 3 + (i % 3);
+        sp.style.height = h + 'px';
+      });
+    } catch (_) {}
+  }
+
+  function setStepsProgress(idx) {
+    try {
+      var list = stepList();
+      if (!list) return;
+      var steps = list.querySelectorAll('.cgo-orb-step');
+      steps.forEach(function (s, i) {
+        s.classList.remove('active', 'done', 'ai-on', 'ai-done');
+        if (i < idx) { s.classList.add('done', 'ai-done'); }
+        else if (i === idx) { s.classList.add('active', 'ai-on'); }
+      });
+    } catch (_) {}
+  }
+
+  function clearStepAnim() {
+    if (stageTimer) { clearInterval(stageTimer); stageTimer = null; }
+  }
+
+  function runStageAnim() {
+    clearStepAnim();
+    stageIdx = 0;
+    setStepsProgress(0);
+    stageTimer = setInterval(function () {
+      stageIdx = Math.min(stageIdx + 1, STAGE_KEYS.length - 1);
+      setStepsProgress(stageIdx);
+      if (stageIdx >= STAGE_KEYS.length - 1) clearStepAnim();
+    }, 700);
+  }
+
+  function setRight(title, body) {
+    try {
+      var t = document.getElementById('cgo-orb-right-title');
+      var b = document.getElementById('cgo-orb-right-body');
+      if (t && title) t.textContent = title;
+      if (b && body) b.textContent = body;
+    } catch (_) {}
+  }
+
+  function orbState(name) {
+    try {
+      if (window.CGOOrb && typeof window.CGOOrb.setState === 'function') {
+        window.CGOOrb.setState(name, { force: true });
+      }
+    } catch (_) {}
+  }
+
+  function snapshotBCGO() {
+    try {
+      var s = window.BCGO_STATE;
+      if (!s || typeof s !== 'object') return null;
+      return {
+        cycle: s.cycle,
+        mode: s.cycleMode || (s.connection && s.connection.status) || null,
+        step: s.step,
+        message: s.message ? String(s.message).slice(0, 120) : null,
+        organ: s.metrics && s.metrics.total,
+        anomali: s.metrics && s.metrics.active,
+        scan: s.sourceScan && s.sourceScan.status
+      };
+    } catch (_) { return null; }
+  }
+
+  /** Dipanggil saat AI Pro mulai stream */
+  function onStreamStart(userText) {
+    runStageAnim();
+    orbState('membuka');
+    setPalette('violet');
+    setMiniWave('live', 4);
+    setRight('CGO MENJAWAB', 'AI Pro menyusun jawaban…');
+    try {
+      var low = String(userText || '').toLowerCase();
+      if (/status|sistem|bcgo|scan|radar|agent|anomali/.test(low)) {
+        setPalette('ice');
+        setRight('CGO ANALISIS', 'Membaca state operasional…');
+      } else if (/code|kode|python|script|program/.test(low)) {
+        setPalette('emerald');
+      } else if (/error|bahaya|ancaman|waspada|rusak/.test(low)) {
+        setPalette('amber');
+        orbState('waspada');
+        setMiniWave('warn', 5);
+      }
+    } catch (_) {}
+  }
+
+  /** Dipanggil tiap chunk (opsional) — jaga gelombang hidup */
+  function onStreamChunk() {
+    try {
+      var mw = miniWave();
+      if (!mw) return;
+      var spans = mw.querySelectorAll('span');
+      spans.forEach(function (sp) {
+        var h = 6 + Math.random() * 16;
+        sp.style.height = h + 'px';
+      });
+    } catch (_) {}
+  }
+
+  /** Dipanggil saat stream selesai — Orb menampilkan keadaan real */
+  function onStreamDone(answer, userText) {
+    clearStepAnim();
+    setStepsProgress(STAGE_KEYS.length - 1);
+    var snap = snapshotBCGO();
+    var text = String(answer || '');
+    var low = text.toLowerCase();
+    var q = String(userText || '').toLowerCase();
+
+    // Deteksi mood dari jawaban + state
+    var alert = /anomali|error|gagal|degraded|failed|bahaya|waspada|temuan|findings/i.test(text);
+    var ok = /normal|bersih|clean|stabil|siap|sukses|tidak ada anomali/i.test(text);
+    var code = /```/.test(text) || /kode|python|javascript/i.test(q);
+
+    if (snap && (snap.anomali > 0 || snap.scan === 'FINDINGS' || snap.scan === 'DEGRADED')) {
+      alert = true;
+    }
+    if (snap && snap.scan === 'CLEAN' && (!snap.anomali || snap.anomali === 0)) {
+      ok = true;
+    }
+
+    if (alert) {
+      orbState('waspada');
+      setPalette('amber');
+      setMiniWave('alert', 5);
+    } else if (code) {
+      orbState('transenden');
+      setPalette('emerald');
+      setMiniWave('live', 4);
+      setTimeout(function () { orbState('tenang'); }, 2200);
+    } else if (ok) {
+      orbState('tenang');
+      setPalette('cyan');
+      setMiniWave('live', 3);
+      setTimeout(function () { setMiniWave('idle', 2); }, 2500);
+    } else {
+      orbState('tenang');
+      setPalette('ice');
+      setMiniWave('live', 3);
+      setTimeout(function () { setMiniWave('idle', 2); }, 2000);
+    }
+
+    // Panel kanan = fakta real BCGO jika ada
+    if (snap) {
+      var lines = [];
+      if (snap.cycle != null) lines.push('Siklus #' + snap.cycle);
+      if (snap.mode) lines.push(String(snap.mode));
+      if (snap.organ != null) lines.push('Organ ' + snap.organ);
+      if (snap.anomali != null) lines.push('Anomali ' + snap.anomali);
+      if (snap.scan) lines.push('Scan ' + snap.scan);
+      var title = alert ? 'CGO WASPADA' : (ok ? 'CGO NOMINAL' : 'CGO SIAP');
+      var body = lines.length
+        ? lines.join(' · ')
+        : (snap.message || 'Jawaban tersusun · kanal live.');
+      setRight(title, body);
+    } else {
+      setRight(
+        alert ? 'CGO WASPADA' : 'CGO SIAP MENDENGAR',
+        alert ? 'Perlu perhatian pada sinyal operasional.' : 'Siap menerima pertanyaan berikutnya.'
+      );
+    }
+  }
+
+  function onStreamError(msg) {
+    clearStepAnim();
+    orbState('waspada');
+    setPalette('rose');
+    setMiniWave('alert', 4);
+    setRight('CGO LINK GAGAL', String(msg || 'Neural link terputus').slice(0, 120));
+  }
+
+  window.__CGO_ORB_DRIVE__ = {
+    start: onStreamStart,
+    chunk: onStreamChunk,
+    done: onStreamDone,
+    error: onStreamError,
+    setPalette: setPalette,
+    setMiniWave: setMiniWave
+  };
+  console.log('[CGO] Orb AI drive siap');
 })();
 </script>
 
