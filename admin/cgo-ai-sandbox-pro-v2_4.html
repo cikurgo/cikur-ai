@@ -1135,13 +1135,19 @@ body[data-mode] .cgo-op,
 body { height: 100vh; height: 100dvh; max-height: 100dvh; overflow: hidden; }
 .hud-container { height: 100vh; height: 100dvh; max-height: 100dvh; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .cgo-op .cgo-chat-shell { flex: 1 1 auto; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.cgo-op .cgo-orb-stage-host { flex: 0 0 auto; max-height: min(36vh, 300px); overflow: hidden; }
+.cgo-op .cgo-orb-stage-host {
+  flex: 0 0 auto;
+  max-height: none;
+  overflow: visible;
+}
 .cgo-op #chat-feed {
   flex: 1 1 auto !important; height: auto !important; min-height: 72px !important;
   max-height: none !important; overflow-y: auto !important;
 }
 .cgo-op #chat-form { flex: none !important; position: relative; z-index: 6; background: #070b16;
   padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+.cgo-op .cgo-orb-wrap.surface-radar-on { margin-bottom: 56px; }
+.cgo-op .cgo-orb-status, .cgo-op .cgo-orb-wake-badge { position: relative; z-index: 2; }
 /* Bubble gaya AI Pro di dalam feed Orb */
 #chat-feed .cgo-pro-msg { display: flex; flex-direction: column; max-width: 92%;
   animation: cgoProIn .22s ease-out both; margin: 4px 0; }
@@ -1208,9 +1214,12 @@ body { height: 100vh; height: 100dvh; max-height: 100dvh; overflow: hidden; }
 #cgo-stop-btn.show { display: inline-flex; }
 #cgo-stop-btn:hover { background: #dc2626; }
 @media (max-width: 720px) {
-  .cgo-orb-wrap, #cgo-orb-wrap { width: 148px !important; height: 148px !important; }
-  .cgo-op .cgo-orb-stage-host { max-height: min(32vh, 240px) !important; }
+  .cgo-orb-wrap, #cgo-orb-wrap { width: 200px !important; height: 200px !important; }
+  .cgo-op .cgo-orb-stage-host { max-height: none !important; overflow: visible !important; padding: 10px 8px 8px !important; }
   .hud-header { padding: 8px 10px; }
+}
+@media (max-width: 380px) {
+  .cgo-orb-wrap, #cgo-orb-wrap { width: 168px !important; height: 168px !important; }
 }
 </style>
 
@@ -2294,6 +2303,30 @@ async function sendQuestion(question, opts) {
             brainSource = 'SAFE_LOCAL';
         }
 
+        // Suntik AI Pro ke jalur Otak HANYA jika jawaban operasional lemah/kosong
+        try {
+          /* AI Pro disuntik PENUH ke Otak — setiap jawaban */
+          if (typeof window.__CGO_AI_PRO_ASK_SILENT__ === 'function') {
+            try {
+              if (liveStatus) liveStatus.textContent = 'Otak + AI Pro · menyusun jawaban…';
+              if (thinkLabel) thinkLabel.textContent = 'AI Pro tersuntik ke Satu Otak…';
+              var llm = await window.__CGO_AI_PRO_ASK_SILENT__(text, {
+                liveState: liveSnap || window.BCGO_STATE || null,
+                priorAnswer: answer || null,
+                brainSource: brainSource || null,
+                opsIntent: (typeof window.__CGO_IS_OPS_INTENT__ === 'function')
+                  ? window.__CGO_IS_OPS_INTENT__(text) : false
+              });
+              if (llm && String(llm).trim()) {
+                answer = String(llm).trim();
+                brainSource = (brainSource && brainSource !== 'none')
+                  ? (String(brainSource) + '+AI_PRO')
+                  : 'AI_PRO_OTAK_INJECT';
+              }
+            } catch (hyE) { console.warn('[CGO-OTAK+AI-PRO]', hyE); }
+          }
+        } catch (_) {}
+
         try { window.__CGO_LAST_BRAIN_SOURCE = brainSource; } catch (_) {}
         try { pikirMs = Math.max(0, Math.round(performance.now() - tParse0)); } catch (_) {}
 
@@ -2369,25 +2402,32 @@ async function sendQuestion(question, opts) {
 // The main form remains module-scoped; only these explicit UI bridges use the global alias.
 window.CGO_BCGO_SEND_QUESTION = sendQuestion;
 
+/* Router: ops/sistem/radar/maps → Otak (sendQuestion); umum → AI Pro stream */
+function __cgoIsOpsIntent(q) {
+  return /\b(status\s*sistem|status\s*bcgo|scanner|source\s*scan|radar|agent\s*cgo|presence|gps|radius|organ|siklus|cycle\s*mode|mesin\s*abc|\babc\b|telemetry|anomali|error\s*log|file\s*saraf|modul\s*otak|bcgo\s*state|verifikasi\s*radar|peta|maps?|live\s*map|agent\s*terdekat|apa\s*yang\s*sedang\s*kamu\s*kerjakan|ada\s*masalah|ada\s*error)\b/i.test(String(q || ''));
+}
+function __cgoRouteChat(text, opts) {
+  opts = opts || {};
+  if (!text) return;
+  /* Semua chat → jalur Otak internal; AI Pro disuntik di sendQuestion */
+  void sendQuestion(text, opts);
+}
+window.__CGO_ROUTE_CHAT__ = __cgoRouteChat;
+window.__CGO_IS_OPS_INTENT__ = __cgoIsOpsIntent;
+
 chatForm?.addEventListener('submit', event => {
     event.preventDefault();
     const text = chatInput.value.trim();
     if (!text) return;
     chatInput.value = '';
-    // Loading + streaming = AI Pro murni (Orb & fungsi lain tetap)
-    if (typeof window.__CGO_AI_PRO_STREAM__ === 'function') {
-      void window.__CGO_AI_PRO_STREAM__(text);
-    } else {
-      void sendQuestion(text); // fallback jika script stream belum siap
-    }
+    __cgoRouteChat(text);
 });
 
 document.querySelectorAll('.quick-q').forEach(button => {
     button.addEventListener('click', () => {
       const q = button.dataset.q;
       if (!q) return;
-      if (typeof window.__CGO_AI_PRO_STREAM__ === 'function') void window.__CGO_AI_PRO_STREAM__(q);
-      else void sendQuestion(q);
+      __cgoRouteChat(q);
     });
 });
 
@@ -4740,8 +4780,12 @@ function startBus() {
     };
     const ask = function (type) { try { bus.postMessage({ type: type, from: 'cgo-ai' }); } catch (_) {} };
     ask('CGO_STATE_REQUEST');
-    setInterval(function () { ask('CGO_STATE_PING'); }, 10000);
+    setInterval(function () { ask('CGO_STATE_PING'); }, 8000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) ask('CGO_STATE_REQUEST'); });
+    window.addEventListener('focus', function () { try { ask('CGO_STATE_REQUEST'); } catch (_) {} });
+    [1200, 3500, 8000, 15000].forEach(function (ms) {
+      setTimeout(function () { try { ask('CGO_STATE_REQUEST'); } catch (_) {} }, ms);
+    });
     /* hasil perintah Mesin ABC dari chat → disalin ke dashboard bcgo.html agar panel hasil tetap sinkron */
     window.addEventListener('cgo:abc-command-result', function (e) {
       try { bus.postMessage({ type: 'CGO_ABC_COMMAND_RESULT', from: 'cgo-ai', detail: JSON.parse(JSON.stringify(e.detail || {})) }); } catch (_) {}
@@ -5698,6 +5742,82 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
     }
   }
 
+
+  /** Non-UI fetch untuk suntikan ke sendQuestion (ops lemah) — tidak double-bubble */
+  window.__CGO_AI_PRO_ASK_SILENT__ = async function (userText, opts) {
+    opts = opts || {};
+    if (!userText) return null;
+    var hasKey = !!(settings.apiKey && settings.apiKey.trim());
+    var endpoint = hasKey
+      ? 'https://gen.pollinations.ai/v1/chat/completions'
+      : 'https://text.pollinations.ai/openai';
+    var headers = { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' };
+    if (hasKey) headers['Authorization'] = 'Bearer ' + settings.apiKey.trim();
+    var modelToUse = settings.model || 'openai';
+    if (!hasKey && modelToUse !== 'openai' && modelToUse !== 'openai-fast') modelToUse = 'openai';
+    var systemContent = SYSTEM_PROMPT;
+    try {
+      var live = (opts && opts.liveState) || window.BCGO_STATE;
+      if (live && typeof live === 'object') {
+        var bits = [];
+        if (live.cycle != null) bits.push('siklus=' + live.cycle);
+        if (live.cycleMode) bits.push('mode=' + live.cycleMode);
+        if (live.step) bits.push('tahap=' + live.step);
+        if (live.message) bits.push('pesan=' + String(live.message).slice(0, 140));
+        if (live.metrics) {
+          bits.push('organ=' + (live.metrics.total != null ? live.metrics.total : '?'));
+          bits.push('anomali=' + (live.metrics.active != null ? live.metrics.active : '?'));
+        }
+        if (live.sourceScan && live.sourceScan.status) bits.push('scan=' + live.sourceScan.status);
+        if (live.connection && live.connection.status) bits.push('koneksi=' + live.connection.status);
+        if (live.agentPresence) {
+          var ap = live.agentPresence;
+          var n = (ap.items && ap.items.length) || (ap.radar && ap.radar.agents && ap.radar.agents.length) || 0;
+          bits.push('agent_presence=' + n);
+        }
+        if (live.abcLiveLink) bits.push('abc=' + (live.abcLiveLink.status || live.abcLiveLink.audit || 'link'));
+        if (bits.length) systemContent += '\n\nKONTEKS LIVE BCGO_STATE (fakta, WAJIB dihormati):\n- ' + bits.join('\n- ');
+      }
+    } catch (_) {}
+    systemContent += '\n\nPERAN SUNTIKAN OTAK+AI PRO:\n' +
+      '- Bagian dari Satu Otak CGO. Jawab pintar, presisi, bahasa Indonesia.\n' +
+      '- Hormati KONTEKS LIVE; jangan mengarang status/radar/agent yang bertentangan.\n' +
+      '- Jika ada DRAFT OTAK, perhalus/perkaya tanpa membuang fakta operasional.\n' +
+      '- Pertanyaan umum (kode/matematika): jawab lengkap bermarkdown.';
+    try {
+      if (opts && opts.priorAnswer && String(opts.priorAnswer).trim()) {
+        systemContent += '\n\nDRAFT OTAK INTERNAL (sumber=' + String(opts.brainSource || 'otak') + '):\n' +
+          String(opts.priorAnswer).slice(0, 1800);
+      }
+    } catch (_) {}
+    var body = {
+      model: modelToUse,
+      stream: true,
+      messages: [{ role: 'system', content: systemContent }, { role: 'user', content: String(userText) }]
+    };
+    var ac = new AbortController();
+    var timer = setTimeout(function () { try { ac.abort(); } catch (_) {} }, 22000);
+    try {
+      var response = await fetch(endpoint, {
+        method: 'POST', headers: headers, body: JSON.stringify(body), signal: ac.signal
+      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      var reader = response.body.getReader();
+      var full = '';
+      for await (var data of parseSSE(reader)) {
+        var delta = data && data.choices && data.choices[0] && data.choices[0].delta;
+        var content = (delta && (delta.content || delta.text)) || '';
+        if (content) full += content;
+      }
+      return full && full.trim() ? full.trim() : null;
+    } catch (e) {
+      console.warn('[CGO-AI-PRO silent]', e);
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   window.__CGO_AI_PRO_STREAM__ = streamAIPro;
   window.__CGO_AI_PRO_ABORT__ = function () {
     if (currentAbortController) currentAbortController.abort();
@@ -5742,7 +5862,8 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
       });
     }
     // Bridge legacy voice path → AI Pro stream
-    window.CGO_BCGO_SEND_QUESTION = function (q) {
+    window.CGO_BCGO_SEND_QUESTION = function (q, opts) {
+      if (typeof window.__CGO_ROUTE_CHAT__ === 'function') return window.__CGO_ROUTE_CHAT__(q, opts || { modality: 'voice' });
       if (typeof streamAIPro === 'function') return streamAIPro(q);
     };
   }
