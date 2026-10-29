@@ -2178,19 +2178,18 @@ async function sendQuestion(question, opts) {
       try { if (chatInput) chatInput.disabled = false; } catch (_) {}
     };
     const watchdog = setTimeout(function () {
-      console.warn('[BCGO] chat watchdog 10s — paksa unlock');
+      console.warn('[BCGO] chat watchdog 60s — paksa unlock');
       forceUnlock();
       try { setChatLiveStatus('Waktu proses habis. Silakan kirim ulang pertanyaan lebih singkat.', 'blocked'); } catch (_) {}
-    }, 10000);
+    }, 60000);
 
-    // Hard timeout 12 detik: PASTI melepas kunci chat (lewat forceUnlock agar tidak
-    // mengganggu permintaan berikutnya yang mungkin sudah berjalan)
+    // Hard timeout 60s (AI Pro butuh lebih dari 12s)
     const hardTimeout = setTimeout(function () {
       try {
         forceUnlock();
         setChatLiveStatus('Proses terlalu lama, dibatalkan otomatis.', 'blocked');
       } catch (_) {}
-    }, 12000);
+    }, 60000);
 
     // Mask kode akses di bubble user (tetap kirim teks asli ke Otak)
     var displayText = (function (raw) {
@@ -2532,8 +2531,14 @@ function __cgoIsOpsIntent(q) {
 function __cgoRouteChat(text, opts) {
   opts = opts || {};
   if (!text) return;
-  /* Semua chat → jalur Otak internal; AI Pro disuntik di sendQuestion */
-  void sendQuestion(text, opts);
+  /* Ops → Otak; Umum → stream AI Pro murni (format = file murni) */
+  if (typeof __cgoIsOpsIntent === 'function' && __cgoIsOpsIntent(text)) {
+    void sendQuestion(text, opts);
+  } else if (typeof window.__CGO_AI_PRO_STREAM__ === 'function') {
+    void window.__CGO_AI_PRO_STREAM__(text);
+  } else {
+    void sendQuestion(text, opts);
+  }
 }
 window.__CGO_ROUTE_CHAT__ = __cgoRouteChat;
 window.__CGO_IS_OPS_INTENT__ = __cgoIsOpsIntent;
@@ -5515,7 +5520,7 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
   'use strict';
   var STORAGE_KEY = 'cgo_ai_pro_v24';
   var MAX_HISTORY = 14;
-  var SYSTEM_PROMPT = "Kamu adalah CGO (Cyber Guardian Operator), asisten AI cerdas yang terintegrasi dengan sistem keamanan dan operasional drone.\nJawab dengan tegas, futuristik, dan bahasa Indonesia yang natural. Gunakan format Markdown untuk penekanan dan struktur.\n\nATURAN KHUSUS UNTUK GRAFIK:\nJika user meminta grafik, chart, atau visualisasi data, kamu WAJIB mengeluarkan format JSON di dalam blok kode seperti ini (tanpa teks lain di dalam blok tersebut):\n```chart\n{\n  \"type\": \"bar\",\n  \"data\": {\n    \"labels\": [\"Jan\", \"Feb\", \"Mar\"],\n    \"datasets\": [{\"label\": \"Trafik\", \"data\": [10, 20, 30], \"backgroundColor\": \"#38bdf8\"}]\n  },\n  \"options\": {\n    \"responsive\": true,\n    \"maintainAspectRatio\": false,\n    \"plugins\": { \"legend\": { \"labels\": { \"color\": \"#e2e8f0\" } } },\n    \"scales\": {\n      \"x\": { \"ticks\": { \"color\": \"#94a3b8\" }, \"grid\": { \"color\": \"#1e293b\" } },\n      \"y\": { \"ticks\": { \"color\": \"#94a3b8\" }, \"grid\": { \"color\": \"#1e293b\" } }\n    }\n  }\n}\n```\nGunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Hanya keluarkan JSON murni di dalam blok ```chart.";
+  var SYSTEM_PROMPT = "Kamu adalah CGO (Cyber Guardian Operator), asisten AI cerdas yang terintegrasi dengan sistem keamanan dan operasional drone.\nJawab dengan tegas, futuristik, dan bahasa Indonesia yang natural. Gunakan format Markdown yang rapi.\n\nATURAN KODE (WAJIB):\n- Semua contoh kode HARUS di dalam blok fenced markdown: tiga backtick + bahasa (python, js, dll), lalu tutup tiga backtick.\n- Jangan menulis kode dalam satu baris panjang tanpa newline.\n- Tambahkan penjelasan singkat di luar blok kode.\n\nATURAN KHUSUS UNTUK GRAFIK:\nJika user meminta grafik, chart, atau visualisasi data, kamu WAJIB mengeluarkan format JSON di dalam blok kode seperti ini (tanpa teks lain di dalam blok tersebut):\n```chart\n{\n  \"type\": \"bar\",\n  \"data\": {\n    \"labels\": [\"Jan\", \"Feb\", \"Mar\"],\n    \"datasets\": [{\"label\": \"Trafik\", \"data\": [10, 20, 30], \"backgroundColor\": \"#38bdf8\"}]\n  },\n  \"options\": {\n    \"responsive\": true,\n    \"maintainAspectRatio\": false,\n    \"plugins\": { \"legend\": { \"labels\": { \"color\": \"#e2e8f0\" } } },\n    \"scales\": {\n      \"x\": { \"ticks\": { \"color\": \"#94a3b8\" }, \"grid\": { \"color\": \"#1e293b\" } },\n      \"y\": { \"ticks\": { \"color\": \"#94a3b8\" }, \"grid\": { \"color\": \"#1e293b\" } }\n    }\n  }\n}\n```\nGunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Hanya keluarkan JSON murni di dalam blok ```chart.";
 
   var chatHistory = [];
   var settings = { apiKey: '', model: 'openai' };
@@ -5919,7 +5924,7 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
       messages: [{ role: 'system', content: systemContent }, { role: 'user', content: String(userText) }]
     };
     var ac = new AbortController();
-    var timer = setTimeout(function () { try { ac.abort(); } catch (_) {} }, 22000);
+    var timer = setTimeout(function () { try { ac.abort(); } catch (_) {} }, 40000);
     try {
       var response = await fetch(endpoint, {
         method: 'POST', headers: headers, body: JSON.stringify(body), signal: ac.signal
