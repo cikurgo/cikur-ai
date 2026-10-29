@@ -2531,13 +2531,31 @@ function __cgoIsOpsIntent(q) {
 function __cgoRouteChat(text, opts) {
   opts = opts || {};
   if (!text) return;
-  /* Ops → Otak; Umum → stream AI Pro murni (format = file murni) */
-  if (typeof __cgoIsOpsIntent === 'function' && __cgoIsOpsIntent(text)) {
-    void sendQuestion(text, opts);
-  } else if (typeof window.__CGO_AI_PRO_STREAM__ === 'function') {
+  /* SELALU stream AI Pro murni (loading + format = file murni).
+     Ops hanya memicu side-effect (radar/maps) tanpa jalur Otak structured. */
+  try {
+    if (typeof __cgoIsOpsIntent === 'function' && __cgoIsOpsIntent(text)) {
+      try {
+        if (window.CGOOrbSurface) {
+          if (window.CGOOrbSurface.isRadarIntent && window.CGOOrbSurface.isRadarIntent(text))
+            window.CGOOrbSurface.showRadar();
+          else if (window.CGOOrbSurface.isOrbIntent && window.CGOOrbSurface.isOrbIntent(text))
+            window.CGOOrbSurface.showOrb();
+        }
+      } catch (_) {}
+      try {
+        var low = String(text).toLowerCase();
+        if (/\b(peta|maps?|live\s*map)\b/.test(low) && window.CGOLiveMaps) {
+          if (typeof window.CGOLiveMaps.open === 'function') window.CGOLiveMaps.open();
+          else if (typeof window.CGOLiveMaps.show === 'function') window.CGOLiveMaps.show();
+        }
+      } catch (_) {}
+    }
+  } catch (_) {}
+  if (typeof window.__CGO_AI_PRO_STREAM__ === 'function') {
     void window.__CGO_AI_PRO_STREAM__(text);
   } else {
-    void sendQuestion(text, opts);
+    void sendQuestion(text, opts); /* fallback terakhir */
   }
 }
 window.__CGO_ROUTE_CHAT__ = __cgoRouteChat;
@@ -5603,6 +5621,43 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
         live.dataset.kind = on ? 'working' : '';
       }
     } catch (_) {}
+    /* Hapus status Otak lama agar loading = file murni */
+    try {
+      var feed = document.getElementById('chat-feed');
+      if (feed) {
+        feed.querySelectorAll('[data-chat-live-status="1"]').forEach(function (el) {
+          if (on) {
+            el.textContent = 'CGO · AI Pro streaming…';
+            el.dataset.kind = 'working';
+          } else {
+            try { el.remove(); } catch (_) {}
+          }
+        });
+      }
+    } catch (_) {}
+    try {
+      var thinkBar = document.getElementById('cgo-think-bar');
+      if (thinkBar) {
+        if (on) {
+          thinkBar.classList.add('on');
+          var tl = document.getElementById('cgo-think-label');
+          if (tl) tl.textContent = 'AI Pro streaming…';
+        } else {
+          thinkBar.classList.remove('on');
+        }
+      }
+    } catch (_) {}
+    try {
+      var rightTitle = document.getElementById('cgo-orb-right-title');
+      var rightBody = document.getElementById('cgo-orb-right-body');
+      if (on) {
+        if (rightTitle) rightTitle.textContent = 'CGO MENJAWAB';
+        if (rightBody) rightBody.textContent = 'AI Pro streaming jawaban…';
+      } else {
+        if (rightTitle) rightTitle.textContent = 'CGO SIAP MENDENGAR';
+        if (rightBody) rightBody.textContent = 'Saya selalu standby, siap membantu kapan saja.';
+      }
+    } catch (_) {}
   }
 
   function addMsg(role, text, typing) {
@@ -6005,6 +6060,48 @@ Gunakan warna yang cocok dengan tema gelap (#38bdf8, #10b981, #f59e0b, dll). Han
   setTimeout(wireUi, 500);
   setTimeout(wireUi, 2000);
   console.log('[CGO] AI Pro pure stream engine siap (Orb utuh)');
+})();
+</script>
+
+
+<script id="cgo-force-pure-stream-bind">
+/* Pastikan form SELALU ke AI Pro stream murni — capture phase, tidak bisa ditimpa */
+(function () {
+  function bind() {
+    var form = document.getElementById('chat-form');
+    var input = document.getElementById('chat-input');
+    if (!form || form.__cgoPureBound) return;
+    form.__cgoPureBound = true;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      var text = (input && input.value || '').trim();
+      if (!text) return;
+      if (input) input.value = '';
+      if (typeof window.__CGO_ROUTE_CHAT__ === 'function') {
+        window.__CGO_ROUTE_CHAT__(text);
+      } else if (typeof window.__CGO_AI_PRO_STREAM__ === 'function') {
+        window.__CGO_AI_PRO_STREAM__(text);
+      }
+    }, true); /* capture = true */
+    document.querySelectorAll('.quick-q').forEach(function (btn) {
+      if (btn.__cgoPureBound) return;
+      btn.__cgoPureBound = true;
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        var q = btn.getAttribute('data-q') || btn.dataset.q;
+        if (!q) return;
+        if (typeof window.__CGO_ROUTE_CHAT__ === 'function') window.__CGO_ROUTE_CHAT__(q);
+        else if (typeof window.__CGO_AI_PRO_STREAM__ === 'function') window.__CGO_AI_PRO_STREAM__(q);
+      }, true);
+    });
+    console.log('[CGO] force pure-stream form bind OK');
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+  setTimeout(bind, 800);
+  setTimeout(bind, 2500);
 })();
 </script>
 
