@@ -1846,6 +1846,7 @@ async function targetRealCCTV() {
 }
 
 async function targetRealFetch() {
+    stats.req++; refreshStats();
     setDot('ip', 'busy');
     log('[TARGET] Mengambil IP publik...', 'info');
     const sources = [
@@ -1866,6 +1867,7 @@ async function targetRealFetch() {
             renderIpCard(mapped, ms, s.url);
             setDot('ip', 'ok');
             log(`[TARGET] IP publik: ${mapped.ip} (via ${s.url})`, 'success');
+            recordReq({ kind: 'TARGET:IP', url: s.url, status: res.status, ms });
             return;
         } catch (e) {
             log(`[TARGET] ✖ ${s.url}: ${e.message}`, 'warn');
@@ -1873,9 +1875,11 @@ async function targetRealFetch() {
     }
     setDot('ip', 'err');
     log('[TARGET] Semua endpoint IP gagal.', 'danger');
+    recordReq({ kind: 'TARGET:IP', url: sources[0].url, status: 0 });
 }
 
 function targetXHR() {
+    stats.req++; refreshStats();
     setDot('xhr', 'busy');
     log('[TARGET] Menghubungi API publik via XHR...', 'info');
     const xhr = new XMLHttpRequest();
@@ -1889,17 +1893,20 @@ function targetXHR() {
             renderXhrCard(data, `XHR 200 · dummyjson.com/users/1`);
             setDot('xhr', 'ok');
             log('[TARGET] XHR 200 OK — user ditarik.', 'success');
+            recordReq({ kind: 'TARGET:XHR', url: 'https://dummyjson.com/users/1', status: xhr.status });
         } else {
             setDot('xhr', 'err');
             log(`[TARGET] XHR ${xhr.status}`, 'warn');
+            recordReq({ kind: 'TARGET:XHR', url: 'https://dummyjson.com/users/1', status: xhr.status });
         }
     };
-    xhr.onerror = () => { setDot('xhr', 'err'); log('[TARGET] XHR network error', 'danger'); };
-    xhr.ontimeout = () => { setDot('xhr', 'err'); log('[TARGET] XHR timeout', 'danger'); };
+    xhr.onerror = () => { setDot('xhr', 'err'); log('[TARGET] XHR network error', 'danger'); recordReq({ kind: 'TARGET:XHR', url: 'https://dummyjson.com/users/1', status: 0 }); };
+    xhr.ontimeout = () => { setDot('xhr', 'err'); log('[TARGET] XHR timeout', 'danger'); recordReq({ kind: 'TARGET:XHR', url: 'https://dummyjson.com/users/1', status: 0 }); };
     xhr.send();
 }
 
 function targetWS() {
+    stats.req++; refreshStats();
     setDot('ws', 'busy');
     log('[TARGET] Membuka WebSocket Echo publik...', 'info');
 
@@ -1910,8 +1917,14 @@ function targetWS() {
     ];
 
     let i = 0;
+    let recorded = false;
     const tryNext = () => {
-        if (i >= candidates.length) { setDot('ws', 'err'); log('[TARGET] Semua WS gagal.', 'danger'); return; }
+        if (i >= candidates.length) {
+            setDot('ws', 'err');
+            log('[TARGET] Semua WS gagal.', 'danger');
+            if (!recorded) { recordReq({ kind: 'TARGET:WS', url: candidates[0], status: 0 }); recorded = true; }
+            return;
+        }
         const url = candidates[i++];
         try {
             const ws = new WebSocket(url);
@@ -1927,6 +1940,7 @@ function targetWS() {
                 log(`[TARGET] WS echo diterima (${String(e.data).length} byte)`, 'success');
                 renderRealtime('WebSocket', e.data);
                 setDot('ws', 'ok');
+                if (!recorded) { recordReq({ kind: 'TARGET:WS', url: url, status: 200 }); recorded = true; }
             };
             ws.onerror = () => { clearTimeout(timer); if (!opened) tryNext(); else { setDot('ws', 'err'); log('[TARGET] WS error', 'danger'); } };
             ws.onclose = () => { log('[TARGET] WS ditutup.', 'sys'); };
@@ -1937,6 +1951,7 @@ function targetWS() {
 }
 
 function targetStorage() {
+    stats.req++; refreshStats();
     setDot('storage', 'busy');
     log('[TARGET] Menyimpan token sesi demo...', 'info');
     const token = 'eyJhbGciOiJIUzI1NiJ9.YWRtaW4tc2Vzc2lvbg.SECRET-KEY';
@@ -1945,10 +1960,12 @@ function targetStorage() {
         localStorage.setItem('demo_session', JSON.stringify({ user: 'admin', token, ts: Date.now() }));
         log('[TARGET] Token (JWT demo) berhasil disimpan.', 'success');
         setDot('storage', 'ok');
-    } catch (e) { log('[TARGET] ✖ ' + e.message, 'danger'); setDot('storage', 'err'); }
+        recordReq({ kind: 'TARGET:STORAGE', url: 'localStorage://auth_token', status: 200 });
+    } catch (e) { log('[TARGET] ✖ ' + e.message, 'danger'); setDot('storage', 'err'); recordReq({ kind: 'TARGET:STORAGE', url: 'localStorage://auth_token', status: 0 }); }
 }
 
 function targetDetect() {
+    stats.req++; refreshStats();
     setDot('detect', 'busy');
     log('[TARGET] Integrity Check...', 'info');
     setTimeout(() => {
@@ -1979,18 +1996,22 @@ function targetDetect() {
         if (dirty.length) {
             log(`[DETECT] Hook terdeteksi: ${dirty.join(', ')}`, 'warn');
             setDot('detect', 'err');
+            recordReq({ kind: 'TARGET:DETECT', url: 'integrity://check', status: 0 });
         } else if (stealthDetected || (hooksActive && stealthOn)) {
             log('[DETECT] Hook tersembunyi (stealth cosmetic) — toString tampak native, tapi interceptor aktif.', 'warn');
             setDot('detect', 'err');
+            recordReq({ kind: 'TARGET:DETECT', url: 'integrity://check', status: 0 });
         } else {
             log('[DETECT] Semua API terlihat native.', 'success');
             setDot('detect', 'ok');
+            recordReq({ kind: 'TARGET:DETECT', url: 'integrity://check', status: 200 });
         }
         log('[DETECT] Catatan: deteksi string-based + stealth awareness.', 'sys');
     }, 350);
 }
 
 async function targetRTC() {
+    stats.req++; refreshStats();
     setDot('rtc', 'busy');
     log('[TARGET] RTCPeerConnection (STUN Google)...', 'info');
     try {
@@ -2012,11 +2033,13 @@ async function targetRTC() {
         renderRealtime('WebRTC', `ICE: ${pc.iceGatheringState} · candidates: ${n}`);
         log(`[TARGET] RTC OK — ${n} ICE candidate terkumpul.`, n > 0 ? 'success' : 'warn');
         setDot('rtc', n > 0 ? 'ok' : 'err');
+        recordReq({ kind: 'TARGET:RTC', url: 'stun:stun.l.google.com:19302', status: n > 0 ? 200 : 0 });
         setTimeout(() => { try { pc.close(); } catch (e) {} }, 800);
-    } catch (e) { log('[TARGET] ' + e.message, 'danger'); setDot('rtc', 'err'); }
+    } catch (e) { log('[TARGET] ' + e.message, 'danger'); setDot('rtc', 'err'); recordReq({ kind: 'TARGET:RTC', url: 'stun:stun.l.google.com:19302', status: 0 }); }
 }
 
 function targetBeacon() {
+    stats.req++; refreshStats();
     setDot('beacon', 'busy');
     log('[TARGET] SendBeacon demo...', 'info');
     const payload = JSON.stringify({ event: 'track', pin: '1234', uid: 'admin', token: 'eyJhbGciOiJIUzI1NiJ9.BEACON-DEMO.sig' });
@@ -2024,21 +2047,24 @@ function targetBeacon() {
         const ok = navigator.sendBeacon('https://jsonplaceholder.typicode.com/posts', new Blob([payload], { type: 'application/json' }));
         setDot('beacon', ok ? 'ok' : 'err');
         log(ok ? '[TARGET] Beacon diantrikan (fire-and-forget, no-cors).' : '[TARGET] Gagal mengirim beacon.', ok ? 'success' : 'warn');
-    } catch (e) { log('[TARGET] ✖ ' + e.message, 'danger'); setDot('beacon', 'err'); }
+        recordReq({ kind: 'TARGET:BEACON', url: 'https://jsonplaceholder.typicode.com/posts', status: ok ? 200 : 0 });
+    } catch (e) { log('[TARGET] ✖ ' + e.message, 'danger'); setDot('beacon', 'err'); recordReq({ kind: 'TARGET:BEACON', url: 'https://jsonplaceholder.typicode.com/posts', status: 0 }); }
 }
 
 function targetEventSource() {
+    stats.req++; refreshStats();
     setDot('sse', 'busy');
     log('[TARGET] Membuka EventSource (SSE)...', 'info');
     const candidates = [
         'https://stream.wikimedia.org/v2/stream/recentchange',
         'https://sse.dev/test'
     ];
-    let i = 0, got = 0;
+    let i = 0, got = 0, recorded = false;
     const tryNext = () => {
         if (i >= candidates.length) {
             setDot('sse', got ? 'ok' : 'err');
             log(got ? `[TARGET] SSE OK — ${got} event` : '[TARGET] SSE semua gagal.', got ? 'success' : 'danger');
+            if (!recorded) { recordReq({ kind: 'TARGET:SSE', url: candidates[0], status: got ? 200 : 0 }); recorded = true; }
             return;
         }
         const url = candidates[i++];
@@ -2051,7 +2077,12 @@ function targetEventSource() {
                 got++;
                 log(`[TARGET] SSE data: ${trunc(e.data, 42)}`, 'success');
                 renderRealtime('SSE', e.data);
-                if (got >= 3) { try { es.close(); } catch (x) {} ; clearTimeout(timer); setDot('sse', 'ok'); }
+                if (got >= 3) {
+                    try { es.close(); } catch (x) {} ;
+                    clearTimeout(timer);
+                    setDot('sse', 'ok');
+                    if (!recorded) { recordReq({ kind: 'TARGET:SSE', url: url, status: 200 }); recorded = true; }
+                }
             };
             es.onerror = () => { clearTimeout(timer); if (!opened) tryNext(); };
             setTimeout(() => { try { es.close(); } catch (e) {} }, 6000);
@@ -3517,6 +3548,13 @@ async function runFuzzParam(payload, label) {
     <button class="cgo-quick" data-cmd="#CCTV">#CCTV</button>
     <button class="cgo-quick" data-cmd="#BUSTER">#BUSTER</button>
     <button class="cgo-quick" data-cmd="#IP">#IP</button>
+    <button class="cgo-quick" data-cmd="#XHR">#XHR</button>
+    <button class="cgo-quick" data-cmd="#WS">#WS</button>
+    <button class="cgo-quick" data-cmd="#RTC">#RTC</button>
+    <button class="cgo-quick" data-cmd="#BEACON">#BEACON</button>
+    <button class="cgo-quick" data-cmd="#SSE">#SSE</button>
+    <button class="cgo-quick" data-cmd="#STORAGE">#STORAGE</button>
+    <button class="cgo-quick" data-cmd="#DETECT">#DETECT</button>
     <button class="cgo-quick cgo-danger" data-cmd="#LOCKDOWN">#LOCKDOWN</button>
   </div>
 
@@ -4751,147 +4789,149 @@ async function handleLocalCommand(raw){
   const text = (raw || '').trim();
   if (!text) return false;
 
-  /* #LOCKDOWN */
-  if (/^#LOCKDOWN\b/i.test(text)){
+  /* Deteksi perintah lokal lebih dulu — non-lokal langsung lewat ke AI */
+  const isLocal = /^#(LOCKDOWN|IP|FINGERPRINT|WHOAMI|PROBE|BUSTER|CCTV|STATUS|VAULT|XHR|WS|RTC|BEACON|SSE|STORAGE|DETECT|CLEAR_VAULT|HELP|\?)\b/i.test(text);
+  if (!isLocal) return false;
+
+  /* KUNCI SISTEM — cegah race condition saat tool berjalan */
+  S.busy = true;
+  el.input.disabled = true;
+  el.send.disabled = true;
+
+  try {
     lineUser(text);
     S.history.push({ role:'user', content:text });
     persistChat();
-    await bridgeLockdown('Perintah manual #LOCKDOWN dari Operator');
-    return true;
-  }
 
-  /* #IP / #FINGERPRINT */
-  if (/^#(IP|FINGERPRINT|WHOAMI)\b/i.test(text)){
-    lineUser(text);
-    S.history.push({ role:'user', content:text });
-    persistChat();
-    await bridgeFetchIP();
-    return true;
-  }
-
-  /* #PROBE [url] */
-  const mProbe = text.match(/^#PROBE(?:\s+(.+))?$/i);
-  if (mProbe){
-    lineUser(text);
-    S.history.push({ role:'user', content:text });
-    persistChat();
-    await bridgeProbe(mProbe[1] || '');
-    return true;
-  }
-
-  /* #BUSTER [url] */
-  const mBust = text.match(/^#BUSTER(?:\s+(.+))?$/i);
-  if (mBust){
-    lineUser(text);
-    S.history.push({ role:'user', content:text });
-    persistChat();
-    await bridgeBuster(mBust[1] || '');
-    return true;
-  }
-
-  /* #CCTV */
-  if (/^#CCTV\b/i.test(text)){
-    lineUser(text);
-    S.history.push({ role:'user', content:text });
-    persistChat();
-    await bridgeCCTV();
-    return true;
-  }
-
-  /* #STATUS */
-  if (/^#STATUS\b/i.test(text)){
-    lineUser(text);
-    const md =
-      '| Modul | Status |\n|-------|--------|\n' +
-      '| Interceptor Hooks (Cyber Lab) | ' + (hostState().hooks ? '**AKTIF**' : 'NONAKTIF') + ' |\n' +
-      '| Security Sensor CGO | ' + (S.hooksArmed ? '**ARMED**' : 'DISARMED') + ' |\n' +
-      '| Anomaly Count | `' + S.anomaly + '` |\n' +
-      '| Lockdown | ' + (S.lockdown ? '**AKTIF**' : 'NONAKTIF') + ' |\n' +
-      '| Vault Cyber Lab (temuan) | `' + hostState().vault + '` |\n' +
-      '| Insiden Penyusupan | `' + S.vault.length + '` |\n' +
-      '| Chat History | `' + S.history.length + '` pesan |\n' +
-      '| Speaker | ' + (S.speaker ? 'ON' : 'OFF') + ' |\n' +
-      '| Hum | ' + (S.humOn ? 'ON' : 'OFF') + ' |\n' +
-      '| Neural Link | READY |\n';
-    renderToolResult('SYSTEM STATUS', md);
-    return true;
-  }
-
-  /* #VAULT */
-  if (/^#VAULT\b/i.test(text)){
-    lineUser(text);
-    let hostRows = [];
-    try { if (typeof vaultEntries !== 'undefined' && vaultEntries) hostRows = vaultEntries.slice(-10).reverse(); } catch(e){}
-    const hostCount = hostState().vault;
-    if (!hostCount && !S.vault.length){
-      lineSys('Vault kosong. Belum ada temuan Cyber Lab maupun insiden tercatat.');
+    /* #LOCKDOWN */
+    if (/^#LOCKDOWN\b/i.test(text)){
+      await bridgeLockdown('Perintah manual #LOCKDOWN dari Operator');
       return true;
     }
-    if (hostCount){
-      let t = '| Label | Risk | Source |\n|-------|------|--------|\n';
-      hostRows.forEach(r => {
-        t += '| ' + String(r.label || r.ruleId || '—').slice(0, 40) + ' | ' + (r.risk || '—') + ' | ' + String(r.source || '—').slice(0, 40) + ' |\n';
-      });
-      renderToolResult('VAULT CYBER LAB — ' + hostCount + ' TEMUAN (10 terbaru, nilai disembunyikan)', t);
-    }
-    if (S.vault.length){
-      let table = '| ID | Timestamp | Reason | IP |\n|----|-----------|--------|----|\n';
-      S.vault.slice(-15).reverse().forEach(r => {
-        const ip = (r.fingerprint && r.fingerprint.ip) || '—';
-        table += '| `' + r.id + '` | ' + fmtTime(r.timestamp) + ' | ' + (r.reason || '').slice(0, 40) + ' | ' + ip + ' |\n';
-      });
-      renderToolResult('VAULT INSIDEN — ' + S.vault.length + ' ENTRI', table);
-    }
-    return true;
-  }
 
-  /* #HELP */
-  if (/^#(HELP|\?)\b/i.test(text)){
-    lineUser(text);
-    const md =
-      '**Perintah Lokal (langsung dieksekusi):**\n\n' +
-      '| Command | Fungsi |\n|---------|--------|\n' +
-      '| `#PROBE [url]` | Jalankan probeOne() Cyber Lab (tanpa URL = pakai kolom Universal Probe) |\n' +
-      '| `#CCTV` | Nyalakan video player utama (targetRealCCTV) |\n' +
-      '| `#BUSTER [url]` | Jalankan runDirBuster() Cyber Lab |\n' +
-      '| `#IP` / `#WHOAMI` | Fingerprint + geolokasi operator |\n' +
-      '| `#STATUS` | Status sistem real-time |\n' +
-      '| `#VAULT` | Lihat laporan insiden tersimpan |\n' +
-      '| `#LOCKDOWN` | Aktifkan protokol lockdown |\n' +
-      '| `#XHR` | Jalankan targetXHR() |\n' +
-      '| `#WS` | Jalankan targetWS() |\n' +
-      '| `#RTC` | Jalankan targetRTC() |\n' +
-      '| `#BEACON` | Jalankan targetBeacon() |\n' +
-      '| `#SSE` | Jalankan targetEventSource() |\n' +
-      '| `#STORAGE` | Jalankan targetStorage() |\n' +
-      '| `#DETECT` | Jalankan targetDetect() |\n' +
-      '| `#CLEAR_VAULT` | Jalankan clearVault() |\n' +
-      '| `#HELP` | Tampilkan bantuan ini |\n\n' +
-      '**Chat bebas** akan diteruskan ke Neural Gateway (CGO AI).\n' +
-      'AI juga bisa mengeluarkan tag `[EXEC:...]` untuk menjalankan tool.';
-    renderToolResult('COMMAND REFERENCE', md);
-    return true;
-  }
-
-  /* #XHR / #WS / #RTC / #BEACON / #SSE / #STORAGE / #DETECT / #CLEAR_VAULT */
-  if (/^#(XHR|WS|RTC|BEACON|SSE|STORAGE|DETECT|CLEAR_VAULT)\b/i.test(text)) {
-      lineUser(text);
-      S.history.push({ role:'user', content:text });
-      persistChat();
-      const cmd = text.replace(/^#/,'').trim().toUpperCase().split(/\s+/)[0];
-      if(cmd === 'XHR') await bridgeXHR();
-      else if(cmd === 'WS') await bridgeWS();
-      else if(cmd === 'RTC') await bridgeRTC();
-      else if(cmd === 'BEACON') await bridgeBEACON();
-      else if(cmd === 'SSE') await bridgeSSE();
-      else if(cmd === 'STORAGE') await bridgeSTORAGE();
-      else if(cmd === 'DETECT') await bridgeDETECT();
-      else if(cmd === 'CLEAR_VAULT') await bridgeCLEAR_VAULT();
+    /* #IP / #FINGERPRINT */
+    if (/^#(IP|FINGERPRINT|WHOAMI)\b/i.test(text)){
+      await bridgeFetchIP();
       return true;
-  }
+    }
 
-  return false; /* bukan local command → teruskan ke AI */
+    /* #PROBE [url] */
+    const mProbe = text.match(/^#PROBE(?:\s+(.+))?$/i);
+    if (mProbe){
+      await bridgeProbe(mProbe[1] || '');
+      return true;
+    }
+
+    /* #BUSTER [url] */
+    const mBust = text.match(/^#BUSTER(?:\s+(.+))?$/i);
+    if (mBust){
+      await bridgeBuster(mBust[1] || '');
+      return true;
+    }
+
+    /* #CCTV */
+    if (/^#CCTV\b/i.test(text)){
+      await bridgeCCTV();
+      return true;
+    }
+
+    /* #STATUS */
+    if (/^#STATUS\b/i.test(text)){
+      const md =
+        '| Modul | Status |\n|-------|--------|\n' +
+        '| Interceptor Hooks (Cyber Lab) | ' + (hostState().hooks ? '**AKTIF**' : 'NONAKTIF') + ' |\n' +
+        '| Security Sensor CGO | ' + (S.hooksArmed ? '**ARMED**' : 'DISARMED') + ' |\n' +
+        '| Anomaly Count | `' + S.anomaly + '` |\n' +
+        '| Lockdown | ' + (S.lockdown ? '**AKTIF**' : 'NONAKTIF') + ' |\n' +
+        '| Vault Cyber Lab (temuan) | `' + hostState().vault + '` |\n' +
+        '| Insiden Penyusupan | `' + S.vault.length + '` |\n' +
+        '| Chat History | `' + S.history.length + '` pesan |\n' +
+        '| Speaker | ' + (S.speaker ? 'ON' : 'OFF') + ' |\n' +
+        '| Hum | ' + (S.humOn ? 'ON' : 'OFF') + ' |\n' +
+        '| Neural Link | READY |\n';
+      renderToolResult('SYSTEM STATUS', md);
+      return true;
+    }
+
+    /* #VAULT */
+    if (/^#VAULT\b/i.test(text)){
+      let hostRows = [];
+      try { if (typeof vaultEntries !== 'undefined' && vaultEntries) hostRows = vaultEntries.slice(-10).reverse(); } catch(e){}
+      const hostCount = hostState().vault;
+      if (!hostCount && !S.vault.length){
+        lineSys('Vault kosong. Belum ada temuan Cyber Lab maupun insiden tercatat.');
+        return true;
+      }
+      if (hostCount){
+        let t = '| Label | Risk | Source |\n|-------|------|--------|\n';
+        hostRows.forEach(r => {
+          t += '| ' + String(r.label || r.ruleId || '—').slice(0, 40) + ' | ' + (r.risk || '—') + ' | ' + String(r.source || '—').slice(0, 40) + ' |\n';
+        });
+        renderToolResult('VAULT CYBER LAB — ' + hostCount + ' TEMUAN (10 terbaru, nilai disembunyikan)', t);
+      }
+      if (S.vault.length){
+        let table = '| ID | Timestamp | Reason | IP |\n|----|-----------|--------|----|\n';
+        S.vault.slice(-15).reverse().forEach(r => {
+          const ip = (r.fingerprint && r.fingerprint.ip) || '—';
+          table += '| `' + r.id + '` | ' + fmtTime(r.timestamp) + ' | ' + (r.reason || '').slice(0, 40) + ' | ' + ip + ' |\n';
+        });
+        renderToolResult('VAULT INSIDEN — ' + S.vault.length + ' ENTRI', table);
+      }
+      return true;
+    }
+
+    /* #HELP */
+    if (/^#(HELP|\?)\b/i.test(text)){
+      const md =
+        '**Perintah Lokal (langsung dieksekusi):**\n\n' +
+        '| Command | Fungsi |\n|---------|--------|\n' +
+        '| `#PROBE [url]` | Jalankan probeOne() Cyber Lab (tanpa URL = pakai kolom Universal Probe) |\n' +
+        '| `#CCTV` | Nyalakan video player utama (targetRealCCTV) |\n' +
+        '| `#BUSTER [url]` | Jalankan runDirBuster() Cyber Lab |\n' +
+        '| `#IP` / `#WHOAMI` | Fingerprint + geolokasi operator |\n' +
+        '| `#STATUS` | Status sistem real-time |\n' +
+        '| `#VAULT` | Lihat laporan insiden tersimpan |\n' +
+        '| `#LOCKDOWN` | Aktifkan protokol lockdown |\n' +
+        '| `#XHR` | Jalankan targetXHR() |\n' +
+        '| `#WS` | Jalankan targetWS() |\n' +
+        '| `#RTC` | Jalankan targetRTC() |\n' +
+        '| `#BEACON` | Jalankan targetBeacon() |\n' +
+        '| `#SSE` | Jalankan targetEventSource() |\n' +
+        '| `#STORAGE` | Jalankan targetStorage() |\n' +
+        '| `#DETECT` | Jalankan targetDetect() |\n' +
+        '| `#CLEAR_VAULT` | Jalankan clearVault() |\n' +
+        '| `#HELP` | Tampilkan bantuan ini |\n\n' +
+        '**Chat bebas** akan diteruskan ke Neural Gateway (CGO AI).\n' +
+        'AI juga bisa mengeluarkan tag `[EXEC:...]` untuk menjalankan tool.';
+      renderToolResult('COMMAND REFERENCE', md);
+      return true;
+    }
+
+    /* #XHR / #WS / #RTC / #BEACON / #SSE / #STORAGE / #DETECT / #CLEAR_VAULT */
+    if (/^#(XHR|WS|RTC|BEACON|SSE|STORAGE|DETECT|CLEAR_VAULT)\b/i.test(text)) {
+        const cmd = text.replace(/^#/,'').trim().toUpperCase().split(/\s+/)[0];
+        if(cmd === 'XHR') await bridgeXHR();
+        else if(cmd === 'WS') await bridgeWS();
+        else if(cmd === 'RTC') await bridgeRTC();
+        else if(cmd === 'BEACON') await bridgeBEACON();
+        else if(cmd === 'SSE') await bridgeSSE();
+        else if(cmd === 'STORAGE') await bridgeSTORAGE();
+        else if(cmd === 'DETECT') await bridgeDETECT();
+        else if(cmd === 'CLEAR_VAULT') await bridgeCLEAR_VAULT();
+        return true;
+    }
+
+    return true;
+  } finally {
+    /* BUKA KUNCI SISTEM — apapun hasilnya, pastikan tidak stuck */
+    S.busy = false;
+    el.input.disabled = false;
+    el.send.disabled = false;
+    try { el.input.focus(); } catch(e){}
+    try { scrollTerm(); } catch(e){}
+  }
 }
+
 
 
 /* ============================================================
