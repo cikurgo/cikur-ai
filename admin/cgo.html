@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spiderweb Prompt Compiler &amp; Validator v1.0</title>
+
+<!-- Library Inti -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================================
+   THEME VARIABLES
+   ============================================================ */
+:root {
+    --bg-main: #060b14;
+    --bg-panel: #0d1526;
+    --bg-bubble-user: #1e3a8a;
+    --bg-bubble-ai: #0f172a;
+    --text-main: #ffffff;
+    --text-muted: #e2e8f0;
+    --text-dim: #94a3b8;
+    --border-color: #1e293b;
+    --border-bright: #ffffff;
+
+    /* Node Category Colors */
+    --c-role: #10b981;
+    --c-context: #ec4899;
+    --c-rules: #f59e0b;
+    --c-objective: #8b5cf6;
+    --c-validation: #3b82f6;
+
+    --accent: #38bdf8;
+    --danger: #ef4444;
+    --success: #10b981;
+    --warning: #f59e0b;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+    background-image:
+        radial-gradient(circle at 20% 0%, rgba(236,72,153,0.04) 0%, transparent 40%),
+        radial-gradient(circle at 80% 100%, rgba(59,130,246,0.05) 0%, transparent 40%);
+}
+
+.hud-container {
+    width: 100%;
+    max-width: 1500px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.hud-header {
+    background: rgba(13, 21, 38, 0.96);
+    backdrop-filter: blur(12px);
+    padding: 10px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.15);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+    z-index: 20;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.hud-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.05rem;
+    color: #ffffff;
+    text-shadow: 0 0 12px rgba(255,255,255,0.35);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    letter-spacing: 0.5px;
+}
+.status-dot {
+    width: 10px; height: 10px;
+    background: var(--success);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--success);
+    animation: pulse 2s infinite;
+    flex-shrink: 0;
+}
+.status-dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); animation: none; }
+.status-dot.busy  { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.system-badge {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.66rem;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #ffffff;
+    padding: 4px 9px;
+    border-radius: 10px;
+    white-space: nowrap;
+    transition: all 0.25s;
+    letter-spacing: 0.5px;
+}
+.btn-icon {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    color: var(--text-dim);
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: 0.2s;
+    font-size: 0.95rem;
+}
+.btn-icon:hover { border-color: #ffffff; color: #ffffff; }
+.btn-icon.active { border-color: #ffffff; color: #ffffff; background: rgba(255,255,255,0.08); }
+
+/* ============================================================
+   SETTINGS PANEL
+   ============================================================ */
+.settings-panel {
+    display: none;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border-color);
+    padding: 14px 18px;
+    gap: 14px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+.settings-panel.open { display: flex; animation: slideDown 0.2s ease; }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+.field label {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    letter-spacing: 0.5px;
+}
+.field input, .field select {
+    background: var(--bg-main);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--text-main);
+    padding: 8px 10px;
+    border-radius: 7px;
+    font-size: 0.86rem;
+    outline: none;
+    transition: border-color 0.2s;
+    font-family: 'Inter', sans-serif;
+}
+.field input:focus, .field select:focus { border-color: #ffffff; }
+.field input[type="password"] { font-family: monospace; letter-spacing: 1px; }
+.field-wide { flex: 1; min-width: 220px; }
+.settings-hint {
+    font-size: 0.7rem;
+    color: #64748b;
+    width: 100%;
+    margin-top: -2px;
+}
+.settings-hint a { color: var(--accent); text-decoration: none; }
+.settings-hint a:hover { text-decoration: underline; }
+
+/* ============================================================
+   APP BODY - SPLIT SCREEN
+   ============================================================ */
+.app-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    background: rgba(255,255,255,0.06);
+    gap: 1px;
+}
+.panel-left, .panel-right {
+    background: var(--bg-main);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+.panel-left { flex: 1.05; }
+.panel-right {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+.panel-right::-webkit-scrollbar { width: 6px; }
+.panel-right::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+
+@media (max-width: 980px) {
+    .app-body { flex-direction: column; }
+    .panel-left { flex: 1; min-height: 0; }
+    .panel-right { flex: 1; min-height: 0; }
+}
+
+/* ============================================================
+   CHAT AREA (LEFT)
+   ============================================================ */
+.chat-container {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scroll-behavior: smooth;
+}
+.chat-container::-webkit-scrollbar { width: 6px; }
+.chat-container::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+
+.message {
+    display: flex;
+    flex-direction: column;
+    max-width: 92%;
+    animation: slideIn 0.25s ease-out forwards;
+    opacity: 0;
+    transform: translateY(8px);
+}
+@keyframes slideIn { to { opacity: 1; transform: translateY(0); } }
+
+.message.user { align-self: flex-end; }
+.message.ai { align-self: flex-start; width: 100%; max-width: 92%; }
+
+.sender {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.5px;
+}
+.message.user .sender { justify-content: flex-end; }
+
+.bubble {
+    padding: 12px 15px;
+    border-radius: 10px;
+    line-height: 1.6;
+    font-size: 0.9rem;
+    position: relative;
+    word-wrap: break-word;
+    overflow-x: auto;
+    border: 1px solid rgba(255,255,255,0.12);
+}
+.message.user .bubble {
+    background: var(--bg-bubble-user);
+    border-color: #3b82f6;
+    border-bottom-right-radius: 2px;
+}
+.message.ai .bubble {
+    background: var(--bg-bubble-ai);
+    border-bottom-left-radius: 2px;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+}
+
+.bubble p { margin-bottom: 10px; }
+.bubble p:last-child { margin-bottom: 0; }
+.bubble strong { color: #ffffff; }
+.bubble ul, .bubble ol { margin-left: 20px; margin-bottom: 10px; }
+.bubble li { margin-bottom: 4px; }
+.bubble pre {
+    background: #000;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    overflow-x: auto;
+    margin: 10px 0;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    position: relative;
+}
+.bubble code {
+    font-family: 'Share Tech Mono', monospace;
+    background: rgba(255,255,255,0.08);
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-size: 0.87em;
+}
+.bubble pre code { background: transparent; padding: 0; }
+.bubble table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.87em; }
+.bubble th, .bubble td { border: 1px solid var(--border-color); padding: 6px 9px; text-align: left; }
+.bubble th { background: rgba(255,255,255,0.06); color: #ffffff; }
+.bubble blockquote {
+    border-left: 3px solid rgba(255,255,255,0.5);
+    padding-left: 12px;
+    margin: 10px 0;
+    color: var(--text-dim);
+}
+.bubble a { color: var(--accent); text-decoration: none; }
+.bubble a:hover { text-decoration: underline; }
+
+.chart-container {
+    margin-top: 12px;
+    background: #0f172a;
+    padding: 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    max-width: 100%;
+    height: 280px;
+    position: relative;
+}
+
+/* ============================================================
+   INPUT AREA
+   ============================================================ */
+.input-area {
+    padding: 12px 14px;
+    background: rgba(13, 21, 38, 0.96);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(255,255,255,0.1);
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0;
+}
+.input-wrapper {
+    flex: 1;
+    display: flex;
+    background: var(--bg-main);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 10px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-wrapper:focus-within {
+    border-color: #ffffff;
+    box-shadow: 0 0 14px rgba(255,255,255,0.15);
+}
+textarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #ffffff;
+    padding: 12px 14px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.9rem;
+    resize: none;
+    outline: none;
+    max-height: 150px;
+    min-height: 48px;
+    overflow-y: auto;
+    line-height: 1.45;
+}
+textarea::placeholder { color: #64748b; }
+
+.btn {
+    padding: 0 16px;
+    height: 48px;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    white-space: nowrap;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0.3px;
+}
+.btn-send {
+    background: #ffffff;
+    color: #060b14;
+    box-shadow: 0 0 16px rgba(255,255,255,0.25);
+}
+.btn-send:hover:not(:disabled) {
+    background: #e2e8f0;
+    box-shadow: 0 0 22px rgba(255,255,255,0.5);
+}
+.btn-send:disabled {
+    background: #334155; color: #94a3b8;
+    cursor: not-allowed; box-shadow: none;
+}
+.btn-stop { background: var(--danger); color: white; display: none; }
+.btn-stop:hover { background: #dc2626; }
+
+.typing-indicator {
+    display: inline-block;
+    width: 7px; height: 14px;
+    background: #ffffff;
+    animation: blink 1s step-end infinite;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.error-text { color: var(--danger); }
+
+.toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #1e293b;
+    border: 1px solid #ffffff;
+    color: var(--text-main);
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    opacity: 0;
+    transition: 0.3s;
+    z-index: 100;
+    pointer-events: none;
+    max-width: 90%;
+    text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.warning { border-color: var(--warning); color: #fbbf24; }
+
+.copy-btn {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid var(--border-color);
+    color: var(--text-dim);
+    font-size: 0.68rem;
+    padding: 3px 7px;
+    border-radius: 5px;
+    cursor: pointer;
+    opacity: 0;
+    transition: 0.2s;
+    font-family: 'Inter', sans-serif;
+}
+.bubble pre:hover .copy-btn { opacity: 1; }
+.copy-btn:hover { color: #ffffff; border-color: #ffffff; }
+
+/* ============================================================
+   RIGHT PANEL - STATUS BAR
+   ============================================================ */
+.status-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 14px;
+    background: rgba(13,21,38,0.96);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    flex-wrap: wrap;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    flex-shrink: 0;
+}
+.sb-phase {
+    background: #ffffff;
+    color: #060b14;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    box-shadow: 0 0 12px rgba(255,255,255,0.5);
+    animation: sbPulse 2s infinite;
+}
+@keyframes sbPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(255,255,255,0.4); }
+    50% { box-shadow: 0 0 20px rgba(255,255,255,0.9); }
+}
+.sb-metric {
+    color: var(--text-muted);
+    letter-spacing: 0.3px;
+}
+.sb-metric b { color: #ffffff; font-weight: 700; }
+
+/* ============================================================
+   GRAPH CONTAINER
+   ============================================================ */
+.graph-wrap {
+    padding: 8px 10px 10px;
+    flex-shrink: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03), transparent 70%);
+}
+#graph-container {
+    height: 320px;
+    width: 100%;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    background: #060b14;
+    position: relative;
+    overflow: hidden;
+}
+#graph-container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+}
+@media (max-width: 980px) {
+    #graph-container { height: 260px; }
+}
+
+/* ============================================================
+   TELEMETRY
+   ============================================================ */
+.telemetry {
+    padding: 0 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0;
+}
+.tele-card {
+    background: rgba(13,21,38,0.85);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 10px 12px;
+}
+.tele-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.68rem;
+    color: #ffffff;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.tele-title::before {
+    content: '▸';
+    color: #ffffff;
+    animation: blink 1.2s step-end infinite;
+}
+
+/* Crawl Log */
+.crawl-log {
+    height: 92px;
+    overflow-y: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: #000;
+    border-radius: 6px;
+    padding: 8px 10px;
+    line-height: 1.5;
+}
+.crawl-log::-webkit-scrollbar { width: 4px; }
+.crawl-log::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.log-line { white-space: pre-wrap; word-break: break-all; }
+.log-line.highlight { color: #ffffff; font-weight: 700; }
+.log-line.warn { color: var(--warning); }
+.log-line.error { color: var(--danger); }
+.log-line.ok { color: var(--success); }
+.log-prompt { color: #ffffff; opacity: 0.5; }
+
+/* Grid Layout for telemetry bottom */
+.tele-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+@media (max-width: 600px) {
+    .tele-row { grid-template-columns: 1fr; }
+}
+
+/* Radar */
+.radar-wrap {
+    height: 220px;
+    position: relative;
+}
+
+/* Word Heat */
+.heat-wrap { }
+.word-heat {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 3px;
+    padding: 4px 0;
+}
+.heat-cell {
+    aspect-ratio: 1;
+    border-radius: 2px;
+    background: #1e293b;
+    transition: background 0.3s;
+}
+.heat-cell.cold { background: #1e293b; }
+.heat-cell.warm { background: #f59e0b; box-shadow: 0 0 6px rgba(245,158,11,0.4); }
+.heat-cell.hot  { background: #ef4444; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
+.heat-cell.max  { background: #10b981; box-shadow: 0 0 10px rgba(16,185,129,0.6); }
+
+/* Spec Score */
+.score-card {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 10px;
+}
+.spec-svg {
+    width: 110px;
+    height: 110px;
+    transform: rotate(-90deg);
+    flex-shrink: 0;
+}
+.ring-bg {
+    fill: none;
+    stroke: #1e293b;
+    stroke-width: 9;
+}
+.ring-fg {
+    fill: none;
+    stroke: #ffffff;
+    stroke-width: 9;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s cubic-bezier(0.34,1.56,0.64,1), stroke 0.3s;
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.55));
+}
+.score-meta { display: flex; flex-direction: column; align-items: flex-start; }
+.score-num {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1;
+    text-shadow: 0 0 20px rgba(255,255,255,0.5);
+}
+.score-tag {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    margin-top: 4px;
+}
+.score-status {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-top: 6px;
+    letter-spacing: 0.5px;
+}
+
+/* Node legend */
+.legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--text-dim);
+    padding: 0 10px 10px;
+}
+.legend span { display: flex; align-items: center; gap: 4px; }
+.legend .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    border: 1px solid currentColor;
+}
+</style>
+</head>
+<body>
+
+<div class="hud-container">
+
+    <!-- HEADER -->
+    <header class="hud-header">
+        <div class="hud-title">
+            <div class="status-dot" id="status-dot"></div>
+            SPIDERWEB PROMPT COMPILER v1.0
+        </div>
+        <div class="header-right">
+            <div class="system-badge" id="engine-badge">ENGINE: CLASSIC (FREE)</div>
+            <button class="btn-icon" id="settings-btn" title="Pengaturan">⚙</button>
+            <button class="btn-icon" id="clear-btn" title="Bersihkan riwayat">🗑</button>
+        </div>
+    </header>
+
+    <!-- SETTINGS -->
+    <div class="settings-panel" id="settings-panel">
+        <div class="field field-wide">
+            <label>API KEY (opsional)</label>
+            <input type="password" id="api-key-input" placeholder="sk_... / pk_... (kosong = gratis)" autocomplete="off">
+        </div>
+        <div class="field">
+            <label>MODEL</label>
+            <select id="model-select">
+                <option value="openai">openai (stabil)</option>
+                <option value="openai-fast">openai-fast</option>
+                <option value="mistral">mistral</option>
+                <option value="deepseek">deepseek</option>
+                <option value="gemini">gemini</option>
+                <option value="grok">grok</option>
+                <option value="claude">claude</option>
+                <option value="openai-large">openai-large</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn btn-send" id="save-settings-btn" style="height:36px;padding:0 16px;font-size:0.8rem;">SIMPAN</button>
+        </div>
+        <div class="settings-hint">
+            Kosongkan API Key = mode gratis (rate limit ~30 dtk). Dapatkan key gratis di
+            <a href="https://enter.pollinations.ai" target="_blank" rel="noopener">enter.pollinations.ai</a>.
+        </div>
+    </div>
+
+    <!-- MAIN BODY -->
+    <div class="app-body">
+
+        <!-- LEFT PANEL : CHAT + INPUT -->
+        <div class="panel-left">
+            <main class="chat-container" id="chat-container"></main>
+
+            <footer class="input-area">
+                <div class="input-wrapper">
+                    <textarea id="chat-input" rows="1"
+                        placeholder="Ketik prompt mentah... (Enter kirim, Shift+Enter baris baru)"></textarea>
+                </div>
+                <button class="btn btn-send" id="send-btn">⚡ COMPILE &amp; SEND</button>
+                <button class="btn btn-stop" id="stop-btn">STOP</button>
+            </footer>
+        </div>
+
+        <!-- RIGHT PANEL : GRAPH + TELEMETRY -->
+        <div class="panel-right">
+
+            <!-- STATUS BAR -->
+            <div class="status-bar">
+                <div class="sb-phase" id="sb-phase">08 SHIP</div>
+                <div class="sb-metric"><b id="sb-words">0</b> words read</div>
+                <div class="sb-metric"><b id="sb-flagged">0</b> flagged</div>
+                <div class="sb-metric"><b id="sb-guessed">0</b> guessed</div>
+            </div>
+
+            <!-- GRAPH -->
+            <div class="graph-wrap">
+                <div id="graph-container"></div>
+            </div>
+
+            <!-- LEGEND -->
+            <div class="legend">
+                <span style="color:#ec4899;"><span class="dot" style="background:#ec4899;"></span>CONTEXT</span>
+                <span style="color:#10b981;"><span class="dot" style="background:#10b981;"></span>ROLE</span>
+                <span style="color:#f59e0b;"><span class="dot" style="background:#f59e0b;"></span>RULES</span>
+                <span style="color:#8b5cf6;"><span class="dot" style="background:#8b5cf6;"></span>OBJECTIVE</span>
+                <span style="color:#3b82f6;"><span class="dot" style="background:#3b82f6;"></span>VALIDATION</span>
+            </div>
+
+            <!-- TELEMETRY -->
+            <div class="telemetry">
+
+                <!-- CRAWL LOG -->
+                <div class="tele-card">
+                    <div class="tele-title">CRAWL LOG &amp; SECTIONS</div>
+                    <div class="crawl-log" id="crawl-log">
+                        <div class="log-line log-prompt">> crawler.py standby...</div>
+                        <div class="log-line log-prompt">> menunggu input operator</div>
+                    </div>
+                </div>
+
+                <!-- RADAR + SCORE -->
+                <div class="tele-row">
+                    <div class="tele-card">
+                        <div class="tele-title">COVERAGE RADAR</div>
+                        <div class="radar-wrap">
+                            <canvas id="radar-canvas"></canvas>
+                        </div>
+                    </div>
+                    <div class="tele-card score-card">
+                        <svg viewBox="0 0 120 120" class="spec-svg">
+                            <circle cx="60" cy="60" r="50" class="ring-bg"></circle>
+                            <circle cx="60" cy="60" r="50" class="ring-fg" id="ring-fg"
+                                style="stroke-dasharray:314;stroke-dashoffset:314;"></circle>
+                        </svg>
+                        <div class="score-meta">
+                            <div class="score-num" id="score-num">0</div>
+                            <div class="score-tag">SPEC SCORE</div>
+                            <div class="score-status" id="score-status">IDLE</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WORD HEAT -->
+                <div class="tele-card">
+                    <div class="tele-title">WORD HEAT</div>
+                    <div class="word-heat" id="word-heat"></div>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================================================================
+   SPIDERWEB PROMPT COMPILER & VALIDATOR v1.0
+   Arsitektur: Parser → Graph → Scoring → Compiler → Execution
+   ================================================================ */
+
+/* ----------------------------------------------------------------
+   1. KONSTANTA & STATE GLOBAL
+   ---------------------------------------------------------------- */
+const STORAGE_KEY = 'cgo_ai_pro_v24';
+const MAX_HISTORY  = 14;
+
+const chatContainer   = document.getElementById('chat-container');
+const chatInput       = document.getElementById('chat-input');
+const sendBtn         = document.getElementById('send-btn');
+const stopBtn         = document.getElementById('stop-btn');
+const statusDot       = document.getElementById('status-dot');
+const clearBtn        = document.getElementById('clear-btn');
+const settingsBtn     = document.getElementById('settings-btn');
+const settingsPanel   = document.getElementById('settings-panel');
+const apiKeyInput     = document.getElementById('api-key-input');
+const modelSelect     = document.getElementById('model-select');
+const saveSettingsBtn = document.getElementById('save-settings-btn');
+const engineBadge     = document.getElementById('engine-badge');
+const toastEl         = document.getElementById('toast');
+
+const crawlLogEl = document.getElementById('crawl-log');
+const sbPhase    = document.getElementById('sb-phase');
+const sbWords    = document.getElementById('sb-words');
+const sbFlagged  = document.getElementById('sb-flagged');
+const sbGuessed  = document.getElementById('sb-guessed');
+const ringFg     = document.getElementById('ring-fg');
+const scoreNum   = document.getElementById('score-num');
+const scoreStatus= document.getElementById('score-status');
+const wordHeatEl = document.getElementById('word-heat');
+
+let chatHistory = [];
+let currentAbortController = null;
+let isGenerating = false;
+let cy = null;                  // Cytoscape instance
+let radarChart = null;          // Chart.js radar instance
+let settings = { apiKey: '', model: 'openai' };
+
+/* ----------------------------------------------------------------
+   2. SYSTEM PROMPT (untuk AI executor)
+   ---------------------------------------------------------------- */
+const SYSTEM_PROMPT = `Kamu adalah CGO (Cyber Guardian Operator), asisten AI cerdas dengan arsitektur reasoning tingkat lanjut.
+Jawab dengan tegas, futuristik, dan bahasa Indonesia yang natural. Gunakan format Markdown.
+Jika diminta grafik/chart, keluarkan HANYA blok kode berikut (tanpa teks lain di dalamnya):
+\`\`\`chart
+{
+  "type": "bar",
+  "data": { "labels": ["A","B"], "datasets": [{"label":"Data","data":[10,20],"backgroundColor":"#38bdf8"}] },
+  "options": { "responsive": true, "maintainAspectRatio": false,
+    "plugins": { "legend": { "labels": { "color": "#e2e8f0" } } },
+    "scales": {
+      "x": { "ticks": { "color": "#94a3b8" }, "grid": { "color": "#1e293b" } },
+      "y": { "ticks": { "color": "#94a3b8" }, "grid": { "color": "#1e293b" } }
+    }
+  }
+}
+\`\`\``;
+
+if (typeof marked !== 'undefined') marked.setOptions({ gfm: true, breaks: true });
+
+/* ----------------------------------------------------------------
+   3. PERSISTENCE (Zero Regression)
+   ---------------------------------------------------------------- */
+function loadSettings() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+            const data = JSON.parse(raw);
+            if (data.settings) {
+                settings.apiKey = data.settings.apiKey || '';
+                settings.model  = data.settings.model  || 'openai';
+            }
+            if (Array.isArray(data.history)) {
+                chatHistory = data.history.slice(-MAX_HISTORY);
+            }
+        }
+    } catch (e) { console.warn('loadSettings:', e); }
+    apiKeyInput.value = settings.apiKey;
+    modelSelect.value = settings.model;
+    updateEngineBadge();
+}
+
+function saveToStorage() {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            settings: { ...settings },
+            history: chatHistory.slice(-MAX_HISTORY)
+        }));
+    } catch (e) { console.warn('saveToStorage:', e); }
+}
+
+function updateEngineBadge(mode) {
+    const hasKey = !!(settings.apiKey && settings.apiKey.trim());
+    if (mode === 'fallback') {
+        engineBadge.textContent = 'ENGINE: FALLBACK (FREE)';
+        engineBadge.style.borderColor = 'var(--warning)';
+        engineBadge.style.color = 'var(--warning)';
+    } else if (hasKey) {
+        engineBadge.textContent = 'ENGINE: GEN (API KEY)';
+        engineBadge.style.borderColor = 'var(--success)';
+        engineBadge.style.color = 'var(--success)';
+    } else {
+        engineBadge.textContent = 'ENGINE: CLASSIC (FREE)';
+        engineBadge.style.borderColor = 'rgba(255,255,255,0.35)';
+        engineBadge.style.color = '#ffffff';
+    }
+}
+
+/* ----------------------------------------------------------------
+   4. UI HELPERS
+   ---------------------------------------------------------------- */
+function showToast(msg, duration = 2600, isWarning = false) {
+    toastEl.textContent = msg;
+    toastEl.className = 'toast show' + (isWarning ? ' warning' : '');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toastEl.classList.remove('show'), duration);
+}
+
+function setStatus(state) {
+    statusDot.className = 'status-dot';
+    if (state === 'busy')  statusDot.classList.add('busy');
+    else if (state === 'error') statusDot.classList.add('error');
+}
+
+function scrollToBottom() {
+    requestAnimationFrame(() => {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ----------------------------------------------------------------
+   5. EVENT LISTENERS (UI)
+   ---------------------------------------------------------------- */
+chatInput.addEventListener('input', function () {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+    // Realtime parse & scoring saat user mengetik
+    runLiveScan(this.value);
+});
+
+chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!isGenerating) sendMessage();
+    }
+});
+
+sendBtn.addEventListener('click', () => { if (!isGenerating) sendMessage(); });
+stopBtn.addEventListener('click', () => {
+    if (currentAbortController) currentAbortController.abort();
+});
+
+settingsBtn.addEventListener('click', () => {
+    settingsPanel.classList.toggle('open');
+    settingsBtn.classList.toggle('active');
+});
+
+saveSettingsBtn.addEventListener('click', () => {
+    settings.apiKey = apiKeyInput.value.trim();
+    settings.model  = modelSelect.value;
+    saveToStorage();
+    updateEngineBadge();
+    settingsPanel.classList.remove('open');
+    settingsBtn.classList.remove('active');
+    showToast(settings.apiKey ? 'API Key tersimpan • Mode GEN aktif' : 'Mode CLASSIC (gratis) aktif');
+});
+
+clearBtn.addEventListener('click', () => {
+    if (isGenerating) return;
+    chatHistory = [];
+    saveToStorage();
+    renderBootMessage(true);
+    showToast('Riwayat dibersihkan');
+});
+
+/* ----------------------------------------------------------------
+   6. CHAT UI RENDERING
+   ---------------------------------------------------------------- */
+function addMessageToUI(role, text, isTyping = false) {
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message', role);
+
+    const senderDiv = document.createElement('div');
+    senderDiv.classList.add('sender');
+    senderDiv.textContent = role === 'user' ? 'ANDA (Operator)' : 'CGO';
+
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.classList.add('bubble');
+
+    if (role === 'ai') {
+        bubbleDiv.innerHTML = DOMPurify.sanitize(marked.parse(text || ' '));
+        if (isTyping) bubbleDiv.innerHTML += '<span class="typing-indicator"></span>';
+    } else {
+        bubbleDiv.innerText = text;
+    }
+
+    msgDiv.appendChild(senderDiv);
+    msgDiv.appendChild(bubbleDiv);
+    chatContainer.appendChild(msgDiv);
+    scrollToBottom();
+    return bubbleDiv;
+}
+
+function renderBootMessage(force = false) {
+    if (!force && chatHistory.length > 0) return;
+    chatContainer.innerHTML = `
+        <div class="message ai">
+            <div class="sender">SPIDERWEB SYSTEM <span style="font-size:0.7em;opacity:0.5;">(Boot Sequence)</span></div>
+            <div class="bubble">
+                <strong>Spiderweb Prompt Compiler v1.0</strong> — arsitektur graf prompt aktif.<br><br>
+                <strong>Pipeline:</strong>
+                <ul>
+                    <li>🧠 <b>Parser</b> — memecah prompt ke 5 node kategori (Role, Context, Rules, Objective, Validation)</li>
+                    <li>🕸 <b>Graph Builder</b> — menyusun node menjadi jaring laba-laba interaktif</li>
+                    <li>📊 <b>Scorer</b> — menghitung coverage, spec score, dan flagged issues</li>
+                    <li>⚡ <b>Compiler</b> — merakit prompt linier + self-correction injection</li>
+                    <li>🚀 <b>Executor</b> — streaming neural link + fallback engine</li>
+                </ul>
+                Ketik prompt Anda, lalu tekan <b>COMPILE &amp; SEND</b> untuk memulai.
+            </div>
+        </div>`;
+}
+
+function restoreHistoryUI() {
+    chatContainer.innerHTML = '';
+    if (chatHistory.length === 0) { renderBootMessage(true); return; }
+
+    const note = document.createElement('div');
+    note.className = 'message ai';
+    note.innerHTML = `<div class="sender">SYSTEM</div>
+        <div class="bubble" style="font-size:0.85rem;opacity:0.75;">
+            Riwayat dipulihkan dari penyimpanan lokal (${chatHistory.length} pesan).
+        </div>`;
+    chatContainer.appendChild(note);
+
+    chatHistory.forEach(msg => {
+        addMessageToUI(msg.role === 'user' ? 'user' : 'ai', msg.content);
+    });
+    chatContainer.querySelectorAll('.bubble').forEach(b => renderChartsInElement(b));
+}
+
+/* ----------------------------------------------------------------
+   7. PARSER INTI — Regex + Semantic Heuristics
+      Memecah input mentah menjadi 5 kategori wajib.
+   ---------------------------------------------------------------- */
+const CATEGORY_KEYWORDS = {
+    role: [
+        'kamu adalah', 'you are', 'sebagai', 'as a', 'act as', 'berperan',
+        'role', 'persona', 'anda adalah', 'kau adalah', 'acting as', 'bertindak sebagai'
+    ],
+    context: [
+        'konteks', 'context', 'latar belakang', 'background', 'situasi', 'dalam kasus',
+        'given', 'mengingat', 'berdasarkan', 'dalam skenario', 'pada kondisi', 'kondisi saat ini'
+    ],
+    rules: [
+        'aturan', 'rules', 'jangan', 'must', 'harus', 'wajib', 'selalu', 'always',
+        'never', 'tidak boleh', 'only', 'hanya', 'dilarang', 'constraint', 'batasan'
+    ],
+    objective: [
+        'tujuan', 'objective', 'goal', 'buat', 'create', 'buatkan', 'tulis', 'generate',
+        'hasilkan', 'analisis', 'analyze', 'jelaskan', 'explain', 'desain', 'design',
+        'rancang', 'susun', 'susunlah', 'berikan', 'carikan'
+    ],
+    validation: [
+        'validasi', 'validation', 'review', 'cek', 'check', 'test', 'pastikan', 'verify',
+        'traceable', 'bug fix', 'periksa', 'audit', 'evaluasi', 'tinjau', 'uji',
+        'quality', 'qa', 'acceptance'
+    ]
+};
+
+/**
+ * parsePrompt(rawText) → { role:[], context:[], rules:[], objective:[], validation:[], _meta }
+ * Heuristik: memecah kalimat, mencocokkan keyword, fallback ke objective
+ */
+function parsePrompt(rawText) {
+    const segments = { role: [], context: [], rules: [], objective: [], validation: [] };
+    const meta = { guessed: 0, totalSentences: 0 };
+
+    if (!rawText || !rawText.trim()) return { ...segments, _meta: meta };
+
+    // Pecah ke kalimat (titik, tanda tanya, newline)
+    const sentences = rawText
+        .split(/(?<=[.!?])\s+|\n+/)
+        .map(s => s.trim())
+        .filter(s => s.length > 0 && !/^[-*•]\s*$/.test(s));
+
+    meta.totalSentences = sentences.length;
+
+    sentences.forEach(sentence => {
+        const lower = sentence.toLowerCase();
+        let bestCat = null;
+        let bestScore = 0;
+
+        for (const [cat, words] of Object.entries(CATEGORY_KEYWORDS)) {
+            let score = 0;
+            words.forEach(w => { if (lower.includes(w)) score += 1; });
+            if (score > bestScore) { bestScore = score; bestCat = cat; }
+        }
+
+        if (bestCat === null) {
+            // Tidak yakin → masuk objective (fallback) & tandai sebagai guessed
+            bestCat = 'objective';
+            meta.guessed += 1;
+        }
+        segments[bestCat].push(sentence);
+    });
+
+    segments._meta = meta;
+    return segments;
+}
+
+/* ----------------------------------------------------------------
+   8. SCORING ENGINE
+      Bobot: Role 15%, Context 20%, Rules 25%, Objective 20%, Validation 20%
+   ---------------------------------------------------------------- */
+const SCORE_WEIGHTS = { role: 0.15, context: 0.20, rules: 0.25, objective: 0.20, validation: 0.20 };
+
+function scorePrompt(segments) {
+    const scores = {};
+    Object.keys(SCORE_WEIGHTS).forEach(cat => {
+        const catSegs = segments[cat] || [];
+        const words = catSegs.join(' ').split(/\s+/).filter(Boolean).length;
+        let s = 0;
+        if (catSegs.length > 0) s += 30;
+        if (words >= 3)  s += 20;
+        if (words >= 8)  s += 25;
+        if (words >= 15) s += 25;
+        scores[cat] = Math.min(100, s);
+    });
+
+    // Completeness = seberapa banyak kategori terisi
+    const filled = Object.keys(SCORE_WEIGHTS).filter(c => segments[c].length > 0).length;
+    scores.completeness = Math.round((filled / 5) * 100);
+
+    // Total spec score (bobot + completeness ringan)
+    let total = 0;
+    Object.keys(SCORE_WEIGHTS).forEach(c => { total += scores[c] * SCORE_WEIGHTS[c]; });
+    total = Math.round(total);
+
+    return { scores, total };
+}
+
+function computeMetrics(rawText, segments) {
+    const words = rawText.split(/\s+/).filter(Boolean);
+    let flagged = 0;
+    Object.keys(SCORE_WEIGHTS).forEach(cat => {
+        const catWords = (segments[cat] || []).join(' ').split(/\s+/).filter(Boolean);
+        if (catWords.length === 0) flagged++;
+        else if (catWords.length < 3) flagged++;
+    });
+    return {
+        wordCount: words.length,
+        flagged,
+        guessed: segments._meta?.guessed || 0
+    };
+}
+
+/* ----------------------------------------------------------------
+   9. GRAPH RENDERER (Cytoscape.js)
+      Visualisasi spiderweb: START di tengah, kategori memancar,
+      sub-node ROLE dan VALIDATION sebagai cabang terdalam.
+   ---------------------------------------------------------------- */
+function initGraph() {
+    const container = document.getElementById('graph-container');
+    if (typeof cytoscape === 'undefined') {
+        container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;font-family:monospace;font-size:0.8rem;">Cytoscape.js gagal dimuat</div>';
+        return;
+    }
+
+    const els = [
+        // START
+        { data: { id: 'start', label: 'START' }, classes: 'start' },
+
+        // Kategori utama
+        { data: { id: 'role',        label: 'ROLE' },        classes: 'cat cat-role' },
+        { data: { id: 'context',     label: 'CONTEXT' },     classes: 'cat cat-context' },
+        { data: { id: 'rules',       label: 'RULES' },       classes: 'cat cat-rules' },
+        { data: { id: 'objective',   label: 'OBJECTIVE' },   classes: 'cat cat-objective' },
+        { data: { id: 'validation',  label: 'VALIDATION' },  classes: 'cat cat-validation' },
+
+        // Edge dari START
+        { data: { source: 'start', target: 'role' } },
+        { data: { source: 'start', target: 'context' } },
+        { data: { source: 'start', target: 'rules' } },
+        { data: { source: 'start', target: 'objective' } },
+        { data: { source: 'start', target: 'validation' } },
+
+        // Sub-node ROLE
+        { data: { id: 'r-dev',          label: 'dev' },          classes: 'sub sub-role' },
+        { data: { id: 'r-qa',           label: 'qa' },           classes: 'sub sub-role' },
+        { data: { id: 'r-stakeholders', label: 'stakeholders' }, classes: 'sub sub-role' },
+        { data: { id: 'r-owner',        label: 'owner' },        classes: 'sub sub-role' },
+        { data: { id: 'r-chief',        label: 'chief' },        classes: 'sub sub-role' },
+        { data: { id: 'r-release',      label: 'release' },      classes: 'sub sub-role' },
+        { data: { source: 'role', target: 'r-dev' },          classes: 'edge-sub' },
+        { data: { source: 'role', target: 'r-qa' },           classes: 'edge-sub' },
+        { data: { source: 'role', target: 'r-stakeholders' }, classes: 'edge-sub' },
+        { data: { source: 'role', target: 'r-owner' },        classes: 'edge-sub' },
+        { data: { source: 'role', target: 'r-chief' },        classes: 'edge-sub' },
+        { data: { source: 'role', target: 'r-release' },      classes: 'edge-sub' },
+
+        // Sub-node VALIDATION
+        { data: { id: 'v-testing',   label: 'testing' },            classes: 'sub sub-val' },
+        { data: { id: 'v-check',     label: 'check' },              classes: 'sub sub-val' },
+        { data: { id: 'v-bugfix',    label: 'bug fix · traceable' },classes: 'sub sub-val' },
+        { data: { id: 'v-traceable', label: 'traceable' },          classes: 'sub sub-val' },
+        { data: { source: 'validation', target: 'v-testing' },   classes: 'edge-sub' },
+        { data: { source: 'validation', target: 'v-check' },     classes: 'edge-sub' },
+        { data: { source: 'validation', target: 'v-bugfix' },    classes: 'edge-sub' },
+        { data: { source: 'validation', target: 'v-traceable' }, classes: 'edge-sub' }
+    ];
+
+    cy = cytoscape({
+        container,
+        elements: els,
+        style: [
+            {
+                selector: 'node',
+                style: {
+                    'label': 'data(label)',
+                    'color': '#ffffff',
+                    'font-family': 'Share Tech Mono, monospace',
+                    'font-size': 9,
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'background-color': '#0d1526',
+                    'border-width': 1.5,
+                    'border-color': '#ffffff',
+                    'width': 38,
+                    'height': 38,
+                    'text-wrap': 'wrap',
+                    'text-max-width': 64,
+                    'transition-property': 'background-color, border-color, border-width, shadow-blur, shadow-opacity',
+                    'transition-duration': 300
+                }
+            },
+            {
+                selector: '.start',
+                style: {
+                    'background-color': '#ffffff',
+                    'color': '#060b14',
+                    'width': 52, 'height': 52,
+                    'font-size': 11,
+                    'font-weight': 'bold',
+                    'border-width': 2,
+                    'shadow-blur': 18,
+                    'shadow-color': '#ffffff',
+                    'shadow-opacity': 0.6,
+                    'shadow-offset-x': 0,
+                    'shadow-offset-y': 0
+                }
+            },
+            {
+                selector: '.cat',
+                style: { 'width': 44, 'height': 44, 'font-size': 10, 'font-weight': 'bold' }
+            },
+            { selector: '.cat-role', style: {
+                'border-color': '#10b981', 'color': '#10b981', 'background-color': 'rgba(16,185,129,0.08)'
+            }},
+            { selector: '.cat-context', style: {
+                'border-color': '#ec4899', 'color': '#ec4899', 'background-color': 'rgba(236,72,153,0.08)'
+            }},
+            { selector: '.cat-rules', style: {
+                'border-color': '#f59e0b', 'color': '#f59e0b', 'background-color': 'rgba(245,158,11,0.08)'
+            }},
+            { selector: '.cat-objective', style: {
+                'border-color': '#8b5cf6', 'color': '#8b5cf6', 'background-color': 'rgba(139,92,246,0.08)'
+            }},
+            { selector: '.cat-validation', style: {
+                'border-color': '#3b82f6', 'color': '#3b82f6', 'background-color': 'rgba(59,130,246,0.08)'
+            }},
+            { selector: '.sub-role', style: {
+                'border-color': '#10b981', 'color': '#10b981', 'background-color': 'rgba(16,185,129,0.04)',
+                'width': 30, 'height': 30, 'font-size': 8
+            }},
+            { selector: '.sub-val', style: {
+                'border-color': '#3b82f6', 'color': '#3b82f6', 'background-color': 'rgba(59,130,246,0.04)',
+                'width': 30, 'height': 30, 'font-size': 8
+            }},
+            {
+                selector: 'edge',
+                style: {
+                    'width': 1.2,
+                    'line-color': '#ffffff',
+                    'line-opacity': 0.28,
+                    'line-style': 'dashed',
+                    'curve-style': 'bezier',
+                    'line-dash-pattern': [6, 5]
+                }
+            },
+            {
+                selector: '.edge-sub',
+                style: { 'line-opacity': 0.18, 'width': 1 }
+            },
+            {
+                selector: '.has-content',
+                style: {
+                    'border-width': 2.5,
+                    'background-color': '#ffffff',
+                    'color': '#060b14',
+                    'shadow-blur': 14,
+                    'shadow-color': '#ffffff',
+                    'shadow-opacity': 0.75,
+                    'shadow-offset-x': 0,
+                    'shadow-offset-y': 0
+                }
+            },
+            {
+                selector: '.active',
+                style: {
+                    'border-width': 3,
+                    'border-color': '#ffffff',
+                    'background-color': '#ffffff',
+                    'color': '#060b14',
+                    'shadow-blur': 24,
+                    'shadow-color': '#ffffff',
+                    'shadow-opacity': 1
+                }
+            }
+        ],
+        layout: {
+            name: 'cose',
+            animate: true,
+            animationDuration: 700,
+            animationEasing: 'ease-out',
+            randomize: false,
+            nodeRepulsion: function (node) {
+                const id = node.id();
+                if (id === 'start') return 26000;
+                if (id.startsWith('cat') || ['role','context','rules','objective','validation'].includes(id)) return 14000;
+                return 6000;
+            },
+            idealEdgeLength: function (edge) {
+                const s = edge.data('source');
+                if (s === 'start') return 110;
+                if (s === 'role' || s === 'validation') return 70;
+                return 70;
+            },
+            gravity: 0.45,
+            numIter: 900,
+            nodeOverlap: 20,
+            padding: 30,
+            fit: true
+        },
+        userZoomingEnabled: true,
+        userPanningEnabled: true,
+        boxSelectionEnabled: false,
+        autoungrabify: true,
+        minZoom: 0.4,
+        maxZoom: 2
+    });
+}
+
+/** Update visual graph berdasarkan hasil parsing real-time */
+function updateGraphFromParse(segments) {
+    if (!cy) return;
+    cy.nodes('.cat').removeClass('has-content');
+    Object.keys(SCORE_WEIGHTS).forEach(cat => {
+        if ((segments[cat] || []).length > 0) {
+            const n = cy.getElementById(cat);
+            if (n && n.length) n.addClass('has-content');
+        }
+    });
+}
+
+/** Animasi sequential node saat COMPILE & SEND */
+async function animateCompileSequence(segments) {
+    if (!cy) return;
+    cy.elements().removeClass('active');
+    const order = ['role', 'context', 'rules', 'objective', 'validation'];
+    for (const cat of order) {
+        const n = cy.getElementById(cat);
+        if (n && n.length) {
+            n.addClass('active');
+            await sleep(180);
+            n.removeClass('active');
+        }
+    }
+    // Semua kategori yang terisi menyala bersamaan di akhir
+    order.forEach(cat => {
+        if ((segments[cat] || []).length > 0) {
+            const n = cy.getElementById(cat);
+            if (n && n.length) n.addClass('has-content');
+        }
+    });
+}
+
+/* ----------------------------------------------------------------
+   10. TERMINAL LOG HELPER
+   ---------------------------------------------------------------- */
+function clearCrawlLog() { crawlLogEl.innerHTML = ''; }
+
+function logTerminal(text, cls = '') {
+    const div = document.createElement('div');
+    div.className = 'log-line ' + cls;
+    div.innerHTML = `<span class="log-prompt">&gt;</span> ${text}`;
+    crawlLogEl.appendChild(div);
+    crawlLogEl.scrollTop = crawlLogEl.scrollHeight;
+}
+
+/* ----------------------------------------------------------------
+   11. TELEMETRY UPDATE — Status bar, Radar, Word Heat, Spec Score
+   ---------------------------------------------------------------- */
+function updateStatusBar(phase, metrics) {
+    if (phase !== null) sbPhase.textContent = phase;
+    sbWords.textContent   = metrics.wordCount;
+    sbFlagged.textContent = metrics.flagged;
+    sbGuessed.textContent = metrics.guessed;
+}
+
+function initRadar() {
+    const ctx = document.getElementById('radar-canvas').getContext('2d');
+    radarChart = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: ['ROLE', 'CONTEXT', 'RULES', 'OBJECTIVE', 'VALIDATION', 'COMPLETENESS'],
+            datasets: [{
+                label: 'Coverage',
+                data: [0, 0, 0, 0, 0, 0],
+                backgroundColor: 'rgba(255,255,255,0.09)',
+                borderColor: '#ffffff',
+                borderWidth: 2,
+                pointBackgroundColor: '#ffffff',
+                pointBorderColor: '#060b14',
+                pointRadius: 3,
+                pointHoverRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 400 },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#0d1526',
+                    borderColor: '#ffffff',
+                    borderWidth: 1,
+                    titleColor: '#ffffff',
+                    bodyColor: '#e2e8f0'
+                }
+            },
+            scales: {
+                r: {
+                    min: 0, max: 100,
+                    angleLines: { color: 'rgba(255,255,255,0.15)' },
+                    grid: { color: 'rgba(255,255,255,0.15)', circular: false },
+                    pointLabels: {
+                        color: '#ffffff',
+                        font: { family: 'Share Tech Mono', size: 9 }
+                    },
+                    ticks: {
+                        display: false,
+                        stepSize: 25
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateRadar(scores) {
+    if (!radarChart) return;
+    radarChart.data.datasets[0].data = [
+        scores.role, scores.context, scores.rules,
+        scores.objective, scores.validation, scores.completeness
+    ];
+    radarChart.update('none');
+}
+
+const RING_CIRCUMFERENCE = 2 * Math.PI * 50; // r=50
+function updateScoreRing(total) {
+    const offset = RING_CIRCUMFERENCE * (1 - total / 100);
+    ringFg.style.strokeDasharray  = RING_CIRCUMFERENCE;
+    ringFg.style.strokeDashoffset = offset;
+
+    // Warna dinamis: merah → kuning → hijau
+    let color;
+    if (total < 40)      color = '#ef4444';
+    else if (total < 70) color = '#f59e0b';
+    else                 color = '#10b981';
+    ringFg.style.stroke = color;
+    ringFg.style.filter = `drop-shadow(0 0 6px ${color})`;
+
+    scoreNum.textContent = total;
+    scoreStatus.textContent =
+        total === 0   ? 'IDLE' :
+        total < 40    ? 'CRITICAL' :
+        total < 70    ? 'PARTIAL' :
+        total < 90    ? 'GOOD' : 'OPTIMAL';
+    scoreStatus.style.color = color;
+}
+
+const HEAT_CELLS = 30;
+function renderWordHeat(text) {
+    if (!wordHeatEl.children.length) {
+        for (let i = 0; i < HEAT_CELLS; i++) {
+            const c = document.createElement('div');
+            c.className = 'heat-cell';
+            wordHeatEl.appendChild(c);
+        }
+    }
+    const cells = wordHeatEl.children;
+    const words = text.split(/\s+/).filter(Boolean);
+    const chunkSize = Math.max(1, Math.ceil(words.length / HEAT_CELLS));
+    const importantWords = [
+        'role','context','rules','objective','validation','harus','wajib','jangan',
+        'buat','pastikan','validasi','test','review','konteks','tujuan','aturan',
+        'kamu adalah','sebagai','traceable','bug','quality','qa'
+    ];
+
+    for (let i = 0; i < HEAT_CELLS; i++) {
+        const chunk = words.slice(i * chunkSize, (i + 1) * chunkSize);
+        const chunkText = chunk.join(' ').toLowerCase();
+        let hits = 0;
+        importantWords.forEach(w => { if (chunkText.includes(w)) hits++; });
+        const density = hits + (chunk.length > 2 ? 0.4 : 0);
+
+        const cell = cells[i];
+        cell.className = 'heat-cell';
+        if (chunk.length === 0)           cell.classList.add('cold');
+        else if (density >= 2)            cell.classList.add('max');
+        else if (density >= 1)            cell.classList.add('hot');
+        else if (chunk.length > 0)        cell.classList.add('warm');
+        else                              cell.classList.add('cold');
+    }
+}
+
+/* Live-scan saat user mengetik (realtime) */
+function runLiveScan(rawText) {
+    const segments = parsePrompt(rawText);
+    const { scores, total } = scorePrompt(segments);
+    const metrics = computeMetrics(rawText, segments);
+
+    updateStatusBar(rawText.trim() ? 'AUTO-SCAN' : '08 SHIP', metrics);
+    updateRadar(scores);
+    updateScoreRing(total);
+    renderWordHeat(rawText);
+    updateGraphFromParse(segments);
+}
+
+/* ----------------------------------------------------------------
+   12. PROMPT COMPILER
+      Menggabungkan JSON graph → prompt linier + self-correction
+   ---------------------------------------------------------------- */
+const SELF_CORRECTION = 'Sebelum menjawab, review kembali apakah jawabanmu sudah mematuhi aturan (Rules) dan konteks di atas. Jika ada error (bug fix), revisi dan pastikan jawabanmu traceable.';
+
+function compilePrompt(segments) {
+    let out = '';
+    if (segments.role.length) {
+        out += `### ROLE\n${segments.role.join(' ')}\n\n`;
+    }
+    if (segments.context.length) {
+        out += `### CONTEXT\n${segments.context.join(' ')}\n\n`;
+    }
+    if (segments.rules.length) {
+        out += `### RULES\n${segments.rules.map(r => `- ${r}`).join('\n')}\n\n`;
+    }
+    if (segments.objective.length) {
+        out += `### OBJECTIVE\n${segments.objective.join(' ')}\n\n`;
+    }
+    if (segments.validation.length) {
+        out += `### VALIDATION\n${segments.validation.map(v => `- ${v}`).join('\n')}\n\n`;
+    }
+    out += `### SELF-CORRECTION\n${SELF_CORRECTION}\n`;
+    return out.trim();
+}
+
+/* ----------------------------------------------------------------
+   13. ROBUST SSE PARSER (dipertahankan dari versi sebelumnya)
+   ---------------------------------------------------------------- */
+async function* parseSSE(reader) {
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === 'data: [DONE]') continue;
+            if (trimmed.startsWith('data: ')) {
+                try { yield JSON.parse(trimmed.slice(6)); } catch (e) { /* partial */ }
+            }
+        }
+    }
+    if (buffer.trim().startsWith('data: ') && buffer.trim() !== 'data: [DONE]') {
+        try { yield JSON.parse(buffer.trim().slice(6)); } catch (e) {}
+    }
+}
+
+/* ----------------------------------------------------------------
+   14. CHART + CODE POST-PROCESSING (Zero Regression)
+   ---------------------------------------------------------------- */
+function renderChartsInElement(element) {
+    const codeBlocks = element.querySelectorAll('pre code.language-chart');
+    codeBlocks.forEach(codeBlock => {
+        try {
+            const jsonStr = codeBlock.innerText.trim();
+            const chartConfig = JSON.parse(jsonStr);
+            if (!chartConfig.options) chartConfig.options = {};
+            chartConfig.options.responsive = true;
+            chartConfig.options.maintainAspectRatio = false;
+
+            const wrap = document.createElement('div');
+            wrap.classList.add('chart-container');
+            const canvas = document.createElement('canvas');
+            wrap.appendChild(canvas);
+
+            const pre = codeBlock.parentElement;
+            if (pre) {
+                pre.style.display = 'none';
+                if (pre.parentElement) pre.parentElement.insertBefore(wrap, pre.nextSibling);
+            } else {
+                element.appendChild(wrap);
+            }
+
+            const existing = Chart.getChart(canvas);
+            if (existing) existing.destroy();
+            new Chart(canvas, chartConfig);
+        } catch (e) {
+            console.error('Gagal render chart:', e);
+            if (codeBlock.parentElement) {
+                codeBlock.parentElement.insertAdjacentHTML('afterend',
+                    '<div class="error-text" style="font-size:0.85rem;margin:8px 0;">⚠️ Gagal merender grafik (JSON tidak valid)</div>');
+            }
+        }
+    });
+
+    element.querySelectorAll('pre code:not(.language-chart)').forEach(el => {
+        try { hljs.highlightElement(el); } catch (e) {}
+        const pre = el.parentElement;
+        if (pre && !pre.querySelector('.copy-btn')) {
+            const btn = document.createElement('button');
+            btn.className = 'copy-btn';
+            btn.textContent = 'Copy';
+            btn.onclick = () => {
+                navigator.clipboard.writeText(el.innerText).then(() => {
+                    btn.textContent = 'Copied!';
+                    setTimeout(() => btn.textContent = 'Copy', 1500);
+                }).catch(() => {
+                    btn.textContent = 'Gagal';
+                    setTimeout(() => btn.textContent = 'Copy', 1500);
+                });
+            };
+            pre.style.position = 'relative';
+            pre.appendChild(btn);
+        }
+    });
+}
+
+/* ----------------------------------------------------------------
+   15. EXECUTOR — COMPILE & SEND PIPELINE
+   ---------------------------------------------------------------- */
+async function sendMessage() {
+    const userText = chatInput.value.trim();
+    if (!userText || isGenerating) return;
+
+    isGenerating = true;
+    setStatus('busy');
+
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    sendBtn.style.display = 'none';
+    stopBtn.style.display = 'flex';
+
+    /* ---- FASE 1: PARSING & SCORING ---- */
+    const segments = parsePrompt(userText);
+    const { scores, total } = scorePrompt(segments);
+    const metrics = computeMetrics(userText, segments);
+
+    /* ---- FASE 2: TERMINAL LOG + GRAPH ANIMATION ---- */
+    clearCrawlLog();
+    const phases = [
+        { label: '01 ROLE',        log: `role: ${segments.role.length} kalimat terdeteksi`,              cls: 'highlight' },
+        { label: '02 CONTEXT',     log: `context: ${segments.context.length} kalimat terdeteksi`,         cls: '' },
+        { label: '03 RULES',       log: `rules: ${segments.rules.length} constraint terdeteksi`,           cls: '' },
+        { label: '04 OBJECTIVE',   log: `objective: ${segments.objective.length} tujuan terdeteksi`,       cls: '' },
+        { label: '05 VALIDATION',  log: `validation: ${segments.validation.length} check terdeteksi`,      cls: '' },
+        { label: '06 REVIEW',      log: `review: spec_score=${total}/100 · flagged=${metrics.flagged}`,    cls: 'highlight' },
+        { label: '07 COMPILE',     log: `compiling linear prompt...`,                                     cls: '' },
+        { label: '08 SHIP',        log: `sending to neural link...`,                                       cls: 'ok' }
+    ];
+
+    for (const p of phases) {
+        updateStatusBar(p.label, metrics);
+        logTerminal(p.log, p.cls);
+        // Animasi node kategori yang sesuai
+        if (cy) {
+            if (['role','context','rules','objective','validation'].includes(p.label.split(' ')[1].toLowerCase())) {
+                const cat = p.label.split(' ')[1].toLowerCase();
+                const n = cy.getElementById(cat);
+                if (n && n.length) {
+                    n.addClass('active');
+                    setTimeout(() => n.removeClass('active'), 400);
+                }
+            }
+        }
+        await sleep(140);
+    }
+
+    /* ---- FASE 3: COMPILE PROMPT ---- */
+    const compiledPrompt = compilePrompt(segments);
+    logTerminal(`compiled: ${compiledPrompt.length} chars · ${compiledPrompt.split(/\s+/).length} tokens`, 'ok');
+
+    /* ---- FASE 4: TAMPILKAN USER MESSAGE DI CHAT ---- */
+    addMessageToUI('user', userText);
+    chatHistory.push({ role: 'user', content: userText, compiled: compiledPrompt });
+    saveToStorage();
+
+    /* ---- FASE 5: STREAMING EXECUTION ---- */
+    const aiBubble = addMessageToUI('ai', '', true);
+    let fullAiResponse = '';
+    let usedFallback = false;
+
+    currentAbortController = new AbortController();
+
+    const hasKey = !!(settings.apiKey && settings.apiKey.trim());
+    let endpoint = hasKey
+        ? 'https://gen.pollinations.ai/v1/chat/completions'
+        : 'https://text.pollinations.ai/openai';
+
+    const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream'
+    };
+    if (hasKey) headers['Authorization'] = `Bearer ${settings.apiKey.trim()}`;
+
+    let modelToUse = settings.model || 'openai';
+    if (!hasKey && !['openai', 'openai-fast'].includes(modelToUse)) modelToUse = 'openai';
+
+    // Riwayat: kirim versi compiled jika ada, fallback ke raw
+    const apiHistory = chatHistory.slice(0, -1).map(m => ({
+        role: m.role,
+        content: m.compiled || m.content
+    }));
+
+    const body = {
+        model: modelToUse,
+        stream: true,
+        messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...apiHistory,
+            { role: 'user', content: compiledPrompt }
+        ]
+    };
+
+    try {
+        let response;
+        try {
+            response = await fetch(endpoint, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(body),
+                signal: currentAbortController.signal
+            });
+
+            if (!response.ok) {
+                let errMsg = `HTTP ${response.status}`;
+                if (response.status === 401 || response.status === 403) {
+                    errMsg = 'API Key tidak valid atau tidak memiliki akses.';
+                } else if (response.status === 402) {
+                    errMsg = hasKey
+                        ? 'Saldo Pollen habis / model berbayar. Coba model lain atau isi ulang.'
+                        : 'Rate limit tercapai (402). Tunggu ~30 detik atau masukkan API Key.';
+                } else if (response.status === 429) {
+                    errMsg = 'Terlalu banyak permintaan. Tunggu sebentar.';
+                }
+                throw new Error(errMsg);
+            }
+        } catch (fetchError) {
+            // Fallback jika API key gagal konek
+            if (hasKey && (fetchError.name === 'TypeError' ||
+                (fetchError.message && fetchError.message.includes('Failed to fetch')))) {
+                showToast('Koneksi GEN gagal. Beralih ke Mode Gratis (Classic)...', 4200, true);
+                logTerminal('fallback: switching to classic endpoint', 'warn');
+                usedFallback = true;
+                updateEngineBadge('fallback');
+
+                endpoint = 'https://text.pollinations.ai/openai';
+                delete headers['Authorization'];
+                body.model = 'openai';
+
+                response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(body),
+                    signal: currentAbortController.signal
+                });
+                if (!response.ok) throw new Error(`HTTP Error Fallback: ${response.status}`);
+            } else {
+                throw fetchError;
+            }
+        }
+
+        const reader = response.body.getReader();
+        for await (const data of parseSSE(reader)) {
+            const delta = data?.choices?.[0]?.delta;
+            const content = (delta && (delta.content || delta.text)) || '';
+            if (content) {
+                fullAiResponse += content;
+                const sanitized = DOMPurify.sanitize(marked.parse(fullAiResponse));
+                aiBubble.innerHTML = sanitized + '<span class="typing-indicator"></span>';
+                scrollToBottom();
+            }
+        }
+
+        if (!fullAiResponse.trim()) fullAiResponse = '_Tidak ada respons dari model._';
+        aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse));
+        renderChartsInElement(aiBubble);
+
+        chatHistory.push({ role: 'assistant', content: fullAiResponse });
+        if (chatHistory.length > MAX_HISTORY) chatHistory = chatHistory.slice(-MAX_HISTORY);
+        saveToStorage();
+        setStatus('ok');
+        logTerminal('response streamed · pipeline complete', 'ok');
+
+        if (!usedFallback) updateEngineBadge();
+
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            const note = fullAiResponse
+                ? '<br><br><em class="error-text">[Dihentikan oleh Operator]</em>'
+                : '<em class="error-text">[Dihentikan oleh Operator]</em>';
+            aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse || '')) + note;
+            if (fullAiResponse) {
+                chatHistory.push({ role: 'assistant', content: fullAiResponse });
+                saveToStorage();
+            }
+            setStatus('ok');
+            logTerminal('aborted by operator', 'warn');
+        } else {
+            console.error(error);
+            aiBubble.innerHTML = `<span class="error-text">⚠️ Neural link terputus: ${error.message || 'Gagal menghubungi server AI.'}</span>`;
+            setStatus('error');
+            logTerminal(`error: ${error.message}`, 'error');
+            // Rollback user message jika gagal total
+            if (chatHistory.length && chatHistory[chatHistory.length - 1].role === 'user') {
+                chatHistory.pop();
+                saveToStorage();
+            }
+        }
+    } finally {
+        isGenerating = false;
+        chatInput.disabled = false;
+        sendBtn.disabled = false;
+        sendBtn.style.display = 'flex';
+        stopBtn.style.display = 'none';
+        currentAbortController = null;
+        chatInput.focus();
+        scrollToBottom();
+        // Kembalikan status bar ke SHIP
+        setTimeout(() => updateStatusBar('08 SHIP', computeMetrics(chatInput.value, parsePrompt(chatInput.value))), 800);
+    }
+}
+
+/* ----------------------------------------------------------------
+   16. INIT
+   ---------------------------------------------------------------- */
+window.addEventListener('load', () => {
+    loadSettings();
+    initGraph();
+    initRadar();
+    restoreHistoryUI();
+    renderWordHeat('');
+    updateScoreRing(0);
+    chatInput.focus();
+});
+
+// Init radar & heat sebelum load jika elemen sudah ada
+if (document.readyState === 'interactive' || document.readyState === 'complete') {
+    try {
+        if (!radarChart) initRadar();
+        if (!cy) initGraph();
+        renderWordHeat('');
+    } catch (e) { console.warn('early init:', e); }
+}
+</script>
+</body>
+</html>
