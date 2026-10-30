@@ -111,7 +111,7 @@ body {
 @media (max-width: 980px) { 
     .app-body { flex-direction: column; } 
     .panel-left { flex: 1; min-height: 0; } 
-    .panel-right { flex: 0 0 45vh; min-height: 0; border-bottom: 1px solid var(--border-color); } /* Fixed height graph on mobile so chat is visible */
+    .panel-right { flex: 0 0 42vh; min-height: 0; border-bottom: 1px solid var(--border-color); } /* Fixed height graph on mobile */
 }
 
 /* ============================================================
@@ -172,7 +172,7 @@ textarea::placeholder { color: #64748b; }
 .sb-metric { color: var(--text-muted); letter-spacing: 0.3px; } .sb-metric b { color: #ffffff; font-weight: 700; }
 
 .graph-wrap { padding: 8px 10px 10px; flex-shrink: 0; background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03), transparent 70%); }
-#graph-container { height: 280px; width: 100%; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; background: #060b14; position: relative; overflow: hidden; }
+#graph-container { height: 320px; width: 100%; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; background: #060b14; position: relative; overflow: hidden; }
 #graph-container::before { content: ''; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 24px 24px; pointer-events: none; }
 
 .telemetry { padding: 0 10px 12px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
@@ -180,7 +180,7 @@ textarea::placeholder { color: #64748b; }
 .tele-title { font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; color: #ffffff; letter-spacing: 2px; margin-bottom: 8px; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
 .tele-title::before { content: '▸'; color: #ffffff; animation: blink 1.2s step-end infinite; }
 
-.crawl-log { height: 80px; overflow-y: auto; font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; color: var(--text-muted); background: #000; border-radius: 6px; padding: 8px 10px; line-height: 1.5; }
+.crawl-log { height: 92px; overflow-y: auto; font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; color: var(--text-muted); background: #000; border-radius: 6px; padding: 8px 10px; line-height: 1.5; }
 .crawl-log::-webkit-scrollbar { width: 4px; } .crawl-log::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
 .log-line { white-space: pre-wrap; word-break: break-all; }
 .log-line.highlight { color: #ffffff; font-weight: 700; }
@@ -195,18 +195,6 @@ textarea::placeholder { color: #64748b; }
 .heat-cell.hot  { background: #ef4444; }
 .heat-cell.max  { background: #10b981; }
 
-.tele-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-@media (max-width: 600px) { .tele-row { grid-template-columns: 1fr; } }
-.radar-wrap { height: 180px; position: relative; }
-
-.score-card { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px; }
-.spec-svg { width: 100px; height: 100px; transform: rotate(-90deg); flex-shrink: 0; }
-.ring-bg { fill: none; stroke: #1e293b; stroke-width: 9; }
-.ring-fg { fill: none; stroke: #ffffff; stroke-width: 9; stroke-linecap: round; transition: stroke-dashoffset 0.6s cubic-bezier(0.34,1.56,0.64,1), stroke 0.3s; filter: drop-shadow(0 0 6px rgba(255,255,255,0.55)); }
-.score-meta { display: flex; flex-direction: column; align-items: flex-start; }
-.score-num { font-family: 'Share Tech Mono', monospace; font-size: 2.2rem; font-weight: 700; color: #ffffff; line-height: 1; text-shadow: 0 0 20px rgba(255,255,255,0.5); }
-.score-tag { font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: var(--text-dim); letter-spacing: 2px; margin-top: 4px; }
-.score-status { font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; color: var(--text-muted); margin-top: 6px; }
 .legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-family: 'Share Tech Mono', monospace; font-size: 0.62rem; color: var(--text-dim); padding: 0 10px 10px; }
 .legend span { display: flex; align-items: center; gap: 4px; }
 .legend .dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid currentColor; }
@@ -306,26 +294,6 @@ textarea::placeholder { color: #64748b; }
                     </div>
                 </div>
 
-                <div class="tele-row">
-                    <div class="tele-card">
-                        <div class="tele-title">COVERAGE RADAR</div>
-                        <div class="radar-wrap">
-                            <canvas id="radar-canvas"></canvas>
-                        </div>
-                    </div>
-                    <div class="tele-card score-card">
-                        <svg viewBox="0 0 120 120" class="spec-svg">
-                            <circle cx="60" cy="60" r="50" class="ring-bg"></circle>
-                            <circle cx="60" cy="60" r="50" class="ring-fg" id="ring-fg" style="stroke-dasharray:314;stroke-dashoffset:314;"></circle>
-                        </svg>
-                        <div class="score-meta">
-                            <div class="score-num" id="score-num">0</div>
-                            <div class="score-tag">SPEC SCORE</div>
-                            <div class="score-status" id="score-status">IDLE</div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- SLIM WORD HEAT -->
                 <div class="tele-card" style="padding-bottom: 6px;">
                     <div class="tele-title" style="margin-bottom: 4px;">WORD HEAT (DENSITY)</div>
@@ -363,16 +331,12 @@ const sbPhase = document.getElementById('sb-phase');
 const sbWords = document.getElementById('sb-words');
 const sbFlagged = document.getElementById('sb-flagged');
 const sbGuessed = document.getElementById('sb-guessed');
-const ringFg = document.getElementById('ring-fg');
-const scoreNum = document.getElementById('score-num');
-const scoreStatus = document.getElementById('score-status');
 const wordHeatEl = document.getElementById('word-heat');
 
 let chatHistory = [];
 let currentAbortController = null;
 let isGenerating = false;
 let cy = null;
-let radarChart = null;
 let settings = { apiKey: '', model: 'openai' };
 
 const SYSTEM_PROMPT = `Kamu adalah CGO (Cyber Guardian Operator), asisten AI cerdas dengan arsitektur reasoning tingkat lanjut.
@@ -470,8 +434,6 @@ function scorePrompt(segments) {
         if (words >= 3) s += 20; if (words >= 8) s += 25; if (words >= 15) s += 25;
         scores[cat] = Math.min(100, s);
     });
-    const filled = Object.keys(SCORE_WEIGHTS).filter(c => segments[c].length > 0).length;
-    scores.completeness = Math.round((filled / 5) * 100);
     let total = 0; Object.keys(SCORE_WEIGHTS).forEach(c => { total += scores[c] * SCORE_WEIGHTS[c]; });
     return { scores, total: Math.round(total) };
 }
@@ -487,10 +449,9 @@ function computeMetrics(rawText, segments) {
 }
 
 /* ================================================================
-   3. NEURAL GRAPH (CYTOSCAPE & PARTICLES)
+   3. NEURAL GRAPH (CYTOSCAPE & DASH OFFSET ANIMATION)
    ================================================================ */
 let graphAnimationFrame = null;
-let particleSystem = null;
 
 function initGraph() {
     const container = document.getElementById('graph-container');
@@ -543,9 +504,19 @@ function initGraph() {
             { selector: '.cat-validation', style: { 'border-color': '#3b82f6', 'color': '#3b82f6' } },
             { selector: '.sub-role', style: { 'border-color': '#10b981', 'color': '#10b981', 'width': 30, 'height': 30, 'font-size': 8 } },
             { selector: '.sub-val', style: { 'border-color': '#3b82f6', 'color': '#3b82f6', 'width': 30, 'height': 30, 'font-size': 8 } },
+            
+            // Garis Dasar (Statis)
             { selector: 'edge', style: { 'width': 1, 'line-color': '#ffffff', 'line-opacity': 0.15, 'curve-style': 'bezier' } },
             { selector: '.edge-sub', style: { 'width': 1, 'line-opacity': 0.08 } },
-            { selector: '.neural-active', style: { 'width': 3, 'line-color': '#ffffff', 'line-opacity': 0.8, 'shadow-blur': 10, 'shadow-color': '#ffffff', 'shadow-opacity': 0.5 } },
+            
+            // Garis Aktif (Pemancar Saraf)
+            { selector: '.neural-active', style: { 
+                'width': 3, 'line-color': '#ffffff', 'line-opacity': 0.8, 
+                'line-style': 'dashed', 'line-dash-pattern': [6, 12], // Pola putus-putus panjang
+                'line-dash-offset': 0, // Akan dianimasikan
+                'shadow-blur': 10, 'shadow-color': '#ffffff', 'shadow-opacity': 0.5 
+            } },
+            
             { selector: '.has-content', style: { 'border-width': 3, 'border-color': '#ffffff', 'background-color': 'rgba(255,255,255,0.1)', 'shadow-blur': 15, 'shadow-color': '#ffffff', 'shadow-opacity': 0.6, 'width': 50, 'height': 50 } },
             { selector: '.firing', style: { 'background-color': '#ffffff', 'color': '#060b14', 'border-width': 4, 'shadow-blur': 30, 'shadow-opacity': 1, 'width': 65, 'height': 65, 'z-index': 999 } }
         ],
@@ -553,58 +524,16 @@ function initGraph() {
         userZoomingEnabled: false, userPanningEnabled: false, autoungrabify: true
     });
 
-    // Particle Canvas System
-    const canvas = document.createElement('canvas');
-    canvas.style.position = 'absolute'; canvas.style.top = '0'; canvas.style.left = '0';
-    canvas.style.width = '100%'; canvas.style.height = '100%'; canvas.style.pointerEvents = 'none';
-    container.appendChild(canvas);
-    const ctx = canvas.getContext('2d');
-    
-    let width, height;
-    function resize() {
-        const rect = container.getBoundingClientRect();
-        width = rect.width; height = rect.height;
-        canvas.width = width; canvas.height = height;
+    // =======================================================
+    // MESIN ANIMASI ALIRAN DATA (MENGGUNAKAN DASH OFFSET)
+    // =======================================================
+    let dashOffset = 0;
+    function animateNeuralPathways() {
+        dashOffset -= 1.5; // Kecepatan aliran sinyal
+        cy.edges('.neural-active').style('line-dash-offset', dashOffset);
+        graphAnimationFrame = requestAnimationFrame(animateNeuralPathways);
     }
-    window.addEventListener('resize', resize);
-    resize();
-
-    class Neurotransmitter {
-        constructor(edge, color) {
-            this.edge = edge; this.color = color || '#ffffff';
-            this.progress = Math.random(); this.speed = 0.015 + Math.random() * 0.01; this.size = 1.5 + Math.random() * 1.5;
-        }
-        update() { this.progress += this.speed; if (this.progress > 1) this.progress = 0; }
-        draw(ctx) {
-            const p1 = this.edge.sourceEndpoint(); const p2 = this.edge.targetEndpoint();
-            const x = p1.x + (p2.x - p1.x) * this.progress; const y = p1.y + (p2.y - p1.y) * this.progress;
-            ctx.beginPath(); ctx.arc(x, y, this.size, 0, Math.PI * 2);
-            ctx.fillStyle = this.color; ctx.shadowBlur = 10; ctx.shadowColor = this.color; ctx.fill();
-        }
-    }
-
-    let particles = [];
-    window.spawnNeuralParticles = function(edgeId, count = 5) {
-        const edge = cy.getElementById(edgeId); if (!edge || !edge.length) return;
-        const targetNode = edge.target(); let color = '#ffffff';
-        if (targetNode.hasClass('cat-role')) color = '#10b981';
-        if (targetNode.hasClass('cat-context')) color = '#ec4899';
-        if (targetNode.hasClass('cat-rules')) color = '#f59e0b';
-        if (targetNode.hasClass('cat-objective')) color = '#8b5cf6';
-        if (targetNode.hasClass('cat-validation')) color = '#3b82f6';
-        for (let i = 0; i < count; i++) particles.push(new Neurotransmitter(edge, color));
-    };
-
-    function renderLoop() {
-        ctx.clearRect(0, 0, width, height);
-        for (let i = particles.length - 1; i >= 0; i--) {
-            const p = particles[i]; p.update(); p.draw(ctx);
-            if (!p.edge.hasClass('neural-active') && Math.random() > 0.95) particles.splice(i, 1);
-        }
-        if (particles.length > 300) particles.splice(0, particles.length - 300);
-        graphAnimationFrame = requestAnimationFrame(renderLoop);
-    }
-    renderLoop();
+    animateNeuralPathways();
 }
 
 function updateGraphFromParse(segments) {
@@ -618,10 +547,6 @@ function updateGraphFromParse(segments) {
                 node.addClass('has-content');
                 const edge = cy.edges(`[source="start"][target="${cat}"]`);
                 edge.addClass('neural-active');
-                if (node.data('lastWordCount') !== wordCount) {
-                    node.data('lastWordCount', wordCount);
-                    window.spawnNeuralParticles(edge.id(), Math.min(10, Math.ceil(wordCount / 2)));
-                }
             }
         }
     });
@@ -629,44 +554,24 @@ function updateGraphFromParse(segments) {
 
 async function animateCompileSequence(segments) {
     if (!cy) return;
-    cy.elements().removeClass('firing');
+    cy.elements().removeClass('firing neural-active');
     const order = ['role', 'context', 'rules', 'objective', 'validation'];
     for (const cat of order) {
         const node = cy.getElementById(cat); const edge = cy.edges(`[source="start"][target="${cat}"]`);
         if (node && node.length) {
-            edge.addClass('neural-active'); window.spawnNeuralParticles(edge.id(), 15);
-            node.addClass('firing'); await sleep(200); node.removeClass('firing');
+            edge.addClass('neural-active'); node.addClass('firing'); 
+            await sleep(200); node.removeClass('firing');
         }
     }
     updateGraphFromParse(segments);
 }
 
 /* ================================================================
-   4. TELEMETRY (RADAR, SCORE, HEATMAP)
+   4. TELEMETRY (LOG & WORD HEAT)
    ================================================================ */
 function updateStatusBar(phase, metrics) {
     if (phase !== null) sbPhase.textContent = phase;
     sbWords.textContent = metrics.wordCount; sbFlagged.textContent = metrics.flagged; sbGuessed.textContent = metrics.guessed;
-}
-
-function initRadar() {
-    const ctx = document.getElementById('radar-canvas').getContext('2d');
-    radarChart = new Chart(ctx, {
-        type: 'radar',
-        data: { labels: ['ROLE', 'CONTEXT', 'RULES', 'OBJECTIVE', 'VALIDATION', 'COMPLETENESS'], datasets: [{ label: 'Coverage', data: [0, 0, 0, 0, 0, 0], backgroundColor: 'rgba(255,255,255,0.09)', borderColor: '#ffffff', borderWidth: 2, pointBackgroundColor: '#ffffff', pointBorderColor: '#060b14', pointRadius: 3, pointHoverRadius: 5 }] },
-        options: { responsive: true, maintainAspectRatio: false, animation: { duration: 400 }, plugins: { legend: { display: false }, tooltip: { backgroundColor: '#0d1526', borderColor: '#ffffff', borderWidth: 1, titleColor: '#ffffff', bodyColor: '#e2e8f0' } }, scales: { r: { min: 0, max: 100, angleLines: { color: 'rgba(255,255,255,0.15)' }, grid: { color: 'rgba(255,255,255,0.15)', circular: false }, pointLabels: { color: '#ffffff', font: { family: 'Share Tech Mono', size: 9 } }, ticks: { display: false, stepSize: 25 } } } }
-    });
-}
-function updateRadar(scores) { if (radarChart) { radarChart.data.datasets[0].data = [scores.role, scores.context, scores.rules, scores.objective, scores.validation, scores.completeness]; radarChart.update('none'); } }
-
-const RING_CIRCUMFERENCE = 2 * Math.PI * 50;
-function updateScoreRing(total) {
-    ringFg.style.strokeDasharray = RING_CIRCUMFERENCE; ringFg.style.strokeDashoffset = RING_CIRCUMFERENCE * (1 - total / 100);
-    let color = total < 40 ? '#ef4444' : (total < 70 ? '#f59e0b' : '#10b981');
-    ringFg.style.stroke = color; ringFg.style.filter = `drop-shadow(0 0 6px ${color})`;
-    scoreNum.textContent = total;
-    scoreStatus.textContent = total === 0 ? 'IDLE' : (total < 40 ? 'CRITICAL' : (total < 70 ? 'PARTIAL' : (total < 90 ? 'GOOD' : 'OPTIMAL')));
-    scoreStatus.style.color = color;
 }
 
 const HEAT_CELLS = 40;
@@ -691,9 +596,9 @@ function renderWordHeat(text) {
 }
 
 function runLiveScan(rawText) {
-    const segments = parsePrompt(rawText); const { scores, total } = scorePrompt(segments); const metrics = computeMetrics(rawText, segments);
+    const segments = parsePrompt(rawText); const { total } = scorePrompt(segments); const metrics = computeMetrics(rawText, segments);
     updateStatusBar(rawText.trim() ? 'AUTO-SCAN' : '08 SHIP', metrics);
-    updateRadar(scores); updateScoreRing(total); renderWordHeat(rawText); updateGraphFromParse(segments);
+    renderWordHeat(rawText); updateGraphFromParse(segments);
 }
 
 /* ================================================================
@@ -887,10 +792,8 @@ async function sendMessage() {
 window.addEventListener('load', () => {
     loadSettings(); 
     initGraph(); 
-    initRadar(); 
     restoreHistoryUI(); 
     renderWordHeat(''); 
-    updateScoreRing(0); 
     chatInput.focus();
     runLiveScan(''); // Sinkronisasi awal
 });
