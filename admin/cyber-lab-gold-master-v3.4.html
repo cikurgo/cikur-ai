@@ -387,16 +387,29 @@
   box-shadow:0 0 10px rgba(0,229,255,.7);}
 @keyframes cgo-blink{50%{opacity:0}}
 #cgoRoot .cgo-err{color:#ff5b5b}
-#cgoRoot .cgo-quickbar{position:relative;z-index:10;
-  display:flex;gap:6px;padding:8px 16px 0;flex-wrap:wrap;
-  flex-shrink:0;}
-#cgoRoot .cgo-quick{background:rgba(0,229,255,.05);
+#cgoRoot .cgo-quickbar-wrap{position:relative;z-index:10;flex-shrink:0;
+  padding:8px 0 0;
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 16px,#000 calc(100% - 16px),transparent 100%);
+          mask-image:linear-gradient(90deg,transparent 0,#000 16px,#000 calc(100% - 16px),transparent 100%);}
+#cgoRoot .cgo-quickbar{
+  display:flex;gap:6px;align-items:center;padding:0 16px;
+  overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;
+  scrollbar-width:none;-ms-overflow-style:none;
+  scroll-snap-type:x proximity;}
+#cgoRoot .cgo-quickbar::-webkit-scrollbar{display:none}
+#cgoRoot .cgo-quick-sep{flex:0 0 auto;width:1px;align-self:stretch;margin:2px 2px;
+  background:rgba(0,229,255,.16);}
+#cgoRoot .cgo-quick{flex:0 0 auto;scroll-snap-align:start;white-space:nowrap;
+  background:rgba(0,229,255,.05);
   border:1px solid rgba(0,229,255,.3);
   color:#7fd7e6;
   padding:6px 12px;font-size:.71rem;letter-spacing:1.4px;
   border-radius:2px;transition:.15s;}
 #cgoRoot .cgo-quick:hover{background:rgba(0,229,255,.16);color:#eaffff;
   box-shadow:0 0 14px rgba(0,229,255,.28);}
+#cgoRoot .cgo-quick.cgo-alt{border-color:rgba(255,179,0,.35);color:#ffcf7a;background:rgba(255,179,0,.04)}
+#cgoRoot .cgo-quick.cgo-alt:hover{background:rgba(255,179,0,.16);color:#fff3da;
+  box-shadow:0 0 14px rgba(255,179,0,.28);}
 #cgoRoot .cgo-quick.cgo-danger{border-color:rgba(255,43,43,.5);color:#ff8a8a}
 #cgoRoot .cgo-quick.cgo-danger:hover{background:rgba(255,43,43,.18);color:#fff;
   box-shadow:0 0 16px rgba(255,43,43,.4);}
@@ -491,6 +504,9 @@
 #cgoRoot .cgo-input-row{padding:8px 12px 12px;gap:6px}
 #cgoRoot .cgo-prompt{font-size:.78rem}
 #cgoRoot .cgo-quick{padding:5px 9px;font-size:.66rem}
+#cgoRoot .cgo-quickbar{padding:0 12px;gap:5px}
+#cgoRoot .cgo-top-bar{padding:6px 10px}
+#cgoRoot .cgo-ticker{display:none}
 }
 /* --- penyesuaian integrasi dengan halaman Cyber Lab --- */
 #cgoRoot .cgo-cyber-overlay{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -3543,19 +3559,24 @@ async function runFuzzParam(payload, label) {
   <main class="cgo-terminal" id="cgoTerminal"></main>
 
   <!-- QUICK ACTIONS -->
-  <div class="cgo-quickbar">
-    <button class="cgo-quick" data-cmd="#PROBE">#PROBE</button>
-    <button class="cgo-quick" data-cmd="#CCTV">#CCTV</button>
-    <button class="cgo-quick" data-cmd="#BUSTER">#BUSTER</button>
-    <button class="cgo-quick" data-cmd="#IP">#IP</button>
-    <button class="cgo-quick" data-cmd="#XHR">#XHR</button>
-    <button class="cgo-quick" data-cmd="#WS">#WS</button>
-    <button class="cgo-quick" data-cmd="#RTC">#RTC</button>
-    <button class="cgo-quick" data-cmd="#BEACON">#BEACON</button>
-    <button class="cgo-quick" data-cmd="#SSE">#SSE</button>
-    <button class="cgo-quick" data-cmd="#STORAGE">#STORAGE</button>
-    <button class="cgo-quick" data-cmd="#DETECT">#DETECT</button>
-    <button class="cgo-quick cgo-danger" data-cmd="#LOCKDOWN">#LOCKDOWN</button>
+  <div class="cgo-quickbar-wrap">
+    <div class="cgo-quickbar" id="cgoQuickbar">
+      <button class="cgo-quick" data-cmd="#PROBE" title="probeOne() — HEAD request + headers">#PROBE</button>
+      <button class="cgo-quick" data-cmd="#CCTV" title="targetRealCCTV() — nyalakan video player utama">#CCTV</button>
+      <button class="cgo-quick" data-cmd="#BUSTER" title="runDirBuster() — path discovery">#BUSTER</button>
+      <button class="cgo-quick" data-cmd="#IP" title="targetRealFetch() — fingerprint + geolokasi">#IP</button>
+      <span class="cgo-quick-sep" aria-hidden="true"></span>
+      <button class="cgo-quick cgo-alt" data-cmd="#XHR" title="targetXHR() — XHR API publik">#XHR</button>
+      <button class="cgo-quick cgo-alt" data-cmd="#WS" title="targetWS() — WebSocket echo publik">#WS</button>
+      <button class="cgo-quick cgo-alt" data-cmd="#RTC" title="targetRTC() — kumpulkan ICE candidate WebRTC">#RTC</button>
+      <button class="cgo-quick cgo-alt" data-cmd="#BEACON" title="targetBeacon() — kirim sendBeacon demo">#BEACON</button>
+      <button class="cgo-quick cgo-alt" data-cmd="#SSE" title="targetEventSource() — buka koneksi SSE">#SSE</button>
+      <button class="cgo-quick cgo-alt" data-cmd="#STORAGE" title="targetStorage() — simpan token sesi demo">#STORAGE</button>
+      <button class="cgo-quick cgo-alt" data-cmd="#DETECT" title="targetDetect() — Integrity Check manual">#DETECT</button>
+      <span class="cgo-quick-sep" aria-hidden="true"></span>
+      <button class="cgo-quick cgo-alt" data-cmd="#CLEAR_VAULT" title="clearVault() — kosongkan vault temuan">#CLEAR_VAULT</button>
+      <button class="cgo-quick cgo-danger" data-cmd="#LOCKDOWN" title="Aktifkan protokol lockdown manual">#LOCKDOWN</button>
+    </div>
   </div>
 
   <!-- INPUT -->
@@ -4797,6 +4818,7 @@ async function handleLocalCommand(raw){
   S.busy = true;
   el.input.disabled = true;
   el.send.disabled = true;
+  try { document.querySelectorAll('.cgo-quick').forEach(b => { b.disabled = true; b.style.opacity = '0.45'; }); } catch(e){}
 
   try {
     lineUser(text);
@@ -4927,6 +4949,11 @@ async function handleLocalCommand(raw){
     S.busy = false;
     el.input.disabled = false;
     el.send.disabled = false;
+    try {
+      if (!S.lockdown) {
+        document.querySelectorAll('.cgo-quick').forEach(b => { b.disabled = false; b.style.opacity = ''; });
+      }
+    } catch(e){}
     try { el.input.focus(); } catch(e){}
     try { scrollTerm(); } catch(e){}
   }
@@ -5086,7 +5113,7 @@ function bootTerminal(){
     '- Security Sentinel real-time (deteksi manipulasi fetch/XHR/WS)\n' +
     '- Alarm darurat + TTS (toggle speaker)\n' +
     '- Lockdown otomatis + laporan intelijen penyusup + unduh JSON\n' +
-    '- Quick Action & perintah: `#PROBE`, `#CCTV`, `#BUSTER`, `#IP`, `#STATUS`, `#VAULT`, `#LOCKDOWN`\n' +
+    '- Quick Action & perintah: `#PROBE`, `#CCTV`, `#BUSTER`, `#IP`, `#XHR`, `#WS`, `#RTC`, `#BEACON`, `#SSE`, `#STORAGE`, `#DETECT`, `#STATUS`, `#VAULT`, `#CLEAR_VAULT`, `#LOCKDOWN`\n' +
     '- Tool Bridge via tag `[EXEC:...]` dari AI\n' +
     '- **Terhubung ke Cyber Lab** — tool memanggil fungsi ASLI; CGO membaca vault, hooks & log terminal real-time\n' +
     '- Vault insiden persisten\n\n' +
@@ -5204,7 +5231,7 @@ document.querySelectorAll('.cgo-quick').forEach(btn => {
     const cmd = btn.dataset.cmd || '';
     if (!cmd) return;
     if (S.busy || S.lockdown){
-      showToast(S.lockdown ? 'Lockdown aktif.' : 'Tunggu respons AI selesai.', 2000, true);
+      showToast(S.lockdown ? 'Lockdown aktif.' : 'Sistem sibuk — tunggu perintah selesai.', 2000, true);
       return;
     }
     el.input.value = cmd;
