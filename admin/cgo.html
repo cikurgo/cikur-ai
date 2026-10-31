@@ -342,36 +342,6 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-i
     .message { opacity: 1 !important; transform: none !important; }
 }
 
-/* ============================================================
-   MULTI-AGENT RESEARCH PANEL — aditif, tidak mengubah style lama
-   ============================================================ */
-.message.agent { align-self: flex-start; width: 100%; max-width: 94%; }
-.message.agent .sender { color: var(--agent-color, var(--text-dim)); font-weight: 600; }
-.message.agent .sender .agent-role { color: var(--text-dim); font-weight: 400; font-size: 0.66rem; margin-left: 2px; }
-.message.agent .bubble {
-    background: var(--bg-bubble-ai);
-    border-color: var(--agent-color, var(--accent));
-    border-left: 3px solid var(--agent-color, var(--accent));
-    box-shadow: inset 0 0 16px rgba(0,0,0,0.35), 0 0 14px -4px var(--agent-color, var(--accent));
-}
-.message.agent.synth .bubble { border-left-width: 4px; background: linear-gradient(180deg, rgba(167,139,250,0.08), var(--bg-bubble-ai) 40%); }
-.message.agent .sender::before {
-    content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-    background: var(--agent-color, var(--accent)); box-shadow: 0 0 6px var(--agent-color, var(--accent));
-}
-@keyframes agentThinking { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
-.agent-thinking .sender::before { animation: agentThinking 1s ease-in-out infinite; }
-#agent-rounds-wrap { display: none; align-items: center; gap: 6px; }
-#agent-rounds-wrap.visible { display: flex; }
-#agent-rounds-wrap label { font-size: 0.65rem; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
-#agent-rounds-select {
-    background: var(--bg-main); border: 1px solid rgba(255,255,255,0.15); color: var(--text-main);
-    border-radius: 6px; padding: 4px 6px; font-size: 0.72rem; font-family: 'JetBrains Mono', monospace;
-}
-@media (max-width: 480px) {
-    .message.agent .sender .agent-role { display: none; }
-}
-
 </style>
 </head>
 <body data-theme="cyber">
@@ -451,8 +421,7 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-i
         </div>
         <div class="settings-hint">
             <b>Multi-Provider:</b> Setiap provider punya key sendiri. Pollinations tanpa key = free. Compile Only = hanya kompilasi tanpa kirim.
-            <b>Agents:</b> 4 peneliti berkarakter beda berdiskusi bergiliran lalu disintesis — pakai provider/model yang sama.
-            Esc = Stop · Ctrl+Shift+C = Copy Artifact · Ctrl+Shift+O = Compile Only · Ctrl+Shift+H = Auto-Heal · Ctrl+Shift+M = Agent Panel.
+            Esc = Stop · Ctrl+Shift+C = Copy Artifact · Ctrl+Shift+O = Compile Only · Ctrl+Shift+H = Auto-Heal.
         </div>
     </div>
 
@@ -466,15 +435,6 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-i
                 <button class="btn btn-secondary" id="heal-btn" title="Auto-Heal: lengkapi section kosong (Ctrl+Shift+H)" aria-label="Auto-Heal"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>HEAL</span></button>
                 <button class="btn btn-secondary" id="sample-btn" title="Sample prompt" aria-label="Sample prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>SAMPLE</span></button>
                 <button class="btn btn-secondary" id="compile-only-btn" title="Compile without sending" aria-label="Compile only"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg><span>COMPILE ONLY</span></button>
-                <button class="btn btn-secondary" id="multiagent-btn" title="Multi-Agent Research Panel: beberapa peneliti AI berdiskusi (Ctrl+Shift+M)" aria-label="Multi-Agent Panel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="18" cy="8" r="3"/><circle cx="13" cy="18" r="3"/><path d="M8 11v2a3 3 0 0 0 3 3M18 11v2a3 3 0 0 0-3 3"/></svg><span>AGENTS</span></button>
-                <div id="agent-rounds-wrap">
-                    <label for="agent-rounds-select">RONDE</label>
-                    <select id="agent-rounds-select" title="Jumlah ronde diskusi sebelum sintesis akhir">
-                        <option value="1">1</option>
-                        <option value="2" selected>2</option>
-                        <option value="3">3</option>
-                    </select>
-                </div>
                 <button class="btn btn-send" id="send-btn">
                     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     <span id="send-label">COMPILE &amp; SEND</span>
@@ -1125,10 +1085,6 @@ document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.shiftKey && (e.key === 'O' || e.key === 'o')) {
         e.preventDefault(); doCompileOnly();
     }
-    if (e.ctrlKey && e.shiftKey && (e.key === 'M' || e.key === 'm')) {
-        e.preventDefault(); setMultiAgentMode(!multiAgentMode);
-        showToast(multiAgentMode ? 'Multi-Agent Panel ON — 4 peneliti akan berdiskusi' : 'Multi-Agent Panel OFF');
-    }
 });
 
 sendBtn.addEventListener('click', () => { if (!isGenerating) sendMessage(); });
@@ -1174,8 +1130,7 @@ function exportHistoryMarkdown() {
     if (!chatHistory.length) { showToast('Empty history', 2000, true); return; }
     let md = `# SPC Research Nexus Export — ${new Date().toISOString()}\n\n`;
     chatHistory.forEach(m => {
-        const label = m.role === 'user' ? 'USER' : (m.role === 'agent' ? (m.agentName || 'AGENT') + (m.isSynth ? ' (SYNTHESIS)' : '') : 'CGO');
-        md += `### ${label}\n\n${m.content}\n\n---\n\n`;
+        md += `### ${m.role === 'user' ? 'USER' : 'CGO'}\n\n${m.content}\n\n---\n\n`;
     });
     const blob = new Blob([md], { type: 'text/markdown' });
     const a = document.createElement('a');
@@ -1257,15 +1212,7 @@ function renderBootMessage(force = false) {
 function restoreHistoryUI() {
     chatContainer.innerHTML = '';
     if (!chatHistory.length) { renderBootMessage(true); return; }
-    chatHistory.forEach(m => {
-        if (m.role === 'agent') {
-            const agentDef = m.isSynth ? SYNTH_AGENT : (AGENTS.find(a => a.id === m.agentId) || { id: m.agentId, name: m.agentName, color: m.agentColor, role_id: m.agentRole, role_en: m.agentRole });
-            const { bubbleDiv } = addAgentMessageToUI(agentDef, false);
-            bubbleDiv.innerHTML = safeMarkdown(m.content || '');
-            return;
-        }
-        addMessageToUI(m.role === 'user' ? 'user' : 'ai', m.content);
-    });
+    chatHistory.forEach(m => addMessageToUI(m.role === 'user' ? 'user' : 'ai', m.content));
     chatContainer.querySelectorAll('.bubble').forEach(b => renderChartsInElement(b));
 }
 
@@ -1353,7 +1300,6 @@ function buildRequest(compiledPrompt, systemPrompt) {
 
     const apiHistory = [];
     chatHistory.slice(0, -1).forEach(m => {
-        if (m.role === 'agent') return; // giliran panel Multi-Agent tidak masuk riwayat chat normal
         const role = m.role === 'assistant' ? 'assistant' : 'user';
         const content = m.compiled || m.content;
         if (!content) return;
@@ -1443,10 +1389,6 @@ async function animateCompileSequence() {
 async function sendMessage() {
     if (compileOnlyMode) {
         doCompileOnly();
-        return;
-    }
-    if (multiAgentMode) {
-        await sendMultiAgentMessage();
         return;
     }
 
@@ -1616,9 +1558,6 @@ function runDiagnostics() {
     assert('Cache roundtrip', getArtifact(h)?.prompt === compiled);
     assert('Providers defined', Object.keys(PROVIDERS).length >= 6);
     assert('System prompts ID+EN', SYSTEM_PROMPTS.id && SYSTEM_PROMPTS.en);
-    assert('Multi-Agent personas defined', AGENTS.length === 4 && !!SYNTH_AGENT);
-    assert('Agent system prompt builds', buildAgentSystemPrompt(AGENTS[0]).includes(AGENTS[0].name));
-    assert('Agent request builder works', !!buildAgentRequest('sys', 'hello').endpoint);
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
 }
@@ -1636,334 +1575,117 @@ window.addEventListener('load', () => {
     runLiveScan('');
     logEvent('SYSTEM', `Research Nexus v${APP_VERSION} ready. Providers: ${Object.keys(PROVIDERS).join(', ')}. Cache: ${getCacheStats()}`);
 });
+</script>
 
-/* ============================================================
-   MULTI-AGENT RESEARCH PANEL
-   Beberapa persona AI berdiskusi bergiliran lalu disintesis.
-   Memakai provider/model/key yang sama dengan mode normal —
-   tidak menambah kebutuhan API key baru. Aditif: mode normal
-   (sendMessage lama) tidak diubah sama sekali.
-   ============================================================ */
-let multiAgentMode = false;
-let agentTranscript = [];   // {id, name, text} — reset tiap sesi diskusi baru
-let agentDiscussionAborted = false;
+<!-- CGO BRIDGE v1 — zero-regression interop with Cyber Lab (postMessage) -->
+<script>
+(function(){
+'use strict';
+if (window.__CGO_NEXUS_BRIDGE__) return;
+window.__CGO_NEXUS_BRIDGE__ = true;
 
-const AGENTS = [
-    { id: 'nova',  name: 'Dr. Nova',  color: '#38bdf8',
-      role_id: 'Teoretikus — kerangka & model formal',
-      role_en: 'Theoretical Scientist — frameworks & formal models',
-      char_id: 'Membangun kerangka berpikir, definisi presisi, dan model formal sebelum melompat ke solusi. Suka memecah masalah jadi prinsip dasar.',
-      char_en: 'Builds rigorous frameworks and formal models before jumping to solutions. Breaks problems down to first principles.' },
-    { id: 'flux',  name: 'Dr. Flux',  color: '#10b981',
-      role_id: 'Eksperimentalis — kelayakan & desain eksperimen',
-      role_en: 'Experimentalist — feasibility & experiment design',
-      char_id: 'Fokus pada kelayakan praktis, data, dan desain eksperimen/validasi. Selalu bertanya: "bagaimana cara mengujinya?"',
-      char_en: 'Focuses on practical feasibility, data, and experiment/validation design. Always asks: "how would we test this?"' },
-    { id: 'cgo',   name: 'CGO',       color: '#f59e0b',
-      role_id: 'Cyber Guardian Operator — ketahanan sistem & risiko',
-      role_en: 'Cyber Guardian Operator — systems resilience & risk',
-      char_id: 'Tegas, dingin, fokus, sangat protektif terhadap ketahanan sistem. Menyoroti mode kegagalan, keamanan, dan risiko operasional dari tiap usulan.',
-      char_en: 'Firm, cool-headed, focused, highly protective of systems resilience. Flags failure modes, security, and operational risk in every proposal.' },
-    { id: 'lyric', name: 'Dr. Lyric', color: '#ef4444',
-      role_id: 'Kritikus independen — red-team & celah argumen',
-      role_en: 'Independent Critic — red-team & argument gaps',
-      char_id: 'Red-team terhadap klaim tim. Mencari counterexample, asumsi tersembunyi, dan celah logika — tapi tetap konstruktif.',
-      char_en: "Red-teams the team's claims. Hunts for counterexamples, hidden assumptions, and logic gaps — but stays constructive." }
-];
-const SYNTH_AGENT = { id: 'synth', name: 'SYNTHESIS', color: '#a78bfa',
-    role_id: 'Sintesis Tim — kesimpulan & solusi akhir',
-    role_en: 'Team Synthesis — final conclusion & solution' };
+const BRIDGE_VER = 1;
+const SOURCE = 'cgo-nexus';
+const ALLOWED = new Set(['cgo-lab', 'cgo-hub']);
 
-const AGENT_PROTOCOL_ID = `Kamu adalah bagian dari panel diskusi multi-peneliti tingkat lanjut yang berusaha memecahkan sebuah masalah langka/kompleks secara kolaboratif, persis seperti protokol CGO Research Nexus.
-
-NAMAMU: {NAME} — {ROLE}
-KARAKTERMU: {CHAR}
-
-ATURAN DISKUSI (WAJIB):
-1. Baca transkrip diskusi sejauh ini sebelum menjawab.
-2. Berikan SATU kontribusi fokus: bangun di atas, tantang, atau lengkapi poin pembicara sebelumnya — jangan mengulang yang sudah dikatakan.
-3. Tetap dalam karakter & kacamata keahlianmu, tapi tetap ilmiah dan berbasis bukti/alasan.
-4. Ringkas dan padat (±120-180 kata), kecuali butuh kode/formula/tabel untuk presisi.
-5. Markdown rapi. Akhiri dengan satu insight tajam atau pertanyaan terbuka untuk tim.
-6. Jangan membuka dengan basa-basi seperti "Terima kasih" — langsung ke substansi.`;
-
-const AGENT_PROTOCOL_EN = `You are part of an advanced multi-researcher discussion panel collaboratively solving a rare/complex problem, following the CGO Research Nexus protocol.
-
-YOUR NAME: {NAME} — {ROLE}
-YOUR CHARACTER: {CHAR}
-
-DISCUSSION RULES (MANDATORY):
-1. Read the transcript so far before answering.
-2. Give ONE focused contribution: build on, challenge, or complete the previous speaker's point — don't repeat what's been said.
-3. Stay in character & your lens of expertise, but remain scientific and evidence/reason-based.
-4. Concise (~120-180 words), unless code/formula/table is needed for precision.
-5. Clean Markdown. End with one sharp insight or an open question for the team.
-6. Don't open with pleasantries like "Thank you" — go straight to substance.`;
-
-const SYNTH_PROTOCOL_ID = `Kamu adalah SYNTHESIS — penyintesis akhir panel diskusi multi-peneliti CGO Research Nexus.
-Baca SELURUH transkrip diskusi tim secara utuh.
-Hasilkan satu jawaban akhir yang terpadu untuk OBJECTIVE asli:
-1. Solusi/rekomendasi final yang jelas dan actionable.
-2. Trade-off kunci yang diakui secara eksplisit.
-3. Level keyakinan (Rendah/Sedang/Tinggi) dengan alasan singkat.
-4. 1-2 risiko residual yang masih terbuka.
-Markdown rapi, ringkas tapi lengkap. Jangan basa-basi.`;
-const SYNTH_PROTOCOL_EN = `You are SYNTHESIS — the final synthesizer of the CGO Research Nexus multi-researcher panel.
-Read the ENTIRE team discussion transcript.
-Produce one unified final answer to the original OBJECTIVE:
-1. Clear, actionable final solution/recommendation.
-2. Key trade-offs explicitly acknowledged.
-3. Confidence level (Low/Medium/High) with brief reasoning.
-4. 1-2 open residual risks.
-Clean Markdown, concise but complete. No pleasantries.`;
-
-function buildAgentSystemPrompt(agent) {
-    const en = settings.lang === 'en';
-    const tpl = en ? AGENT_PROTOCOL_EN : AGENT_PROTOCOL_ID;
-    return tpl
-        .replace('{NAME}', agent.name)
-        .replace('{ROLE}', en ? agent.role_en : agent.role_id)
-        .replace('{CHAR}', en ? agent.char_en : agent.char_id);
-}
-function buildSynthSystemPrompt() {
-    return settings.lang === 'en' ? SYNTH_PROTOCOL_EN : SYNTH_PROTOCOL_ID;
-}
-function formatTranscript(entries, maxChars) {
-    maxChars = maxChars || 7000;
-    let log = entries.map(e => `**${e.name}:** ${e.text}`).join('\n\n');
-    if (log.length > maxChars) log = '…(awal diskusi dipotong)…\n\n' + log.slice(-maxChars);
-    return log;
-}
-function buildAgentTurnContent(compiledPrompt, agent, roundNum, totalRounds, isFinal) {
-    const en = settings.lang === 'en';
-    const header = en
-        ? `ORIGINAL OBJECTIVE (compiled by Research Nexus):\n\n${compiledPrompt}\n\n`
-        : `OBJECTIVE ASLI (dikompilasi oleh Research Nexus):\n\n${compiledPrompt}\n\n`;
-    if (!agentTranscript.length) {
-        return header + (en ? 'No one has spoken yet. You open the discussion with your perspective.' : 'Belum ada yang bicara. Kamu membuka diskusi dengan perspektifmu.');
-    }
-    const transcript = (en ? 'DISCUSSION TRANSCRIPT SO FAR:\n\n' : 'TRANSKRIP DISKUSI SEJAUH INI:\n\n') + formatTranscript(agentTranscript);
-    const progress = isFinal
-        ? ''
-        : (en ? `\n\n(Round ${roundNum}/${totalRounds} — speaking as ${agent.name})` : `\n\n(Ronde ${roundNum}/${totalRounds} — giliran bicara: ${agent.name})`);
-    return header + transcript + progress;
+function reply(target, type, id, payload){
+  try {
+    target.postMessage({ source: SOURCE, v: BRIDGE_VER, type: type, id: id || null, payload: payload || {} }, '*');
+  } catch(e){}
 }
 
-/* Request builder minimal khusus agen: single-turn (system + satu user content),
-   TIDAK memakai chatHistory supaya tidak mengganggu riwayat percakapan mode normal. */
-function buildAgentRequest(systemPrompt, userContent) {
-    const p = PROVIDERS[settings.provider];
-    const key = (settings.keys[settings.provider] || '').trim();
-    const model = settings.models[settings.provider] || p.defaultModel;
-    const conf = p.build(key, model, settings.customBase);
-    if (!p.free && !key && settings.provider !== 'custom') {
-        throw new Error(`${p.name} requires an API key. Open Settings.`);
-    }
-    if (conf.isAnthropic) {
-        return {
-            endpoint: conf.endpoint,
-            headers: { 'Content-Type': 'application/json', ...conf.headers },
-            body: { model: conf.model, max_tokens: 2048, stream: true, system: systemPrompt, messages: [{ role: 'user', content: userContent }] },
-            parse: 'anthropic'
-        };
-    }
-    if (conf.isGemini) {
-        return {
-            endpoint: conf.endpoint,
-            headers: { 'Content-Type': 'application/json' },
-            body: { systemInstruction: { parts: [{ text: systemPrompt }] }, contents: [{ role: 'user', parts: [{ text: userContent }] }], generationConfig: { temperature: 0.8 } },
-            parse: 'gemini'
-        };
-    }
-    return {
-        endpoint: conf.endpoint,
-        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream', ...conf.headers },
-        body: { model: conf.model, stream: true, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userContent }] },
-        parse: 'openai'
-    };
-}
-
-function addAgentMessageToUI(agent, isTyping) {
-    const msgDiv = document.createElement('div');
-    msgDiv.classList.add('message', 'agent');
-    if (agent.id === 'synth') msgDiv.classList.add('synth');
-    if (isTyping) msgDiv.classList.add('agent-thinking');
-    msgDiv.style.setProperty('--agent-color', agent.color);
-    const senderDiv = document.createElement('div');
-    senderDiv.classList.add('sender');
-    const roleLabel = settings.lang === 'en' ? agent.role_en : agent.role_id;
-    senderDiv.innerHTML = `${escapeHtml(agent.name)}<span class="agent-role">${escapeHtml(roleLabel || '')}</span>`;
-    const bubbleDiv = document.createElement('div');
-    bubbleDiv.classList.add('bubble');
-    bubbleDiv.innerHTML = isTyping ? '<span class="typing-indicator"></span>' : '';
-    msgDiv.appendChild(senderDiv);
-    msgDiv.appendChild(bubbleDiv);
-    chatContainer.appendChild(msgDiv);
-    scrollToBottom();
-    return { msgDiv, bubbleDiv };
-}
-
-function classifyAgentHttpError(status) {
-    if (status === 401 || status === 403) return { msg: 'Invalid or missing API key.', fatal: true };
-    if (status === 402) return { msg: 'Payment / quota required.', fatal: true };
-    if (status === 429) return { msg: 'Rate limited. Wait and retry.', fatal: false };
-    return { msg: `HTTP ${status}`, fatal: false };
-}
-
-/* Jalankan satu giliran bicara satu agen. Return true jika berhasil (lanjut),
-   false jika fatal (hentikan seluruh diskusi — misal API key salah). */
-async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFinal) {
-    const { msgDiv, bubbleDiv } = addAgentMessageToUI(agent, true);
-    const systemPrompt = isFinal ? buildSynthSystemPrompt() : buildAgentSystemPrompt(agent);
-    const userContent = buildAgentTurnContent(compiledPrompt, agent, roundNum, totalRounds, isFinal);
-    let fullText = '';
-    try {
-        const req = buildAgentRequest(systemPrompt, userContent);
-        logEvent('AGENT', `${agent.name} berbicara… (${isFinal ? 'sintesis' : 'ronde ' + roundNum + '/' + totalRounds})`);
-        const response = await fetch(req.endpoint, {
-            method: 'POST', headers: req.headers, body: JSON.stringify(req.body),
-            signal: currentAbortController.signal
-        });
-        if (!response.ok) {
-            const info = classifyAgentHttpError(response.status);
-            let detail = info.msg;
-            try { const t = await response.text(); if (t && t.length < 200) detail += ` — ${t.slice(0, 160)}`; } catch (e) {}
-            throw Object.assign(new Error(detail), { fatal: info.fatal });
+function compileLocal(problem){
+  // Use existing Nexus functions if present — never break if missing
+  try {
+    if (typeof parsePrompt === 'function' && typeof compilePrompt === 'function' && typeof scorePrompt === 'function') {
+      const segments = parsePrompt(problem);
+      const compiled = compilePrompt(segments);
+      const scored = scorePrompt(segments);
+      const total = (scored && typeof scored.total === 'number') ? scored.total : (scored || 0);
+      return {
+        ok: true,
+        compiled: compiled,
+        score: total,
+        segments: {
+          role: (segments.role || []).length,
+          context: (segments.context || []).length,
+          rules: (segments.rules || []).length,
+          objective: (segments.objective || []).length,
+          validation: (segments.validation || []).length
         }
-        if (!response.body) throw new Error('Empty response body.');
-        if ((response.headers.get('content-type') || '').includes('application/json')) {
-            fullText = extractDelta(await response.json(), req.parse);
-        } else {
-            const reader = response.body.getReader();
-            for await (const data of parseSSE(reader)) {
-                const content = extractDelta(data, req.parse);
-                if (content) {
-                    fullText += content;
-                    bubbleDiv.innerHTML = safeMarkdown(fullText) + '<span class="typing-indicator"></span>';
-                    scrollToBottom();
-                }
-            }
-        }
-        bubbleDiv.innerHTML = safeMarkdown(fullText || '_(tidak ada respons)_');
-        renderChartsInElement(bubbleDiv);
-        msgDiv.classList.remove('agent-thinking');
-        agentTranscript.push({ id: agent.id, name: agent.name, text: fullText });
-        chatHistory.push({ role: 'agent', agentId: agent.id, agentName: agent.name, agentColor: agent.color, agentRole: isFinal ? (settings.lang === 'en' ? SYNTH_AGENT.role_en : SYNTH_AGENT.role_id) : (settings.lang === 'en' ? agent.role_en : agent.role_id), content: fullText, isSynth: !!isFinal });
-        logEvent('OK', `${agent.name}: ${fullText.length} chars.`);
-        return true;
-    } catch (error) {
-        msgDiv.classList.remove('agent-thinking');
-        if (error.name === 'AbortError') {
-            bubbleDiv.innerHTML = safeMarkdown(fullText || '') + '<br><br><em class="error-text">[Dihentikan oleh operator]</em>';
-            if (fullText) { agentTranscript.push({ id: agent.id, name: agent.name, text: fullText }); chatHistory.push({ role: 'agent', agentId: agent.id, agentName: agent.name, agentColor: agent.color, content: fullText, isSynth: !!isFinal }); }
-            logEvent('SYSTEM', 'Agent discussion aborted.');
-            return false;
-        }
-        bubbleDiv.innerHTML = `<span class="error-text">⚠️ ${agent.name} gagal merespons: ${escapeHtml(error.message || String(error))}</span>`;
-        logEvent('ERROR', `${agent.name}: ${error.message || error}`);
-        return !error.fatal;
+      };
     }
+  } catch(e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+  return { ok: false, error: 'Nexus compiler unavailable' };
 }
 
-async function runMultiAgentDiscussion(compiledPrompt) {
-    const rounds = Math.max(1, Math.min(3, parseInt(document.getElementById('agent-rounds-select').value, 10) || 2));
-    agentTranscript = [];
-    agentDiscussionAborted = false;
-    logEvent('SYSTEM', `Multi-Agent panel start — ${AGENTS.length} peneliti × ${rounds} ronde + sintesis.`);
-    roundLoop:
-    for (let r = 1; r <= rounds; r++) {
-        for (const agent of AGENTS) {
-            if (currentAbortController.signal.aborted) { agentDiscussionAborted = true; break roundLoop; }
-            const ok = await runAgentTurn(agent, compiledPrompt, r, rounds, false);
-            if (!ok) { agentDiscussionAborted = true; break roundLoop; }
-            if (currentAbortController.signal.aborted) { agentDiscussionAborted = true; break roundLoop; }
-            await sleep(350); // jeda sopan antar panggilan provider gratis
-        }
-    }
-    if (!agentDiscussionAborted && !currentAbortController.signal.aborted) {
-        await runAgentTurn(SYNTH_AGENT, compiledPrompt, rounds, rounds, true);
-    }
-    logEvent('SYSTEM', agentDiscussionAborted ? 'Multi-Agent panel stopped.' : 'Multi-Agent panel done.');
+function discussReply(problem, labState){
+  const comp = compileLocal(String(problem || ''));
+  const lines = [];
+  lines.push('**CGO Research Nexus — analisis terstruktur**');
+  lines.push('');
+  if (comp.ok) {
+    lines.push('Skor kompilasi intent: **' + comp.score + '/100**');
+    lines.push('Segmen: R' + comp.segments.role + ' C' + comp.segments.context + ' Ru' + comp.segments.rules + ' O' + comp.segments.objective + ' V' + comp.segments.validation);
+    lines.push('');
+    lines.push('Artifact (ringkas):');
+    lines.push('```');
+    lines.push(String(comp.compiled || '').slice(0, 900));
+    lines.push('```');
+  } else {
+    lines.push('_Compiler tidak tersedia di sesi ini (' + (comp.error || 'unknown') + '). Lanjut analisis kualitatif._');
+  }
+  lines.push('');
+  lines.push('Implikasi untuk Cyber Lab:');
+  lines.push('- **Role** operator vs agen harus dipisah (capability token).');
+  lines.push('- **Validation** sebaiknya memakai DETECT + jejak vault sebagai bukti runtime.');
+  lines.push('- **Rules**: jangan eksekusi LOCKDOWN/CLEAR_VAULT dari saran otomatis tanpa konfirmasi manusia.');
+  if (labState) {
+    lines.push('');
+    lines.push('Status Lab yang diterima: hooks=' + (labState.hooks ? 'ON' : 'OFF') + ', vault=' + (labState.vault|0) + ', anomaly=' + (labState.anomaly|0) + '.');
+  }
+  return { text: lines.join('\n'), compile: comp };
 }
 
-async function sendMultiAgentMessage() {
-    const userText = chatInput.value.trim();
-    if (!userText || isGenerating) return;
-    if (userText.length > MAX_INPUT_CHARS) { showToast(`Too long (max ${MAX_INPUT_CHARS})`, 3000, true); return; }
+window.addEventListener('message', function(ev){
+  const d = ev && ev.data;
+  if (!d || d.v !== BRIDGE_VER || !ALLOWED.has(d.source)) return;
+  const srcWin = ev.source;
+  if (!srcWin) return;
 
-    isGenerating = true;
-    setStatus('busy');
-    lastUserRaw = userText;
-    chatInput.value = '';
-    chatInput.style.height = 'auto';
-    chatInput.disabled = true;
-    sendBtn.disabled = true;
-    sendBtn.style.display = 'none';
-    stopBtn.style.display = 'flex';
-
-    debouncedScan.cancel();
-    runLiveScan(userText);
-    const segments = liveSegments, total = liveScore, metrics = liveMetrics;
-    const issues = validateDAG(segments);
-
-    eventLogEl.innerHTML = '';
-    logEvent('SYSTEM', `Pipeline start v${APP_VERSION} (multi-agent)`);
-    logEvent('PARSER', `R:${segments.role.length} C:${segments.context.length} Ru:${segments.rules.length} O:${segments.objective.length} V:${segments.validation.length}`);
-    logEvent('PARSER', `words=${metrics.wordCount} flagged=${metrics.flagged} guessed=${metrics.guessed}`);
-    issues.forEach(i => logEvent('VALIDATOR', `[${i.type}] ${i.msg}`));
-
-    const hash = hashSegments(segments);
-    let cached = getArtifact(hash);
-    let compiledPrompt;
-    if (cached?.prompt) { compiledPrompt = cached.prompt; logEvent('CACHE', `Hit ${hash} · cache ${getCacheStats()}`); }
-    else { compiledPrompt = compilePrompt(segments); putArtifact(hash, compiledPrompt); logEvent('COMPILER', `Generated ${hash} · cache ${getCacheStats()}`); }
-    lastCompiledArtifact = compiledPrompt;
-    updateArtifactPreview(compiledPrompt);
-    saveToStorage();
-    logEvent('COMPILER', `SPEC ${total}/100`);
-    logEvent('PROVIDER', `${PROVIDERS[settings.provider].name} · model ${settings.models[settings.provider] || PROVIDERS[settings.provider].defaultModel}`);
-
-    addMessageToUI('user', userText);
-    chatHistory.push({ role: 'user', content: userText, compiled: compiledPrompt });
-    saveToStorage();
-    animateCompileSequence();
-
-    currentAbortController = new AbortController();
-    try {
-        await runMultiAgentDiscussion(compiledPrompt);
-        if (chatHistory.length > MAX_HISTORY * 3) chatHistory = chatHistory.slice(-MAX_HISTORY * 3);
-        saveToStorage();
-        setStatus('ok');
-    } catch (error) {
-        setStatus('error');
-        logEvent('ERROR', error.message || String(error));
-    } finally {
-        isGenerating = false;
-        chatInput.disabled = false;
-        sendBtn.disabled = false;
-        sendBtn.style.display = 'flex';
-        stopBtn.style.display = 'none';
-        currentAbortController = null;
-        chatInput.focus();
-        scrollToBottom();
-        if (chatInput.value.trim()) runLiveScan(chatInput.value);
+  try {
+    if (d.type === 'PING' || d.type === 'HELLO') {
+      reply(srcWin, 'HELLO_ACK', d.id, { role: 'nexus', version: (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'nexus') });
+      return;
     }
-}
-
-function setMultiAgentMode(on) {
-    multiAgentMode = on;
-    const btn = document.getElementById('multiagent-btn');
-    const wrap = document.getElementById('agent-rounds-wrap');
-    btn.classList.toggle('active', on);
-    wrap.classList.toggle('visible', on);
-    if (on && compileOnlyMode) { compileOnlyMode = false; compileOnlyBtn.classList.remove('active'); }
-    document.getElementById('send-label').textContent = on ? 'CONVENE PANEL' : (compileOnlyMode ? 'COMPILE' : 'COMPILE & SEND');
-}
-document.getElementById('multiagent-btn').addEventListener('click', () => {
-    setMultiAgentMode(!multiAgentMode);
-    showToast(multiAgentMode ? 'Multi-Agent Panel ON — 4 peneliti akan berdiskusi' : 'Multi-Agent Panel OFF');
+    if (d.type === 'NEXUS_COMPILE') {
+      const problem = (d.payload && d.payload.problem) || (d.payload && d.payload.text) || '';
+      const result = compileLocal(problem);
+      reply(srcWin, 'NEXUS_COMPILE_ACK', d.id, result);
+      return;
+    }
+    if (d.type === 'DISCUSS') {
+      const problem = (d.payload && d.payload.problem) || '';
+      const labState = (d.payload && d.payload.labState) || null;
+      const out = discussReply(problem, labState);
+      reply(srcWin, 'DISCUSS_ACK', d.id, { from: 'nexus', text: out.text, compile: out.compile });
+      return;
+    }
+    if (d.type === 'CONTEXT_SYNC') {
+      reply(srcWin, 'CONTEXT_SYNC_ACK', d.id, { ready: true });
+      return;
+    }
+  } catch(e) {
+    try { reply(srcWin, 'ERROR', d.id, { error: (e && e.message) || String(e) }); } catch(_){}
+  }
 });
 
+try { localStorage.setItem('cgo_bridge_nexus_ready', String(Date.now())); } catch(e){}
+console.log('%c[CGO Bridge] Nexus side v1 ready (postMessage).', 'color:#38bdf8');
+})();
 </script>
+
 </body>
 </html>
