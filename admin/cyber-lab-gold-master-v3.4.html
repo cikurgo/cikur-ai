@@ -1289,6 +1289,31 @@ function scanText(text, source) {
     if (text.length > 2_500_000) text = text.slice(0, 2_500_000);
 
     const findings = [];
+
+    // ============================================================
+    // FASE 13: TURBO ENGINE (Aho-Corasick Pre-Filter)
+    // ============================================================
+    try {
+        const acHits = acScanner.search(text);
+        if (acHits.length > 0) {
+            const hitCounts = {};
+            acHits.forEach(hit => {
+                hitCounts[hit.pattern] = (hitCounts[hit.pattern] || 0) + 1;
+            });
+
+            for (const [pattern, count] of Object.entries(hitCounts)) {
+                const isHighRisk = ['eyJ', 'AKIA', 'sk_live_', 'AIza', 'ghp_', '-----BEGIN', 'password', 'api_key'].includes(pattern);
+                if (addVault('ac_turbo', 'Turbo Hit', `${pattern} (${count}x)`, isHighRisk ? 'high' : 'info', source)) {
+                    log(`[TURBO] Aho-Corasick menemukan "${pattern}" (${count}x) di ${source}`, isHighRisk ? 'danger' : 'success', { leak: isHighRisk, scan: true });
+                }
+            }
+            // Tambahkan ke findings agar kartu hasil menampilkannya
+            findings.push(...acHits.map(h => ({ ruleId: 'turbo', label: 'Turbo Hit', risk: 'high', value: h.pattern, source })));
+        }
+    } catch(e) { console.warn('Aho-Corasick Error:', e); }
+    // ============================================================
+
+    // Lanjutkan dengan Regex untuk ekstraksi detail (seperti nilai token asli)
     for (const rule of SCAN_RULES) {
         if (!scanEnabled.has(rule.id)) continue;
         rule.re.lastIndex = 0;
@@ -1306,11 +1331,10 @@ function scanText(text, source) {
         }
     }
 
-    // UPGRADE 3: SQLi detector
+    // SQLi & Custom Regex (tetap jalan)
     if (scanForSQLi(text, source)) {
         findings.push({ ruleId: 'sqli', label: 'SQLi Error Leak', risk: 'high', value: 'DB error signature', source });
     }
-    // UPGRADE 4: Custom regex
     scanCustomRegex(text, source);
 
     return findings;
