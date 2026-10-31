@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spiderweb Prompt Compiler v1.0</title>
+<title>Sustainable Prompt Compiler v3.0</title>
 
 <!-- Library Inti -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -11,13 +11,13 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+<!-- Catatan: Cytoscape DIHAPUS total (Zero-Regression check: tidak dipakai di v3) -->
 
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
 /* ============================================================
-   THEME & VARIABLES
+   THEME & VARIABLES (Cyberpunk HUD v3)
    ============================================================ */
 :root {
     --bg-main: #060b14;
@@ -28,6 +28,7 @@
     --text-muted: #e2e8f0;
     --text-dim: #94a3b8;
     --border-color: #1e293b;
+    --border-strong: rgba(255,255,255,0.35);
     --c-role: #10b981;
     --c-context: #ec4899;
     --c-rules: #f59e0b;
@@ -42,48 +43,48 @@
 body {
     background-color: var(--bg-main); color: var(--text-main); font-family: 'Inter', sans-serif;
     display: flex; justify-content: center; height: 100vh; overflow: hidden;
-    background-image: radial-gradient(circle at 20% 0%, rgba(236,72,153,0.04) 0%, transparent 40%), radial-gradient(circle at 80% 100%, rgba(59,130,246,0.05) 0%, transparent 40%);
+    background-image: radial-gradient(circle at 20% 0%, rgba(236,72,153,0.03) 0%, transparent 40%),
+                      radial-gradient(circle at 80% 100%, rgba(59,130,246,0.04) 0%, transparent 40%);
 }
 .hud-container { width: 100%; max-width: 1500px; height: 100vh; display: flex; flex-direction: column; position: relative; }
 
 /* ============================================================
-   HEADER & SVG ICONS
+   HEADER
    ============================================================ */
 .hud-header {
     background: rgba(13, 21, 38, 0.96); backdrop-filter: blur(12px); padding: 10px 18px;
-    border-bottom: 1px solid rgba(255,255,255,0.15); display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border-strong); display: flex; justify-content: space-between; align-items: center;
     box-shadow: 0 4px 24px rgba(0,0,0,0.6); z-index: 20; gap: 10px; flex-wrap: wrap;
 }
 .hud-title {
-    font-family: 'Share Tech Mono', monospace; font-size: 1.05rem; color: #ffffff;
+    font-family: 'Share Tech Mono', monospace; font-size: 1.02rem; color: #ffffff;
     text-shadow: 0 0 12px rgba(255,255,255,0.35); display: flex; align-items: center; gap: 9px; letter-spacing: 0.5px;
 }
-.status-dot { width: 10px; height: 10px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); animation: pulse 2s infinite; flex-shrink: 0; }
-.status-dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); animation: none; }
-.status-dot.busy { background: var(--warning); box-shadow: 0 0 8px var(--warning); }
+.status-dot { width: 10px; height: 10px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); flex-shrink: 0; }
+.status-dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+.status-dot.busy { background: var(--warning); box-shadow: 0 0 8px var(--warning); animation: pulse 1.2s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
 .header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .system-badge {
     font-family: 'Share Tech Mono', monospace; font-size: 0.66rem; background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.35); color: #ffffff; padding: 4px 9px; border-radius: 10px; white-space: nowrap;
+    border: 1px solid var(--border-strong); color: #ffffff; padding: 4px 9px; border-radius: 10px; white-space: nowrap;
 }
 .btn-icon {
     background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-dim);
     width: 34px; height: 34px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;
 }
-.btn-icon:hover { border-color: #ffffff; color: #ffffff; background: rgba(255,255,255,0.05); }
-.btn-icon.active { border-color: #ffffff; color: #ffffff; background: rgba(255,255,255,0.1); }
+.btn-icon:hover, .btn-icon.active { border-color: #ffffff; color: #ffffff; background: rgba(255,255,255,0.08); }
 .btn-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ============================================================
-   SETTINGS PANEL (AUTO-SAVE)
+   SETTINGS PANEL
    ============================================================ */
 .settings-panel {
     display: none; background: var(--bg-panel); border-bottom: 1px solid var(--border-color);
     padding: 14px 18px; gap: 14px; flex-wrap: wrap; align-items: flex-end;
 }
-.settings-panel.open { display: flex; animation: slideDown 0.2s ease; }
+.settings-panel.open { display: flex; animation: slideDown 0.18s ease; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 .field { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
 .field label { font-size: 0.72rem; color: var(--text-dim); font-family: 'Share Tech Mono', monospace; }
@@ -95,23 +96,22 @@ body {
 .field input[type="password"] { font-family: monospace; letter-spacing: 1px; }
 .field-wide { flex: 1; min-width: 220px; }
 .settings-hint { font-size: 0.7rem; color: #64748b; width: 100%; margin-top: -2px; }
-.settings-hint a { color: var(--accent); text-decoration: none; }
+.settings-hint b { color: #ffffff; }
 
 /* ============================================================
-   APP BODY (SPLIT SCREEN) - Graph at Top on Mobile
+   APP BODY (SPLIT)
    ============================================================ */
 .app-body { display: flex; flex: 1; overflow: hidden; background: rgba(255,255,255,0.06); gap: 1px; }
 .panel-left, .panel-right { background: var(--bg-main); display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-.panel-left { flex: 1.05; order: 2; } /* Chat order */
-.panel-right { flex: 1; order: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; } /* Graph order */
-
+.panel-left { flex: 1.15; order: 2; }
+.panel-right { flex: 1; order: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
 .panel-right::-webkit-scrollbar { width: 6px; }
 .panel-right::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
 
-@media (max-width: 980px) { 
-    .app-body { flex-direction: column; } 
-    .panel-left { flex: 1; min-height: 0; } 
-    .panel-right { flex: 0 0 42vh; min-height: 0; border-bottom: 1px solid var(--border-color); } /* Fixed height graph on mobile */
+@media (max-width: 980px) {
+    .app-body { flex-direction: column; }
+    .panel-left { flex: 1; min-height: 0; }
+    .panel-right { flex: 0 0 46vh; min-height: 0; border-bottom: 1px solid var(--border-color); }
 }
 
 /* ============================================================
@@ -120,10 +120,10 @@ body {
 .chat-container { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
 .chat-container::-webkit-scrollbar { width: 6px; }
 .chat-container::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-.message { display: flex; flex-direction: column; max-width: 92%; animation: slideIn 0.25s ease-out forwards; opacity: 0; transform: translateY(8px); }
+.message { display: flex; flex-direction: column; max-width: 94%; animation: slideIn 0.22s ease-out forwards; opacity: 0; transform: translateY(8px); }
 @keyframes slideIn { to { opacity: 1; transform: translateY(0); } }
 .message.user { align-self: flex-end; }
-.message.ai { align-self: flex-start; width: 100%; max-width: 92%; }
+.message.ai { align-self: flex-start; width: 100%; max-width: 94%; }
 .sender { font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; color: var(--text-dim); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
 .message.user .sender { justify-content: flex-end; }
 .bubble { padding: 12px 15px; border-radius: 10px; line-height: 1.6; font-size: 0.9rem; position: relative; word-wrap: break-word; overflow-x: auto; border: 1px solid rgba(255,255,255,0.12); }
@@ -140,7 +140,7 @@ body {
 .bubble blockquote { border-left: 3px solid rgba(255,255,255,0.5); padding-left: 12px; margin: 10px 0; color: var(--text-dim); }
 .chart-container { margin-top: 12px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border-color); max-width: 100%; height: 280px; position: relative; }
 
-/* INPUT AREA */
+/* INPUT */
 .input-area { padding: 12px 14px; background: rgba(13, 21, 38, 0.96); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; }
 .input-wrapper { flex: 1; display: flex; background: var(--bg-main); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; transition: border-color 0.2s, box-shadow 0.2s; }
 .input-wrapper:focus-within { border-color: #ffffff; box-shadow: 0 0 14px rgba(255,255,255,0.15); }
@@ -164,40 +164,89 @@ textarea::placeholder { color: #64748b; }
 .bubble pre:hover .copy-btn { opacity: 1; } .copy-btn:hover { color: #ffffff; border-color: #ffffff; }
 
 /* ============================================================
-   RIGHT PANEL - GRAPH & TELEMETRY
+   RIGHT PANEL: TELEMETRY v3
    ============================================================ */
-.status-bar { display: flex; align-items: center; gap: 14px; padding: 10px 14px; background: rgba(13,21,38,0.96); border-bottom: 1px solid rgba(255,255,255,0.1); flex-wrap: wrap; font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; flex-shrink: 0; }
-.sb-phase { background: #ffffff; color: #060b14; padding: 4px 10px; border-radius: 4px; font-weight: 700; letter-spacing: 1px; box-shadow: 0 0 12px rgba(255,255,255,0.5); animation: sbPulse 2s infinite; }
-@keyframes sbPulse { 0%, 100% { box-shadow: 0 0 8px rgba(255,255,255,0.4); } 50% { box-shadow: 0 0 20px rgba(255,255,255,0.9); } }
-.sb-metric { color: var(--text-muted); letter-spacing: 0.3px; } .sb-metric b { color: #ffffff; font-weight: 700; }
+.tele-section { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.tele-title {
+    font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; color: #ffffff; letter-spacing: 2px;
+    margin-bottom: 10px; text-transform: uppercase; display: flex; align-items: center; gap: 6px;
+}
+.tele-title::before { content: '▸'; color: #ffffff; }
+.tele-title .hint { color: var(--text-dim); font-size: 0.6rem; letter-spacing: 0.5px; margin-left: auto; text-transform: none; }
 
-.graph-wrap { padding: 8px 10px 10px; flex-shrink: 0; background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.03), transparent 70%); }
-#graph-container { height: 320px; width: 100%; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; background: #060b14; position: relative; overflow: hidden; }
-#graph-container::before { content: ''; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px); background-size: 24px 24px; pointer-events: none; }
+/* NEURAL STATUS BADGES */
+.neural-badges { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.nbadge {
+    background: rgba(13,21,38,0.9); border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 7px; padding: 8px 4px; text-align: center;
+    transition: all 0.22s ease; opacity: 0.45;
+    position: relative;
+}
+.nbadge .nbadge-label { font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; letter-spacing: 1px; color: var(--text-dim); display: block; }
+.nbadge .nbadge-count { font-family: 'Share Tech Mono', monospace; font-size: 1.05rem; font-weight: 700; color: #ffffff; line-height: 1.2; }
+.nbadge.active { opacity: 1; }
+.nbadge[data-cat="role"].active      { border-color: var(--c-role);        box-shadow: 0 0 14px var(--c-role);        }
+.nbadge[data-cat="role"].active .nbadge-count      { color: var(--c-role); }
+.nbadge[data-cat="context"].active   { border-color: var(--c-context);     box-shadow: 0 0 14px var(--c-context);     }
+.nbadge[data-cat="context"].active .nbadge-count   { color: var(--c-context); }
+.nbadge[data-cat="rules"].active     { border-color: var(--c-rules);       box-shadow: 0 0 14px var(--c-rules);       }
+.nbadge[data-cat="rules"].active .nbadge-count     { color: var(--c-rules); }
+.nbadge[data-cat="objective"].active { border-color: var(--c-objective);   box-shadow: 0 0 14px var(--c-objective);   }
+.nbadge[data-cat="objective"].active .nbadge-count { color: var(--c-objective); }
+.nbadge[data-cat="validation"].active{ border-color: var(--c-validation);  box-shadow: 0 0 14px var(--c-validation);  }
+.nbadge[data-cat="validation"].active .nbadge-count{ color: var(--c-validation); }
+/* Animasi firing: event-based, berhenti sendiri */
+.nbadge.firing { transform: scale(1.08); }
+.nbadge.firing[data-cat="role"]      { box-shadow: 0 0 28px var(--c-role), 0 0 44px var(--c-role); }
+.nbadge.firing[data-cat="context"]   { box-shadow: 0 0 28px var(--c-context), 0 0 44px var(--c-context); }
+.nbadge.firing[data-cat="rules"]     { box-shadow: 0 0 28px var(--c-rules), 0 0 44px var(--c-rules); }
+.nbadge.firing[data-cat="objective"] { box-shadow: 0 0 28px var(--c-objective), 0 0 44px var(--c-objective); }
+.nbadge.firing[data-cat="validation"]{ box-shadow: 0 0 28px var(--c-validation), 0 0 44px var(--c-validation); }
 
-.telemetry { padding: 0 10px 12px; display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
-.tele-card { background: rgba(13,21,38,0.85); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px 12px; }
-.tele-title { font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; color: #ffffff; letter-spacing: 2px; margin-bottom: 8px; text-transform: uppercase; display: flex; align-items: center; gap: 6px; }
-.tele-title::before { content: '▸'; color: #ffffff; animation: blink 1.2s step-end infinite; }
+/* SPEC SCORE */
+.spec-block { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
+.spec-label { font-family: 'Share Tech Mono', monospace; font-size: 0.66rem; color: var(--text-dim); letter-spacing: 2px; }
+.spec-value { font-family: 'Share Tech Mono', monospace; font-size: 2.1rem; font-weight: 700; line-height: 1; color: #ffffff; transition: color 0.3s; }
+.spec-value.low    { color: var(--danger); }
+.spec-value.mid    { color: var(--warning); }
+.spec-value.high   { color: var(--success); text-shadow: 0 0 18px rgba(16,185,129,0.6); }
+.spec-bar { flex: 1; height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden; }
+.spec-fill { height: 100%; background: linear-gradient(90deg, var(--danger), var(--warning), var(--success)); width: 0%; transition: width 0.4s ease; }
 
-.crawl-log { height: 92px; overflow-y: auto; font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; color: var(--text-muted); background: #000; border-radius: 6px; padding: 8px 10px; line-height: 1.5; }
-.crawl-log::-webkit-scrollbar { width: 4px; } .crawl-log::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-.log-line { white-space: pre-wrap; word-break: break-all; }
-.log-line.highlight { color: #ffffff; font-weight: 700; }
-.log-line.warn { color: var(--warning); } .log-line.error { color: var(--danger); } .log-line.ok { color: var(--success); }
-.log-prompt { color: #ffffff; opacity: 0.5; }
-
-/* SLIM WORD HEAT */
-.word-heat { display: flex; flex-direction: row; height: 6px; gap: 1px; width: 100%; border-radius: 3px; overflow: hidden; margin-top: 6px; }
-.heat-cell { flex: 1; border-radius: 0; transition: background 0.3s; background: #1e293b; }
-.heat-cell.cold { background: #1e293b; }
+/* WORD HEAT BAR (THIN) */
+.heat-bar { display: flex; flex-direction: row; height: 8px; gap: 1px; width: 100%; border-radius: 3px; overflow: hidden; }
+.heat-cell { flex: 1; background: #0f172a; transition: background 0.25s; }
+.heat-cell.cold { background: #0f172a; }
+.heat-cell.dim  { background: #1e293b; }
 .heat-cell.warm { background: #f59e0b; }
 .heat-cell.hot  { background: #ef4444; }
 .heat-cell.max  { background: #10b981; }
+.heat-meta { display: flex; justify-content: space-between; margin-top: 4px; font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: var(--text-dim); }
 
-.legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-family: 'Share Tech Mono', monospace; font-size: 0.62rem; color: var(--text-dim); padding: 0 10px 10px; }
-.legend span { display: flex; align-items: center; gap: 4px; }
-.legend .dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid currentColor; }
+/* ISSUES */
+.issues-list { display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; }
+.issues-list::-webkit-scrollbar { width: 4px; } .issues-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.issue { font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; padding: 6px 8px; border-radius: 5px; border-left: 3px solid; line-height: 1.35; }
+.issue.info    { background: rgba(59,130,246,0.08);  border-color: var(--c-validation); color: #93c5fd; }
+.issue.warning { background: rgba(245,158,11,0.08);  border-color: var(--warning);      color: #fbbf24; }
+.issue.error   { background: rgba(239,68,68,0.08);   border-color: var(--danger);       color: #fca5a5; }
+.issue.ok      { background: rgba(16,185,129,0.08);  border-color: var(--success);      color: #6ee7b7; }
+
+/* EVENT STREAM LOG */
+.event-log {
+    background: #000; border-radius: 6px; padding: 8px 10px; height: 170px; overflow-y: auto;
+    font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; line-height: 1.55;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+.event-log::-webkit-scrollbar { width: 4px; } .event-log::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.log-line { white-space: pre-wrap; word-break: break-word; color: var(--text-muted); }
+.log-line .ts { color: #475569; margin-right: 4px; }
+.log-line.tag-sys  { color: #93c5fd; }
+.log-line.tag-pars { color: var(--c-context); }
+.log-line.tag-val  { color: var(--warning); }
+.log-line.tag-comp { color: var(--c-validation); }
+.log-line.tag-err  { color: var(--danger); }
+.log-line.tag-ok   { color: var(--success); }
 </style>
 </head>
 <body>
@@ -207,15 +256,13 @@ textarea::placeholder { color: #64748b; }
     <header class="hud-header">
         <div class="hud-title">
             <div class="status-dot" id="status-dot"></div>
-            SPIDERWEB PROMPT COMPILER v1.0
+            SUSTAINABLE PROMPT COMPILER v3.0
         </div>
         <div class="header-right">
             <div class="system-badge" id="engine-badge">AUTO-DETECTING...</div>
-            <!-- SVG SETTINGS ICON -->
             <button class="btn-icon" id="settings-btn" title="Pengaturan">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             </button>
-            <!-- SVG TRASH ICON -->
             <button class="btn-icon" id="clear-btn" title="Bersihkan riwayat">
                 <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
             </button>
@@ -248,56 +295,63 @@ textarea::placeholder { color: #64748b; }
 
     <!-- MAIN BODY -->
     <div class="app-body">
-        <!-- LEFT PANEL (CHAT) -->
+        <!-- LEFT: CHAT -->
         <div class="panel-left">
             <main class="chat-container" id="chat-container"></main>
             <footer class="input-area">
                 <div class="input-wrapper">
-                    <textarea id="chat-input" rows="1" placeholder="Ketik prompt mentah... (Enter kirim)"></textarea>
+                    <textarea id="chat-input" rows="1" placeholder="Ketik prompt mentah... (Enter kirim, Shift+Enter baris baru)"></textarea>
                 </div>
                 <button class="btn btn-send" id="send-btn">
-                    <!-- SVG SEND ICON -->
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                    COMPILE
+                    COMPILE &amp; SEND
                 </button>
                 <button class="btn btn-stop" id="stop-btn">STOP</button>
             </footer>
         </div>
 
-        <!-- RIGHT PANEL (GRAPH & TELEMETRY) -->
+        <!-- RIGHT: TELEMETRY (v3) -->
         <div class="panel-right">
-            <!-- GRAPH AT TOP -->
-            <div class="graph-wrap">
-                <div id="graph-container"></div>
-            </div>
-
-            <div class="status-bar">
-                <div class="sb-phase" id="sb-phase">08 SHIP</div>
-                <div class="sb-metric"><b id="sb-words">0</b> words</div>
-                <div class="sb-metric"><b id="sb-flagged">0</b> flagged</div>
-                <div class="sb-metric"><b id="sb-guessed">0</b> guessed</div>
-            </div>
-
-            <div class="legend">
-                <span style="color:#ec4899;"><span class="dot" style="background:#ec4899;"></span>CONTEXT</span>
-                <span style="color:#10b981;"><span class="dot" style="background:#10b981;"></span>ROLE</span>
-                <span style="color:#f59e0b;"><span class="dot" style="background:#f59e0b;"></span>RULES</span>
-                <span style="color:#8b5cf6;"><span class="dot" style="background:#8b5cf6;"></span>OBJECTIVE</span>
-                <span style="color:#3b82f6;"><span class="dot" style="background:#3b82f6;"></span>VALIDATION</span>
-            </div>
-
-            <div class="telemetry">
-                <div class="tele-card">
-                    <div class="tele-title">CRAWL LOG &amp; SECTIONS</div>
-                    <div class="crawl-log" id="crawl-log">
-                        <div class="log-line log-prompt">> crawler.py standby...</div>
-                    </div>
+            <!-- NEURAL STATUS BADGES -->
+            <div class="tele-section">
+                <div class="tele-title">NEURAL STATUS <span class="hint">5-node IR</span></div>
+                <div class="neural-badges">
+                    <div class="nbadge" data-cat="role"><span class="nbadge-label">ROLE</span><span class="nbadge-count" id="count-role">0</span></div>
+                    <div class="nbadge" data-cat="context"><span class="nbadge-label">CONTEXT</span><span class="nbadge-count" id="count-context">0</span></div>
+                    <div class="nbadge" data-cat="rules"><span class="nbadge-label">RULES</span><span class="nbadge-count" id="count-rules">0</span></div>
+                    <div class="nbadge" data-cat="objective"><span class="nbadge-label">OBJECTIVE</span><span class="nbadge-count" id="count-objective">0</span></div>
+                    <div class="nbadge" data-cat="validation"><span class="nbadge-label">VALIDATION</span><span class="nbadge-count" id="count-validation">0</span></div>
                 </div>
+                <div class="spec-block">
+                    <div class="spec-label">SPEC<br>SCORE</div>
+                    <div class="spec-value" id="spec-value">0</div>
+                    <div class="spec-bar"><div class="spec-fill" id="spec-fill"></div></div>
+                </div>
+            </div>
 
-                <!-- SLIM WORD HEAT -->
-                <div class="tele-card" style="padding-bottom: 6px;">
-                    <div class="tele-title" style="margin-bottom: 4px;">WORD HEAT (DENSITY)</div>
-                    <div class="word-heat" id="word-heat"></div>
+            <!-- WORD HEAT -->
+            <div class="tele-section">
+                <div class="tele-title">WORD HEAT (DEBOUNCED)</div>
+                <div class="heat-bar" id="heat-bar"></div>
+                <div class="heat-meta">
+                    <span id="heat-words">0 words</span>
+                    <span id="heat-flagged">0 flagged</span>
+                </div>
+            </div>
+
+            <!-- SYMBOLIC ISSUES -->
+            <div class="tele-section">
+                <div class="tele-title">SYMBOLIC VALIDATOR</div>
+                <div class="issues-list" id="issues-list">
+                    <div class="issue info">▸ Menunggu input...</div>
+                </div>
+            </div>
+
+            <!-- EVENT STREAM LOG -->
+            <div class="tele-section" style="border-bottom:none;">
+                <div class="tele-title">EVENT STREAM LOG</div>
+                <div class="event-log" id="event-log">
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[SYSTEM]</span> Spiderweb v3.0 online. ZTA ready.</div>
                 </div>
             </div>
         </div>
@@ -308,45 +362,73 @@ textarea::placeholder { color: #64748b; }
 
 <script>
 /* ================================================================
-   CORE LOGIC & STATE
+   [1] CONFIG & STATE
    ================================================================ */
-const STORAGE_KEY = 'cgo_ai_pro_v24';
+const STORAGE_KEY = 'spc_ai_v30';
+const ARTIFACT_CACHE_KEY = 'spc_artifacts_v30';
 const MAX_HISTORY = 14;
+const MAX_CACHE = 20;
+const DEBOUNCE_MS = 300;
 
 const chatContainer = document.getElementById('chat-container');
-const chatInput = document.getElementById('chat-input');
-const sendBtn = document.getElementById('send-btn');
-const stopBtn = document.getElementById('stop-btn');
-const statusDot = document.getElementById('status-dot');
-const clearBtn = document.getElementById('clear-btn');
-const settingsBtn = document.getElementById('settings-btn');
+const chatInput     = document.getElementById('chat-input');
+const sendBtn       = document.getElementById('send-btn');
+const stopBtn       = document.getElementById('stop-btn');
+const statusDot     = document.getElementById('status-dot');
+const clearBtn      = document.getElementById('clear-btn');
+const settingsBtn   = document.getElementById('settings-btn');
 const settingsPanel = document.getElementById('settings-panel');
-const apiKeyInput = document.getElementById('api-key-input');
-const modelSelect = document.getElementById('model-select');
-const engineBadge = document.getElementById('engine-badge');
-const toastEl = document.getElementById('toast');
+const apiKeyInput   = document.getElementById('api-key-input');
+const modelSelect   = document.getElementById('model-select');
+const engineBadge   = document.getElementById('engine-badge');
+const toastEl       = document.getElementById('toast');
 
-const crawlLogEl = document.getElementById('crawl-log');
-const sbPhase = document.getElementById('sb-phase');
-const sbWords = document.getElementById('sb-words');
-const sbFlagged = document.getElementById('sb-flagged');
-const sbGuessed = document.getElementById('sb-guessed');
-const wordHeatEl = document.getElementById('word-heat');
+const countEls = {
+    role: document.getElementById('count-role'),
+    context: document.getElementById('count-context'),
+    rules: document.getElementById('count-rules'),
+    objective: document.getElementById('count-objective'),
+    validation: document.getElementById('count-validation'),
+};
+const badgeEls = document.querySelectorAll('.nbadge');
+const specValueEl = document.getElementById('spec-value');
+const specFillEl  = document.getElementById('spec-fill');
+const heatBarEl   = document.getElementById('heat-bar');
+const heatWordsEl = document.getElementById('heat-words');
+const heatFlaggedEl = document.getElementById('heat-flagged');
+const issuesListEl  = document.getElementById('issues-list');
+const eventLogEl    = document.getElementById('event-log');
 
 let chatHistory = [];
 let currentAbortController = null;
 let isGenerating = false;
-let cy = null;
 let settings = { apiKey: '', model: 'openai' };
 
-const SYSTEM_PROMPT = `Kamu adalah CGO (Cyber Guardian Operator), asisten AI cerdas dengan arsitektur reasoning tingkat lanjut.
-Jawab dengan tegas, futuristik, dan bahasa Indonesia yang natural. Gunakan format Markdown.
-Jika diminta grafik/chart, keluarkan HANYA blok kode \`\`\`chart ... \`\`\` dengan format JSON murni.`;
+// Live scan state (updated via debounce)
+let liveSegments = { role: [], context: [], rules: [], objective: [], validation: [], _meta: { guessed: 0 } };
+let liveScore = 0;
+let liveMetrics = { wordCount: 0, flagged: 0, guessed: 0 };
+let liveIssues = [];
 
 if (typeof marked !== 'undefined') marked.setOptions({ gfm: true, breaks: true });
 
+// SYSTEM PROMPT v3: CGO sadar menerima prompt terkompilasi
+const SYSTEM_PROMPT = `Kamu adalah CGO (Cyber Guardian Operator), asisten AI tingkat lanjut yang menerima prompt dari Sustainable Prompt Compiler v3.0.
+
+PENTING: Kamu menerima prompt yang SUDAH DIKOMPILASI oleh compiler deterministik. Prompt ini berisi section terstruktur: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, dan SELF-CORRECTION.
+
+Protokol evaluasi (WAJIB):
+1. Sebelum menjawab, evaluasi dulu apakah ROLE, CONTEXT, dan RULES saling selaras.
+2. Jika ada kontradiksi antar section atau bagian penting kosong (flagged), beri tahu operator singkat di awal jawaban dengan format: "⚠️ Catatan: [masalah singkat]".
+3. Setelah itu jawab sesuai OBJECTIVE dengan format Markdown rapi.
+4. Terapkan maksimal SATU putaran self-correction. Jika format output diminta (JSON/dll), pastikan terpenuhi di output akhir. Jangan loop tak berujung.
+
+Bahasa: Indonesia natural, futuristik, to-the-point. Jangan bertele-tele.
+Jika diminta grafik: keluarkan HANYA blok \`\`\`chart ... \`\`\` berisi JSON murni Chart.js.
+Jika diminta kode: gunakan Markdown code block dengan language tag.`;
+
 /* ================================================================
-   1. SETTINGS (AUTO-SAVE)
+   [2] SETTINGS (localStorage, auto-save)
    ================================================================ */
 function loadSettings() {
     try {
@@ -361,23 +443,13 @@ function loadSettings() {
     modelSelect.value = settings.model;
     updateEngineBadge();
 }
-
 function saveToStorage() {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ settings: { ...settings }, history: chatHistory.slice(-MAX_HISTORY) }));
     } catch (e) { console.warn(e); }
 }
-
-apiKeyInput.addEventListener('input', () => {
-    settings.apiKey = apiKeyInput.value.trim();
-    saveToStorage();
-    updateEngineBadge();
-});
-
-modelSelect.addEventListener('change', () => {
-    settings.model = modelSelect.value;
-    saveToStorage();
-});
+apiKeyInput.addEventListener('input', () => { settings.apiKey = apiKeyInput.value.trim(); saveToStorage(); updateEngineBadge(); });
+modelSelect.addEventListener('change', () => { settings.model = modelSelect.value; saveToStorage(); });
 
 function updateEngineBadge(mode) {
     const hasKey = !!(settings.apiKey && settings.apiKey.trim());
@@ -390,15 +462,13 @@ function updateEngineBadge(mode) {
         modelSelect.disabled = false;
     } else {
         engineBadge.textContent = 'ENGINE: CLASSIC (AUTO)';
-        engineBadge.style.borderColor = 'rgba(255,255,255,0.35)'; engineBadge.style.color = '#ffffff';
-        modelSelect.value = 'openai';
-        modelSelect.disabled = true;
-        settings.model = 'openai';
+        engineBadge.style.borderColor = 'var(--border-strong)'; engineBadge.style.color = '#ffffff';
+        modelSelect.value = 'openai'; modelSelect.disabled = true; settings.model = 'openai';
     }
 }
 
 /* ================================================================
-   2. PARSER & SCORING ENGINE
+   [3] PARSER (Deterministik, keyword-based)
    ================================================================ */
 const CATEGORY_KEYWORDS = {
     role: ['kamu adalah', 'you are', 'sebagai', 'as a', 'act as', 'berperan', 'role', 'persona', 'anda adalah', 'bertindak sebagai'],
@@ -408,15 +478,20 @@ const CATEGORY_KEYWORDS = {
     validation: ['validasi', 'validation', 'review', 'cek', 'check', 'test', 'pastikan', 'verify', 'traceable', 'bug fix', 'periksa', 'audit', 'evaluasi', 'uji', 'quality', 'qa']
 };
 
+/**
+ * Parse teks mentah menjadi IR (Intermediate Representation) 5 kategori.
+ * Deterministik: hasil sama untuk input sama. Tidak ada API call.
+ */
 function parsePrompt(rawText) {
     const segments = { role: [], context: [], rules: [], objective: [], validation: [], _meta: { guessed: 0 } };
     if (!rawText || !rawText.trim()) return segments;
     const sentences = rawText.split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(s => s.length > 0);
     sentences.forEach(sentence => {
         const lower = sentence.toLowerCase();
-        let bestCat = null; let bestScore = 0;
+        let bestCat = null, bestScore = 0;
         for (const [cat, words] of Object.entries(CATEGORY_KEYWORDS)) {
-            let score = 0; words.forEach(w => { if (lower.includes(w)) score += 1; });
+            let score = 0;
+            words.forEach(w => { if (lower.includes(w)) score += 1; });
             if (score > bestScore) { bestScore = score; bestCat = cat; }
         }
         if (bestCat === null) { bestCat = 'objective'; segments._meta.guessed += 1; }
@@ -425,16 +500,78 @@ function parsePrompt(rawText) {
     return segments;
 }
 
+/* ================================================================
+   [4] DAG LOGICAL VALIDATION & SYMBOLIC CHECKS
+   ================================================================
+   Node DAG:
+     ROLE, CONTEXT (root, independen)
+     OBJECTIVE (butuh minimal salah satu dari ROLE/CONTEXT)
+     RULES (butuh OBJECTIVE sebagai konteks)
+     VALIDATION (butuh OBJECTIVE + RULES)
+   ================================================================ */
+function validateDAG(segments) {
+    const issues = [];
+    const hasRole       = segments.role.length > 0;
+    const hasContext    = segments.context.length > 0;
+    const hasObjective  = segments.objective.length > 0;
+    const hasRules      = segments.rules.length > 0;
+    const hasValidation = segments.validation.length > 0;
+
+    // Precondition checks
+    if (hasObjective && !hasRole && !hasContext) {
+        issues.push({ type: 'warning', msg: 'DAG WARN: OBJECTIVE tanpa ROLE/CONTEXT — risiko halusinasi konteks.' });
+    }
+    if (hasRules && !hasObjective) {
+        issues.push({ type: 'warning', msg: 'DAG WARN: RULES tanpa OBJECTIVE — constraint tidak punya target.' });
+    }
+    if (hasValidation && !hasObjective) {
+        issues.push({ type: 'warning', msg: 'DAG WARN: VALIDATION tanpa OBJECTIVE — tidak ada yang divalidasi.' });
+    }
+
+    // Contradiction detection (informal vs formal tone)
+    const allText = [segments.role, segments.context, segments.rules, segments.objective, segments.validation]
+                    .flat().join(' ').toLowerCase();
+    const informalWords = ['santai', 'casual', 'informal', 'akrab', 'gaul', 'santuy'];
+    const formalWords   = ['formal', 'resmi', 'professional', 'baku', 'kaku'];
+    const hasInformal = informalWords.some(w => allText.includes(w));
+    const hasFormal   = formalWords.some(w => allText.includes(w));
+    if (hasInformal && hasFormal) {
+        issues.push({ type: 'error', msg: 'SYMBOLIC CONFLICT: nada formal & informal terdeteksi bersamaan.' });
+    }
+
+    // Missing critical sections
+    if (!hasRole && !hasContext) {
+        issues.push({ type: 'error', msg: 'CRITICAL: ROLE dan CONTEXT sama-sama kosong.' });
+    }
+    if (!hasObjective) {
+        issues.push({ type: 'error', msg: 'CRITICAL: OBJECTIVE kosong — AI tidak tahu apa yang harus dilakukan.' });
+    }
+
+    // Success
+    if (issues.length === 0 && hasObjective) {
+        issues.push({ type: 'ok', msg: 'DAG VALID: Semua precondition terpenuhi. Siap kompilasi.' });
+    }
+    return issues;
+}
+
+/* ================================================================
+   [5] SCORING (deterministik, bobot tetap)
+   ================================================================ */
 const SCORE_WEIGHTS = { role: 0.15, context: 0.20, rules: 0.25, objective: 0.20, validation: 0.20 };
+
 function scorePrompt(segments) {
     const scores = {};
     Object.keys(SCORE_WEIGHTS).forEach(cat => {
         const words = (segments[cat] || []).join(' ').split(/\s+/).filter(Boolean).length;
-        let s = 0; if (segments[cat].length > 0) s += 30;
-        if (words >= 3) s += 20; if (words >= 8) s += 25; if (words >= 15) s += 25;
+        let s = 0;
+        if (segments[cat].length > 0) s += 30;
+        if (words >= 3)  s += 20;
+        if (words >= 8)  s += 25;
+        if (words >= 15) s += 25;
         scores[cat] = Math.min(100, s);
     });
-    let total = 0; Object.keys(SCORE_WEIGHTS).forEach(c => { total += scores[c] * SCORE_WEIGHTS[c]; });
+    let total = 0;
+    Object.keys(SCORE_WEIGHTS).forEach(c => { total += scores[c] * SCORE_WEIGHTS[c]; });
     return { scores, total: Math.round(total) };
 }
 
@@ -449,227 +586,198 @@ function computeMetrics(rawText, segments) {
 }
 
 /* ================================================================
-   3. NEURAL GRAPH (CYTOSCAPE & DASH OFFSET ANIMATION)
+   [6] COMPILER (IR -> Artifact)
+   ================================================================
+   Single-pass compile: tidak ada loop API. Hasil disimpan sebagai
+   artefak di cache (ZTA).
    ================================================================ */
-let graphAnimationFrame = null;
+const SELF_CORRECTION = 'Review sekali jawabanmu: apakah ROLE, CONTEXT, dan RULES sudah dipatuhi? Jika format output diminta, pastikan terpenuhi. Jangan loop >1x.';
 
-function initGraph() {
-    const container = document.getElementById('graph-container');
-    if (typeof cytoscape === 'undefined') return;
-
-    const els = [
-        { data: { id: 'start', label: 'START' }, classes: 'start' },
-        { data: { id: 'role',        label: 'ROLE' },        classes: 'cat cat-role' },
-        { data: { id: 'context',     label: 'CONTEXT' },     classes: 'cat cat-context' },
-        { data: { id: 'rules',       label: 'RULES' },       classes: 'cat cat-rules' },
-        { data: { id: 'objective',   label: 'OBJECTIVE' },   classes: 'cat cat-objective' },
-        { data: { id: 'validation',  label: 'VALIDATION' },  classes: 'cat cat-validation' },
-        { data: { source: 'start', target: 'role' }, classes: 'neural-edge' },
-        { data: { source: 'start', target: 'context' }, classes: 'neural-edge' },
-        { data: { source: 'start', target: 'rules' }, classes: 'neural-edge' },
-        { data: { source: 'start', target: 'objective' }, classes: 'neural-edge' },
-        { data: { source: 'start', target: 'validation' }, classes: 'neural-edge' },
-        { data: { id: 'r-dev', label: 'dev' }, classes: 'sub sub-role' },
-        { data: { id: 'r-qa', label: 'qa' }, classes: 'sub sub-role' },
-        { data: { id: 'r-stakeholders', label: 'stakeholders' }, classes: 'sub sub-role' },
-        { data: { id: 'r-owner', label: 'owner' }, classes: 'sub sub-role' },
-        { data: { id: 'r-chief', label: 'chief' }, classes: 'sub sub-role' },
-        { data: { id: 'r-release', label: 'release' }, classes: 'sub sub-role' },
-        { data: { source: 'role', target: 'r-dev' }, classes: 'edge-sub' },
-        { data: { source: 'role', target: 'r-qa' }, classes: 'edge-sub' },
-        { data: { source: 'role', target: 'r-stakeholders' }, classes: 'edge-sub' },
-        { data: { source: 'role', target: 'r-owner' }, classes: 'edge-sub' },
-        { data: { source: 'role', target: 'r-chief' }, classes: 'edge-sub' },
-        { data: { source: 'role', target: 'r-release' }, classes: 'edge-sub' },
-        { data: { id: 'v-testing', label: 'testing' }, classes: 'sub sub-val' },
-        { data: { id: 'v-check', label: 'check' }, classes: 'sub sub-val' },
-        { data: { id: 'v-bugfix', label: 'bug fix' }, classes: 'sub sub-val' },
-        { data: { id: 'v-traceable', label: 'traceable' }, classes: 'sub sub-val' },
-        { data: { source: 'validation', target: 'v-testing' }, classes: 'edge-sub' },
-        { data: { source: 'validation', target: 'v-check' }, classes: 'edge-sub' },
-        { data: { source: 'validation', target: 'v-bugfix' }, classes: 'edge-sub' },
-        { data: { source: 'validation', target: 'v-traceable' }, classes: 'edge-sub' }
-    ];
-
-    cy = cytoscape({
-        container, elements: els,
-        style: [
-            { selector: 'node', style: { 'label': 'data(label)', 'color': '#ffffff', 'font-family': 'Share Tech Mono', 'font-size': 9, 'text-valign': 'center', 'text-halign': 'center', 'background-color': '#0d1526', 'border-width': 1.5, 'border-color': 'rgba(255,255,255,0.3)', 'width': 38, 'height': 38, 'text-wrap': 'wrap', 'text-max-width': 64, 'transition-property': 'background-color, border-color, border-width, width, height, shadow-blur', 'transition-duration': 400 } },
-            { selector: '.start', style: { 'background-color': '#ffffff', 'color': '#060b14', 'width': 52, 'height': 52, 'font-weight': 'bold', 'shadow-blur': 20, 'shadow-color': '#ffffff', 'shadow-opacity': 0.8 } },
-            { selector: '.cat', style: { 'width': 44, 'height': 44, 'font-size': 10, 'font-weight': 'bold' } },
-            { selector: '.cat-role', style: { 'border-color': '#10b981', 'color': '#10b981' } },
-            { selector: '.cat-context', style: { 'border-color': '#ec4899', 'color': '#ec4899' } },
-            { selector: '.cat-rules', style: { 'border-color': '#f59e0b', 'color': '#f59e0b' } },
-            { selector: '.cat-objective', style: { 'border-color': '#8b5cf6', 'color': '#8b5cf6' } },
-            { selector: '.cat-validation', style: { 'border-color': '#3b82f6', 'color': '#3b82f6' } },
-            { selector: '.sub-role', style: { 'border-color': '#10b981', 'color': '#10b981', 'width': 30, 'height': 30, 'font-size': 8 } },
-            { selector: '.sub-val', style: { 'border-color': '#3b82f6', 'color': '#3b82f6', 'width': 30, 'height': 30, 'font-size': 8 } },
-            
-            // Garis Dasar (Statis)
-            { selector: 'edge', style: { 'width': 1, 'line-color': '#ffffff', 'line-opacity': 0.15, 'curve-style': 'bezier' } },
-            { selector: '.edge-sub', style: { 'width': 1, 'line-opacity': 0.08 } },
-            
-            // Garis Aktif (Pemancar Saraf)
-            { selector: '.neural-active', style: { 
-                'width': 3, 'line-color': '#ffffff', 'line-opacity': 0.8, 
-                'line-style': 'dashed', 'line-dash-pattern': [6, 12], // Pola putus-putus panjang
-                'line-dash-offset': 0, // Akan dianimasikan
-                'shadow-blur': 10, 'shadow-color': '#ffffff', 'shadow-opacity': 0.5 
-            } },
-            
-            { selector: '.has-content', style: { 'border-width': 3, 'border-color': '#ffffff', 'background-color': 'rgba(255,255,255,0.1)', 'shadow-blur': 15, 'shadow-color': '#ffffff', 'shadow-opacity': 0.6, 'width': 50, 'height': 50 } },
-            { selector: '.firing', style: { 'background-color': '#ffffff', 'color': '#060b14', 'border-width': 4, 'shadow-blur': 30, 'shadow-opacity': 1, 'width': 65, 'height': 65, 'z-index': 999 } }
-        ],
-        layout: { name: 'cose', animate: true, animationDuration: 700, randomize: false, padding: 30, fit: true, nodeRepulsion: function (node) { return (node.id() === 'start') ? 30000 : 15000; }, idealEdgeLength: 100 },
-        userZoomingEnabled: false, userPanningEnabled: false, autoungrabify: true
-    });
-
-    // =======================================================
-    // MESIN ANIMASI ALIRAN DATA (MENGGUNAKAN DASH OFFSET)
-    // =======================================================
-    let dashOffset = 0;
-    function animateNeuralPathways() {
-        dashOffset -= 1.5; // Kecepatan aliran sinyal
-        cy.edges('.neural-active').style('line-dash-offset', dashOffset);
-        graphAnimationFrame = requestAnimationFrame(animateNeuralPathways);
-    }
-    animateNeuralPathways();
-}
-
-function updateGraphFromParse(segments) {
-    if (!cy) return;
-    cy.nodes('.cat').removeClass('has-content'); cy.edges().removeClass('neural-active');
-    Object.keys(SCORE_WEIGHTS).forEach(cat => {
-        const wordCount = (segments[cat] || []).join(' ').split(/\s+/).filter(Boolean).length;
-        if (wordCount > 0) {
-            const node = cy.getElementById(cat);
-            if (node && node.length) {
-                node.addClass('has-content');
-                const edge = cy.edges(`[source="start"][target="${cat}"]`);
-                edge.addClass('neural-active');
-            }
-        }
-    });
-}
-
-async function animateCompileSequence(segments) {
-    if (!cy) return;
-    cy.elements().removeClass('firing neural-active');
-    const order = ['role', 'context', 'rules', 'objective', 'validation'];
-    for (const cat of order) {
-        const node = cy.getElementById(cat); const edge = cy.edges(`[source="start"][target="${cat}"]`);
-        if (node && node.length) {
-            edge.addClass('neural-active'); node.addClass('firing'); 
-            await sleep(200); node.removeClass('firing');
-        }
-    }
-    updateGraphFromParse(segments);
+function compilePrompt(segments) {
+    let out = '';
+    if (segments.role.length)       out += `### ROLE\n${segments.role.join(' ')}\n\n`;
+    if (segments.context.length)    out += `### CONTEXT\n${segments.context.join(' ')}\n\n`;
+    if (segments.rules.length)      out += `### RULES\n${segments.rules.map(r => `- ${r}`).join('\n')}\n\n`;
+    if (segments.objective.length)  out += `### OBJECTIVE\n${segments.objective.join(' ')}\n\n`;
+    if (segments.validation.length) out += `### VALIDATION\n${segments.validation.map(v => `- ${v}`).join('\n')}\n\n`;
+    out += `### SELF-CORRECTION\n${SELF_CORRECTION}\n`;
+    return out.trim();
 }
 
 /* ================================================================
-   4. TELEMETRY (LOG & WORD HEAT)
+   [7] ARTIFACT CACHE (ZTA: Zero-Token reuse)
    ================================================================ */
-function updateStatusBar(phase, metrics) {
-    if (phase !== null) sbPhase.textContent = phase;
-    sbWords.textContent = metrics.wordCount; sbFlagged.textContent = metrics.flagged; sbGuessed.textContent = metrics.guessed;
+function hashSegments(segments) {
+    const raw = JSON.stringify({
+        r: segments.role, c: segments.context, u: segments.rules,
+        o: segments.objective, v: segments.validation
+    });
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+        hash = ((hash << 5) - hash) + raw.charCodeAt(i);
+        hash |= 0;
+    }
+    return 'h' + hash.toString(36);
+}
+function getArtifact(hash) {
+    try {
+        const cache = JSON.parse(localStorage.getItem(ARTIFACT_CACHE_KEY) || '{}');
+        return cache[hash] || null;
+    } catch (e) { return null; }
+}
+function putArtifact(hash, artifact) {
+    try {
+        const cache = JSON.parse(localStorage.getItem(ARTIFACT_CACHE_KEY) || '{}');
+        cache[hash] = { prompt: artifact, ts: Date.now() };
+        const keys = Object.keys(cache);
+        if (keys.length > MAX_CACHE) {
+            keys.sort((a,b) => (cache[a].ts||0) - (cache[b].ts||0));
+            keys.slice(0, keys.length - MAX_CACHE).forEach(k => delete cache[k]);
+        }
+        localStorage.setItem(ARTIFACT_CACHE_KEY, JSON.stringify(cache));
+    } catch (e) { console.warn(e); }
+}
+
+/* ================================================================
+   [8] TELEMETRY UI
+   ================================================================ */
+function logEvent(tag, message) {
+    const ts = new Date().toTimeString().slice(0, 8);
+    const tagClass = {
+        SYSTEM: 'tag-sys', PARSER: 'tag-pars', VALIDATOR: 'tag-val',
+        COMPILER: 'tag-comp', ERROR: 'tag-err', OK: 'tag-ok', CACHE: 'tag-ok'
+    }[tag] || 'tag-sys';
+    const div = document.createElement('div');
+    div.className = 'log-line';
+    div.innerHTML = `<span class="ts">${ts}</span><span class="${tagClass}">[${tag}]</span> ${message}`;
+    eventLogEl.appendChild(div);
+    eventLogEl.scrollTop = eventLogEl.scrollHeight;
+    // Batasi DOM: simpan 60 baris terakhir
+    while (eventLogEl.children.length > 60) eventLogEl.removeChild(eventLogEl.firstChild);
+}
+
+function updateBadges(segments) {
+    badgeEls.forEach(badge => {
+        const cat = badge.dataset.cat;
+        const count = (segments[cat] || []).length;
+        countEls[cat].textContent = count;
+        if (count > 0) badge.classList.add('active');
+        else badge.classList.remove('active');
+    });
+}
+
+function updateSpecScore(score) {
+    specValueEl.textContent = score;
+    specFillEl.style.width = score + '%';
+    specValueEl.classList.remove('low', 'mid', 'high');
+    if (score < 40)      specValueEl.classList.add('low');
+    else if (score < 70) specValueEl.classList.add('mid');
+    else                 specValueEl.classList.add('high');
 }
 
 const HEAT_CELLS = 40;
 function renderWordHeat(text) {
-    if (!wordHeatEl.children.length) {
-        for (let i = 0; i < HEAT_CELLS; i++) { const c = document.createElement('div'); c.className = 'heat-cell'; wordHeatEl.appendChild(c); }
+    if (!heatBarEl.children.length) {
+        for (let i = 0; i < HEAT_CELLS; i++) {
+            const c = document.createElement('div');
+            c.className = 'heat-cell cold';
+            heatBarEl.appendChild(c);
+        }
     }
-    const cells = wordHeatEl.children; const words = text.split(/\s+/).filter(Boolean);
+    const cells = heatBarEl.children;
+    const words = text.split(/\s+/).filter(Boolean);
     const chunkSize = Math.max(1, Math.ceil(words.length / HEAT_CELLS));
-    const importantWords = ['role','context','rules','objective','validation','harus','wajib','jangan','buat','pastikan','validasi','test','review','konteks','tujuan','aturan','kamu adalah','sebagai','traceable','bug','quality','qa'];
-    
+    const importantWords = [
+        'role','context','rules','objective','validation','harus','wajib','jangan',
+        'buat','pastikan','validasi','test','review','konteks','tujuan','aturan',
+        'kamu adalah','sebagai','traceable','bug','quality','qa','analisis'
+    ];
+
     for (let i = 0; i < HEAT_CELLS; i++) {
-        const chunk = words.slice(i * chunkSize, (i + 1) * chunkSize); const chunkText = chunk.join(' ').toLowerCase();
-        let hits = 0; importantWords.forEach(w => { if (chunkText.includes(w)) hits++; });
-        const density = hits + (chunk.length > 2 ? 0.4 : 0);
-        const cell = cells[i]; cell.className = 'heat-cell';
-        if (chunk.length === 0) cell.classList.add('cold');
-        else if (density >= 2) cell.classList.add('max');
-        else if (density >= 1) cell.classList.add('hot');
-        else if (chunk.length > 0) cell.classList.add('warm');
+        const chunk = words.slice(i * chunkSize, (i + 1) * chunkSize);
+        const chunkText = chunk.join(' ').toLowerCase();
+        let hits = 0;
+        importantWords.forEach(w => { if (chunkText.includes(w)) hits++; });
+
+        const cell = cells[i];
+        cell.className = 'heat-cell';
+        if (chunk.length === 0)    cell.classList.add('cold');
+        else if (hits >= 3)        cell.classList.add('max');
+        else if (hits >= 2)        cell.classList.add('hot');
+        else if (hits >= 1)        cell.classList.add('warm');
+        else                       cell.classList.add('dim');
     }
 }
 
-function runLiveScan(rawText) {
-    const segments = parsePrompt(rawText); const { total } = scorePrompt(segments); const metrics = computeMetrics(rawText, segments);
-    updateStatusBar(rawText.trim() ? 'AUTO-SCAN' : '08 SHIP', metrics);
-    renderWordHeat(rawText); updateGraphFromParse(segments);
+function renderIssues(issues) {
+    issuesListEl.innerHTML = '';
+    if (!issues.length) {
+        const el = document.createElement('div');
+        el.className = 'issue info';
+        el.textContent = '▸ Menunggu input...';
+        issuesListEl.appendChild(el);
+        return;
+    }
+    issues.forEach(iss => {
+        const el = document.createElement('div');
+        el.className = 'issue ' + iss.type;
+        el.textContent = iss.msg;
+        issuesListEl.appendChild(el);
+    });
 }
 
 /* ================================================================
-   5. COMPILER & API EXECUTION
+   [9] LIVE SCAN (Debounced)
    ================================================================ */
-const SELF_CORRECTION = 'Sebelum menjawab, review kembali apakah jawabanmu sudah mematuhi aturan (Rules) dan konteks di atas. Jika ada error (bug fix), revisi dan pastikan jawabanmu traceable.';
-function compilePrompt(segments) {
-    let out = '';
-    if (segments.role.length) out += `### ROLE\n${segments.role.join(' ')}\n\n`;
-    if (segments.context.length) out += `### CONTEXT\n${segments.context.join(' ')}\n\n`;
-    if (segments.rules.length) out += `### RULES\n${segments.rules.map(r => `- ${r}`).join('\n')}\n\n`;
-    if (segments.objective.length) out += `### OBJECTIVE\n${segments.objective.join(' ')}\n\n`;
-    if (segments.validation.length) out += `### VALIDATION\n${segments.validation.map(v => `- ${v}`).join('\n')}\n\n`;
-    out += `### SELF-CORRECTION\n${SELF_CORRECTION}\n`; return out.trim();
+function runLiveScan(rawText) {
+    liveSegments = parsePrompt(rawText);
+    const { total } = scorePrompt(liveSegments);
+    liveScore = total;
+    liveMetrics = computeMetrics(rawText, liveSegments);
+    liveIssues = validateDAG(liveSegments);
+
+    updateBadges(liveSegments);
+    updateSpecScore(liveScore);
+    renderWordHeat(rawText);
+    renderIssues(liveIssues);
+
+    heatWordsEl.textContent   = liveMetrics.wordCount + ' words';
+    heatFlaggedEl.textContent = liveMetrics.flagged + ' flagged';
 }
 
-async function* parseSSE(reader) {
-    const decoder = new TextDecoder('utf-8'); let buffer = '';
-    while (true) {
-        const { done, value } = await reader.read(); if (done) break;
-        buffer += decoder.decode(value, { stream: true }); const lines = buffer.split('\n'); buffer = lines.pop() || '';
-        for (const line of lines) {
-            const trimmed = line.trim(); if (!trimmed || trimmed === 'data: [DONE]') continue;
-            if (trimmed.startsWith('data: ')) { try { yield JSON.parse(trimmed.slice(6)); } catch (e) {} }
-        }
-    }
-    if (buffer.trim().startsWith('data: ') && buffer.trim() !== 'data: [DONE]') { try { yield JSON.parse(buffer.trim().slice(6)); } catch (e) {} }
-}
+const debouncedScan = debounce(function(text) {
+    runLiveScan(text);
+}, DEBOUNCE_MS);
 
-function renderChartsInElement(element) {
-    const codeBlocks = element.querySelectorAll('pre code.language-chart');
-    codeBlocks.forEach(codeBlock => {
-        try {
-            const jsonStr = codeBlock.innerText.trim(); const chartConfig = JSON.parse(jsonStr);
-            if (!chartConfig.options) chartConfig.options = {}; chartConfig.options.responsive = true; chartConfig.options.maintainAspectRatio = false;
-            const wrap = document.createElement('div'); wrap.classList.add('chart-container');
-            const canvas = document.createElement('canvas'); wrap.appendChild(canvas);
-            const pre = codeBlock.parentElement; if (pre) { pre.style.display = 'none'; if (pre.parentElement) pre.parentElement.insertBefore(wrap, pre.nextSibling); } else { element.appendChild(wrap); }
-            const existing = Chart.getChart(canvas); if (existing) existing.destroy(); new Chart(canvas, chartConfig);
-        } catch (e) { if (codeBlock.parentElement) codeBlock.parentElement.insertAdjacentHTML('afterend', '<div class="error-text">⚠️ Gagal render grafik</div>'); }
-    });
-    element.querySelectorAll('pre code:not(.language-chart)').forEach(el => {
-        try { hljs.highlightElement(el); } catch (e) {}
-        const pre = el.parentElement;
-        if (pre && !pre.querySelector('.copy-btn')) {
-            const btn = document.createElement('button'); btn.className = 'copy-btn'; btn.textContent = 'Copy';
-            btn.onclick = () => { navigator.clipboard.writeText(el.innerText).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500); }); };
-            pre.style.position = 'relative'; pre.appendChild(btn);
-        }
-    });
+function debounce(fn, delay) {
+    let timer = null;
+    return function(...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+    };
 }
 
 /* ================================================================
-   6. CHAT UI & INTERACTION
+   [10] CHAT UI
    ================================================================ */
 function showToast(msg, duration = 2600, isWarning = false) {
     toastEl.textContent = msg;
     toastEl.className = 'toast show' + (isWarning ? ' warning' : '');
-    clearTimeout(showToast._t); showToast._t = setTimeout(() => toastEl.classList.remove('show'), duration);
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toastEl.classList.remove('show'), duration);
 }
 function setStatus(state) {
     statusDot.className = 'status-dot';
-    if (state === 'busy') statusDot.classList.add('busy');
+    if (state === 'busy')      statusDot.classList.add('busy');
     else if (state === 'error') statusDot.classList.add('error');
 }
 function scrollToBottom() { requestAnimationFrame(() => { chatContainer.scrollTop = chatContainer.scrollHeight; }); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 chatInput.addEventListener('input', function () {
-    this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 150) + 'px';
-    runLiveScan(this.value);
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+    debouncedScan(this.value);   // Debounce 300ms
 });
 chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!isGenerating) sendMessage(); }
@@ -679,70 +787,214 @@ stopBtn.addEventListener('click', () => { if (currentAbortController) currentAbo
 settingsBtn.addEventListener('click', () => { settingsPanel.classList.toggle('open'); settingsBtn.classList.toggle('active'); });
 clearBtn.addEventListener('click', () => {
     if (isGenerating) return;
-    chatHistory = []; saveToStorage(); renderBootMessage(true); showToast('Riwayat dibersihkan');
+    chatHistory = [];
+    saveToStorage();
+    renderBootMessage(true);
+    showToast('Riwayat dibersihkan');
+    logEvent('SYSTEM', 'Chat history cleared.');
 });
 
 function addMessageToUI(role, text, isTyping = false) {
-    const msgDiv = document.createElement('div'); msgDiv.classList.add('message', role);
-    const senderDiv = document.createElement('div'); senderDiv.classList.add('sender'); senderDiv.textContent = role === 'user' ? 'ANDA' : 'CGO';
-    const bubbleDiv = document.createElement('div'); bubbleDiv.classList.add('bubble');
-    if (role === 'ai') { bubbleDiv.innerHTML = DOMPurify.sanitize(marked.parse(text || ' ')); if (isTyping) bubbleDiv.innerHTML += '<span class="typing-indicator"></span>'; }
-    else { bubbleDiv.innerText = text; }
-    msgDiv.appendChild(senderDiv); msgDiv.appendChild(bubbleDiv); chatContainer.appendChild(msgDiv); scrollToBottom(); return bubbleDiv;
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message', role);
+    const senderDiv = document.createElement('div');
+    senderDiv.classList.add('sender');
+    senderDiv.textContent = role === 'user' ? 'ANDA' : 'CGO';
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.classList.add('bubble');
+    if (role === 'ai') {
+        bubbleDiv.innerHTML = DOMPurify.sanitize(marked.parse(text || ' '));
+        if (isTyping) bubbleDiv.innerHTML += '<span class="typing-indicator"></span>';
+    } else {
+        bubbleDiv.innerText = text;
+    }
+    msgDiv.appendChild(senderDiv);
+    msgDiv.appendChild(bubbleDiv);
+    chatContainer.appendChild(msgDiv);
+    scrollToBottom();
+    return bubbleDiv;
 }
 
 function renderBootMessage(force = false) {
     if (!force && chatHistory.length > 0) return;
-    chatContainer.innerHTML = `<div class="message ai"><div class="sender">SPIDERWEB SYSTEM</div><div class="bubble"><strong>Spiderweb Prompt Compiler v1.0</strong> — Neural Link Active.<br><br>Ketik prompt Anda. Sistem akan merakit node, menghitung skor, dan menembakkan impuls saraf ke AI.</div></div>`;
+    chatContainer.innerHTML = `
+        <div class="message ai">
+            <div class="sender">SPIDERWEB SYSTEM</div>
+            <div class="bubble">
+                <strong>Sustainable Prompt Compiler v3.0</strong> — Zero-Token Architecture Active.<br><br>
+                Ketik prompt Anda. Sistem akan mem-parsing ke IR 5-node, memvalidasi secara simbolik, dan mengompilasi artefak <b>hanya sekali</b>. Artefak di-cache untuk reuse.
+            </div>
+        </div>`;
 }
 
 function restoreHistoryUI() {
-    chatContainer.innerHTML = ''; if (chatHistory.length === 0) { renderBootMessage(true); return; }
-    chatHistory.forEach(msg => { addMessageToUI(msg.role === 'user' ? 'user' : 'ai', msg.content); });
+    chatContainer.innerHTML = '';
+    if (chatHistory.length === 0) { renderBootMessage(true); return; }
+    chatHistory.forEach(msg => {
+        addMessageToUI(msg.role === 'user' ? 'user' : 'ai', msg.content);
+    });
     chatContainer.querySelectorAll('.bubble').forEach(b => renderChartsInElement(b));
 }
 
-async function sendMessage() {
-    const userText = chatInput.value.trim(); if (!userText || isGenerating) return;
-    isGenerating = true; setStatus('busy'); chatInput.value = ''; chatInput.style.height = 'auto'; chatInput.disabled = true; sendBtn.disabled = true; sendBtn.style.display = 'none'; stopBtn.style.display = 'flex';
+/* ================================================================
+   [11] STREAMING & API EXECUTION
+   ================================================================ */
+function renderChartsInElement(element) {
+    const codeBlocks = element.querySelectorAll('pre code.language-chart');
+    codeBlocks.forEach(codeBlock => {
+        try {
+            const jsonStr = codeBlock.innerText.trim();
+            const chartConfig = JSON.parse(jsonStr);
+            if (!chartConfig.options) chartConfig.options = {};
+            chartConfig.options.responsive = true;
+            chartConfig.options.maintainAspectRatio = false;
+            const wrap = document.createElement('div');
+            wrap.classList.add('chart-container');
+            const canvas = document.createElement('canvas');
+            wrap.appendChild(canvas);
+            const pre = codeBlock.parentElement;
+            if (pre) {
+                pre.style.display = 'none';
+                if (pre.parentElement) pre.parentElement.insertBefore(wrap, pre.nextSibling);
+            } else { element.appendChild(wrap); }
+            const existing = Chart.getChart(canvas);
+            if (existing) existing.destroy();
+            new Chart(canvas, chartConfig);
+        } catch (e) {
+            if (codeBlock.parentElement) codeBlock.parentElement.insertAdjacentHTML('afterend', '<div class="error-text">⚠️ Gagal render grafik</div>');
+        }
+    });
+    element.querySelectorAll('pre code:not(.language-chart)').forEach(el => {
+        try { hljs.highlightElement(el); } catch (e) {}
+        const pre = el.parentElement;
+        if (pre && !pre.querySelector('.copy-btn')) {
+            const btn = document.createElement('button');
+            btn.className = 'copy-btn';
+            btn.textContent = 'Copy';
+            btn.onclick = () => {
+                navigator.clipboard.writeText(el.innerText).then(() => {
+                    btn.textContent = 'Copied!';
+                    setTimeout(() => btn.textContent = 'Copy', 1500);
+                });
+            };
+            pre.style.position = 'relative';
+            pre.appendChild(btn);
+        }
+    });
+}
 
-    const segments = parsePrompt(userText); const { total } = scorePrompt(segments); const metrics = computeMetrics(userText, segments);
-    crawlLogEl.innerHTML = '';
-    const phases = [
-        { label: '01 ROLE', log: `role: ${segments.role.length} kalimat terdeteksi`, cls: 'highlight' },
-        { label: '02 CONTEXT', log: `context: ${segments.context.length} kalimat terdeteksi`, cls: '' },
-        { label: '03 RULES', log: `rules: ${segments.rules.length} constraint terdeteksi`, cls: '' },
-        { label: '04 OBJECTIVE', log: `objective: ${segments.objective.length} tujuan terdeteksi`, cls: '' },
-        { label: '05 VALIDATION', log: `validation: ${segments.validation.length} check terdeteksi`, cls: '' },
-        { label: '06 REVIEW', log: `review: spec_score=${total}/100 · flagged=${metrics.flagged}`, cls: 'highlight' },
-        { label: '07 COMPILE', log: `compiling linear prompt...`, cls: '' },
-        { label: '08 SHIP', log: `sending to neural link...`, cls: 'ok' }
-    ];
-
-    for (const p of phases) {
-        updateStatusBar(p.label, metrics);
-        const div = document.createElement('div'); div.className = 'log-line ' + p.cls; div.innerHTML = `<span class="log-prompt">&gt;</span> ${p.log}`;
-        crawlLogEl.appendChild(div); crawlLogEl.scrollTop = crawlLogEl.scrollHeight;
-        await sleep(140);
+async function* parseSSE(reader) {
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === 'data: [DONE]') continue;
+            if (trimmed.startsWith('data: ')) {
+                try { yield JSON.parse(trimmed.slice(6)); } catch (e) {}
+            }
+        }
     }
-    
-    // Jalankan Animasi Graf
-    animateCompileSequence(segments);
+    if (buffer.trim().startsWith('data: ') && buffer.trim() !== 'data: [DONE]') {
+        try { yield JSON.parse(buffer.trim().slice(6)); } catch (e) {}
+    }
+}
 
-    const compiledPrompt = compilePrompt(segments);
-    addMessageToUI('user', userText); chatHistory.push({ role: 'user', content: userText, compiled: compiledPrompt }); saveToStorage();
-    
-    const aiBubble = addMessageToUI('ai', '', true); let fullAiResponse = ''; let usedFallback = false;
+/* ================================================================
+   [12] MAIN SEND FLOW (Compile -> Cache -> API)
+   ================================================================ */
+async function animateCompileSequence() {
+    // Animasi firing sekuensial pada badge (event-based, selesai ~800ms)
+    const order = ['role', 'context', 'rules', 'objective', 'validation'];
+    for (const cat of order) {
+        const badge = document.querySelector(`.nbadge[data-cat="${cat}"]`);
+        if (badge && liveSegments[cat].length > 0) {
+            badge.classList.add('firing');
+            await sleep(140);
+            badge.classList.remove('firing');
+        } else {
+            await sleep(60);
+        }
+    }
+}
+
+async function sendMessage() {
+    const userText = chatInput.value.trim();
+    if (!userText || isGenerating) return;
+
+    isGenerating = true;
+    setStatus('busy');
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    sendBtn.style.display = 'none';
+    stopBtn.style.display = 'flex';
+
+    // ---- 1) Parse + Validate + Score ----
+    const segments = parsePrompt(userText);
+    const { total } = scorePrompt(segments);
+    const metrics = computeMetrics(userText, segments);
+    const issues = validateDAG(segments);
+
+    eventLogEl.innerHTML = '';
+    logEvent('SYSTEM', 'Compile pipeline started.');
+    logEvent('PARSER', `ROLE: ${segments.role.length} sentences, CONTEXT: ${segments.context.length}, RULES: ${segments.rules.length}, OBJ: ${segments.objective.length}, VAL: ${segments.validation.length}`);
+    logEvent('PARSER', `words=${metrics.wordCount}, flagged=${metrics.flagged}, guessed=${metrics.guessed}`);
+    issues.forEach(iss => logEvent('VALIDATOR', `[${iss.type}] ${iss.msg}`));
+
+    // ---- 2) Compile artifact + cache lookup (ZTA) ----
+    const hash = hashSegments(segments);
+    let compiledPrompt = getArtifact(hash);
+    const cacheHit = !!compiledPrompt;
+
+    if (cacheHit) {
+        logEvent('CACHE', `Artifact hit (${hash}). Skip LLM re-compile.`);
+        compiledPrompt = compiledPrompt.prompt;
+    } else {
+        compiledPrompt = compilePrompt(segments);
+        putArtifact(hash, compiledPrompt);
+        logEvent('COMPILER', `Artifact generated & cached (${hash}).`);
+    }
+    logEvent('COMPILER', `SPEC SCORE: ${total}/100.`);
+    logEvent('SYSTEM', 'Sending to neural link...');
+
+    // ---- 3) UI: kirim message user + animasi badge ----
+    addMessageToUI('user', userText);
+    chatHistory.push({ role: 'user', content: userText, compiled: compiledPrompt });
+    saveToStorage();
+
+    animateCompileSequence(); // fire-and-forget animation (selesai sendiri)
+
+    const aiBubble = addMessageToUI('ai', '', true);
+    let fullAiResponse = '';
+    let usedFallback = false;
     currentAbortController = new AbortController();
-    
+
+    // ---- 4) API call ----
     const hasKey = !!(settings.apiKey && settings.apiKey.trim());
     let endpoint = hasKey ? 'https://gen.pollinations.ai/v1/chat/completions' : 'https://text.pollinations.ai/openai';
     const headers = { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' };
     if (hasKey) headers['Authorization'] = `Bearer ${settings.apiKey.trim()}`;
-    let modelToUse = settings.model || 'openai'; if (!hasKey && !['openai', 'openai-fast'].includes(modelToUse)) modelToUse = 'openai';
 
-    const apiHistory = chatHistory.slice(0, -1).map(m => ({ role: m.role, content: m.compiled || m.content }));
-    const body = { model: modelToUse, stream: true, messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...apiHistory, { role: 'user', content: compiledPrompt }] };
+    let modelToUse = settings.model || 'openai';
+    if (!hasKey && !['openai', 'openai-fast'].includes(modelToUse)) modelToUse = 'openai';
+
+    // Zero-Token: kirim artefak, bukan raw input
+    const apiHistory = chatHistory.slice(0, -1).map(m => ({
+        role: m.role,
+        content: m.compiled || m.content
+    }));
+    const body = {
+        model: modelToUse,
+        stream: true,
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...apiHistory, { role: 'user', content: compiledPrompt }]
+    };
 
     try {
         let response;
@@ -756,8 +1008,13 @@ async function sendMessage() {
             }
         } catch (fetchError) {
             if (hasKey && (fetchError.name === 'TypeError' || fetchError.message.includes('Failed to fetch'))) {
-                showToast('Koneksi GEN gagal. Beralih ke Mode Gratis...', 4200, true); usedFallback = true; updateEngineBadge('fallback');
-                endpoint = 'https://text.pollinations.ai/openai'; delete headers['Authorization']; body.model = 'openai';
+                showToast('Koneksi GEN gagal. Beralih ke Mode Gratis...', 4200, true);
+                usedFallback = true;
+                updateEngineBadge('fallback');
+                logEvent('ERROR', 'GEN endpoint failed. Falling back to free endpoint.');
+                endpoint = 'https://text.pollinations.ai/openai';
+                delete headers['Authorization'];
+                body.model = 'openai';
                 response = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body), signal: currentAbortController.signal });
                 if (!response.ok) throw new Error(`HTTP Fallback Error: ${response.status}`);
             } else { throw fetchError; }
@@ -765,37 +1022,64 @@ async function sendMessage() {
 
         const reader = response.body.getReader();
         for await (const data of parseSSE(reader)) {
-            const delta = data?.choices?.[0]?.delta; const content = (delta && (delta.content || delta.text)) || '';
-            if (content) { fullAiResponse += content; aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse)) + '<span class="typing-indicator"></span>'; scrollToBottom(); }
+            const delta = data?.choices?.[0]?.delta;
+            const content = (delta && (delta.content || delta.text)) || '';
+            if (content) {
+                fullAiResponse += content;
+                aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse)) + '<span class="typing-indicator"></span>';
+                scrollToBottom();
+            }
         }
-        aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse || '_Tidak ada respons._')); renderChartsInElement(aiBubble);
-        chatHistory.push({ role: 'assistant', content: fullAiResponse }); if (chatHistory.length > MAX_HISTORY) chatHistory = chatHistory.slice(-MAX_HISTORY);
-        saveToStorage(); setStatus('ok'); if (!usedFallback) updateEngineBadge();
+        aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse || '_Tidak ada respons._'));
+        renderChartsInElement(aiBubble);
+        chatHistory.push({ role: 'assistant', content: fullAiResponse });
+        if (chatHistory.length > MAX_HISTORY) chatHistory = chatHistory.slice(-MAX_HISTORY);
+        saveToStorage();
+        setStatus('ok');
+        if (!usedFallback) updateEngineBadge();
+        logEvent('OK', `Response received (${fullAiResponse.length} chars).`);
     } catch (error) {
         if (error.name === 'AbortError') {
-            aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse || '')) + '<br><br><em class="error-text">[Dihentikan]</em>';
+            aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse || '')) + '<br><br><em class="error-text">[Dihentikan oleh operator]</em>';
             if (fullAiResponse) { chatHistory.push({ role: 'assistant', content: fullAiResponse }); saveToStorage(); }
             setStatus('ok');
+            logEvent('SYSTEM', 'Request aborted by user.');
         } else {
-            aiBubble.innerHTML = `<span class="error-text">⚠️ Neural link terputus: ${error.message}</span>`; setStatus('error');
-            if (chatHistory.length && chatHistory[chatHistory.length - 1].role === 'user') { chatHistory.pop(); saveToStorage(); }
+            aiBubble.innerHTML = `<span class="error-text">⚠️ Neural link terputus: ${error.message}</span>`;
+            setStatus('error');
+            logEvent('ERROR', error.message);
+            if (chatHistory.length && chatHistory[chatHistory.length - 1].role === 'user') {
+                chatHistory.pop();
+                saveToStorage();
+            }
         }
     } finally {
-        isGenerating = false; chatInput.disabled = false; sendBtn.disabled = false; sendBtn.style.display = 'flex'; stopBtn.style.display = 'none'; currentAbortController = null; chatInput.focus(); scrollToBottom();
-        setTimeout(() => updateStatusBar('08 SHIP', computeMetrics(chatInput.value, parsePrompt(chatInput.value))), 800);
+        isGenerating = false;
+        chatInput.disabled = false;
+        sendBtn.disabled = false;
+        sendBtn.style.display = 'flex';
+        stopBtn.style.display = 'none';
+        currentAbortController = null;
+        chatInput.focus();
+        scrollToBottom();
+        // Re-scan input kosong (untuk reset state)
+        runLiveScan(chatInput.value);
     }
 }
 
 /* ================================================================
-   7. INITIALIZATION
+   [13] INITIALIZATION
    ================================================================ */
 window.addEventListener('load', () => {
-    loadSettings(); 
-    initGraph(); 
-    restoreHistoryUI(); 
-    renderWordHeat(''); 
+    loadSettings();
+    restoreHistoryUI();
+    renderWordHeat('');
+    renderIssues([]);
+    updateBadges({ role: [], context: [], rules: [], objective: [], validation: [] });
+    updateSpecScore(0);
     chatInput.focus();
-    runLiveScan(''); // Sinkronisasi awal
+    runLiveScan('');
+    logEvent('SYSTEM', 'ZTA ready. Artifact cache active.');
 });
 </script>
 </body>
