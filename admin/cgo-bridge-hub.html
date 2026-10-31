@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>CGO Bridge Hub — Nexus ↔ Cyber Lab</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -10,20 +10,19 @@
 <style>
 :root {
   --bg:#050a12; --panel:#0b1220; --line:#1a2740; --text:#e8f0fa; --muted:#8ba0b8; --dim:#5a6f88;
-  --cyan:#38bdf8; --green:#10b981; --amber:#f59e0b; --red:#ef4444; --purple:#a78bfa;
+  --cyan:#38bdf8; --green:#10b981; --amber:#f59e0b; --red:#ef4444;
 }
 * { box-sizing:border-box; margin:0; padding:0; }
 body {
-  background: radial-gradient(ellipse at 15% 0%, rgba(56,189,248,.07), transparent 42%),
-              radial-gradient(ellipse at 85% 100%, rgba(16,185,129,.05), transparent 40%), var(--bg);
+  background: radial-gradient(ellipse at 15% 0%, rgba(56,189,248,.07), transparent 42%), var(--bg);
   color: var(--text); font-family: 'Space Grotesk', system-ui, sans-serif;
   min-height: 100vh; display: flex; flex-direction: column;
 }
 .top {
-  padding: 12px 18px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px;
-  align-items: center; justify-content: space-between; background: rgba(11,18,32,.94);
+  padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px;
+  align-items: center; justify-content: space-between; background: rgba(11,18,32,.94); position: sticky; top: 0; z-index: 10;
 }
-.brand h1 { font-size: 14px; letter-spacing: 1px; color: var(--cyan); text-transform: uppercase; }
+.brand h1 { font-size: 13px; letter-spacing: 1px; color: var(--cyan); text-transform: uppercase; }
 .brand p { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .pills { display: flex; gap: 8px; flex-wrap: wrap; }
 .pill {
@@ -37,63 +36,76 @@ body {
 @keyframes p { 50% { opacity: .35; } }
 
 .grid {
-  flex: 1; display: grid; grid-template-columns: 1fr 1.2fr; gap: 1px; background: var(--line);
-  min-height: 0;
+  flex: 1; display: grid; grid-template-columns: minmax(280px, 1fr) minmax(300px, 1.25fr);
+  gap: 1px; background: var(--line); min-height: 0;
 }
-@media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
-.col { background: var(--panel); display: flex; flex-direction: column; min-height: 320px; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+.col { background: var(--panel); display: flex; flex-direction: column; min-height: 280px; }
 .col-h {
   padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 11px; letter-spacing: 1px;
   text-transform: uppercase; color: var(--muted); font-weight: 700;
 }
 .col-b { padding: 14px; flex: 1; overflow: auto; }
 textarea {
-  width: 100%; min-height: 110px; background: #000; border: 1px solid var(--line); color: var(--text);
+  width: 100%; min-height: 100px; background: #000; border: 1px solid var(--line); color: var(--text);
   border-radius: 10px; padding: 12px; font: inherit; font-size: 13px; line-height: 1.5; resize: vertical; outline: none;
 }
 textarea:focus { border-color: var(--cyan); }
 .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .btn {
   border: 1px solid var(--line); background: #0a1422; color: var(--cyan); font: inherit; font-size: 11px;
-  font-weight: 700; padding: 9px 14px; border-radius: 8px; cursor: pointer;
+  font-weight: 700; padding: 10px 14px; border-radius: 8px; cursor: pointer;
 }
 .btn:hover:not(:disabled) { border-color: var(--cyan); background: rgba(56,189,248,.1); }
-.btn:disabled { opacity: .4; cursor: not-allowed; }
-.btn.primary { color: var(--green); border-color: rgba(16,185,129,.45); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.primary { color: var(--green); border-color: rgba(16,185,129,.5); background: rgba(16,185,129,.08); }
 .btn.danger { color: var(--red); border-color: rgba(239,68,68,.4); }
-.hint { font-size: 11px; color: var(--dim); margin-top: 10px; line-height: 1.5; }
-.seed { display: block; width: 100%; text-align: left; margin-top: 6px; background: transparent;
-  border: 1px dashed var(--line); color: var(--muted); padding: 8px 10px; border-radius: 8px; font: inherit; font-size: 11px; cursor: pointer; }
+.hint { font-size: 11px; color: var(--dim); margin-top: 10px; line-height: 1.55; }
+.seed {
+  display: block; width: 100%; text-align: left; margin-top: 6px; background: transparent;
+  border: 1px dashed var(--line); color: var(--muted); padding: 8px 10px; border-radius: 8px;
+  font: inherit; font-size: 11px; cursor: pointer; line-height: 1.4;
+}
 .seed:hover { border-color: var(--cyan); color: var(--text); }
-
-.thread { display: flex; flex-direction: column; gap: 12px; }
+.thread { display: flex; flex-direction: column; gap: 12px; padding-bottom: 24px; }
 .msg { border: 1px solid var(--line); border-radius: 12px; background: #0e1728; overflow: hidden; animation: in .22s ease; }
 @keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.msg.nexus { border-color: rgba(56,189,248,.4); }
-.msg.lab { border-color: rgba(16,185,129,.4); }
+.msg.nexus { border-color: rgba(56,189,248,.45); }
+.msg.lab { border-color: rgba(16,185,129,.45); }
 .msg.hub { border-color: rgba(245,158,11,.35); }
-.msg-h { display: flex; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid rgba(26,39,64,.85); background: rgba(0,0,0,.25); font-size: 12px; font-weight: 700; }
+.msg-h {
+  display: flex; gap: 8px; align-items: center; padding: 8px 12px;
+  border-bottom: 1px solid rgba(26,39,64,.85); background: rgba(0,0,0,.25);
+  font-size: 12px; font-weight: 700;
+}
 .msg-h span { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--dim); font-weight: 500; margin-left: auto; }
 .msg-b { padding: 12px 14px; font-size: 13px; line-height: 1.55; }
 .msg-b pre { background: #000; border: 1px solid var(--line); padding: 8px; border-radius: 8px; overflow: auto; font-size: 11px; }
 .msg-b code { font-family: 'JetBrains Mono', monospace; background: rgba(56,189,248,.08); padding: 1px 4px; border-radius: 3px; }
+.msg-b p { margin: 0 0 8px; } .msg-b p:last-child { margin: 0; }
+.msg-b ul { margin: 6px 0 8px 18px; }
 .log {
   font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--dim); background: #000;
-  border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 140px; overflow: auto; margin-top: 10px;
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px; max-height: 120px; overflow: auto; margin-top: 10px;
 }
+/* hidden peer frames — no popup */
+#peers { position: absolute; width: 0; height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
+#peers iframe { border: 0; width: 1px; height: 1px; }
 .toast {
-  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #0f1b2e;
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #0f1b2e;
   border: 1px solid var(--cyan); color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 12px;
-  opacity: 0; transition: .25s; z-index: 20; pointer-events: none;
+  opacity: 0; transition: .25s; z-index: 30; pointer-events: none; max-width: 92%; text-align: center;
 }
 .toast.show { opacity: 1; }
+.typing { display: inline-block; width: 7px; height: 13px; background: var(--cyan); animation: blink 1s step-end infinite; vertical-align: middle; }
+@keyframes blink { 50% { opacity: 0; } }
 </style>
 </head>
 <body>
 <div class="top">
   <div class="brand">
     <h1>CGO Bridge Hub</h1>
-    <p>Research Nexus ↔ Cyber Lab · postMessage · Zero Regression</p>
+    <p>Nexus ↔ Lab · auto dialogue · iframe bridge</p>
   </div>
   <div class="pills">
     <span class="pill" id="pillNexus"><span class="d"></span> NEXUS</span>
@@ -106,24 +118,18 @@ textarea:focus { border-color: var(--cyan); }
   <div class="col">
     <div class="col-h">Control</div>
     <div class="col-b">
-      <div class="row">
-        <button class="btn" id="btnOpenNexus">OPEN NEXUS</button>
-        <button class="btn" id="btnOpenLab">OPEN LAB</button>
-        <button class="btn" id="btnPing">PING BOTH</button>
-      </div>
-      <p class="hint">
-        1) Buka <b>Nexus</b> dan <b>Lab</b> (popup). 2) Tunggu status hijau. 3) Tulis masalah / pilih seed. 4) <b>START DIALOGUE</b>.
-        Kedua file tetap terpisah; hanya saling bicara lewat bridge.
+      <p class="hint" style="margin-top:0">
+        Ketik pertanyaan lalu tekan <b>START DIALOGUE</b>. Hub memuat Nexus + Lab otomatis (tanpa popup) dan menjalankan diskusi.
       </p>
-      <textarea id="problem" placeholder="Masalah tingkat tinggi untuk didiskusikan Nexus + Cyber Lab…"></textarea>
+      <textarea id="problem" placeholder="Tulis pertanyaan / masalah tingkat tinggi…"></textarea>
       <div class="row">
         <button class="btn primary" id="btnStart">▶ START DIALOGUE</button>
         <button class="btn danger" id="btnStop" disabled>■ STOP</button>
-        <button class="btn" id="btnClear">CLEAR THREAD</button>
+        <button class="btn" id="btnClear">CLEAR</button>
       </div>
-      <button class="seed" data-p="Bagaimana menautkan kompilasi intent Research Nexus (Role→Validation) ke eksekusi tool Cyber Lab agar saran model tidak pernah menembak LOCKDOWN tanpa veto operator, sambil tetap mempertahankan audit trail?">Seed: Nexus compile → Lab exec + human veto</button>
-      <button class="seed" data-p="Rancang protokol diskusi multi-agen antara CGO Research Nexus dan CGO Cyber Lab untuk memverifikasi integritas interceptor (fetch/XHR/WS) tanpa false positive saat operator melakukan REAPPLY hook.">Seed: Integrity check tanpa false positive</button>
-      <button class="seed" data-p="Masalah langka: ontological mismatch antara model dunia Nexus (prompt-as-spec) dan model runtime Lab (hooks/vault). Susun kerangka keputusan bersama yang contestable.">Seed: Ontological mismatch Nexus vs Lab</button>
+      <button class="seed" data-p="Bagaimana menautkan kompilasi intent Research Nexus (Role → Validation) ke eksekusi tool Cyber Lab agar LOCKDOWN tidak pernah jalan tanpa veto operator, sambil audit trail tetap utuh?">Seed: Nexus → Lab + human veto</button>
+      <button class="seed" data-p="Rancang protokol verifikasi integritas interceptor fetch/XHR/WS antara Research Nexus dan Cyber Lab tanpa false positive saat REAPPLY hook.">Seed: Integrity tanpa false positive</button>
+      <button class="seed" data-p="Ontological mismatch: model dunia Nexus (prompt-as-spec) vs runtime Lab (hooks/vault). Susun kerangka keputusan bersama yang contestable.">Seed: Ontological mismatch</button>
       <div class="log" id="log"></div>
     </div>
   </div>
@@ -131,6 +137,11 @@ textarea:focus { border-color: var(--cyan); }
     <div class="col-h">Dialogue Thread</div>
     <div class="col-b"><div class="thread" id="thread"></div></div>
   </div>
+</div>
+
+<div id="peers">
+  <iframe id="frameNexus" title="nexus" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
+  <iframe id="frameLab" title="lab" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>
 </div>
 <div class="toast" id="toast"></div>
 
@@ -150,26 +161,26 @@ const el = {
   pillNexus: document.getElementById('pillNexus'),
   pillLab: document.getElementById('pillLab'),
   pillRun: document.getElementById('pillRun'),
-  btnOpenNexus: document.getElementById('btnOpenNexus'),
-  btnOpenLab: document.getElementById('btnOpenLab'),
-  btnPing: document.getElementById('btnPing'),
   btnStart: document.getElementById('btnStart'),
   btnStop: document.getElementById('btnStop'),
-  btnClear: document.getElementById('btnClear')
+  btnClear: document.getElementById('btnClear'),
+  frameNexus: document.getElementById('frameNexus'),
+  frameLab: document.getElementById('frameLab')
 };
 
 const S = {
-  nexusWin: null,
-  labWin: null,
   nexusOk: false,
   labOk: false,
+  nexusReady: false,
+  labReady: false,
   running: false,
   abort: false,
-  pending: new Map(), // id -> {resolve,reject,timer}
-  seq: 1
+  pending: new Map(),
+  seq: 1,
+  framesLoaded: false
 };
 
-function toast(m){ el.toast.textContent=m; el.toast.classList.add('show'); setTimeout(()=>el.toast.classList.remove('show'), 2400); }
+function toast(m){ el.toast.textContent=m; el.toast.classList.add('show'); setTimeout(()=>el.toast.classList.remove('show'), 2600); }
 function log(m){
   const d=document.createElement('div');
   d.textContent = '[' + new Date().toLocaleTimeString('id-ID',{hour12:false}) + '] ' + m;
@@ -179,12 +190,12 @@ function md(t){
   if (hasMarked && hasPurify) { try { return DOMPurify.sanitize(marked.parse(String(t||''))); } catch(e){} }
   return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 }
-function setPill(which, state){
+function setPill(which, state, extra){
   const node = which === 'nexus' ? el.pillNexus : which === 'lab' ? el.pillLab : el.pillRun;
   node.className = 'pill ' + (state || '');
-  if (which === 'nexus') node.innerHTML = '<span class="d"></span> NEXUS' + (state==='ok'?' · LINK':'');
-  if (which === 'lab') node.innerHTML = '<span class="d"></span> LAB' + (state==='ok'?' · LINK':'');
-  if (which === 'run') node.innerHTML = '<span class="d"></span> ' + (state==='wait'?'RUNNING': state==='ok'?'DONE':'IDLE');
+  if (which === 'nexus') node.innerHTML = '<span class="d"></span> NEXUS' + (state==='ok'?' · LINK': state==='wait'?' · …':'');
+  if (which === 'lab') node.innerHTML = '<span class="d"></span> LAB' + (state==='ok'?' · LINK': state==='wait'?' · …':'');
+  if (which === 'run') node.innerHTML = '<span class="d"></span> ' + (extra || (state==='wait'?'RUNNING': state==='ok'?'DONE':'IDLE'));
 }
 function pushMsg(kind, title, body){
   const div=document.createElement('div');
@@ -192,25 +203,39 @@ function pushMsg(kind, title, body){
   div.innerHTML = '<div class="msg-h">' + title + '<span>' + new Date().toLocaleTimeString('id-ID',{hour12:false}) + '</span></div><div class="msg-b">' + md(body) + '</div>';
   el.thread.appendChild(div);
   el.thread.scrollTop = el.thread.scrollHeight;
+  return div;
+}
+function pushTyping(kind, title){
+  const div=document.createElement('div');
+  div.className = 'msg ' + kind;
+  div.id = 'typing-' + kind;
+  div.innerHTML = '<div class="msg-h">' + title + '<span>…</span></div><div class="msg-b"><span class="typing"></span> menyusun respons</div>';
+  el.thread.appendChild(div);
+  el.thread.scrollTop = el.thread.scrollHeight;
+}
+function clearTyping(kind){
+  const n = document.getElementById('typing-' + kind);
+  if (n) n.remove();
 }
 
 function uid(){ return 'h' + (S.seq++) + '_' + Date.now().toString(36); }
 
-function send(win, type, payload, timeoutMs){
+function targetWin(which){
+  if (which === 'nexus') return el.frameNexus.contentWindow;
+  return el.frameLab.contentWindow;
+}
+
+function send(which, type, payload, timeoutMs){
   return new Promise((resolve, reject) => {
-    if (!win || win.closed) return reject(new Error('window closed'));
+    const win = targetWin(which);
+    if (!win) return reject(new Error(which + ' frame missing'));
     const id = uid();
-    const timer = setTimeout(() => {
-      S.pending.delete(id);
-      reject(new Error('timeout ' + type));
-    }, timeoutMs || 12000);
-    S.pending.set(id, { resolve, reject, timer, type });
+    const timer = setTimeout(() => { S.pending.delete(id); reject(new Error('timeout ' + type + ' @' + which)); }, timeoutMs || 15000);
+    S.pending.set(id, { resolve, reject, timer, type, which });
     try {
       win.postMessage({ source: SOURCE, v: BRIDGE_VER, type, id, payload: payload || {} }, '*');
     } catch(e) {
-      clearTimeout(timer);
-      S.pending.delete(id);
-      reject(e);
+      clearTimeout(timer); S.pending.delete(id); reject(e);
     }
   });
 }
@@ -221,8 +246,8 @@ window.addEventListener('message', (ev) => {
   if (d.source !== 'cgo-nexus' && d.source !== 'cgo-lab') return;
 
   if (d.type === 'HELLO_ACK') {
-    if (d.source === 'cgo-nexus') { S.nexusOk = true; setPill('nexus', 'ok'); log('Nexus linked'); }
-    if (d.source === 'cgo-lab') { S.labOk = true; setPill('lab', 'ok'); log('Lab linked'); }
+    if (d.source === 'cgo-nexus') { S.nexusOk = true; setPill('nexus', 'ok'); }
+    if (d.source === 'cgo-lab') { S.labOk = true; setPill('lab', 'ok'); }
   }
 
   if (d.id && S.pending.has(d.id)) {
@@ -237,144 +262,187 @@ window.addEventListener('message', (ev) => {
 function nexusUrl(){ return new URL('cgo.html', location.href).href; }
 function labUrl(){ return new URL('cyber-lab-gold-master-v3.4.html', location.href).href; }
 
-function openNexus(){
-  S.nexusWin = window.open(nexusUrl(), 'cgo_nexus_bridge', 'width=1100,height=800');
-  S.nexusOk = false; setPill('nexus', 'wait');
-  log('Opening Nexus…');
-  setTimeout(() => pingOne('nexus'), 1200);
-}
-function openLab(){
-  S.labWin = window.open(labUrl(), 'cgo_lab_bridge', 'width=1280,height=860');
-  S.labOk = false; setPill('lab', 'wait');
-  log('Opening Lab…');
-  setTimeout(() => pingOne('lab'), 1500);
+function loadPeers(){
+  return new Promise((resolve) => {
+    if (S.framesLoaded) return resolve();
+    setPill('nexus', 'wait'); setPill('lab', 'wait');
+    log('Memuat peer iframe…');
+    let left = 2;
+    const done = () => { if (--left <= 0) { S.framesLoaded = true; resolve(); } };
+    el.frameNexus.onload = () => { log('Nexus frame load'); done(); };
+    el.frameLab.onload = () => { log('Lab frame load'); done(); };
+    el.frameNexus.src = nexusUrl();
+    el.frameLab.src = labUrl();
+    // safety timeout
+    setTimeout(() => { if (!S.framesLoaded) { S.framesLoaded = true; log('Frame load timeout — lanjut ping'); resolve(); } }, 8000);
+  });
 }
 
 async function pingOne(which){
-  const win = which === 'nexus' ? S.nexusWin : S.labWin;
-  if (!win || win.closed) { log(which + ' window missing'); return; }
   let lastErr = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 4; attempt++) {
     try {
-      const ack = await send(win, 'PING', {}, 5000);
+      await send(which, 'PING', {}, 4000);
       if (which === 'nexus') { S.nexusOk = true; setPill('nexus', 'ok'); }
       else { S.labOk = true; setPill('lab', 'ok'); }
-      log('PING ' + which + ' OK (try ' + attempt + ')');
-      return ack;
+      log('LINK ' + which + ' (try ' + attempt + ')');
+      return true;
     } catch(e) {
       lastErr = e;
-      log('PING ' + which + ' try ' + attempt + ' fail: ' + e.message);
-      await new Promise(r => setTimeout(r, 600 * attempt));
+      await new Promise(r => setTimeout(r, 500 * attempt));
     }
   }
   if (which === 'nexus') { S.nexusOk = false; setPill('nexus', 'bad'); }
   else { S.labOk = false; setPill('lab', 'bad'); }
-  log('PING ' + which + ' failed: ' + (lastErr && lastErr.message));
+  log('FAIL ' + which + ': ' + (lastErr && lastErr.message));
+  return false;
 }
 
-async function pingBoth(){
-  await pingOne('nexus');
-  await pingOne('lab');
-  toast('Ping selesai');
+async function ensureLinked(){
+  await loadPeers();
+  // beri waktu bridge script di dalam iframe untuk boot
+  await new Promise(r => setTimeout(r, 900));
+  const a = await pingOne('nexus');
+  const b = await pingOne('lab');
+  return a || b;
+}
+
+/* -------- Local fallback if peer unreachable (still auto-dialogue) -------- */
+function localNexusDiscuss(problem){
+  return [
+    '**CGO Research Nexus — analisis lokal (fallback)**',
+    '',
+    'Masalah dipetakan ke kerangka Role · Context · Rules · Objective · Validation:',
+    '- **Role**: operator manusia = otoritas final; Nexus = kompiler intent.',
+    '- **Context**: runtime Lab (hooks/vault/anomaly) harus disinkron sebelum eksekusi.',
+    '- **Rules**: larangan eksekusi destruktif otomatis (LOCKDOWN/CLEAR_VAULT) tanpa veto.',
+    '- **Objective**: keputusan yang dapat diaudit dan digugurkan (contestable).',
+    '- **Validation**: silang-cek dengan status Lab + jejak log.',
+    '',
+    'Ringkas masalah: _' + String(problem).slice(0, 220) + '_',
+    '',
+    '_Catatan: peer Nexus iframe tidak merespons; fallback deterministic dipakai agar dialog tetap jalan._'
+  ].join('\n');
+}
+function localLabDiscuss(problem, note){
+  return [
+    '**CGO Cyber Lab — tanggapan lokal (fallback)**',
+    '',
+    'Sikap teknis terhadap masalah:',
+    '- Interceptor & sensor integritas cocok sebagai lapisan **Validation** runtime.',
+    '- Tool PROBE/XHR/WS/DETECT dapat dipanggil manual; bridge menolak destruktif tanpa confirm.',
+    '- Masukan Nexus: ' + (note ? String(note).slice(0, 180) : '—'),
+    '',
+    'Fokus: _' + String(problem).slice(0, 180) + '_',
+    '',
+    '_Catatan: peer Lab iframe tidak merespons; fallback deterministic dipakai._'
+  ].join('\n');
 }
 
 async function runDialogue(){
   const problem = el.problem.value.trim();
-  if (!problem) { toast('Isi masalah dulu'); return; }
+  if (!problem) { toast('Tulis pertanyaan dulu'); return; }
   if (S.running) return;
-
-  if (!S.nexusWin || S.nexusWin.closed) openNexus();
-  if (!S.labWin || S.labWin.closed) openLab();
-  await new Promise(r => setTimeout(r, 1500));
-  await pingBoth();
-
-  if (!S.nexusOk && !S.labOk) {
-    toast('Tidak ada peer bridge. Pastikan popup tidak diblokir.');
-    pushMsg('hub', 'HUB', 'Gagal tautkan Nexus dan Lab. Izinkan popup, lalu PING BOTH.');
-    return;
-  }
 
   S.running = true; S.abort = false;
   el.btnStart.disabled = true; el.btnStop.disabled = false;
-  setPill('run', 'wait');
-  pushMsg('hub', 'HUB · SESSION', 'Dialog dimulai.\n\n**Masalah:** ' + problem);
-  log('Dialogue start');
+  setPill('run', 'wait', 'RUNNING');
+  pushMsg('hub', 'HUB', 'Menerima pertanyaan. Menautkan Nexus + Lab lalu memulai diskusi otomatis…\n\n**Q:** ' + problem);
+  log('Dialogue auto-start');
 
   try {
-    // Round 1: Nexus analyzes / compiles
+    await ensureLinked();
     if (S.abort) throw new Error('abort');
-    let nexusText = '_Nexus tidak tertaut — analisis lokal hub dilewati._';
-    let compile = null;
+
+    // --- Turn 1: Nexus ---
+    pushTyping('nexus', 'CGO RESEARCH NEXUS');
+    let nexusText = '';
+    let compileNote = '';
     if (S.nexusOk) {
       try {
-        const ack = await send(S.nexusWin, 'DISCUSS', { problem }, 20000);
-        nexusText = (ack.payload && ack.payload.text) || nexusText;
-        compile = ack.payload && ack.payload.compile;
-        pushMsg('nexus', 'CGO RESEARCH NEXUS', nexusText);
+        const ack = await send('nexus', 'DISCUSS', { problem }, 20000);
+        nexusText = (ack.payload && ack.payload.text) || '';
+        if (ack.payload && ack.payload.compile && ack.payload.compile.ok)
+          compileNote = 'score ' + ack.payload.compile.score + '/100';
       } catch(e) {
-        pushMsg('nexus', 'CGO RESEARCH NEXUS', 'Gagal: ' + e.message);
-        log('Nexus discuss fail: ' + e.message);
+        log('Nexus DISCUSS fail: ' + e.message);
+        S.nexusOk = false; setPill('nexus', 'bad');
       }
     }
-
+    if (!nexusText) nexusText = localNexusDiscuss(problem);
+    clearTyping('nexus');
+    pushMsg('nexus', 'CGO RESEARCH NEXUS', nexusText);
     if (S.abort) throw new Error('abort');
 
-    // Round 2: Lab responds with live state + technical stance
+    // --- Turn 2: Lab ---
+    pushTyping('lab', 'CGO CYBER LAB');
+    let labText = '';
     let labState = null;
     if (S.labOk) {
       try {
-        const st = await send(S.labWin, 'LAB_STATUS', {}, 8000);
+        const st = await send('lab', 'LAB_STATUS', {}, 8000);
         labState = st.payload || null;
-      } catch(e) { log('Lab status fail: ' + e.message); }
-
+      } catch(e) { log('Lab STATUS fail: ' + e.message); }
       try {
-        const ack = await send(S.labWin, 'DISCUSS', {
-          problem,
-          nexusNote: compile && compile.ok ? ('score ' + compile.score + '/100') : (nexusText || '').slice(0, 200)
-        }, 15000);
-        pushMsg('lab', 'CGO CYBER LAB', (ack.payload && ack.payload.text) || '_kosong_');
+        const ack = await send('lab', 'DISCUSS', { problem, nexusNote: compileNote || nexusText.slice(0, 200) }, 15000);
+        labText = (ack.payload && ack.payload.text) || '';
       } catch(e) {
-        pushMsg('lab', 'CGO CYBER LAB', 'Gagal: ' + e.message);
-        log('Lab discuss fail: ' + e.message);
+        log('Lab DISCUSS fail: ' + e.message);
+        S.labOk = false; setPill('lab', 'bad');
       }
     }
-
+    if (!labText) labText = localLabDiscuss(problem, compileNote);
+    clearTyping('lab');
+    pushMsg('lab', 'CGO CYBER LAB', labText);
     if (S.abort) throw new Error('abort');
 
-    // Round 3: Nexus sees lab state (context sync discussion)
+    // --- Turn 3: Nexus rebuttal with lab state ---
+    pushTyping('nexus', 'CGO RESEARCH NEXUS');
+    let nexus2 = '';
     if (S.nexusOk) {
       try {
-        const ack = await send(S.nexusWin, 'DISCUSS', { problem, labState }, 20000);
-        pushMsg('nexus', 'CGO RESEARCH NEXUS · REBUTTAL', (ack.payload && ack.payload.text) || '_kosong_');
-      } catch(e) {
-        log('Nexus rebuttal fail: ' + e.message);
-      }
+        const ack = await send('nexus', 'DISCUSS', { problem, labState }, 20000);
+        nexus2 = (ack.payload && ack.payload.text) || '';
+      } catch(e) { log('Nexus rebuttal fail: ' + e.message); }
     }
-
+    if (!nexus2) {
+      nexus2 = [
+        '**Nexus · penutup putaran (fallback)**',
+        '',
+        'Setelah masukan Lab, spesifikasi operasional:',
+        '1. Sinkron status hooks/vault sebelum aksi.',
+        '2. Validation = DETECT + review manusia untuk aksi berisiko.',
+        '3. Bridge tetap memblok CLEAR_VAULT/LOCKDOWN tanpa confirm.',
+        '',
+        labState ? ('Lab state: `' + JSON.stringify(labState).slice(0, 240) + '`') : 'Lab state tidak tersedia.'
+      ].join('\n');
+    }
+    clearTyping('nexus');
+    pushMsg('nexus', 'CGO RESEARCH NEXUS · REBUTTAL', nexus2);
     if (S.abort) throw new Error('abort');
 
-    // Optional safe status-only validation from lab (no destructive exec)
+    // --- Turn 4: Lab status snapshot only ---
     if (S.labOk) {
       try {
-        const det = await send(S.labWin, 'LAB_EXEC', { cmd: 'STATUS' }, 8000);
-        pushMsg('lab', 'CGO CYBER LAB · STATUS SNAPSHOT', '```\n' + JSON.stringify(det.payload, null, 2).slice(0, 1200) + '\n```');
-      } catch(e) { log('status snapshot fail: ' + e.message); }
+        const det = await send('lab', 'LAB_EXEC', { cmd: 'STATUS' }, 8000);
+        pushMsg('lab', 'CGO CYBER LAB · STATUS', '```\n' + JSON.stringify(det.payload, null, 2).slice(0, 1200) + '\n```');
+      } catch(e) { log('snapshot fail: ' + e.message); }
     }
 
-    pushMsg('hub', 'HUB · CLOSE', 'Sesi dialog selesai. Tidak ada aksi destruktif yang dijalankan otomatis. Operator dapat melanjutkan manual di masing-masing jendela.');
-    setPill('run', 'ok');
+    pushMsg('hub', 'HUB · SELESAI', 'Diskusi otomatis selesai. Tidak ada aksi destruktif yang dijalankan.');
+    setPill('run', 'ok', 'DONE');
     log('Dialogue complete');
-    toast('Dialog selesai');
+    toast('Diskusi selesai');
   } catch(e) {
+    clearTyping('nexus'); clearTyping('lab');
     if (String(e.message) === 'abort') {
-      pushMsg('hub', 'HUB', 'Dihentikan operator.');
-      setPill('run', '');
-      log('Aborted');
+      pushMsg('hub', 'HUB', 'Dihentikan.');
+      setPill('run', '', 'IDLE');
     } else {
       pushMsg('hub', 'HUB · ERROR', e.message || String(e));
-      setPill('run', 'bad');
-      log('Error: ' + e.message);
+      setPill('run', 'bad', 'ERROR');
     }
+    log('Error: ' + e.message);
   } finally {
     S.running = false;
     el.btnStart.disabled = false;
@@ -382,17 +450,20 @@ async function runDialogue(){
   }
 }
 
-el.btnOpenNexus.onclick = openNexus;
-el.btnOpenLab.onclick = openLab;
-el.btnPing.onclick = pingBoth;
 el.btnStart.onclick = runDialogue;
-el.btnStop.onclick = () => { S.abort = true; el.btnStop.disabled = true; log('Stop requested'); };
-el.btnClear.onclick = () => { el.thread.innerHTML = ''; log('Thread cleared'); };
-document.querySelectorAll('.seed').forEach(b => b.addEventListener('click', () => { el.problem.value = b.getAttribute('data-p') || ''; toast('Seed loaded'); }));
+el.btnStop.onclick = () => { S.abort = true; el.btnStop.disabled = true; log('Stop'); };
+el.btnClear.onclick = () => { el.thread.innerHTML = ''; log('Cleared'); };
+document.querySelectorAll('.seed').forEach(b => b.addEventListener('click', () => {
+  el.problem.value = b.getAttribute('data-p') || '';
+  toast('Seed siap — tekan START DIALOGUE');
+}));
 
-setPill('nexus', ''); setPill('lab', ''); setPill('run', '');
-log('Hub ready. Open Nexus + Lab, then start dialogue.');
-pushMsg('hub', 'HUB', 'Bridge Hub aktif.\n\n- File tetap **terpisah** (zero regression pada fungsi asli).\n- Komunikasi: `postMessage` v1.\n- Buka kedua peer, pastikan status **LINK**, lalu jalankan dialog.');
+// Prefetch peers in background so first START is faster
+setTimeout(() => { loadPeers().catch(()=>{}); }, 400);
+
+setPill('nexus',''); setPill('lab',''); setPill('run','');
+log('Hub ready — ketik pertanyaan lalu START DIALOGUE (otomatis).');
+pushMsg('hub', 'HUB', 'Mode **auto dialogue**.\n\n1. Tulis / pilih seed pertanyaan\n2. Tekan **START DIALOGUE**\n3. Nexus + Lab dimuat & dihubungkan otomatis, lalu bergiliran menjawab.\n\nJika iframe peer gagal (file belum di-deploy), fallback lokal tetap menampilkan diskusi agar alur tidak kosong.');
 })();
 </script>
 </body>
