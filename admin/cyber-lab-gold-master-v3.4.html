@@ -819,7 +819,94 @@
    7. FETCH bar uses robustFetch + scan; probe accepts empty body.
    ZERO REGRESSION — all v3.3 features retained + hardened.
    ============================================================ */
+/* ==========================================================
+ *            Aho‑Corasick  (Multi‑Pattern Scanner)
+ *            Author: Dr. 5 – CGO
+ * ==========================================================
+ */
+class AhoCorasickScanner {
+  constructor() {
+    this.root = { next: new Map(), fail: null, outputs: [] };
+    this.built = false;
+  }
 
+  /* 1. Build trie + failure links */
+  build(patterns) {
+    if (!Array.isArray(patterns)) throw new TypeError('patterns must be an array');
+
+    patterns.forEach((pat, idx) => {
+      if (typeof pat !== 'string') throw new TypeError('patterns must be strings');
+      let node = this.root;
+      for (const ch of pat) {
+        if (!node.next.has(ch))
+          node.next.set(ch, { next: new Map(), fail: null, outputs: [] });
+        node = node.next.get(ch);
+      }
+      node.outputs.push({ pattern: pat, id: idx });
+    });
+
+    const queue = [];
+    for (const child of this.root.next.values()) {
+      child.fail = this.root;
+      queue.push(child);
+    }
+
+    while (queue.length) {
+      const cur = queue.shift();
+      for (const [ch, child] of cur.next.entries()) {
+        let f = cur.fail;
+        while (f && !f.next.has(ch)) f = f.fail;
+        child.fail = (f && f.next.has(ch)) ? f.next.get(ch) : this.root;
+        child.outputs.push(...child.fail.outputs);
+        queue.push(child);
+      }
+    }
+    this.built = true;
+  }
+
+  /* 2. Search whole text */
+  search(text) {
+    if (!this.built) throw new Error('Call build(patterns) before search()');
+    const results = [];
+    let node = this.root;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      while (node && !node.next.has(ch)) node = node.fail;
+      node = node ? node.next.get(ch) : this.root;
+      for (const out of node.outputs) {
+        results.push({
+          pattern: out.pattern,
+          index: i - out.pattern.length + 1
+        });
+      }
+    }
+    return results;
+  }
+
+  /* 3. Optional streaming (chunked) */
+  processChunk(chunk) {
+    if (!this.built) throw new Error('Call build(patterns) first');
+    this._lastNode = this._lastNode || this.root;
+    let node = this._lastNode;
+    const results = [];
+
+    for (let i = 0; i < chunk.length; i++) {
+      const ch = chunk[i];
+      while (node && !node.next.has(ch)) node = node.fail;
+      node = node ? node.next.get(ch) : this.root;
+      for (const out of node.outputs) {
+        results.push({
+          pattern: out.pattern,
+          index: i - out.pattern.length + 1
+        });
+      }
+    }
+    this._lastNode = node;
+    return results;
+  }
+}
+   
 const NATIVE = {
     fetch:           window.fetch.bind(window),
     XHR:             window.XMLHttpRequest,
@@ -961,6 +1048,30 @@ function refreshStats() {
     $('statHist').textContent  = `${reqHistory.length} hist`;
 }
 
+/* ============================================================
+   FASE 13: TURBO ENGINE (Aho-Corasick Patterns)
+   ============================================================ */
+// Kumpulan string statis yang akan dideteksi oleh Aho-Corasick
+const AC_PATTERNS = [
+    'eyJ',              // JWT Header
+    'AKIA',             // AWS Key
+    'sk_live_',         // Stripe Key
+    'AIza',             // Google API Key
+    'ghp_',             // GitHub Token
+    '-----BEGIN',       // Private Key
+    'password',         // Kata kunci password
+    'api_key',
+    'secret',
+    '<script>',         // XSS Basic
+    'UNION SELECT',     // SQLi Basic
+    'javascript:',      // XSS payload
+    '.env'              // File config
+];
+
+// Inisialisasi mesin Aho-Corasick
+const acScanner = new AhoCorasickScanner();
+acScanner.build(AC_PATTERNS);
+   
 /* ---------- SCAN RULES ---------- */
 const SCAN_RULES = [
     { id: 'jwt',      label: 'JWT',         risk: 'high',   re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
