@@ -3,366 +3,447 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sustainable Prompt Compiler v3.0</title>
+<title>CGO — Research Nexus</title>
 
-<!-- Library Inti -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
 <style>
-/* ============================================================
-   THEME & VARIABLES (Cyberpunk HUD v3)
-   ============================================================ */
-:root {
-    --bg-main: #060b14;
-    --bg-panel: #0d1526;
-    --bg-bubble-user: #1e3a8a;
-    --bg-bubble-ai: #0f172a;
-    --text-main: #ffffff;
-    --text-muted: #e2e8f0;
-    --text-dim: #94a3b8;
-    --border-color: #1e293b;
-    --border-strong: rgba(255,255,255,0.35);
-    --c-role: #10b981;
-    --c-context: #ec4899;
-    --c-rules: #f59e0b;
-    --c-objective: #8b5cf6;
-    --c-validation: #3b82f6;
-    --accent: #38bdf8;
-    --danger: #ef4444;
-    --success: #10b981;
-    --warning: #f59e0b;
+:root, [data-theme="cyber"] {
+    --bg-main: #060b14; --bg-panel: #0d1526; --bg-bubble-user: #1e3a8a; --bg-bubble-ai: #0f172a;
+    --text-main: #ffffff; --text-muted: #e2e8f0; --text-dim: #94a3b8;
+    --border-color: #1e293b; --border-strong: rgba(255,255,255,0.35);
+    --c-role: #10b981; --c-context: #ec4899; --c-rules: #f59e0b; --c-objective: #8b5cf6; --c-validation: #3b82f6;
+    --accent: #38bdf8; --danger: #ef4444; --success: #10b981; --warning: #f59e0b;
+    --btn-primary-bg: #ffffff; --btn-primary-fg: #060b14;
+}
+[data-theme="clean"] {
+    --bg-main: #0a0a0f; --bg-panel: #12121a; --bg-bubble-user: #1a2744; --bg-bubble-ai: #14141f;
+    --text-main: #f1f5f9; --text-muted: #cbd5e1; --text-dim: #64748b;
+    --border-color: #1e1e2e; --border-strong: rgba(148,163,184,0.25);
+    --btn-primary-bg: #38bdf8; --btn-primary-fg: #0a0a0f;
+}
+[data-theme="light"] {
+    --bg-main: #f8fafc; --bg-panel: #ffffff; --bg-bubble-user: #dbeafe; --bg-bubble-ai: #f1f5f9;
+    --text-main: #0f172a; --text-muted: #334155; --text-dim: #64748b;
+    --border-color: #e2e8f0; --border-strong: rgba(15,23,42,0.15);
+    --c-role: #059669; --c-context: #db2777; --c-rules: #d97706; --c-objective: #7c3aed; --c-validation: #2563eb;
+    --accent: #0284c7; --danger: #dc2626; --success: #059669; --warning: #d97706;
+    --btn-primary-bg: #0f172a; --btn-primary-fg: #ffffff;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-    background-color: var(--bg-main); color: var(--text-main); font-family: 'Inter', sans-serif;
+    background-color: var(--bg-main); color: var(--text-main); font-family: 'Space Grotesk', sans-serif;
     display: flex; justify-content: center; height: 100vh; overflow: hidden;
-    background-image: radial-gradient(circle at 20% 0%, rgba(236,72,153,0.03) 0%, transparent 40%),
-                      radial-gradient(circle at 80% 100%, rgba(59,130,246,0.04) 0%, transparent 40%);
+    background-image: radial-gradient(circle at 20% 0%, rgba(236,72,153,0.04) 0%, transparent 40%),
+                      radial-gradient(circle at 80% 100%, rgba(59,130,246,0.05) 0%, transparent 40%);
 }
-.hud-container { width: 100%; max-width: 1500px; height: 100vh; display: flex; flex-direction: column; position: relative; }
+.hud-container { width: 100%; max-width: 1560px; height: 100vh; display: flex; flex-direction: column; position: relative; }
 
-/* ============================================================
-   HEADER
-   ============================================================ */
 .hud-header {
-    background: rgba(13, 21, 38, 0.96); backdrop-filter: blur(12px); padding: 10px 18px;
+    background: rgba(13, 21, 38, 0.96); backdrop-filter: blur(12px); padding: 10px 16px;
     border-bottom: 1px solid var(--border-strong); display: flex; justify-content: space-between; align-items: center;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.6); z-index: 20; gap: 10px; flex-wrap: wrap;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5); z-index: 20; gap: 8px; flex-wrap: wrap;
 }
+[data-theme="light"] .hud-header { background: rgba(255,255,255,0.95); }
 .hud-title {
-    font-family: 'Share Tech Mono', monospace; font-size: 1.02rem; color: #ffffff;
-    text-shadow: 0 0 12px rgba(255,255,255,0.35); display: flex; align-items: center; gap: 9px; letter-spacing: 0.5px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.98rem; color: var(--text-main);
+    text-shadow: 0 0 10px rgba(56,189,248,0.25); display: flex; align-items: center; gap: 8px; letter-spacing: 0.4px;
 }
 .status-dot { width: 10px; height: 10px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); flex-shrink: 0; }
 .status-dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
 .status-dot.busy { background: var(--warning); box-shadow: 0 0 8px var(--warning); animation: pulse 1.2s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-.header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.header-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .system-badge {
-    font-family: 'Share Tech Mono', monospace; font-size: 0.66rem; background: rgba(255,255,255,0.06);
-    border: 1px solid var(--border-strong); color: #ffffff; padding: 4px 9px; border-radius: 10px; white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.64rem; background: rgba(255,255,255,0.06);
+    border: 1px solid var(--border-strong); color: var(--text-main); padding: 4px 8px; border-radius: 10px; white-space: nowrap;
 }
 .btn-icon {
     background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-dim);
-    width: 34px; height: 34px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;
+    width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;
 }
-.btn-icon:hover, .btn-icon.active { border-color: #ffffff; color: #ffffff; background: rgba(255,255,255,0.08); }
-.btn-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+[data-theme="light"] .btn-icon { border-color: rgba(15,23,42,0.15); }
+.btn-icon:hover, .btn-icon.active { border-color: var(--accent); color: var(--accent); background: rgba(56,189,248,0.08); }
+.btn-icon svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-/* ============================================================
-   SETTINGS PANEL
-   ============================================================ */
 .settings-panel {
     display: none; background: var(--bg-panel); border-bottom: 1px solid var(--border-color);
-    padding: 14px 18px; gap: 14px; flex-wrap: wrap; align-items: flex-end;
+    padding: 12px 16px; gap: 12px; flex-wrap: wrap; align-items: flex-end; max-height: 42vh; overflow-y: auto;
 }
 .settings-panel.open { display: flex; animation: slideDown 0.18s ease; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-.field { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
-.field label { font-size: 0.72rem; color: var(--text-dim); font-family: 'Share Tech Mono', monospace; }
+.field { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
+.field label { font-size: 0.7rem; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
 .field input, .field select {
     background: var(--bg-main); border: 1px solid rgba(255,255,255,0.15); color: var(--text-main);
-    padding: 8px 10px; border-radius: 7px; font-size: 0.86rem; outline: none; transition: border-color 0.2s;
+    padding: 7px 9px; border-radius: 7px; font-size: 0.84rem; outline: none; transition: border-color 0.2s;
 }
-.field input:focus, .field select:focus { border-color: #ffffff; }
+[data-theme="light"] .field input, [data-theme="light"] .field select { border-color: #cbd5e1; }
+.field input:focus, .field select:focus { border-color: var(--accent); }
 .field input[type="password"] { font-family: monospace; letter-spacing: 1px; }
-.field-wide { flex: 1; min-width: 220px; }
-.settings-hint { font-size: 0.7rem; color: #64748b; width: 100%; margin-top: -2px; }
-.settings-hint b { color: #ffffff; }
+.field-wide { flex: 1; min-width: 200px; }
+.settings-hint { font-size: 0.68rem; color: #64748b; width: 100%; margin-top: -2px; }
+.settings-hint b { color: var(--text-main); }
+.provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; width: 100%; }
+.provider-card {
+    background: var(--bg-main); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 8px 10px;
+    cursor: pointer; transition: 0.15s; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+}
+.provider-card:hover { border-color: var(--accent); }
+.provider-card.active { border-color: var(--success); box-shadow: 0 0 10px rgba(16,185,129,0.25); }
+.provider-card .p-name { font-weight: 600; color: var(--text-main); }
+.provider-card .p-status { font-size: 0.6rem; color: var(--text-dim); margin-top: 2px; }
 
-/* ============================================================
-   APP BODY (SPLIT)
-   ============================================================ */
-.app-body { display: flex; flex: 1; overflow: hidden; background: rgba(255,255,255,0.06); gap: 1px; }
+.app-body { display: flex; flex: 1; overflow: hidden; background: rgba(255,255,255,0.04); gap: 1px; }
 .panel-left, .panel-right { background: var(--bg-main); display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-.panel-left { flex: 1.15; order: 2; }
+.panel-left { flex: 1.2; order: 2; }
 .panel-right { flex: 1; order: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
 .panel-right::-webkit-scrollbar { width: 6px; }
 .panel-right::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
 
-/* ============================================================
-   CHAT AREA
-   ============================================================ */
-.chat-container { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+.chat-container { flex: 1; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
 .chat-container::-webkit-scrollbar { width: 6px; }
 .chat-container::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
 .message { display: flex; flex-direction: column; max-width: 94%; animation: slideIn 0.22s ease-out forwards; opacity: 0; transform: translateY(8px); }
 @keyframes slideIn { to { opacity: 1; transform: translateY(0); } }
 .message.user { align-self: flex-end; }
 .message.ai { align-self: flex-start; width: 100%; max-width: 94%; }
-.sender { font-family: 'Share Tech Mono', monospace; font-size: 0.72rem; color: var(--text-dim); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+.sender { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-dim); margin-bottom: 3px; display: flex; align-items: center; gap: 8px; }
 .message.user .sender { justify-content: flex-end; }
-.bubble { padding: 12px 15px; border-radius: 10px; line-height: 1.6; font-size: 0.9rem; position: relative; word-wrap: break-word; overflow-x: auto; border: 1px solid rgba(255,255,255,0.12); }
+.bubble { padding: 11px 14px; border-radius: 10px; line-height: 1.55; font-size: 0.88rem; position: relative; word-wrap: break-word; overflow-x: auto; border: 1px solid rgba(255,255,255,0.1); }
 .message.user .bubble { background: var(--bg-bubble-user); border-color: #3b82f6; border-bottom-right-radius: 2px; }
-.message.ai .bubble { background: var(--bg-bubble-ai); border-bottom-left-radius: 2px; box-shadow: inset 0 0 20px rgba(0,0,0,0.5); }
-.bubble p { margin-bottom: 10px; } .bubble p:last-child { margin-bottom: 0; } .bubble strong { color: #ffffff; }
-.bubble ul, .bubble ol { margin-left: 20px; margin-bottom: 10px; } .bubble li { margin-bottom: 4px; }
-.bubble code { font-family: 'Share Tech Mono', monospace; background: rgba(255,255,255,0.08); padding: 2px 5px; border-radius: 4px; font-size: 0.87em; }
+.message.ai .bubble { background: var(--bg-bubble-ai); border-bottom-left-radius: 2px; box-shadow: inset 0 0 16px rgba(0,0,0,0.35); }
+.bubble p { margin-bottom: 8px; } .bubble p:last-child { margin-bottom: 0; } .bubble strong { color: var(--text-main); }
+.bubble ul, .bubble ol { margin-left: 18px; margin-bottom: 8px; } .bubble li { margin-bottom: 3px; }
+.bubble code { font-family: 'JetBrains Mono', monospace; background: rgba(255,255,255,0.08); padding: 2px 5px; border-radius: 4px; font-size: 0.85em; }
 .bubble pre code { background: transparent; padding: 0; }
-.bubble blockquote { border-left: 3px solid rgba(255,255,255,0.5); padding-left: 12px; margin: 10px 0; color: var(--text-dim); }
-.chart-container { margin-top: 12px; background: #0f172a; padding: 14px; border-radius: 10px; border: 1px solid var(--border-color); max-width: 100%; height: 280px; position: relative; }
+.bubble blockquote { border-left: 3px solid rgba(255,255,255,0.4); padding-left: 10px; margin: 8px 0; color: var(--text-dim); }
+.chart-container { margin-top: 10px; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); max-width: 100%; height: 260px; position: relative; }
 
-/* --- PERBAIKAN BLOK KODE (BIAR GAK BOROS TEMPAT) --- */
-.bubble pre { 
-    background: #000; padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border-color); 
-    overflow-x: auto; margin: 10px 0; font-family: 'Share Tech Mono', monospace; font-size: 0.82rem; 
-    position: relative;
-    max-height: 350px; /* Batasi tinggi maksimal kode */
-    overflow-y: auto;  /* Scrollbar vertikal untuk kode panjang */
+.bubble pre {
+    background: #000; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color);
+    overflow-x: auto; margin: 8px 0; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+    position: relative; max-height: 320px; overflow-y: auto;
 }
-/* Scrollbar tipis untuk blok kode */
-.bubble pre::-webkit-scrollbar { width: 6px; height: 6px; }
+.bubble pre::-webkit-scrollbar { width: 5px; height: 5px; }
 .bubble pre::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+.bubble table { display: block; overflow-x: auto; max-width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.85em; }
+.bubble th, .bubble td { border: 1px solid var(--border-color); padding: 5px 8px; text-align: left; }
+.bubble th { background: rgba(255,255,255,0.06); color: var(--text-main); }
 
-/* --- PERBAIKAN TABEL MARKDOWN --- */
-.bubble table { 
-    display: block; 
-    overflow-x: auto; 
-    max-width: 100%; 
-    border-collapse: collapse; 
-    margin: 10px 0; 
-    font-size: 0.87em; 
-}
-.bubble th, .bubble td { border: 1px solid var(--border-color); padding: 6px 9px; text-align: left; }
-.bubble th { background: rgba(255,255,255,0.06); color: #ffffff; }
-
-/* INPUT */
-.input-area { padding: 12px 14px; background: rgba(13, 21, 38, 0.96); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.1); display: flex; gap: 10px; align-items: flex-end; flex-shrink: 0; }
-.input-wrapper { flex: 1; display: flex; background: var(--bg-main); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; transition: border-color 0.2s, box-shadow 0.2s; }
-.input-wrapper:focus-within { border-color: #ffffff; box-shadow: 0 0 14px rgba(255,255,255,0.15); }
-textarea { width: 100%; background: transparent; border: none; color: #ffffff; padding: 12px 14px; font-family: 'Inter', sans-serif; font-size: 0.9rem; resize: none; outline: none; max-height: 150px; min-height: 48px; overflow-y: auto; line-height: 1.45; }
+.input-area { padding: 10px 12px; background: rgba(13, 21, 38, 0.96); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; flex-wrap: wrap; }
+[data-theme="light"] .input-area { background: rgba(255,255,255,0.95); }
+.input-wrapper { flex: 1; min-width: 180px; display: flex; background: var(--bg-main); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; transition: border-color 0.2s, box-shadow 0.2s; }
+.input-wrapper:focus-within { border-color: var(--accent); box-shadow: 0 0 12px rgba(56,189,248,0.15); }
+textarea { width: 100%; background: transparent; border: none; color: var(--text-main); padding: 11px 12px; font-family: 'Space Grotesk', sans-serif; font-size: 0.88rem; resize: none; outline: none; max-height: 140px; min-height: 44px; overflow-y: auto; line-height: 1.4; }
 textarea::placeholder { color: #64748b; }
-.btn { padding: 0 16px; height: 48px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.82rem; white-space: nowrap; font-family: 'Inter', sans-serif; }
-.btn-send { background: #ffffff; color: #060b14; box-shadow: 0 0 16px rgba(255,255,255,0.25); }
-.btn-send:hover:not(:disabled) { background: #e2e8f0; box-shadow: 0 0 22px rgba(255,255,255,0.5); }
+.btn { padding: 0 14px; height: 44px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.8rem; white-space: nowrap; font-family: 'Space Grotesk', sans-serif; }
+.btn-send { background: var(--btn-primary-bg); color: var(--btn-primary-fg); box-shadow: 0 0 14px rgba(255,255,255,0.15); }
+.btn-send:hover:not(:disabled) { filter: brightness(1.08); }
 .btn-send:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
 .btn-stop { background: var(--danger); color: white; display: none; }
 .btn-stop:hover { background: #dc2626; }
-.typing-indicator { display: inline-block; width: 7px; height: 14px; background: #ffffff; animation: blink 1s step-end infinite; vertical-align: middle; margin-left: 4px; }
+.btn-secondary {
+    background: rgba(255,255,255,0.07); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.14);
+    height: 44px; padding: 0 10px; border-radius: 10px; font-size: 0.75rem; cursor: pointer;
+}
+.btn-secondary:hover { background: rgba(255,255,255,0.12); color: var(--text-main); border-color: var(--accent); }
+.btn-secondary.active { border-color: var(--success); color: var(--success); }
+.typing-indicator { display: inline-block; width: 6px; height: 12px; background: var(--text-main); animation: blink 1s step-end infinite; vertical-align: middle; margin-left: 3px; }
 @keyframes blink { 50% { opacity: 0; } }
 .error-text { color: var(--danger); }
 
-/* TOAST & COPY */
-.toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1e293b; border: 1px solid #ffffff; color: var(--text-main); padding: 10px 18px; border-radius: 8px; font-size: 0.82rem; opacity: 0; transition: 0.3s; z-index: 100; pointer-events: none; max-width: 90%; text-align: center; }
+.toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1e293b; border: 1px solid var(--accent); color: var(--text-main); padding: 9px 16px; border-radius: 8px; font-size: 0.8rem; opacity: 0; transition: 0.3s; z-index: 100; pointer-events: none; max-width: 90%; text-align: center; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .toast.warning { border-color: var(--warning); color: #fbbf24; }
-.copy-btn { position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.1); border: 1px solid var(--border-color); color: var(--text-dim); font-size: 0.68rem; padding: 3px 7px; border-radius: 5px; cursor: pointer; opacity: 0; transition: 0.2s; }
-.bubble pre:hover .copy-btn { opacity: 1; } .copy-btn:hover { color: #ffffff; border-color: #ffffff; }
+.copy-btn { position: absolute; top: 7px; right: 7px; background: rgba(255,255,255,0.1); border: 1px solid var(--border-color); color: var(--text-dim); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; cursor: pointer; opacity: 0; transition: 0.2s; }
+.bubble pre:hover .copy-btn { opacity: 1; } .copy-btn:hover { color: var(--text-main); border-color: var(--accent); }
 
-/* ============================================================
-   RIGHT PANEL: TELEMETRY v3
-   ============================================================ */
-.tele-section { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.tele-section { padding: 11px; border-bottom: 1px solid rgba(255,255,255,0.05); }
 .tele-title {
-    font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; color: #ffffff; letter-spacing: 2px;
-    margin-bottom: 10px; text-transform: uppercase; display: flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-main); letter-spacing: 1.5px;
+    margin-bottom: 8px; text-transform: uppercase; display: flex; align-items: center; gap: 5px;
 }
-.tele-title::before { content: '▸'; color: #ffffff; }
-.tele-title .hint { color: var(--text-dim); font-size: 0.6rem; letter-spacing: 0.5px; margin-left: auto; text-transform: none; }
+.tele-title::before { content: '▸'; color: var(--accent); }
+.tele-title .hint { color: var(--text-dim); font-size: 0.58rem; letter-spacing: 0.4px; margin-left: auto; text-transform: none; }
 
-/* NEURAL STATUS BADGES */
-.neural-badges { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.neural-badges { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
 .nbadge {
-    background: rgba(13,21,38,0.9); border: 1.5px solid rgba(255,255,255,0.12);
-    border-radius: 7px; padding: 8px 4px; text-align: center;
-    transition: all 0.22s ease; opacity: 0.45;
-    position: relative;
+    background: rgba(13,21,38,0.9); border: 1.5px solid rgba(255,255,255,0.1);
+    border-radius: 6px; padding: 6px 3px; text-align: center; transition: all 0.2s ease; opacity: 0.4; position: relative;
 }
-.nbadge .nbadge-label { font-family: 'Share Tech Mono', monospace; font-size: 0.55rem; letter-spacing: 1px; color: var(--text-dim); display: block; }
-.nbadge .nbadge-count { font-family: 'Share Tech Mono', monospace; font-size: 1.05rem; font-weight: 700; color: #ffffff; line-height: 1.2; }
+.nbadge .nbadge-label { font-family: 'JetBrains Mono', monospace; font-size: 0.52rem; letter-spacing: 0.8px; color: var(--text-dim); display: block; }
+.nbadge .nbadge-count { font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 700; color: var(--text-main); line-height: 1.15; }
 .nbadge.active { opacity: 1; }
-.nbadge[data-cat="role"].active      { border-color: var(--c-role);        box-shadow: 0 0 14px var(--c-role);        }
-.nbadge[data-cat="role"].active .nbadge-count      { color: var(--c-role); }
-.nbadge[data-cat="context"].active   { border-color: var(--c-context);     box-shadow: 0 0 14px var(--c-context);     }
-.nbadge[data-cat="context"].active .nbadge-count   { color: var(--c-context); }
-.nbadge[data-cat="rules"].active     { border-color: var(--c-rules);       box-shadow: 0 0 14px var(--c-rules);       }
-.nbadge[data-cat="rules"].active .nbadge-count     { color: var(--c-rules); }
-.nbadge[data-cat="objective"].active { border-color: var(--c-objective);   box-shadow: 0 0 14px var(--c-objective);   }
+.nbadge[data-cat="role"].active { border-color: var(--c-role); box-shadow: 0 0 12px var(--c-role); }
+.nbadge[data-cat="role"].active .nbadge-count { color: var(--c-role); }
+.nbadge[data-cat="context"].active { border-color: var(--c-context); box-shadow: 0 0 12px var(--c-context); }
+.nbadge[data-cat="context"].active .nbadge-count { color: var(--c-context); }
+.nbadge[data-cat="rules"].active { border-color: var(--c-rules); box-shadow: 0 0 12px var(--c-rules); }
+.nbadge[data-cat="rules"].active .nbadge-count { color: var(--c-rules); }
+.nbadge[data-cat="objective"].active { border-color: var(--c-objective); box-shadow: 0 0 12px var(--c-objective); }
 .nbadge[data-cat="objective"].active .nbadge-count { color: var(--c-objective); }
-.nbadge[data-cat="validation"].active{ border-color: var(--c-validation);  box-shadow: 0 0 14px var(--c-validation);  }
-.nbadge[data-cat="validation"].active .nbadge-count{ color: var(--c-validation); }
-/* Animasi firing: event-based, berhenti sendiri */
-.nbadge.firing { transform: scale(1.08); }
-.nbadge.firing[data-cat="role"]      { box-shadow: 0 0 28px var(--c-role), 0 0 44px var(--c-role); }
-.nbadge.firing[data-cat="context"]   { box-shadow: 0 0 28px var(--c-context), 0 0 44px var(--c-context); }
-.nbadge.firing[data-cat="rules"]     { box-shadow: 0 0 28px var(--c-rules), 0 0 44px var(--c-rules); }
-.nbadge.firing[data-cat="objective"] { box-shadow: 0 0 28px var(--c-objective), 0 0 44px var(--c-objective); }
-.nbadge.firing[data-cat="validation"]{ box-shadow: 0 0 28px var(--c-validation), 0 0 44px var(--c-validation); }
+.nbadge[data-cat="validation"].active { border-color: var(--c-validation); box-shadow: 0 0 12px var(--c-validation); }
+.nbadge[data-cat="validation"].active .nbadge-count { color: var(--c-validation); }
+.nbadge.firing { transform: scale(1.07); }
 
-/* SPEC SCORE */
-.spec-block { display: flex; align-items: center; gap: 14px; margin-top: 12px; }
-.spec-label { font-family: 'Share Tech Mono', monospace; font-size: 0.66rem; color: var(--text-dim); letter-spacing: 2px; }
-.spec-value { font-family: 'Share Tech Mono', monospace; font-size: 2.1rem; font-weight: 700; line-height: 1; color: #ffffff; transition: color 0.3s; }
-.spec-value.low    { color: var(--danger); }
-.spec-value.mid    { color: var(--warning); }
-.spec-value.high   { color: var(--success); text-shadow: 0 0 18px rgba(16,185,129,0.6); }
-.spec-bar { flex: 1; height: 6px; background: #1e293b; border-radius: 3px; overflow: hidden; }
+.spec-block { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.spec-label { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: var(--text-dim); letter-spacing: 1.5px; }
+.spec-value { font-family: 'JetBrains Mono', monospace; font-size: 1.9rem; font-weight: 700; line-height: 1; color: var(--text-main); transition: color 0.3s; }
+.spec-value.low { color: var(--danger); } .spec-value.mid { color: var(--warning); }
+.spec-value.high { color: var(--success); text-shadow: 0 0 14px rgba(16,185,129,0.5); }
+.spec-bar { flex: 1; height: 5px; background: #1e293b; border-radius: 3px; overflow: hidden; }
 .spec-fill { height: 100%; background: linear-gradient(90deg, var(--danger), var(--warning), var(--success)); width: 0%; transition: width 0.4s ease; }
 
-/* WORD HEAT BAR (THIN) */
-.heat-bar { display: flex; flex-direction: row; height: 8px; gap: 1px; width: 100%; border-radius: 3px; overflow: hidden; }
+.heat-bar { display: flex; flex-direction: row; height: 7px; gap: 1px; width: 100%; border-radius: 3px; overflow: hidden; }
 .heat-cell { flex: 1; background: #0f172a; transition: background 0.25s; }
-.heat-cell.cold { background: #0f172a; }
-.heat-cell.dim  { background: #1e293b; }
-.heat-cell.warm { background: #f59e0b; }
-.heat-cell.hot  { background: #ef4444; }
-.heat-cell.max  { background: #10b981; }
-.heat-meta { display: flex; justify-content: space-between; margin-top: 4px; font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; color: var(--text-dim); }
+.heat-cell.cold { background: #0f172a; } .heat-cell.dim { background: #1e293b; }
+.heat-cell.warm { background: #f59e0b; } .heat-cell.hot { background: #ef4444; } .heat-cell.max { background: #10b981; }
+.heat-meta { display: flex; justify-content: space-between; margin-top: 3px; font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; color: var(--text-dim); }
 
-/* ISSUES */
-.issues-list { display: flex; flex-direction: column; gap: 6px; max-height: 120px; overflow-y: auto; }
-.issues-list::-webkit-scrollbar { width: 4px; } .issues-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-.issue { font-family: 'Share Tech Mono', monospace; font-size: 0.68rem; padding: 6px 8px; border-radius: 5px; border-left: 3px solid; line-height: 1.35; }
-.issue.info    { background: rgba(59,130,246,0.08);  border-color: var(--c-validation); color: #93c5fd; }
-.issue.warning { background: rgba(245,158,11,0.08);  border-color: var(--warning);      color: #fbbf24; }
-.issue.error   { background: rgba(239,68,68,0.08);   border-color: var(--danger);       color: #fca5a5; }
-.issue.ok      { background: rgba(16,185,129,0.08);  border-color: var(--success);      color: #6ee7b7; }
+.issues-list { display: flex; flex-direction: column; gap: 5px; max-height: 110px; overflow-y: auto; }
+.issues-list::-webkit-scrollbar { width: 3px; } .issues-list::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.issue { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; padding: 5px 7px; border-radius: 5px; border-left: 3px solid; line-height: 1.3; }
+.issue.info { background: rgba(59,130,246,0.08); border-color: var(--c-validation); color: #93c5fd; }
+.issue.warning { background: rgba(245,158,11,0.08); border-color: var(--warning); color: #fbbf24; }
+.issue.error { background: rgba(239,68,68,0.08); border-color: var(--danger); color: #fca5a5; }
+.issue.ok { background: rgba(16,185,129,0.08); border-color: var(--success); color: #6ee7b7; }
 
-/* EVENT STREAM LOG */
-.event-log {
-    background: #000; border-radius: 6px; padding: 8px 10px; height: 170px; overflow-y: auto;
-    font-family: 'Share Tech Mono', monospace; font-size: 0.7rem; line-height: 1.55;
-    border: 1px solid rgba(255,255,255,0.08);
+.artifact-box {
+    background: #000; border: 1px solid rgba(255,255,255,0.1); border-radius: 7px;
+    padding: 8px; max-height: 160px; overflow-y: auto; font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem; line-height: 1.4; color: var(--text-muted); white-space: pre-wrap; word-break: break-word;
 }
-.event-log::-webkit-scrollbar { width: 4px; } .event-log::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.artifact-box::-webkit-scrollbar { width: 3px; }
+.artifact-box::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.artifact-actions { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+.artifact-actions button {
+    background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.15); color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; padding: 4px 8px; border-radius: 5px; cursor: pointer;
+}
+.artifact-actions button:hover { color: var(--text-main); border-color: var(--accent); }
+
+.event-log {
+    background: #000; border-radius: 6px; padding: 7px 9px; height: 130px; overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; line-height: 1.5;
+    border: 1px solid rgba(255,255,255,0.07);
+}
+.event-log::-webkit-scrollbar { width: 3px; } .event-log::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
 .log-line { white-space: pre-wrap; word-break: break-word; color: var(--text-muted); }
-.log-line .ts { color: #475569; margin-right: 4px; }
-.log-line.tag-sys  { color: #93c5fd; }
-.log-line.tag-pars { color: var(--c-context); }
-.log-line.tag-val  { color: var(--warning); }
-.log-line.tag-comp { color: var(--c-validation); }
-.log-line.tag-err  { color: var(--danger); }
-.log-line.tag-ok   { color: var(--success); }
+.log-line .ts { color: #475569; margin-right: 3px; }
+.log-line.tag-sys { color: #93c5fd; } .log-line.tag-pars { color: var(--c-context); }
+.log-line.tag-val { color: var(--warning); } .log-line.tag-comp { color: var(--c-validation); }
+.log-line.tag-err { color: var(--danger); } .log-line.tag-ok { color: var(--success); }
 
-/* ============================================================
-   RESPONSIVE (MOBILE) & TOGGLE TELEMETRY
-   ============================================================ */
-#toggle-telemetry-btn { display: none; } /* Sembunyikan di Desktop */
-
-@media (max-width: 980px) { 
-    .app-body { flex-direction: column; } 
-    .panel-left { flex: 1; min-height: 0; } 
-    
-    /* Panel Kanan dibuat fleksibel, tidak dipaksa 46vh */
-    .panel-right { 
-        flex: 0 1 auto; 
-        max-height: 40vh; 
-        min-height: 0; 
-        border-bottom: 1px solid var(--border-color); 
-        transition: max-height 0.3s ease;
-    } 
-    
-    /* Class untuk menyembunyikan telemetri di mobile */
-    .panel-right.collapsed { 
-        display: none; 
-    }
-
-    /* Perkecil tinggi log & chart di mobile */
-    .event-log { height: 120px; }
-    .chart-container { height: 200px; }
-    
-    /* Tampilkan tombol toggle di mobile */
+#toggle-telemetry-btn { display: none; }
+@media (max-width: 980px) {
+    .app-body { flex-direction: column; }
+    .panel-left { flex: 1; min-height: 0; }
+    .panel-right { flex: 0 1 auto; max-height: 38vh; min-height: 0; border-bottom: 1px solid var(--border-color); }
+    .panel-right.collapsed { display: none; }
+    .event-log { height: 100px; }
+    .chart-container { height: 190px; }
     #toggle-telemetry-btn { display: flex; }
 }
+/* ===== CGO FUTURE SKIN v4.1 (override, fungsi tidak berubah) ===== */
+html, body { height: 100%; }
+body { font-family: 'Space Grotesk', system-ui, sans-serif; height: 100vh; height: 100dvh;
+    background: radial-gradient(1100px 560px at 12% -8%, rgba(34,211,238,.10), transparent 60%),
+                radial-gradient(900px 600px at 98% 108%, rgba(139,92,246,.14), transparent 60%), #04070d; }
+[data-theme="light"] body, body[data-theme="light"] { background: radial-gradient(900px 500px at 10% -10%, rgba(2,132,199,.08), transparent 60%), #f3f6fb; }
+body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: linear-gradient(rgba(148,163,184,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.05) 1px, transparent 1px);
+    background-size: 44px 44px; -webkit-mask-image: radial-gradient(ellipse at 50% 40%, #000 25%, transparent 78%); mask-image: radial-gradient(ellipse at 50% 40%, #000 25%, transparent 78%); }
+.hud-container { height: 100vh; height: 100dvh; z-index: 1; }
+.hud-header { background: rgba(8,13,26,.72); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-bottom: 1px solid transparent;
+    border-image: linear-gradient(90deg, transparent, rgba(34,211,238,.55), rgba(139,92,246,.55), transparent) 1; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
+[data-theme="light"] .hud-header { background: rgba(255,255,255,.8); }
+.hud-title { font-weight: 600; letter-spacing: .14em; font-size: .9rem; text-shadow: 0 0 18px rgba(34,211,238,.35); }
+
+/* satu momen utama: inti neural berputar */
+.status-dot { width: 12px; height: 12px; position: relative; margin: 0 6px; }
+.status-dot::after { content: ''; position: absolute; inset: -7px; border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent 0 30%, var(--accent) 60%, #a78bfa 85%, transparent);
+    -webkit-mask: radial-gradient(circle, transparent 58%, #000 62%); mask: radial-gradient(circle, transparent 58%, #000 62%);
+    animation: coreSpin 7s linear infinite; }
+.status-dot.busy::after { animation-duration: .9s; }
+.status-dot.error::after { background: conic-gradient(from 0deg, transparent, var(--danger), transparent 70%); animation-duration: 3s; }
+@keyframes coreSpin { to { transform: rotate(360deg); } }
+
+.system-badge { border-radius: 999px; background: rgba(34,211,238,.06); }
+.btn-icon { border-radius: 10px; background: rgba(148,163,184,.05); }
+.settings-panel { background: rgba(10,16,30,.88); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+[data-theme="light"] .settings-panel { background: rgba(255,255,255,.95); }
+
+.app-body { background: transparent; gap: 10px; padding: 10px; }
+.panel-left { order: 1; flex: 1.5; border-radius: 16px; background: rgba(8,13,26,.55); border: 1px solid rgba(148,163,184,.14); }
+.panel-right { order: 2; flex: 1; max-width: 460px; background: transparent; gap: 0; }
+[data-theme="light"] .panel-left { background: rgba(255,255,255,.7); }
+.chat-container { scroll-behavior: auto; padding: 18px; gap: 16px; }
+
+.bubble { border-radius: 14px; line-height: 1.6; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.message.ai .bubble { background: linear-gradient(180deg, rgba(17,26,46,.78), rgba(9,15,29,.78)); border: 1px solid rgba(34,211,238,.16);
+    border-left: 2px solid var(--accent); border-bottom-left-radius: 4px; box-shadow: 0 10px 34px rgba(0,0,0,.35); }
+.message.user .bubble { background: linear-gradient(135deg, rgba(37,99,235,.6), rgba(124,58,237,.55)); border-color: rgba(147,197,253,.35); border-bottom-right-radius: 4px; }
+[data-theme="light"] .message.ai .bubble { background: #fff; border-color: rgba(2,132,199,.25); box-shadow: 0 6px 20px rgba(15,23,42,.08); }
+[data-theme="light"] .message.user .bubble { background: #dbeafe; border-color: #93c5fd; color: #0f172a; }
+.sender { letter-spacing: .12em; }
+.typing-indicator { background: linear-gradient(180deg, var(--accent), #a78bfa); width: 7px; border-radius: 2px; }
+
+.input-area { background: transparent; border-top: 1px solid rgba(148,163,184,.12); -webkit-backdrop-filter: none; backdrop-filter: none; padding: 12px; }
+.input-wrapper { border-radius: 16px; background: rgba(4,7,13,.7); }
+[data-theme="light"] .input-wrapper { background: #fff; }
+.input-wrapper:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34,211,238,.12), 0 0 28px rgba(34,211,238,.14); }
+.btn { border-radius: 14px; }
+.btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.btn-send { background: linear-gradient(135deg, #22d3ee, #8b5cf6); color: #04070d; box-shadow: 0 0 22px rgba(34,211,238,.28); }
+[data-theme="light"] .btn-send { background: var(--btn-primary-bg); color: var(--btn-primary-fg); box-shadow: none; }
+.btn-secondary { border-radius: 14px; }
+
+.tele-section { background: rgba(10,16,30,.62); margin: 0 0 10px; border: 1px solid rgba(148,163,184,.13); border-radius: 14px; padding: 12px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+[data-theme="light"] .tele-section { background: rgba(255,255,255,.8); }
+.tele-title { letter-spacing: .12em; }
+.nbadge { border-radius: 10px; }
+.spec-value.high { text-shadow: 0 0 18px rgba(16,185,129,.6); }
+.spec-fill { box-shadow: 0 0 12px rgba(16,185,129,.4); }
+
+[data-theme="light"] .issue.info { color: #1d4ed8; } [data-theme="light"] .issue.warning { color: #b45309; }
+[data-theme="light"] .issue.error { color: #b91c1c; } [data-theme="light"] .issue.ok { color: #047857; }
+[data-theme="light"] .artifact-box, [data-theme="light"] .event-log { background: #f1f5f9; color: #334155; }
+[data-theme="light"] .chart-container { background: #fff; }
+[data-theme="light"] .toast { background: #fff; }
+[data-theme="light"] .nbadge { background: #fff; }
+[data-theme="light"] .settings-hint, [data-theme="light"] textarea::placeholder { color: #64748b; }
+.bubble pre { background: #05080f; }
+.toast { border-radius: 12px; bottom: 96px; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 980px) {
+    .app-body { padding: 6px; gap: 0; }
+    .panel-left { border-radius: 14px; }
+    .panel-right { position: fixed; left: 0; right: 0; bottom: 0; max-width: none; max-height: 64vh; max-height: 64dvh; z-index: 30; padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
+        background: var(--bg-panel); border-radius: 20px 20px 0 0; border-top: 1px solid var(--border-strong); box-shadow: 0 -24px 60px rgba(0,0,0,.6); }
+    .panel-right.collapsed { display: none; }
+}
+@media (max-width: 560px) {
+    .btn-secondary span { display: none; }
+    .btn-secondary { padding: 0 12px; }
+    .system-badge { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .message { opacity: 1 !important; transform: none !important; }
+}
+
 </style>
 </head>
-<body>
+<body data-theme="cyber">
 
 <div class="hud-container">
-    <!-- HEADER -->
     <header class="hud-header">
         <div class="hud-title">
             <div class="status-dot" id="status-dot"></div>
-            SUSTAINABLE PROMPT COMPILER v3.0
+            CGO · RESEARCH NEXUS
         </div>
         <div class="header-right">
-            <div class="system-badge" id="engine-badge">AUTO-DETECTING...</div>
-            
-            <!-- TOMBOL TOGGLE TELEMETRI (KHUSUS MOBILE) -->
-            <button class="btn-icon" id="toggle-telemetry-btn" title="Sembunyikan/Tampilkan Telemetri">
+            <div class="system-badge" id="engine-badge">PROVIDER: —</div>
+            <button class="btn-icon" id="toggle-telemetry-btn" title="Toggle Telemetry" aria-label="Toggle Telemetry">
                 <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
             </button>
-
-            <button class="btn-icon" id="settings-btn" title="Pengaturan">
+            <button class="btn-icon" id="theme-btn" title="Theme" aria-label="Theme">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            </button>
+            <button class="btn-icon" id="diag-btn" title="Self-Test" aria-label="Self-Test">
+                <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            </button>
+            <button class="btn-icon" id="settings-btn" title="Settings / Providers" aria-label="Settings / Providers">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             </button>
-            <button class="btn-icon" id="clear-btn" title="Bersihkan riwayat">
+            <button class="btn-icon" id="clear-btn" title="Clear history" aria-label="Clear history">
                 <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
             </button>
         </div>
     </header>
 
-    <!-- SETTINGS -->
     <div class="settings-panel" id="settings-panel">
-        <div class="field field-wide">
-            <label>API KEY (Auto-Save)</label>
-            <input type="password" id="api-key-input" placeholder="sk_... / pk_... (kosong = gratis)" autocomplete="off">
-        </div>
-        <div class="field">
-            <label>MODEL ENGINE</label>
-            <select id="model-select" disabled>
-                <option value="openai">openai (stabil)</option>
-                <option value="openai-fast">openai-fast</option>
-                <option value="mistral">mistral</option>
-                <option value="deepseek">deepseek</option>
-                <option value="gemini">gemini</option>
-                <option value="grok">grok</option>
-                <option value="claude">claude</option>
-                <option value="openai-large">openai-large</option>
+        <div class="field" style="min-width:160px;">
+            <label>PROVIDER</label>
+            <select id="provider-select">
+                <option value="pollinations">Pollinations (Free/GEN)</option>
+                <option value="openai">OpenAI</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="xai">xAI (Grok)</option>
+                <option value="gemini">Google Gemini</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="custom">Custom OpenAI-compatible</option>
             </select>
         </div>
+        <div class="field field-wide">
+            <label>API KEY (auto-save per provider)</label>
+            <input type="password" id="api-key-input" placeholder="sk-... / sk_... / AIza... / kosong = free Pollinations" autocomplete="off">
+        </div>
+        <div class="field">
+            <label>MODEL</label>
+            <select id="model-select">
+                <option value="openai">openai</option>
+            </select>
+        </div>
+        <div class="field" id="custom-model-wrap" style="display:none;">
+            <label>CUSTOM MODEL ID</label>
+            <input type="text" id="custom-model-input" placeholder="model-id" autocomplete="off">
+        </div>
+        <div class="field">
+            <label>LANGUAGE</label>
+            <select id="lang-select">
+                <option value="id">Indonesia</option>
+                <option value="en">English</option>
+                <option value="auto">Auto (detect)</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>THEME</label>
+            <select id="theme-select">
+                <option value="cyber">Cyberpunk</option>
+                <option value="clean">Clean Dark</option>
+                <option value="light">Light</option>
+            </select>
+        </div>
+        <div class="field field-wide" id="custom-base-wrap" style="display:none;">
+            <label>CUSTOM BASE URL</label>
+            <input type="text" id="custom-base-input" placeholder="https://api.example.com/v1">
+        </div>
         <div class="settings-hint">
-            <b>Otomatis:</b> Tanpa API Key, sistem mengunci ke <i>Classic (Free)</i>. Masukkan key untuk membuka semua model.
+            <b>Multi-Provider:</b> Setiap provider punya key sendiri. Pollinations tanpa key = free. Compile Only = hanya kompilasi tanpa kirim.
+            Esc = Stop · Ctrl+Shift+C = Copy Artifact · Ctrl+Shift+O = Compile Only · Ctrl+Shift+H = Auto-Heal.
         </div>
     </div>
 
-    <!-- MAIN BODY -->
     <div class="app-body">
-        <!-- LEFT: CHAT -->
         <div class="panel-left">
             <main class="chat-container" id="chat-container"></main>
             <footer class="input-area">
                 <div class="input-wrapper">
-                    <textarea id="chat-input" rows="1" placeholder="Ketik prompt mentah... (Enter kirim, Shift+Enter baris baru)"></textarea>
+                    <textarea id="chat-input" rows="1" placeholder="Raw prompt... (Enter send, Shift+Enter newline)"></textarea>
                 </div>
+                <button class="btn btn-secondary" id="heal-btn" title="Auto-Heal: lengkapi section kosong (Ctrl+Shift+H)" aria-label="Auto-Heal"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>HEAL</span></button>
+                <button class="btn btn-secondary" id="sample-btn" title="Sample prompt" aria-label="Sample prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>SAMPLE</span></button>
+                <button class="btn btn-secondary" id="compile-only-btn" title="Compile without sending" aria-label="Compile only"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg><span>COMPILE ONLY</span></button>
                 <button class="btn btn-send" id="send-btn">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                    COMPILE &amp; SEND
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    <span id="send-label">COMPILE &amp; SEND</span>
                 </button>
-                <button class="btn btn-stop" id="stop-btn">STOP</button>
+                <button class="btn btn-stop" id="stop-btn" aria-label="Stop"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>STOP</button>
             </footer>
         </div>
 
-        <!-- RIGHT: TELEMETRY (v3) -->
         <div class="panel-right">
-            <!-- NEURAL STATUS BADGES -->
             <div class="tele-section">
                 <div class="tele-title">NEURAL STATUS <span class="hint">5-node IR</span></div>
                 <div class="neural-badges">
@@ -379,9 +460,8 @@ textarea::placeholder { color: #64748b; }
                 </div>
             </div>
 
-            <!-- WORD HEAT -->
             <div class="tele-section">
-                <div class="tele-title">WORD HEAT (DEBOUNCED)</div>
+                <div class="tele-title">WORD HEAT</div>
                 <div class="heat-bar" id="heat-bar"></div>
                 <div class="heat-meta">
                     <span id="heat-words">0 words</span>
@@ -389,19 +469,26 @@ textarea::placeholder { color: #64748b; }
                 </div>
             </div>
 
-            <!-- SYMBOLIC ISSUES -->
             <div class="tele-section">
                 <div class="tele-title">SYMBOLIC VALIDATOR</div>
                 <div class="issues-list" id="issues-list">
-                    <div class="issue info">▸ Menunggu input...</div>
+                    <div class="issue info">▸ Waiting input...</div>
                 </div>
             </div>
 
-            <!-- EVENT STREAM LOG -->
+            <div class="tele-section">
+                <div class="tele-title">ARTIFACT PREVIEW <span class="hint">ZTA</span></div>
+                <div class="artifact-box" id="artifact-box">No artifact yet. Type to see structured IR.</div>
+                <div class="artifact-actions">
+                    <button id="copy-artifact-btn">COPY ARTIFACT</button>
+                    <button id="export-md-btn">EXPORT MD</button>
+                </div>
+            </div>
+
             <div class="tele-section" style="border-bottom:none;">
-                <div class="tele-title">EVENT STREAM LOG</div>
+                <div class="tele-title">EVENT STREAM</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[SYSTEM]</span> Spiderweb v3.0 online. ZTA ready.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[SYSTEM]</span> Research Nexus v4.0 online. Multi-provider ready.</div>
                 </div>
             </div>
         </div>
@@ -412,220 +499,394 @@ textarea::placeholder { color: #64748b; }
 
 <script>
 /* ================================================================
-   [1] CONFIG & STATE
+   SPC v4.0 — RESEARCH NEXUS
+   Multi-provider · Compile Only · Multi-lang · Theme · Researcher mode
+   Zero regression from v3.1
    ================================================================ */
-const STORAGE_KEY = 'spc_ai_v30';
-const ARTIFACT_CACHE_KEY = 'spc_artifacts_v30';
-const MAX_HISTORY = 14;
-const MAX_CACHE = 20;
-const DEBOUNCE_MS = 300;
+const APP_VERSION = '4.1-nexus';
+const STORAGE_KEY = 'spc_ai_v40';
+const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
+const MAX_HISTORY = 18;
+const MAX_CACHE = 30;
+const DEBOUNCE_MS = 260;
+const MAX_INPUT_CHARS = 14000;
 
+const PROVIDERS = {
+    pollinations: {
+        name: 'Pollinations',
+        free: true,
+        models: ['openai', 'openai-fast', 'mistral', 'deepseek', 'gemini', 'grok', 'claude', 'openai-large'],
+        defaultModel: 'openai',
+        build: (key, model) => ({
+            endpoint: key ? 'https://gen.pollinations.ai/v1/chat/completions' : 'https://text.pollinations.ai/openai',
+            headers: key ? { 'Authorization': `Bearer ${key}` } : {},
+            model: key ? model : (['openai','openai-fast'].includes(model) ? model : 'openai')
+        })
+    },
+    openai: {
+        name: 'OpenAI',
+        free: false,
+        models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-4.1-mini', 'o3-mini', 'o1'],
+        defaultModel: 'gpt-4o-mini',
+        build: (key, model) => ({
+            endpoint: 'https://api.openai.com/v1/chat/completions',
+            headers: { 'Authorization': `Bearer ${key}` },
+            model
+        })
+    },
+    anthropic: {
+        name: 'Anthropic',
+        free: false,
+        models: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5', 'claude-sonnet-4-6', 'claude-sonnet-4-20250514'],
+        defaultModel: 'claude-sonnet-5-5',
+        build: (key, model) => ({
+            endpoint: 'https://api.anthropic.com/v1/messages',
+            headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+            model,
+            isAnthropic: true
+        })
+    },
+    xai: {
+        name: 'xAI (Grok)',
+        free: false,
+        models: ['grok-3', 'grok-3-mini', 'grok-2', 'grok-2-mini'],
+        defaultModel: 'grok-3-mini',
+        build: (key, model) => ({
+            endpoint: 'https://api.x.ai/v1/chat/completions',
+            headers: { 'Authorization': `Bearer ${key}` },
+            model
+        })
+    },
+    gemini: {
+        name: 'Google Gemini',
+        free: false,
+        models: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'],
+        defaultModel: 'gemini-2.5-flash',
+        build: (key, model) => ({
+            endpoint: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse&key=${encodeURIComponent(key)}`,
+            headers: {},
+            model,
+            isGemini: true
+        })
+    },
+    deepseek: {
+        name: 'DeepSeek',
+        free: false,
+        models: ['deepseek-chat', 'deepseek-reasoner'],
+        defaultModel: 'deepseek-chat',
+        build: (key, model) => ({
+            endpoint: 'https://api.deepseek.com/v1/chat/completions',
+            headers: { 'Authorization': `Bearer ${key}` },
+            model
+        })
+    },
+    custom: {
+        name: 'Custom',
+        free: false,
+        models: [],
+        defaultModel: '',
+        build: (key, model, base) => ({
+            endpoint: (base || 'https://api.openai.com/v1').replace(/\/$/, '') + '/chat/completions',
+            headers: key ? { 'Authorization': `Bearer ${key}` } : {},
+            model: model || 'custom-model'
+        })
+    }
+};
+
+const SYSTEM_PROMPTS = {
+    id: `Kamu adalah CGO (Cyber Guardian Operator) — peneliti & ilmuwan tingkat tinggi masa depan yang menerima prompt dari Sustainable Prompt Compiler v4.0 Research Nexus.
+
+PENTING: Prompt sudah dikompilasi deterministik ke section: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
+
+Protokol (WAJIB):
+1. Evaluasi keselarasan ROLE–CONTEXT–RULES sebelum menjawab.
+2. Jika ada kontradiksi atau bagian kritis kosong, tulis singkat di awal: "⚠️ Catatan: [masalah]".
+3. Jawab sesuai OBJECTIVE dengan Markdown rapi, to-the-point, futuristik.
+4. Maksimal SATU putaran self-correction. Jika format (JSON/kode/langka) diminta, pastikan terpenuhi.
+
+Kemampuan khusus peneliti:
+- Urai masalah kompleks menjadi peta dependensi, asumsi, dan risiko.
+- Hasilkan kode langka / algoritma non-trivial dengan penjelasan alasan desain.
+- Bandingkan pendekatan, berikan trade-off, dan rekomendasi berbasis bukti.
+- Jika diminta grafik: HANYA blok \`\`\`chart ... \`\`\` berisi JSON Chart.js murni.
+- Jika diminta kode: gunakan code block ber-language tag.
+
+Bahasa: Indonesia natural, ilmiah, ringkas.`,
+
+    en: `You are CGO (Cyber Guardian Operator) — a high-level future researcher & scientist receiving prompts from Sustainable Prompt Compiler v4.0 Research Nexus.
+
+IMPORTANT: The prompt is already deterministically compiled into sections: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
+
+Protocol (MANDATORY):
+1. Evaluate alignment of ROLE–CONTEXT–RULES before answering.
+2. If contradictions or critical empty sections exist, start with: "⚠️ Note: [brief issue]".
+3. Answer per OBJECTIVE in clean Markdown, concise, futuristic tone.
+4. At most ONE self-correction pass. If output format (JSON/code/rare algo) is requested, ensure it is met.
+
+Researcher capabilities:
+- Decompose complex problems into dependency maps, assumptions, and risks.
+- Produce rare / non-trivial code or algorithms with design rationale.
+- Compare approaches, surface trade-offs, evidence-based recommendations.
+- For charts: ONLY a \`\`\`chart ... \`\`\` block with pure Chart.js JSON.
+- For code: use fenced blocks with language tags.
+
+Language: natural, scientific English, concise.`
+};
+
+// DOM
 const chatContainer = document.getElementById('chat-container');
-const chatInput     = document.getElementById('chat-input');
-const sendBtn       = document.getElementById('send-btn');
-const stopBtn       = document.getElementById('stop-btn');
-const statusDot     = document.getElementById('status-dot');
-const clearBtn      = document.getElementById('clear-btn');
-const settingsBtn   = document.getElementById('settings-btn');
+const chatInput = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-btn');
+const stopBtn = document.getElementById('stop-btn');
+const statusDot = document.getElementById('status-dot');
+const clearBtn = document.getElementById('clear-btn');
+const settingsBtn = document.getElementById('settings-btn');
 const settingsPanel = document.getElementById('settings-panel');
-const apiKeyInput   = document.getElementById('api-key-input');
-const modelSelect   = document.getElementById('model-select');
-const engineBadge   = document.getElementById('engine-badge');
-const toastEl       = document.getElementById('toast');
-
-// Elemen Toggle Mobile
+const apiKeyInput = document.getElementById('api-key-input');
+const modelSelect = document.getElementById('model-select');
+const providerSelect = document.getElementById('provider-select');
+const langSelect = document.getElementById('lang-select');
+const themeSelect = document.getElementById('theme-select');
+const customBaseInput = document.getElementById('custom-base-input');
+const customBaseWrap = document.getElementById('custom-base-wrap');
+const customModelWrap = document.getElementById('custom-model-wrap');
+const customModelInput = document.getElementById('custom-model-input');
+const healBtn = document.getElementById('heal-btn');
+const engineBadge = document.getElementById('engine-badge');
+const toastEl = document.getElementById('toast');
+const diagBtn = document.getElementById('diag-btn');
+const sampleBtn = document.getElementById('sample-btn');
+const compileOnlyBtn = document.getElementById('compile-only-btn');
+const themeBtn = document.getElementById('theme-btn');
+const copyArtifactBtn = document.getElementById('copy-artifact-btn');
+const exportMdBtn = document.getElementById('export-md-btn');
+const artifactBox = document.getElementById('artifact-box');
 const toggleTelemetryBtn = document.getElementById('toggle-telemetry-btn');
-const panelRight         = document.querySelector('.panel-right');
+const panelRight = document.querySelector('.panel-right');
 
 const countEls = {
     role: document.getElementById('count-role'),
     context: document.getElementById('count-context'),
     rules: document.getElementById('count-rules'),
     objective: document.getElementById('count-objective'),
-    validation: document.getElementById('count-validation'),
+    validation: document.getElementById('count-validation')
 };
 const badgeEls = document.querySelectorAll('.nbadge');
 const specValueEl = document.getElementById('spec-value');
-const specFillEl  = document.getElementById('spec-fill');
-const heatBarEl   = document.getElementById('heat-bar');
+const specFillEl = document.getElementById('spec-fill');
+const heatBarEl = document.getElementById('heat-bar');
 const heatWordsEl = document.getElementById('heat-words');
 const heatFlaggedEl = document.getElementById('heat-flagged');
-const issuesListEl  = document.getElementById('issues-list');
-const eventLogEl    = document.getElementById('event-log');
+const issuesListEl = document.getElementById('issues-list');
+const eventLogEl = document.getElementById('event-log');
 
 let chatHistory = [];
 let currentAbortController = null;
 let isGenerating = false;
-let settings = { apiKey: '', model: 'openai' };
+let compileOnlyMode = false;
+let lastCompiledArtifact = '';
+let lastUserRaw = '';
 
-// Live scan state (updated via debounce)
+let settings = {
+    provider: 'pollinations',
+    keys: {},           // provider -> key
+    models: {},         // provider -> model
+    lang: 'id',
+    theme: 'cyber',
+    customBase: ''
+};
+
 let liveSegments = { role: [], context: [], rules: [], objective: [], validation: [], _meta: { guessed: 0 } };
 let liveScore = 0;
 let liveMetrics = { wordCount: 0, flagged: 0, guessed: 0 };
 let liveIssues = [];
 
-if (typeof marked !== 'undefined') marked.setOptions({ gfm: true, breaks: true });
+const hasMarked = typeof marked !== 'undefined';
+const hasPurify = typeof DOMPurify !== 'undefined';
+const hasChart = typeof Chart !== 'undefined';
+const hasHljs = typeof hljs !== 'undefined';
+if (hasMarked) marked.setOptions({ gfm: true, breaks: true });
+if (hasChart) { Chart.defaults.color = '#cbd5e1'; Chart.defaults.borderColor = 'rgba(148,163,184,.18)'; }
 
-// SYSTEM PROMPT v3: CGO sadar menerima prompt terkompilasi
-const SYSTEM_PROMPT = `Kamu adalah CGO (Cyber Guardian Operator), asisten AI tingkat lanjut yang menerima prompt dari Sustainable Prompt Compiler v3.0.
-
-PENTING: Kamu menerima prompt yang SUDAH DIKOMPILASI oleh compiler deterministik. Prompt ini berisi section terstruktur: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, dan SELF-CORRECTION.
-
-Protokol evaluasi (WAJIB):
-1. Sebelum menjawab, evaluasi dulu apakah ROLE, CONTEXT, dan RULES saling selaras.
-2. Jika ada kontradiksi antar section atau bagian penting kosong (flagged), beri tahu operator singkat di awal jawaban dengan format: "⚠️ Catatan: [masalah singkat]".
-3. Setelah itu jawab sesuai OBJECTIVE dengan format Markdown rapi.
-4. Terapkan maksimal SATU putaran self-correction. Jika format output diminta (JSON/dll), pastikan terpenuhi di output akhir. Jangan loop tak berujung.
-
-Bahasa: Indonesia natural, futuristik, to-the-point. Jangan bertele-tele.
-Jika diminta grafik: keluarkan HANYA blok \`\`\`chart ... \`\`\` berisi JSON murni Chart.js.
-Jika diminta kode: gunakan Markdown code block dengan language tag.`;
-
-/* ================================================================
-   [2] SETTINGS (localStorage, auto-save)
-   ================================================================ */
+/* ===================== SETTINGS ===================== */
 function loadSettings() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
             const data = JSON.parse(raw);
-            if (data.settings) { settings.apiKey = data.settings.apiKey || ''; settings.model = data.settings.model || 'openai'; }
+            if (data.settings) {
+                settings = { ...settings, ...data.settings };
+                if (!settings.keys) settings.keys = {};
+                if (!settings.models) settings.models = {};
+            }
             if (Array.isArray(data.history)) chatHistory = data.history.slice(-MAX_HISTORY);
+            if (data.lastArtifact) lastCompiledArtifact = data.lastArtifact;
         }
     } catch (e) { console.warn(e); }
-    apiKeyInput.value = settings.apiKey;
-    modelSelect.value = settings.model;
+
+    if (!PROVIDERS[settings.provider]) settings.provider = 'pollinations';
+    if (!['cyber', 'clean', 'light'].includes(settings.theme)) settings.theme = 'cyber';
+    providerSelect.value = settings.provider;
+    langSelect.value = settings.lang || 'id';
+    themeSelect.value = settings.theme || 'cyber';
+    customBaseInput.value = settings.customBase || '';
+    applyTheme(settings.theme);
+    refreshModelList();
+    apiKeyInput.value = settings.keys[settings.provider] || '';
     updateEngineBadge();
+    if (lastCompiledArtifact) updateArtifactPreview(lastCompiledArtifact);
+    customBaseWrap.style.display = settings.provider === 'custom' ? 'flex' : 'none';
 }
+
 function saveToStorage() {
     try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ settings: { ...settings }, history: chatHistory.slice(-MAX_HISTORY) }));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            settings,
+            history: chatHistory.slice(-MAX_HISTORY),
+            lastArtifact: lastCompiledArtifact
+        }));
     } catch (e) { console.warn(e); }
 }
-apiKeyInput.addEventListener('input', () => { settings.apiKey = apiKeyInput.value.trim(); saveToStorage(); updateEngineBadge(); });
-modelSelect.addEventListener('change', () => { settings.model = modelSelect.value; saveToStorage(); });
 
-function updateEngineBadge(mode) {
-    const hasKey = !!(settings.apiKey && settings.apiKey.trim());
-    if (mode === 'fallback') {
-        engineBadge.textContent = 'ENGINE: FALLBACK (FREE)';
-        engineBadge.style.borderColor = 'var(--warning)'; engineBadge.style.color = 'var(--warning)';
-    } else if (hasKey) {
-        engineBadge.textContent = 'ENGINE: GEN (AUTO-DETECT)';
-        engineBadge.style.borderColor = 'var(--success)'; engineBadge.style.color = 'var(--success)';
-        modelSelect.disabled = false;
-    } else {
-        engineBadge.textContent = 'ENGINE: CLASSIC (AUTO)';
-        engineBadge.style.borderColor = 'var(--border-strong)'; engineBadge.style.color = '#ffffff';
-        modelSelect.value = 'openai'; modelSelect.disabled = true; settings.model = 'openai';
-    }
+function refreshModelList() {
+    const p = PROVIDERS[settings.provider];
+    modelSelect.innerHTML = '';
+    p.models.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; modelSelect.appendChild(o); });
+    const c = document.createElement('option'); c.value = '__custom__'; c.textContent = 'Custom model ID…'; modelSelect.appendChild(c);
+    const saved = settings.models[settings.provider] || p.defaultModel;
+    if (saved && p.models.includes(saved)) { modelSelect.value = saved; customModelWrap.style.display = 'none'; }
+    else { modelSelect.value = '__custom__'; customModelWrap.style.display = 'flex'; customModelInput.value = saved || ''; }
+}
+function updateEngineBadge() {
+    const p = PROVIDERS[settings.provider];
+    const key = (settings.keys[settings.provider] || '').trim();
+    let label = `PROVIDER: ${p.name}`;
+    if (settings.provider === 'pollinations' && !key) label += ' (FREE)';
+    else if (key) label += ' (KEY)';
+    else label += ' (NO KEY)';
+    engineBadge.textContent = label;
+    engineBadge.style.borderColor = key || p.free ? 'var(--success)' : 'var(--warning)';
+    engineBadge.style.color = key || p.free ? 'var(--success)' : 'var(--warning)';
 }
 
-/* ================================================================
-   [3] PARSER (Deterministik, keyword-based)
-   ================================================================ */
+function applyTheme(t) {
+    document.body.setAttribute('data-theme', t || 'cyber');
+    settings.theme = t || 'cyber';
+}
+
+providerSelect.addEventListener('change', () => {
+    settings.provider = providerSelect.value;
+    apiKeyInput.value = settings.keys[settings.provider] || '';
+    refreshModelList();
+    customBaseWrap.style.display = settings.provider === 'custom' ? 'flex' : 'none';
+    updateEngineBadge();
+    saveToStorage();
+});
+apiKeyInput.addEventListener('input', () => {
+    settings.keys[settings.provider] = apiKeyInput.value.trim();
+    updateEngineBadge();
+    saveToStorage();
+});
+modelSelect.addEventListener('change', () => {
+    if (modelSelect.value === '__custom__') { customModelWrap.style.display = 'flex'; customModelInput.focus(); return; }
+    customModelWrap.style.display = 'none';
+    settings.models[settings.provider] = modelSelect.value;
+    saveToStorage();
+});
+customModelInput.addEventListener('input', () => {
+    settings.models[settings.provider] = customModelInput.value.trim();
+    saveToStorage();
+});
+langSelect.addEventListener('change', () => {
+    settings.lang = langSelect.value;
+    saveToStorage();
+});
+themeSelect.addEventListener('change', () => {
+    applyTheme(themeSelect.value);
+    saveToStorage();
+});
+customBaseInput.addEventListener('input', () => {
+    settings.customBase = customBaseInput.value.trim();
+    saveToStorage();
+});
+themeBtn.addEventListener('click', () => {
+    const order = ['cyber', 'clean', 'light'];
+    const next = order[(order.indexOf(settings.theme) + 1) % order.length];
+    themeSelect.value = next;
+    applyTheme(next);
+    saveToStorage();
+    showToast(`Theme: ${next}`);
+});
+
+/* ===================== PARSER (v3.1 expanded, kept) ===================== */
 const CATEGORY_KEYWORDS = {
-    role: ['kamu adalah', 'you are', 'sebagai', 'as a', 'act as', 'berperan', 'role', 'persona', 'anda adalah', 'bertindak sebagai'],
-    context: ['konteks', 'context', 'latar belakang', 'background', 'situasi', 'dalam kasus', 'given', 'mengingat', 'berdasarkan', 'skenario', 'kondisi saat ini'],
-    rules: ['aturan', 'rules', 'jangan', 'must', 'harus', 'wajib', 'selalu', 'always', 'never', 'tidak boleh', 'only', 'hanya', 'dilarang', 'constraint', 'batasan'],
-    objective: ['tujuan', 'objective', 'goal', 'buat', 'create', 'buatkan', 'tulis', 'generate', 'hasilkan', 'analisis', 'analyze', 'jelaskan', 'explain', 'desain', 'design', 'susun', 'berikan'],
-    validation: ['validasi', 'validation', 'review', 'cek', 'check', 'test', 'pastikan', 'verify', 'traceable', 'bug fix', 'periksa', 'audit', 'evaluasi', 'uji', 'quality', 'qa']
+    role: ['kamu adalah','you are','sebagai','as a','act as','berperan','role','persona','anda adalah','bertindak sebagai','peranmu','jadilah','ahli','expert','specialist','pakar','konsultan','mentor','peneliti','scientist','researcher','ilmuwan'],
+    context: ['konteks','context','latar belakang','background','situasi','dalam kasus','given','mengingat','berdasarkan','skenario','kondisi','asumsi','asumsikan','diberikan','data berikut','saat ini','lingkungan','setting','premise','masalah','problem space'],
+    rules: ['aturan','rules','jangan','must','harus','wajib','selalu','always','never','tidak boleh','only','hanya','dilarang','constraint','batasan','larangan','hindari','do not','format output','gaya','nada','tone','maksimal','minimal','batasi','prioritaskan'],
+    objective: ['tujuan','objective','goal','buat','create','buatkan','tulis','generate','hasilkan','analisis','analyze','jelaskan','explain','desain','design','susun','berikan','rancang','kembangkan','ringkas','summarize','bandingkan','compare','rekomendasi','solusi','langkah','cara','how to','bantu','tolong','petakan','map','decomp','urai'],
+    validation: ['validasi','validation','review','cek','check','test','pastikan','verify','traceable','periksa','audit','evaluasi','uji','quality','qa','self-check','self correction','konfirmasi','akurasi','accuracy','bukti','evidence']
 };
 
-/**
- * Parse teks mentah menjadi IR (Intermediate Representation) 5 kategori.
- * Deterministik: hasil sama untuk input sama. Tidak ada API call.
- */
+function hasTerm(text, term) {
+    let i = text.indexOf(term);
+    while (i !== -1) {
+        if (i === 0 || !/[\p{L}\p{N}]/u.test(text[i - 1])) return true;
+        i = text.indexOf(term, i + 1);
+    }
+    return false;
+}
 function parsePrompt(rawText) {
     const segments = { role: [], context: [], rules: [], objective: [], validation: [], _meta: { guessed: 0 } };
     if (!rawText || !rawText.trim()) return segments;
-    const sentences = rawText.split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(s => s.length > 0);
+    const sentences = rawText.replace(/([.!?])[ \t]+/g, '$1\n').split(/\n+/).map(s => s.trim()).filter(s => s.length > 0);
     sentences.forEach(sentence => {
         const lower = sentence.toLowerCase();
         let bestCat = null, bestScore = 0;
         for (const [cat, words] of Object.entries(CATEGORY_KEYWORDS)) {
             let score = 0;
-            words.forEach(w => { if (lower.includes(w)) score += 1; });
+            words.forEach(w => { if (hasTerm(lower, w)) score += Math.max(1, Math.floor(w.split(/\s+/).length * 1.4)); });
             if (score > bestScore) { bestScore = score; bestCat = cat; }
         }
-        if (bestCat === null) { bestCat = 'objective'; segments._meta.guessed += 1; }
+        if (!bestCat || bestScore === 0) { bestCat = 'objective'; segments._meta.guessed++; }
         segments[bestCat].push(sentence);
     });
     return segments;
 }
 
-/* ================================================================
-   [4] DAG LOGICAL VALIDATION & SYMBOLIC CHECKS
-   ================================================================
-   Node DAG:
-     ROLE, CONTEXT (root, independen)
-     OBJECTIVE (butuh minimal salah satu dari ROLE/CONTEXT)
-     RULES (butuh OBJECTIVE sebagai konteks)
-     VALIDATION (butuh OBJECTIVE + RULES)
-   ================================================================ */
 function validateDAG(segments) {
     const issues = [];
-    const hasRole       = segments.role.length > 0;
-    const hasContext    = segments.context.length > 0;
-    const hasObjective  = segments.objective.length > 0;
-    const hasRules      = segments.rules.length > 0;
-    const hasValidation = segments.validation.length > 0;
-
-    // Precondition checks
-    if (hasObjective && !hasRole && !hasContext) {
-        issues.push({ type: 'warning', msg: 'DAG WARN: OBJECTIVE tanpa ROLE/CONTEXT — risiko halusinasi konteks.' });
+    const hasRole = segments.role.length > 0, hasContext = segments.context.length > 0;
+    const hasObjective = segments.objective.length > 0, hasRules = segments.rules.length > 0, hasValidation = segments.validation.length > 0;
+    if (hasObjective && !hasRole && !hasContext) issues.push({ type: 'warning', msg: 'DAG WARN: OBJECTIVE without ROLE/CONTEXT.' });
+    if (hasRules && !hasObjective) issues.push({ type: 'warning', msg: 'DAG WARN: RULES without OBJECTIVE.' });
+    if (hasValidation && !hasObjective) issues.push({ type: 'warning', msg: 'DAG WARN: VALIDATION without OBJECTIVE.' });
+    const allText = [segments.role, segments.context, segments.rules, segments.objective, segments.validation].flat().join(' ').toLowerCase();
+    const informal = ['santai','casual','informal','akrab','gaul','santuy'];
+    const formal = ['formal','resmi','professional','baku','kaku','akademis'];
+    if (informal.some(w => hasTerm(allText, w)) && formal.some(w => hasTerm(allText, w))) {
+        issues.push({ type: 'error', msg: 'SYMBOLIC CONFLICT: formal & informal tone together.' });
     }
-    if (hasRules && !hasObjective) {
-        issues.push({ type: 'warning', msg: 'DAG WARN: RULES tanpa OBJECTIVE — constraint tidak punya target.' });
-    }
-    if (hasValidation && !hasObjective) {
-        issues.push({ type: 'warning', msg: 'DAG WARN: VALIDATION tanpa OBJECTIVE — tidak ada yang divalidasi.' });
-    }
-
-    // Contradiction detection (informal vs formal tone)
-    const allText = [segments.role, segments.context, segments.rules, segments.objective, segments.validation]
-                    .flat().join(' ').toLowerCase();
-    const informalWords = ['santai', 'casual', 'informal', 'akrab', 'gaul', 'santuy'];
-    const formalWords   = ['formal', 'resmi', 'professional', 'baku', 'kaku'];
-    const hasInformal = informalWords.some(w => allText.includes(w));
-    const hasFormal   = formalWords.some(w => allText.includes(w));
-    if (hasInformal && hasFormal) {
-        issues.push({ type: 'error', msg: 'SYMBOLIC CONFLICT: nada formal & informal terdeteksi bersamaan.' });
-    }
-
-    // Missing critical sections
-    if (!hasRole && !hasContext) {
-        issues.push({ type: 'error', msg: 'CRITICAL: ROLE dan CONTEXT sama-sama kosong.' });
-    }
-    if (!hasObjective) {
-        issues.push({ type: 'error', msg: 'CRITICAL: OBJECTIVE kosong — AI tidak tahu apa yang harus dilakukan.' });
-    }
-
-    // Success
-    if (issues.length === 0 && hasObjective) {
-        issues.push({ type: 'ok', msg: 'DAG VALID: Semua precondition terpenuhi. Siap kompilasi.' });
-    }
+    if (allText.split(/\s+/).filter(Boolean).length > 1000) issues.push({ type: 'warning', msg: 'LENGTH WARN: very long prompt.' });
+    if (!hasRole && !hasContext) issues.push({ type: 'error', msg: 'CRITICAL: ROLE and CONTEXT both empty.' });
+    if (!hasObjective) issues.push({ type: 'error', msg: 'CRITICAL: OBJECTIVE empty.' });
+    if (issues.length === 0 && hasObjective) issues.push({ type: 'ok', msg: 'DAG VALID: ready to compile.' });
     return issues;
 }
 
-/* ================================================================
-   [5] SCORING (deterministik, bobot tetap)
-   ================================================================ */
 const SCORE_WEIGHTS = { role: 0.15, context: 0.20, rules: 0.25, objective: 0.20, validation: 0.20 };
-
 function scorePrompt(segments) {
-    const scores = {};
+    const scores = {}; let filled = 0;
     Object.keys(SCORE_WEIGHTS).forEach(cat => {
         const words = (segments[cat] || []).join(' ').split(/\s+/).filter(Boolean).length;
         let s = 0;
-        if (segments[cat].length > 0) s += 30;
-        if (words >= 3)  s += 20;
-        if (words >= 8)  s += 25;
-        if (words >= 15) s += 25;
+        if (segments[cat].length > 0) { s += 30; filled++; }
+        if (words >= 3) s += 20; if (words >= 8) s += 25; if (words >= 15) s += 25;
         scores[cat] = Math.min(100, s);
     });
     let total = 0;
-    Object.keys(SCORE_WEIGHTS).forEach(c => { total += scores[c] * SCORE_WEIGHTS[c]; });
+    Object.keys(SCORE_WEIGHTS).forEach(c => total += scores[c] * SCORE_WEIGHTS[c]);
+    if (filled >= 4) total = Math.min(100, total + 8);
+    else if (filled >= 3) total = Math.min(100, total + 4);
     return { scores, total: Math.round(total) };
 }
 
@@ -633,51 +894,34 @@ function computeMetrics(rawText, segments) {
     const wordCount = rawText.split(/\s+/).filter(Boolean).length;
     let flagged = 0;
     Object.keys(SCORE_WEIGHTS).forEach(cat => {
-        const catWords = (segments[cat] || []).join(' ').split(/\s+/).filter(Boolean);
-        if (catWords.length === 0 || catWords.length < 3) flagged++;
+        const w = (segments[cat] || []).join(' ').split(/\s+/).filter(Boolean);
+        if (w.length === 0 || w.length < 3) flagged++;
     });
     return { wordCount, flagged, guessed: segments._meta.guessed };
 }
 
-/* ================================================================
-   [6] COMPILER (IR -> Artifact)
-   ================================================================
-   Single-pass compile: tidak ada loop API. Hasil disimpan sebagai
-   artefak di cache (ZTA).
-   ================================================================ */
-const SELF_CORRECTION = 'Review sekali jawabanmu: apakah ROLE, CONTEXT, dan RULES sudah dipatuhi? Jika format output diminta, pastikan terpenuhi. Jangan loop >1x.';
-
+const SELF_CORRECTION = 'Review once: ROLE, CONTEXT, RULES respected? Required output format met? Do not loop >1x.';
 function compilePrompt(segments) {
     let out = '';
-    if (segments.role.length)       out += `### ROLE\n${segments.role.join(' ')}\n\n`;
-    if (segments.context.length)    out += `### CONTEXT\n${segments.context.join(' ')}\n\n`;
-    if (segments.rules.length)      out += `### RULES\n${segments.rules.map(r => `- ${r}`).join('\n')}\n\n`;
-    if (segments.objective.length)  out += `### OBJECTIVE\n${segments.objective.join(' ')}\n\n`;
+    if (segments.role.length) out += `### ROLE\n${segments.role.join(' ')}\n\n`;
+    if (segments.context.length) out += `### CONTEXT\n${segments.context.join(' ')}\n\n`;
+    if (segments.rules.length) out += `### RULES\n${segments.rules.map(r => `- ${r}`).join('\n')}\n\n`;
+    if (segments.objective.length) out += `### OBJECTIVE\n${segments.objective.join(' ')}\n\n`;
     if (segments.validation.length) out += `### VALIDATION\n${segments.validation.map(v => `- ${v}`).join('\n')}\n\n`;
     out += `### SELF-CORRECTION\n${SELF_CORRECTION}\n`;
     return out.trim();
 }
 
-/* ================================================================
-   [7] ARTIFACT CACHE (ZTA: Zero-Token reuse)
-   ================================================================ */
 function hashSegments(segments) {
-    const raw = JSON.stringify({
-        r: segments.role, c: segments.context, u: segments.rules,
-        o: segments.objective, v: segments.validation
-    });
-    let hash = 0;
-    for (let i = 0; i < raw.length; i++) {
-        hash = ((hash << 5) - hash) + raw.charCodeAt(i);
-        hash |= 0;
-    }
-    return 'h' + hash.toString(36);
+    const raw = JSON.stringify({ r: segments.role, c: segments.context, u: segments.rules, o: segments.objective, v: segments.validation });
+    let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+    for (let i = 0; i < raw.length; i++) { const ch = raw.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return 'h' + (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 function getArtifact(hash) {
-    try {
-        const cache = JSON.parse(localStorage.getItem(ARTIFACT_CACHE_KEY) || '{}');
-        return cache[hash] || null;
-    } catch (e) { return null; }
+    try { return JSON.parse(localStorage.getItem(ARTIFACT_CACHE_KEY) || '{}')[hash] || null; } catch { return null; }
 }
 function putArtifact(hash, artifact) {
     try {
@@ -685,135 +929,105 @@ function putArtifact(hash, artifact) {
         cache[hash] = { prompt: artifact, ts: Date.now() };
         const keys = Object.keys(cache);
         if (keys.length > MAX_CACHE) {
-            keys.sort((a,b) => (cache[a].ts||0) - (cache[b].ts||0));
+            keys.sort((a,b) => (cache[a].ts||0)-(cache[b].ts||0));
             keys.slice(0, keys.length - MAX_CACHE).forEach(k => delete cache[k]);
         }
         localStorage.setItem(ARTIFACT_CACHE_KEY, JSON.stringify(cache));
-    } catch (e) { console.warn(e); }
+    } catch (e) {}
+}
+function getCacheStats() {
+    try { return Object.keys(JSON.parse(localStorage.getItem(ARTIFACT_CACHE_KEY) || '{}')).length; } catch { return 0; }
 }
 
-/* ================================================================
-   [8] TELEMETRY UI
-   ================================================================ */
+/* ===================== TELEMETRY ===================== */
 function logEvent(tag, message) {
     const ts = new Date().toTimeString().slice(0, 8);
-    const tagClass = {
-        SYSTEM: 'tag-sys', PARSER: 'tag-pars', VALIDATOR: 'tag-val',
-        COMPILER: 'tag-comp', ERROR: 'tag-err', OK: 'tag-ok', CACHE: 'tag-ok'
-    }[tag] || 'tag-sys';
+    const tagClass = { SYSTEM:'tag-sys', PARSER:'tag-pars', VALIDATOR:'tag-val', COMPILER:'tag-comp', ERROR:'tag-err', OK:'tag-ok', CACHE:'tag-ok', DIAG:'tag-sys', PROVIDER:'tag-sys' }[tag] || 'tag-sys';
     const div = document.createElement('div');
     div.className = 'log-line';
-    div.innerHTML = `<span class="ts">${ts}</span><span class="${tagClass}">[${tag}]</span> ${message}`;
+    div.innerHTML = `<span class="ts">${ts}</span><span class="${tagClass}">[${tag}]</span> ${escapeHtml(message)}`;
     eventLogEl.appendChild(div);
     eventLogEl.scrollTop = eventLogEl.scrollHeight;
-    // Batasi DOM: simpan 60 baris terakhir
-    while (eventLogEl.children.length > 60) eventLogEl.removeChild(eventLogEl.firstChild);
+    while (eventLogEl.children.length > 80) eventLogEl.removeChild(eventLogEl.firstChild);
 }
-
+function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 function updateBadges(segments) {
-    badgeEls.forEach(badge => {
-        const cat = badge.dataset.cat;
+    badgeEls.forEach(b => {
+        const cat = b.dataset.cat;
         const count = (segments[cat] || []).length;
         countEls[cat].textContent = count;
-        if (count > 0) badge.classList.add('active');
-        else badge.classList.remove('active');
+        b.classList.toggle('active', count > 0);
     });
 }
-
 function updateSpecScore(score) {
     specValueEl.textContent = score;
     specFillEl.style.width = score + '%';
-    specValueEl.classList.remove('low', 'mid', 'high');
-    if (score < 40)      specValueEl.classList.add('low');
+    specValueEl.classList.remove('low','mid','high');
+    if (score < 40) specValueEl.classList.add('low');
     else if (score < 70) specValueEl.classList.add('mid');
-    else                 specValueEl.classList.add('high');
+    else specValueEl.classList.add('high');
 }
-
 const HEAT_CELLS = 40;
 function renderWordHeat(text) {
     if (!heatBarEl.children.length) {
         for (let i = 0; i < HEAT_CELLS; i++) {
-            const c = document.createElement('div');
-            c.className = 'heat-cell cold';
-            heatBarEl.appendChild(c);
+            const c = document.createElement('div'); c.className = 'heat-cell cold'; heatBarEl.appendChild(c);
         }
     }
     const cells = heatBarEl.children;
     const words = text.split(/\s+/).filter(Boolean);
     const chunkSize = Math.max(1, Math.ceil(words.length / HEAT_CELLS));
-    const importantWords = [
-        'role','context','rules','objective','validation','harus','wajib','jangan',
-        'buat','pastikan','validasi','test','review','konteks','tujuan','aturan',
-        'kamu adalah','sebagai','traceable','bug','quality','qa','analisis'
-    ];
-
+    const important = ['role','context','rules','objective','validation','harus','wajib','jangan','buat','pastikan','validasi','test','review','konteks','tujuan','aturan','kamu adalah','sebagai','analisis','expert','pakar','constraint','peneliti','scientist','map','decomp'];
     for (let i = 0; i < HEAT_CELLS; i++) {
-        const chunk = words.slice(i * chunkSize, (i + 1) * chunkSize);
-        const chunkText = chunk.join(' ').toLowerCase();
-        let hits = 0;
-        importantWords.forEach(w => { if (chunkText.includes(w)) hits++; });
-
-        const cell = cells[i];
-        cell.className = 'heat-cell';
-        if (chunk.length === 0)    cell.classList.add('cold');
-        else if (hits >= 3)        cell.classList.add('max');
-        else if (hits >= 2)        cell.classList.add('hot');
-        else if (hits >= 1)        cell.classList.add('warm');
-        else                       cell.classList.add('dim');
+        const chunk = words.slice(i * chunkSize, (i+1)*chunkSize).join(' ').toLowerCase();
+        let hits = 0; important.forEach(w => { if (chunk.includes(w)) hits++; });
+        const cell = cells[i]; cell.className = 'heat-cell';
+        if (!chunk) cell.classList.add('cold');
+        else if (hits >= 3) cell.classList.add('max');
+        else if (hits >= 2) cell.classList.add('hot');
+        else if (hits >= 1) cell.classList.add('warm');
+        else cell.classList.add('dim');
     }
 }
-
 function renderIssues(issues) {
     issuesListEl.innerHTML = '';
     if (!issues.length) {
-        const el = document.createElement('div');
-        el.className = 'issue info';
-        el.textContent = '▸ Menunggu input...';
-        issuesListEl.appendChild(el);
-        return;
+        const el = document.createElement('div'); el.className = 'issue info'; el.textContent = '▸ Waiting input...'; issuesListEl.appendChild(el); return;
     }
     issues.forEach(iss => {
-        const el = document.createElement('div');
-        el.className = 'issue ' + iss.type;
-        el.textContent = iss.msg;
-        issuesListEl.appendChild(el);
+        const el = document.createElement('div'); el.className = 'issue ' + iss.type; el.textContent = iss.msg; issuesListEl.appendChild(el);
     });
 }
+function updateArtifactPreview(text) {
+    lastCompiledArtifact = text || '';
+    artifactBox.textContent = text || 'No artifact yet. Type to see structured IR.';
+}
 
-/* ================================================================
-   [9] LIVE SCAN (Debounced)
-   ================================================================ */
 function runLiveScan(rawText) {
     liveSegments = parsePrompt(rawText);
     const { total } = scorePrompt(liveSegments);
     liveScore = total;
     liveMetrics = computeMetrics(rawText, liveSegments);
     liveIssues = validateDAG(liveSegments);
-
     updateBadges(liveSegments);
     updateSpecScore(liveScore);
     renderWordHeat(rawText);
     renderIssues(liveIssues);
-
-    heatWordsEl.textContent   = liveMetrics.wordCount + ' words';
+    heatWordsEl.textContent = liveMetrics.wordCount + ' words · ~' + Math.ceil(rawText.length / 4) + ' tok';
     heatFlaggedEl.textContent = liveMetrics.flagged + ' flagged';
+    if (rawText.trim()) updateArtifactPreview(compilePrompt(liveSegments));
 }
-
-const debouncedScan = debounce(function(text) {
-    runLiveScan(text);
-}, DEBOUNCE_MS);
-
+const debouncedScan = debounce(t => runLiveScan(t), DEBOUNCE_MS);
 function debounce(fn, delay) {
-    let timer = null;
-    return function(...args) {
-        clearTimeout(timer);
-        timer = setTimeout(() => fn.apply(this, args), delay);
-    };
+    let t = null;
+    const d = (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), delay); };
+    d.cancel = () => clearTimeout(t);
+    return d;
 }
 
-/* ================================================================
-   [10] CHAT UI
-   ================================================================ */
+/* ===================== UI HELPERS ===================== */
 function showToast(msg, duration = 2600, isWarning = false) {
     toastEl.textContent = msg;
     toastEl.className = 'toast show' + (isWarning ? ' warning' : '');
@@ -822,179 +1036,372 @@ function showToast(msg, duration = 2600, isWarning = false) {
 }
 function setStatus(state) {
     statusDot.className = 'status-dot';
-    if (state === 'busy')      statusDot.classList.add('busy');
+    if (state === 'busy') statusDot.classList.add('busy');
     else if (state === 'error') statusDot.classList.add('error');
 }
-function scrollToBottom() { requestAnimationFrame(() => { chatContainer.scrollTop = chatContainer.scrollHeight; }); }
+function scrollToBottom(force) { requestAnimationFrame(() => { const c = chatContainer; if (force || c.scrollHeight - c.scrollTop - c.clientHeight < 160) c.scrollTop = c.scrollHeight; }); }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function safeMarkdown(text) {
+    if (!text) return '';
+    if (hasMarked && hasPurify) return DOMPurify.sanitize(marked.parse(text));
+    if (hasMarked) return marked.parse(text);
+    return escapeHtml(text).replace(/\n/g, '<br>');
+}
 
-// Event Listener Toggle Telemetri (Mobile)
+function getSystemPrompt() {
+    if (settings.lang === 'en') return SYSTEM_PROMPTS.en;
+    if (settings.lang === 'id') return SYSTEM_PROMPTS.id;
+    // auto: simple detect from last user text
+    const sample = (lastUserRaw || chatInput.value || '').toLowerCase();
+    const idHints = ['kamu','adalah','buatkan','jelaskan','aturan','tujuan','konteks'];
+    const enHints = ['you are','create','explain','rules','objective','context','please'];
+    const idScore = idHints.filter(h => sample.includes(h)).length;
+    const enScore = enHints.filter(h => sample.includes(h)).length;
+    return enScore > idScore ? SYSTEM_PROMPTS.en : SYSTEM_PROMPTS.id;
+}
+
 toggleTelemetryBtn.addEventListener('click', () => {
     panelRight.classList.toggle('collapsed');
-    if (panelRight.classList.contains('collapsed')) {
-        toggleTelemetryBtn.style.borderColor = 'var(--warning)';
-        toggleTelemetryBtn.style.color = 'var(--warning)';
-    } else {
-        toggleTelemetryBtn.style.borderColor = 'rgba(255,255,255,0.2)';
-        toggleTelemetryBtn.style.color = 'var(--text-dim)';
-    }
+    toggleTelemetryBtn.style.borderColor = panelRight.classList.contains('collapsed') ? 'var(--warning)' : '';
 });
 
 chatInput.addEventListener('input', function () {
     this.style.height = 'auto';
-    this.style.height = Math.min(this.scrollHeight, 150) + 'px';
-    debouncedScan(this.value);   // Debounce 300ms
+    this.style.height = Math.min(this.scrollHeight, 140) + 'px';
+    debouncedScan(this.value);
 });
-chatInput.addEventListener('keydown', (e) => {
+chatInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!isGenerating) sendMessage(); }
 });
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && isGenerating && currentAbortController) {
+        currentAbortController.abort();
+        showToast('Stopped (Esc)');
+    }
+    if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
+        e.preventDefault(); copyLastArtifact();
+    }
+    if (e.ctrlKey && e.shiftKey && (e.key === 'H' || e.key === 'h')) { e.preventDefault(); healPrompt(); }
+    if (e.ctrlKey && e.shiftKey && (e.key === 'O' || e.key === 'o')) {
+        e.preventDefault(); doCompileOnly();
+    }
+});
+
 sendBtn.addEventListener('click', () => { if (!isGenerating) sendMessage(); });
 stopBtn.addEventListener('click', () => { if (currentAbortController) currentAbortController.abort(); });
-settingsBtn.addEventListener('click', () => { settingsPanel.classList.toggle('open'); settingsBtn.classList.toggle('active'); });
+settingsBtn.addEventListener('click', () => {
+    settingsPanel.classList.toggle('open');
+    settingsBtn.classList.toggle('active');
+});
 clearBtn.addEventListener('click', () => {
     if (isGenerating) return;
-    chatHistory = [];
-    saveToStorage();
-    renderBootMessage(true);
-    showToast('Riwayat dibersihkan');
-    logEvent('SYSTEM', 'Chat history cleared.');
+    chatHistory = []; lastCompiledArtifact = '';
+    saveToStorage(); renderBootMessage(true); updateArtifactPreview('');
+    showToast('History cleared'); logEvent('SYSTEM', 'History cleared.');
 });
+copyArtifactBtn.addEventListener('click', copyLastArtifact);
+exportMdBtn.addEventListener('click', exportHistoryMarkdown);
+diagBtn.addEventListener('click', runDiagnostics);
+sampleBtn.addEventListener('click', insertSamplePrompt);
+compileOnlyBtn.addEventListener('click', () => {
+    compileOnlyMode = !compileOnlyMode;
+    compileOnlyBtn.classList.toggle('active', compileOnlyMode);
+    document.getElementById('send-label').textContent = compileOnlyMode ? 'COMPILE' : 'COMPILE & SEND';
+    showToast(compileOnlyMode ? 'Compile Only ON' : 'Compile Only OFF');
+});
+
+function copyText(t) {
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(t);
+    return new Promise((res, rej) => {
+        const a = document.createElement('textarea');
+        a.value = t; a.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(a); a.select();
+        try { document.execCommand('copy') ? res() : rej(new Error('copy')); } catch (e) { rej(e); }
+        a.remove();
+    });
+}
+function copyLastArtifact() {
+    if (!lastCompiledArtifact) { showToast('No artifact', 2000, true); return; }
+    copyText(lastCompiledArtifact).then(() => {
+        showToast('Artifact copied'); logEvent('OK', 'Artifact copied.');
+    }).catch(() => showToast('Copy failed', 2000, true));
+}
+function exportHistoryMarkdown() {
+    if (!chatHistory.length) { showToast('Empty history', 2000, true); return; }
+    let md = `# SPC Research Nexus Export — ${new Date().toISOString()}\n\n`;
+    chatHistory.forEach(m => {
+        md += `### ${m.role === 'user' ? 'USER' : 'CGO'}\n\n${m.content}\n\n---\n\n`;
+    });
+    const blob = new Blob([md], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `spc-nexus-${Date.now()}.md`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    showToast('Markdown exported'); logEvent('OK', 'Exported MD.');
+}
+function healPrompt() {
+    const t = chatInput.value;
+    if (!t.trim()) { showToast('Tulis prompt dulu', 2000, true); return; }
+    const s = parsePrompt(t), en = settings.lang === 'en';
+    const tpl = en
+        ? { role: 'You are an expert in: ', context: 'Context: ', rules: 'Rules: ', objective: 'Objective: ', validation: 'Validation: Verify every claim with reasoning or evidence.' }
+        : { role: 'Kamu adalah ahli di bidang: ', context: 'Konteks: ', rules: 'Aturan: ', objective: 'Tujuan: ', validation: 'Validasi: Pastikan setiap klaim punya alasan atau bukti.' };
+    const missing = ['role', 'context', 'rules', 'objective', 'validation'].filter(c => !s[c].length);
+    if (!missing.length) { showToast('Semua section sudah terisi'); return; }
+    chatInput.value = t.replace(/\s+$/, '') + '\n' + missing.map(c => tpl[c]).join('\n');
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 140) + 'px';
+    runLiveScan(chatInput.value);
+    chatInput.focus();
+    showToast(`Auto-Heal: ${missing.length} section ditambahkan`);
+    logEvent('COMPILER', `Auto-Heal → ${missing.join(', ')}`);
+}
+healBtn.addEventListener('click', healPrompt);
+function insertSamplePrompt() {
+    const samples = [
+`Kamu adalah ilmuwan komputasi tingkat tinggi yang ahli algoritma langka dan sistem kompleks.
+Konteks: Kita ingin memetakan masalah optimasi multi-objektif pada jaringan sensor edge dengan constraint energi ekstrem.
+Aturan: Formal, berbasis bukti, sertakan asumsi eksplisit. Hindari jargon kosong. Berikan trade-off.
+Tujuan: Urai masalah menjadi dependency map, usulkan 2 pendekatan algoritma non-trivial (boleh novel), dan rancang eksperimen validasi.
+Validasi: Setiap klaim harus punya alasan desain atau referensi konsep.`,
+
+`You are a senior research scientist specializing in rare algorithms and problem decomposition.
+Context: Mapping a hard combinatorial search problem under severe latency and memory constraints for an on-device model.
+Rules: Scientific tone. Explicit assumptions. Trade-offs required. No empty jargon.
+Objective: Produce a dependency map of the problem, propose two non-trivial algorithmic approaches (novel ideas welcome), and design a validation experiment.
+Validation: Every claim must have design rationale.`
+    ];
+    const pick = samples[Math.floor(Math.random() * samples.length)];
+    chatInput.value = pick;
+    chatInput.style.height = 'auto';
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 140) + 'px';
+    runLiveScan(pick);
+    chatInput.focus();
+    showToast('Sample loaded');
+}
 
 function addMessageToUI(role, text, isTyping = false) {
     const msgDiv = document.createElement('div');
     msgDiv.classList.add('message', role);
     const senderDiv = document.createElement('div');
     senderDiv.classList.add('sender');
-    senderDiv.textContent = role === 'user' ? 'ANDA' : 'CGO';
+    senderDiv.textContent = role === 'user' ? 'YOU' : 'CGO';
     const bubbleDiv = document.createElement('div');
     bubbleDiv.classList.add('bubble');
-    if (role === 'ai') {
-        bubbleDiv.innerHTML = DOMPurify.sanitize(marked.parse(text || ' '));
-        if (isTyping) bubbleDiv.innerHTML += '<span class="typing-indicator"></span>';
-    } else {
-        bubbleDiv.innerText = text;
-    }
+    if (role === 'ai') bubbleDiv.innerHTML = safeMarkdown(text || ' ') + (isTyping ? '<span class="typing-indicator"></span>' : '');
+    else bubbleDiv.innerText = text;
     msgDiv.appendChild(senderDiv);
     msgDiv.appendChild(bubbleDiv);
     chatContainer.appendChild(msgDiv);
-    scrollToBottom();
+    scrollToBottom(role === 'user');
     return bubbleDiv;
 }
-
 function renderBootMessage(force = false) {
     if (!force && chatHistory.length > 0) return;
     chatContainer.innerHTML = `
         <div class="message ai">
-            <div class="sender">SPIDERWEB SYSTEM</div>
+            <div class="sender">RESEARCH NEXUS</div>
             <div class="bubble">
-                <strong>Sustainable Prompt Compiler v3.0</strong> — Zero-Token Architecture Active.<br><br>
-                Ketik prompt Anda. Sistem akan mem-parsing ke IR 5-node, memvalidasi secara simbolik, dan mengompilasi artefak <b>hanya sekali</b>. Artefak di-cache untuk reuse.
+                <strong>CGO — Research Nexus v4.1</strong><br><br>
+                Multi-provider neural link active. Compile deterministically → validate → send to any connected model.<br><br>
+                <em>New:</em> OpenAI · Anthropic · xAI/Grok · Gemini · DeepSeek · Custom · Compile Only · Theme · Multi-lang · Researcher protocol.
             </div>
         </div>`;
 }
-
 function restoreHistoryUI() {
     chatContainer.innerHTML = '';
-    if (chatHistory.length === 0) { renderBootMessage(true); return; }
-    chatHistory.forEach(msg => {
-        addMessageToUI(msg.role === 'user' ? 'user' : 'ai', msg.content);
-    });
+    if (!chatHistory.length) { renderBootMessage(true); return; }
+    chatHistory.forEach(m => addMessageToUI(m.role === 'user' ? 'user' : 'ai', m.content));
     chatContainer.querySelectorAll('.bubble').forEach(b => renderChartsInElement(b));
 }
 
-/* ================================================================
-   [11] STREAMING & API EXECUTION
-   ================================================================ */
 function renderChartsInElement(element) {
-    const codeBlocks = element.querySelectorAll('pre code.language-chart');
-    codeBlocks.forEach(codeBlock => {
+    if (!hasChart) return;
+    element.querySelectorAll('pre code.language-chart').forEach(codeBlock => {
         try {
-            const jsonStr = codeBlock.innerText.trim();
-            const chartConfig = JSON.parse(jsonStr);
-            if (!chartConfig.options) chartConfig.options = {};
-            chartConfig.options.responsive = true;
-            chartConfig.options.maintainAspectRatio = false;
-            const wrap = document.createElement('div');
-            wrap.classList.add('chart-container');
-            const canvas = document.createElement('canvas');
-            wrap.appendChild(canvas);
+            const cfg = JSON.parse(codeBlock.innerText.trim());
+            if (!cfg.options) cfg.options = {};
+            cfg.options.responsive = true; cfg.options.maintainAspectRatio = false;
+            const wrap = document.createElement('div'); wrap.classList.add('chart-container');
+            const canvas = document.createElement('canvas'); wrap.appendChild(canvas);
             const pre = codeBlock.parentElement;
-            if (pre) {
-                pre.style.display = 'none';
-                if (pre.parentElement) pre.parentElement.insertBefore(wrap, pre.nextSibling);
-            } else { element.appendChild(wrap); }
-            const existing = Chart.getChart(canvas);
-            if (existing) existing.destroy();
-            new Chart(canvas, chartConfig);
+            if (pre) { pre.style.display = 'none'; if (pre.parentElement) pre.parentElement.insertBefore(wrap, pre.nextSibling); }
+            const ex = Chart.getChart(canvas); if (ex) ex.destroy();
+            new Chart(canvas, cfg);
         } catch (e) {
-            if (codeBlock.parentElement) codeBlock.parentElement.insertAdjacentHTML('afterend', '<div class="error-text">⚠️ Gagal render grafik</div>');
+            if (codeBlock.parentElement) codeBlock.parentElement.insertAdjacentHTML('afterend', '<div class="error-text">⚠️ Chart render failed</div>');
         }
     });
-    element.querySelectorAll('pre code:not(.language-chart)').forEach(el => {
-        try { hljs.highlightElement(el); } catch (e) {}
-        const pre = el.parentElement;
-        if (pre && !pre.querySelector('.copy-btn')) {
-            const btn = document.createElement('button');
-            btn.className = 'copy-btn';
-            btn.textContent = 'Copy';
-            btn.onclick = () => {
-                navigator.clipboard.writeText(el.innerText).then(() => {
-                    btn.textContent = 'Copied!';
-                    setTimeout(() => btn.textContent = 'Copy', 1500);
-                });
-            };
-            pre.style.position = 'relative';
-            pre.appendChild(btn);
-        }
-    });
+    if (hasHljs) {
+        element.querySelectorAll('pre code:not(.language-chart)').forEach(el => {
+            try { hljs.highlightElement(el); } catch {}
+            const pre = el.parentElement;
+            if (pre && !pre.querySelector('.copy-btn')) {
+                const btn = document.createElement('button');
+                btn.className = 'copy-btn'; btn.textContent = 'Copy';
+                btn.onclick = () => copyText(el.innerText).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1200); });
+                pre.style.position = 'relative'; pre.appendChild(btn);
+            }
+        });
+    }
 }
 
 async function* parseSSE(reader) {
     const decoder = new TextDecoder('utf-8');
     let buffer = '';
+    const parseLine = line => {
+        const t = line.trim();
+        if (!t.startsWith('data:')) return undefined;
+        const p = t.slice(5).trim();
+        if (!p || p === '[DONE]') return undefined;
+        try { return JSON.parse(p); } catch { return undefined; }
+    };
     while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
+        const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() || '';
-        for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed === 'data: [DONE]') continue;
-            if (trimmed.startsWith('data: ')) {
-                try { yield JSON.parse(trimmed.slice(6)); } catch (e) {}
-            }
-        }
+        for (const l of lines) { const d = parseLine(l); if (d !== undefined) yield d; }
     }
-    if (buffer.trim().startsWith('data: ') && buffer.trim() !== 'data: [DONE]') {
-        try { yield JSON.parse(buffer.trim().slice(6)); } catch (e) {}
-    }
+    buffer += decoder.decode();
+    for (const l of buffer.split(/\r?\n/)) { const d = parseLine(l); if (d !== undefined) yield d; }
 }
 
-/* ================================================================
-   [12] MAIN SEND FLOW (Compile -> Cache -> API)
-   ================================================================ */
+/* ===================== COMPILE ONLY ===================== */
+function doCompileOnly() {
+    const userText = chatInput.value.trim();
+    if (!userText) { showToast('Empty input', 2000, true); return; }
+    const segments = parsePrompt(userText);
+    const { total } = scorePrompt(segments);
+    const compiled = compilePrompt(segments);
+    const hash = hashSegments(segments);
+    putArtifact(hash, compiled);
+    lastCompiledArtifact = compiled;
+    updateArtifactPreview(compiled);
+    saveToStorage();
+    logEvent('COMPILER', `Compile Only — score ${total}/100 · ${hash}`);
+    addMessageToUI('user', userText);
+    addMessageToUI('ai', `**Compile Only** (score ${total}/100)\n\n\`\`\`\`\n${compiled}\n\`\`\`\`\n\nArtifact cached. Copy via button or Ctrl+Shift+C.`);
+    showToast(`Compiled · score ${total}`);
+}
+
+/* ===================== PROVIDER REQUEST BUILDERS ===================== */
+function buildRequest(compiledPrompt, systemPrompt) {
+    const p = PROVIDERS[settings.provider];
+    const key = (settings.keys[settings.provider] || '').trim();
+    const model = settings.models[settings.provider] || p.defaultModel;
+    const conf = p.build(key, model, settings.customBase);
+
+    if (!p.free && !key && settings.provider !== 'custom') {
+        throw new Error(`${p.name} requires an API key. Open Settings.`);
+    }
+
+    const apiHistory = [];
+    chatHistory.slice(0, -1).forEach(m => {
+        const role = m.role === 'assistant' ? 'assistant' : 'user';
+        const content = m.compiled || m.content;
+        if (!content) return;
+        const last = apiHistory[apiHistory.length - 1];
+        if (last && last.role === role) last.content += '\n\n' + content; else apiHistory.push({ role, content });
+    });
+    while (apiHistory.length && apiHistory[0].role !== 'user') apiHistory.shift();
+    if (apiHistory.length && apiHistory[apiHistory.length - 1].role === 'user') apiHistory.pop();
+
+    // Anthropic
+    if (conf.isAnthropic) {
+        const msgs = [...apiHistory, { role: 'user', content: compiledPrompt }];
+        return {
+            endpoint: conf.endpoint,
+            headers: { 'Content-Type': 'application/json', ...conf.headers },
+            body: {
+                model: conf.model,
+                max_tokens: 8192,
+                stream: true,
+                system: systemPrompt,
+                messages: msgs.map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
+            },
+            parse: 'anthropic'
+        };
+    }
+
+    // Gemini
+    if (conf.isGemini) {
+        const contents = [...apiHistory, { role: 'user', content: compiledPrompt }].map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+        return {
+            endpoint: conf.endpoint,
+            headers: { 'Content-Type': 'application/json' },
+            body: {
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents,
+                generationConfig: { temperature: 0.7 }
+            },
+            parse: 'gemini'
+        };
+    }
+
+    // OpenAI-compatible (OpenAI, xAI, DeepSeek, Pollinations, Custom)
+    return {
+        endpoint: conf.endpoint,
+        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream', ...conf.headers },
+        body: {
+            model: conf.model,
+            stream: true,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                ...apiHistory,
+                { role: 'user', content: compiledPrompt }
+            ]
+        },
+        parse: 'openai'
+    };
+}
+
+function extractDelta(data, parseType) {
+    if (data && data.error) throw new Error(typeof data.error === 'string' ? data.error : (data.error.message || 'Provider error'));
+    if (parseType === 'anthropic') {
+        if (data.type === 'error') throw new Error(data.error?.message || 'Anthropic stream error');
+        return (data.type === 'content_block_delta' && data.delta?.text) || '';
+    }
+    if (parseType === 'gemini') {
+        if (data?.promptFeedback?.blockReason) throw new Error('Blocked by Gemini: ' + data.promptFeedback.blockReason);
+        return (data?.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('');
+    }
+    const choice = data?.choices?.[0];
+    const delta = choice?.delta;
+    return (delta && (delta.content || delta.text)) || choice?.message?.content || '';
+}
+
+/* ===================== MAIN SEND ===================== */
 async function animateCompileSequence() {
-    // Animasi firing sekuensial pada badge (event-based, selesai ~800ms)
-    const order = ['role', 'context', 'rules', 'objective', 'validation'];
+    const order = ['role','context','rules','objective','validation'];
     for (const cat of order) {
         const badge = document.querySelector(`.nbadge[data-cat="${cat}"]`);
-        if (badge && liveSegments[cat].length > 0) {
+        if (badge && liveSegments[cat]?.length) {
             badge.classList.add('firing');
-            await sleep(140);
+            await sleep(120);
             badge.classList.remove('firing');
-        } else {
-            await sleep(60);
-        }
+        } else await sleep(40);
     }
 }
 
 async function sendMessage() {
+    if (compileOnlyMode) {
+        doCompileOnly();
+        return;
+    }
+
     const userText = chatInput.value.trim();
     if (!userText || isGenerating) return;
+    if (userText.length > MAX_INPUT_CHARS) {
+        showToast(`Too long (max ${MAX_INPUT_CHARS})`, 3000, true);
+        return;
+    }
 
     isGenerating = true;
     setStatus('busy');
+    lastUserRaw = userText;
     chatInput.value = '';
     chatInput.style.height = 'auto';
     chatInput.disabled = true;
@@ -1002,121 +1409,110 @@ async function sendMessage() {
     sendBtn.style.display = 'none';
     stopBtn.style.display = 'flex';
 
-    // ---- 1) Parse + Validate + Score ----
-    const segments = parsePrompt(userText);
-    const { total } = scorePrompt(segments);
-    const metrics = computeMetrics(userText, segments);
+    debouncedScan.cancel();
+    runLiveScan(userText);
+    const segments = liveSegments, total = liveScore, metrics = liveMetrics;
     const issues = validateDAG(segments);
 
     eventLogEl.innerHTML = '';
-    logEvent('SYSTEM', 'Compile pipeline started.');
-    logEvent('PARSER', `ROLE: ${segments.role.length} sentences, CONTEXT: ${segments.context.length}, RULES: ${segments.rules.length}, OBJ: ${segments.objective.length}, VAL: ${segments.validation.length}`);
-    logEvent('PARSER', `words=${metrics.wordCount}, flagged=${metrics.flagged}, guessed=${metrics.guessed}`);
-    issues.forEach(iss => logEvent('VALIDATOR', `[${iss.type}] ${iss.msg}`));
+    logEvent('SYSTEM', `Pipeline start v${APP_VERSION}`);
+    logEvent('PARSER', `R:${segments.role.length} C:${segments.context.length} Ru:${segments.rules.length} O:${segments.objective.length} V:${segments.validation.length}`);
+    logEvent('PARSER', `words=${metrics.wordCount} flagged=${metrics.flagged} guessed=${metrics.guessed}`);
+    issues.forEach(i => logEvent('VALIDATOR', `[${i.type}] ${i.msg}`));
 
-    // ---- 2) Compile artifact + cache lookup (ZTA) ----
     const hash = hashSegments(segments);
-    let compiledPrompt = getArtifact(hash);
-    const cacheHit = !!compiledPrompt;
-
-    if (cacheHit) {
-        logEvent('CACHE', `Artifact hit (${hash}). Skip LLM re-compile.`);
-        compiledPrompt = compiledPrompt.prompt;
+    let cached = getArtifact(hash);
+    let compiledPrompt;
+    if (cached?.prompt) {
+        compiledPrompt = cached.prompt;
+        logEvent('CACHE', `Hit ${hash} · cache ${getCacheStats()}`);
     } else {
         compiledPrompt = compilePrompt(segments);
         putArtifact(hash, compiledPrompt);
-        logEvent('COMPILER', `Artifact generated & cached (${hash}).`);
+        logEvent('COMPILER', `Generated ${hash} · cache ${getCacheStats()}`);
     }
-    logEvent('COMPILER', `SPEC SCORE: ${total}/100.`);
-    logEvent('SYSTEM', 'Sending to neural link...');
+    lastCompiledArtifact = compiledPrompt;
+    updateArtifactPreview(compiledPrompt);
+    saveToStorage();
+    logEvent('COMPILER', `SPEC ${total}/100`);
+    logEvent('PROVIDER', `${PROVIDERS[settings.provider].name} · model ${settings.models[settings.provider] || PROVIDERS[settings.provider].defaultModel}`);
 
-    // ---- 3) UI: kirim message user + animasi badge ----
     addMessageToUI('user', userText);
     chatHistory.push({ role: 'user', content: userText, compiled: compiledPrompt });
     saveToStorage();
-
-    animateCompileSequence(); // fire-and-forget animation (selesai sendiri)
+    animateCompileSequence();
 
     const aiBubble = addMessageToUI('ai', '', true);
     let fullAiResponse = '';
-    let usedFallback = false;
     currentAbortController = new AbortController();
 
-    // ---- 4) API call ----
-    const hasKey = !!(settings.apiKey && settings.apiKey.trim());
-    let endpoint = hasKey ? 'https://gen.pollinations.ai/v1/chat/completions' : 'https://text.pollinations.ai/openai';
-    const headers = { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' };
-    if (hasKey) headers['Authorization'] = `Bearer ${settings.apiKey.trim()}`;
-
-    let modelToUse = settings.model || 'openai';
-    if (!hasKey && !['openai', 'openai-fast'].includes(modelToUse)) modelToUse = 'openai';
-
-    // Zero-Token: kirim artefak, bukan raw input
-    const apiHistory = chatHistory.slice(0, -1).map(m => ({
-        role: m.role,
-        content: m.compiled || m.content
-    }));
-    const body = {
-        model: modelToUse,
-        stream: true,
-        messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...apiHistory, { role: 'user', content: compiledPrompt }]
-    };
-
     try {
-        let response;
-        try {
-            response = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body), signal: currentAbortController.signal });
-            if (!response.ok) {
-                let errMsg = `HTTP ${response.status}`;
-                if (response.status === 401 || response.status === 403) errMsg = 'API Key tidak valid.';
-                else if (response.status === 402) errMsg = hasKey ? 'Saldo habis.' : 'Rate limit. Tunggu ~30 dtk.';
-                throw new Error(errMsg);
-            }
-        } catch (fetchError) {
-            if (hasKey && (fetchError.name === 'TypeError' || fetchError.message.includes('Failed to fetch'))) {
-                showToast('Koneksi GEN gagal. Beralih ke Mode Gratis...', 4200, true);
-                usedFallback = true;
-                updateEngineBadge('fallback');
-                logEvent('ERROR', 'GEN endpoint failed. Falling back to free endpoint.');
-                endpoint = 'https://text.pollinations.ai/openai';
-                delete headers['Authorization'];
-                body.model = 'openai';
-                response = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify(body), signal: currentAbortController.signal });
-                if (!response.ok) throw new Error(`HTTP Fallback Error: ${response.status}`);
-            } else { throw fetchError; }
+        const systemPrompt = getSystemPrompt();
+        const req = buildRequest(compiledPrompt, systemPrompt);
+
+        logEvent('SYSTEM', `POST ${req.endpoint.split('?')[0]}`);
+
+        const response = await fetch(req.endpoint, {
+            method: 'POST',
+            headers: req.headers,
+            body: JSON.stringify(req.body),
+            signal: currentAbortController.signal
+        });
+
+        if (!response.ok) {
+            let errMsg = `HTTP ${response.status}`;
+            if (response.status === 401 || response.status === 403) errMsg = 'Invalid or missing API key.';
+            else if (response.status === 402) errMsg = 'Payment / quota required.';
+            else if (response.status === 429) errMsg = 'Rate limited. Wait and retry.';
+            try {
+                const errBody = await response.text();
+                if (errBody && errBody.length < 300) errMsg += ` — ${errBody.slice(0, 200)}`;
+            } catch {}
+            throw new Error(errMsg);
         }
 
-        const reader = response.body.getReader();
-        for await (const data of parseSSE(reader)) {
-            const delta = data?.choices?.[0]?.delta;
-            const content = (delta && (delta.content || delta.text)) || '';
-            if (content) {
-                fullAiResponse += content;
-                aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse)) + '<span class="typing-indicator"></span>';
-                scrollToBottom();
+        if (!response.body) throw new Error('Empty response body (no stream).');
+
+        if ((response.headers.get('content-type') || '').includes('application/json')) {
+            fullAiResponse = extractDelta(await response.json(), req.parse);
+        } else {
+            const reader = response.body.getReader();
+            for await (const data of parseSSE(reader)) {
+                const content = extractDelta(data, req.parse);
+                if (content) {
+                    fullAiResponse += content;
+                    aiBubble.innerHTML = safeMarkdown(fullAiResponse) + '<span class="typing-indicator"></span>';
+                    scrollToBottom();
+                }
             }
         }
-        aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse || '_Tidak ada respons._'));
+
+        // Gemini sometimes returns non-streamed chunks differently; final flush already handled
+        aiBubble.innerHTML = safeMarkdown(fullAiResponse || '_No response._');
         renderChartsInElement(aiBubble);
         chatHistory.push({ role: 'assistant', content: fullAiResponse });
         if (chatHistory.length > MAX_HISTORY) chatHistory = chatHistory.slice(-MAX_HISTORY);
         saveToStorage();
         setStatus('ok');
-        if (!usedFallback) updateEngineBadge();
-        logEvent('OK', `Response received (${fullAiResponse.length} chars).`);
+        updateEngineBadge();
+        logEvent('OK', `Received ${fullAiResponse.length} chars.`);
     } catch (error) {
         if (error.name === 'AbortError') {
-            aiBubble.innerHTML = DOMPurify.sanitize(marked.parse(fullAiResponse || '')) + '<br><br><em class="error-text">[Dihentikan oleh operator]</em>';
-            if (fullAiResponse) { chatHistory.push({ role: 'assistant', content: fullAiResponse }); saveToStorage(); }
+            aiBubble.innerHTML = safeMarkdown(fullAiResponse || '') + '<br><br><em class="error-text">[Stopped by operator]</em>';
+            if (fullAiResponse) chatHistory.push({ role: 'assistant', content: fullAiResponse });
+            else if (chatHistory.length && chatHistory[chatHistory.length - 1].role === 'user') chatHistory.pop();
+            saveToStorage();
             setStatus('ok');
-            logEvent('SYSTEM', 'Request aborted by user.');
+            logEvent('SYSTEM', 'Aborted.');
         } else {
-            aiBubble.innerHTML = `<span class="error-text">⚠️ Neural link terputus: ${error.message}</span>`;
+            aiBubble.innerHTML = `<span class="error-text">⚠️ Link failed: ${escapeHtml(error.message || String(error))}</span>
+                <br><br><button class="btn-secondary" style="height:30px;padding:0 10px;font-size:0.72rem;" id="retry-btn">RETRY LAST</button>`;
+            const rb = aiBubble.querySelector('#retry-btn');
+            if (rb) rb.onclick = () => { if (!lastUserRaw || isGenerating) return; const m = aiBubble.closest('.message'); const um = m && m.previousElementSibling; if (m) m.remove(); if (um) um.remove(); chatInput.value = lastUserRaw; runLiveScan(lastUserRaw); sendMessage(); };
             setStatus('error');
-            logEvent('ERROR', error.message);
-            if (chatHistory.length && chatHistory[chatHistory.length - 1].role === 'user') {
-                chatHistory.pop();
-                saveToStorage();
+            logEvent('ERROR', error.message || String(error));
+            if (chatHistory.length && chatHistory[chatHistory.length-1].role === 'user') {
+                chatHistory.pop(); saveToStorage();
             }
         }
     } finally {
@@ -1128,25 +1524,168 @@ async function sendMessage() {
         currentAbortController = null;
         chatInput.focus();
         scrollToBottom();
-        // Re-scan input kosong (untuk reset state)
-        runLiveScan(chatInput.value);
+        if (chatInput.value.trim()) runLiveScan(chatInput.value);
     }
 }
 
-/* ================================================================
-   [13] INITIALIZATION
-   ================================================================ */
+/* ===================== DIAGNOSTICS ===================== */
+function runDiagnostics() {
+    logEvent('DIAG', '=== SELF-TEST START ===');
+    let passed = 0, failed = 0;
+    const assert = (name, cond) => {
+        if (cond) { logEvent('OK', `PASS: ${name}`); passed++; }
+        else { logEvent('ERROR', `FAIL: ${name}`); failed++; }
+    };
+    const sample = 'Kamu adalah ahli. Konteks: proyek X. Aturan: formal. Buat ringkasan. Pastikan akurat.';
+    const s1 = parsePrompt(sample), s2 = parsePrompt(sample);
+    assert('Parser deterministic', hashSegments(s1) === hashSegments(s2));
+    assert('ROLE detected', s1.role.length > 0);
+    assert('CONTEXT detected', s1.context.length > 0);
+    assert('RULES detected', s1.rules.length > 0);
+    assert('OBJECTIVE detected', s1.objective.length > 0);
+    assert('VALIDATION detected', s1.validation.length > 0);
+    const compiled = compilePrompt(s1);
+    assert('Compile non-empty', compiled.length > 40 && compiled.includes('### ROLE'));
+    const { total } = scorePrompt(s1);
+    assert('Score range', total >= 0 && total <= 100);
+    assert('DAG no critical', !validateDAG(s1).some(i => i.type === 'error'));
+    assert('marked', hasMarked);
+    assert('DOMPurify', hasPurify);
+    assert('Chart.js', hasChart);
+    assert('hljs', hasHljs);
+    const h = hashSegments(s1);
+    putArtifact(h, compiled);
+    assert('Cache roundtrip', getArtifact(h)?.prompt === compiled);
+    assert('Providers defined', Object.keys(PROVIDERS).length >= 6);
+    assert('System prompts ID+EN', SYSTEM_PROMPTS.id && SYSTEM_PROMPTS.en);
+    logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
+    showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
+}
+
+/* ===================== INIT ===================== */
 window.addEventListener('load', () => {
     loadSettings();
     restoreHistoryUI();
+    if (window.matchMedia('(max-width: 980px)').matches) panelRight.classList.add('collapsed');
     renderWordHeat('');
     renderIssues([]);
-    updateBadges({ role: [], context: [], rules: [], objective: [], validation: [] });
+    updateBadges({ role:[], context:[], rules:[], objective:[], validation:[] });
     updateSpecScore(0);
     chatInput.focus();
     runLiveScan('');
-    logEvent('SYSTEM', 'ZTA ready. Artifact cache active.');
+    logEvent('SYSTEM', `Research Nexus v${APP_VERSION} ready. Providers: ${Object.keys(PROVIDERS).join(', ')}. Cache: ${getCacheStats()}`);
 });
 </script>
+
+<!-- CGO BRIDGE v1 — zero-regression interop with Cyber Lab (postMessage) -->
+<script>
+(function(){
+'use strict';
+if (window.__CGO_NEXUS_BRIDGE__) return;
+window.__CGO_NEXUS_BRIDGE__ = true;
+
+const BRIDGE_VER = 1;
+const SOURCE = 'cgo-nexus';
+const ALLOWED = new Set(['cgo-lab', 'cgo-hub']);
+
+function reply(target, type, id, payload){
+  try {
+    target.postMessage({ source: SOURCE, v: BRIDGE_VER, type: type, id: id || null, payload: payload || {} }, '*');
+  } catch(e){}
+}
+
+function compileLocal(problem){
+  // Use existing Nexus functions if present — never break if missing
+  try {
+    if (typeof parsePrompt === 'function' && typeof compilePrompt === 'function' && typeof scorePrompt === 'function') {
+      const segments = parsePrompt(problem);
+      const compiled = compilePrompt(segments);
+      const scored = scorePrompt(segments);
+      const total = (scored && typeof scored.total === 'number') ? scored.total : (scored || 0);
+      return {
+        ok: true,
+        compiled: compiled,
+        score: total,
+        segments: {
+          role: (segments.role || []).length,
+          context: (segments.context || []).length,
+          rules: (segments.rules || []).length,
+          objective: (segments.objective || []).length,
+          validation: (segments.validation || []).length
+        }
+      };
+    }
+  } catch(e) {
+    return { ok: false, error: (e && e.message) || String(e) };
+  }
+  return { ok: false, error: 'Nexus compiler unavailable' };
+}
+
+function discussReply(problem, labState){
+  const comp = compileLocal(String(problem || ''));
+  const lines = [];
+  lines.push('**CGO Research Nexus — analisis terstruktur**');
+  lines.push('');
+  if (comp.ok) {
+    lines.push('Skor kompilasi intent: **' + comp.score + '/100**');
+    lines.push('Segmen: R' + comp.segments.role + ' C' + comp.segments.context + ' Ru' + comp.segments.rules + ' O' + comp.segments.objective + ' V' + comp.segments.validation);
+    lines.push('');
+    lines.push('Artifact (ringkas):');
+    lines.push('```');
+    lines.push(String(comp.compiled || '').slice(0, 900));
+    lines.push('```');
+  } else {
+    lines.push('_Compiler tidak tersedia di sesi ini (' + (comp.error || 'unknown') + '). Lanjut analisis kualitatif._');
+  }
+  lines.push('');
+  lines.push('Implikasi untuk Cyber Lab:');
+  lines.push('- **Role** operator vs agen harus dipisah (capability token).');
+  lines.push('- **Validation** sebaiknya memakai DETECT + jejak vault sebagai bukti runtime.');
+  lines.push('- **Rules**: jangan eksekusi LOCKDOWN/CLEAR_VAULT dari saran otomatis tanpa konfirmasi manusia.');
+  if (labState) {
+    lines.push('');
+    lines.push('Status Lab yang diterima: hooks=' + (labState.hooks ? 'ON' : 'OFF') + ', vault=' + (labState.vault|0) + ', anomaly=' + (labState.anomaly|0) + '.');
+  }
+  return { text: lines.join('\n'), compile: comp };
+}
+
+window.addEventListener('message', function(ev){
+  const d = ev && ev.data;
+  if (!d || d.v !== BRIDGE_VER || !ALLOWED.has(d.source)) return;
+  const srcWin = ev.source;
+  if (!srcWin) return;
+
+  try {
+    if (d.type === 'PING' || d.type === 'HELLO') {
+      reply(srcWin, 'HELLO_ACK', d.id, { role: 'nexus', version: (typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'nexus') });
+      return;
+    }
+    if (d.type === 'NEXUS_COMPILE') {
+      const problem = (d.payload && d.payload.problem) || (d.payload && d.payload.text) || '';
+      const result = compileLocal(problem);
+      reply(srcWin, 'NEXUS_COMPILE_ACK', d.id, result);
+      return;
+    }
+    if (d.type === 'DISCUSS') {
+      const problem = (d.payload && d.payload.problem) || '';
+      const labState = (d.payload && d.payload.labState) || null;
+      const out = discussReply(problem, labState);
+      reply(srcWin, 'DISCUSS_ACK', d.id, { from: 'nexus', text: out.text, compile: out.compile });
+      return;
+    }
+    if (d.type === 'CONTEXT_SYNC') {
+      reply(srcWin, 'CONTEXT_SYNC_ACK', d.id, { ready: true });
+      return;
+    }
+  } catch(e) {
+    try { reply(srcWin, 'ERROR', d.id, { error: (e && e.message) || String(e) }); } catch(_){}
+  }
+});
+
+try { localStorage.setItem('cgo_bridge_nexus_ready', String(Date.now())); } catch(e){}
+console.log('%c[CGO Bridge] Nexus side v1 ready (postMessage).', 'color:#38bdf8');
+})();
+</script>
+
 </body>
 </html>
