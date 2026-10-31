@@ -372,6 +372,44 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-i
     .message.agent .sender .agent-role { display: none; }
 }
 
+
+/* ============================================================
+   AVATAR + CHAT MASA DEPAN — aditif, tidak mengubah style lama
+   ============================================================ */
+.panel-left { position: relative; }
+.message { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 10px; align-items: start; }
+.message > .av { grid-column: 1; grid-row: 1 / span 2; }
+.message > .sender { grid-column: 2; grid-row: 1; }
+.message > .bubble { grid-column: 2; grid-row: 2; }
+.message.user { grid-template-columns: minmax(0, auto) 40px; justify-content: end; }
+.message.user > .av { grid-column: 2; }
+.message.user > .sender, .message.user > .bubble { grid-column: 1; }
+.av { --c: var(--accent, #22d3ee); position: relative; width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; color: var(--c);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--c) 24%, transparent), rgba(5,8,15,.88));
+    border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--c) 35%, transparent), inset 0 0 12px color-mix(in srgb, var(--c) 18%, transparent); }
+.av svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.av::after { content: ""; position: absolute; inset: -4px; border-radius: 17px; border: 1px solid var(--c); opacity: 0; }
+.agent-thinking > .av::after, .message.ai:has(.typing-indicator) > .av::after { animation: avRing 1.4s ease-out infinite; }
+@keyframes avRing { 0% { opacity: .7; transform: scale(.85); } 100% { opacity: 0; transform: scale(1.3); } }
+.message.user > .av { --c: #60a5fa; }
+.sender time { margin-left: auto; font-size: .62rem; opacity: .6; letter-spacing: .04em; }
+.message.user .sender time { margin-left: 0; }
+.mcopy { background: transparent; border: 1px solid transparent; color: var(--text-dim); border-radius: 7px; width: 24px; height: 22px; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.mcopy:hover { color: var(--text-main); border-color: var(--accent); }
+.mcopy svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.typing-indicator { width: 30px; height: 8px; border-radius: 0; margin-left: 4px;
+    background: radial-gradient(circle, var(--accent) 2.6px, transparent 3px) 0 0 / 10px 8px repeat-x; animation: tdots 1.2s ease-in-out infinite; }
+@keyframes tdots { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+#jump-bottom { position: absolute; right: 18px; bottom: 92px; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--accent); background: rgba(8,13,26,.92); color: var(--accent);
+    display: grid; place-items: center; cursor: pointer; opacity: 0; pointer-events: none; transform: translateY(8px); transition: .2s; z-index: 5; box-shadow: 0 0 16px rgba(34,211,238,.35); }
+#jump-bottom.show { opacity: 1; pointer-events: auto; transform: none; }
+#jump-bottom svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@media (max-width: 480px) {
+    .message { grid-template-columns: 32px minmax(0, 1fr); column-gap: 8px; }
+    .message.user { grid-template-columns: minmax(0, auto) 32px; }
+    .av { width: 32px; height: 32px; border-radius: 11px; } .av svg { width: 18px; height: 18px; }
+}
 </style>
 </head>
 <body data-theme="cyber">
@@ -1226,6 +1264,31 @@ Validation: Every claim must have design rationale.`
     showToast('Sample loaded');
 }
 
+var NX_RESTORING = false;
+function avSvg(k) {
+    const P = {
+        user: '<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.8 3.6-5.6 7-5.6s6.2 1.8 7 5.6"/>',
+        ai: '<path d="M12 2.8l7.8 4.5v9.4L12 21.2l-7.8-4.5V7.3z"/><circle cx="12" cy="12" r="2.6"/><path d="M12 5.5v4M12 14.5v4M6.3 9l3.4 2M14.3 13l3.4 2"/>',
+        agent: '<circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.6"/><circle cx="19" cy="6" r="1.6"/><circle cx="12" cy="20" r="1.6"/><path d="M6.4 7l4 3.6M17.6 7l-4 3.6M12 14.4V18.4"/>',
+        synth: '<path d="M12 3l2.2 6.3L21 12l-6.8 2.7L12 21l-2.2-6.3L3 12l6.8-2.7z"/>'
+    };
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (P[k] || P.agent) + '</svg>';
+}
+function nxDecorate(msgDiv, kind, color, live) {
+    const av = document.createElement('div');
+    av.className = 'av'; av.setAttribute('aria-hidden', 'true'); av.innerHTML = avSvg(kind);
+    if (color) av.style.setProperty('--c', color);
+    msgDiv.insertBefore(av, msgDiv.firstChild);
+    const s = msgDiv.querySelector('.sender'), b = msgDiv.querySelector('.bubble');
+    if (!s || !b) return;
+    if (live) { const t = document.createElement('time'); t.textContent = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }); s.appendChild(t); }
+    const c = document.createElement('button');
+    c.type = 'button'; c.className = 'mcopy'; c.setAttribute('aria-label', 'Salin pesan');
+    c.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>';
+    c.onclick = () => { copyText(b.innerText).then(() => showToast('Pesan disalin')).catch(() => showToast('Gagal menyalin', 2000, true)); };
+    s.appendChild(c);
+}
+
 function addMessageToUI(role, text, isTyping = false) {
     const msgDiv = document.createElement('div');
     msgDiv.classList.add('message', role);
@@ -1238,6 +1301,7 @@ function addMessageToUI(role, text, isTyping = false) {
     else bubbleDiv.innerText = text;
     msgDiv.appendChild(senderDiv);
     msgDiv.appendChild(bubbleDiv);
+    nxDecorate(msgDiv, role === 'user' ? 'user' : 'ai', null, !NX_RESTORING);
     chatContainer.appendChild(msgDiv);
     scrollToBottom(role === 'user');
     return bubbleDiv;
@@ -1246,6 +1310,7 @@ function renderBootMessage(force = false) {
     if (!force && chatHistory.length > 0) return;
     chatContainer.innerHTML = `
         <div class="message ai">
+            <div class="av" aria-hidden="true">${avSvg('ai')}</div>
             <div class="sender">RESEARCH NEXUS</div>
             <div class="bubble">
                 <strong>CGO — Research Nexus v4.1</strong><br><br>
@@ -1257,6 +1322,7 @@ function renderBootMessage(force = false) {
 function restoreHistoryUI() {
     chatContainer.innerHTML = '';
     if (!chatHistory.length) { renderBootMessage(true); return; }
+    NX_RESTORING = true;
     chatHistory.forEach(m => {
         if (m.role === 'agent') {
             const agentDef = m.isSynth ? SYNTH_AGENT : (AGENTS.find(a => a.id === m.agentId) || { id: m.agentId, name: m.agentName, color: m.agentColor, role_id: m.agentRole, role_en: m.agentRole });
@@ -1266,6 +1332,7 @@ function restoreHistoryUI() {
         }
         addMessageToUI(m.role === 'user' ? 'user' : 'ai', m.content);
     });
+    NX_RESTORING = false;
     chatContainer.querySelectorAll('.bubble').forEach(b => renderChartsInElement(b));
 }
 
@@ -1798,6 +1865,7 @@ function addAgentMessageToUI(agent, isTyping) {
     bubbleDiv.innerHTML = isTyping ? '<span class="typing-indicator"></span>' : '';
     msgDiv.appendChild(senderDiv);
     msgDiv.appendChild(bubbleDiv);
+    nxDecorate(msgDiv, agent.id === 'synth' ? 'synth' : 'agent', agent.color, !NX_RESTORING);
     chatContainer.appendChild(msgDiv);
     scrollToBottom();
     return { msgDiv, bubbleDiv };
@@ -1963,6 +2031,48 @@ document.getElementById('multiagent-btn').addEventListener('click', () => {
     setMultiAgentMode(!multiAgentMode);
     showToast(multiAgentMode ? 'Multi-Agent Panel ON — 4 peneliti akan berdiskusi' : 'Multi-Agent Panel OFF');
 });
+
+/* ===== Tombol "ke pesan terbaru" (aditif) ===== */
+(function () {
+    const f = document.createElement('button');
+    f.id = 'jump-bottom'; f.type = 'button'; f.setAttribute('aria-label', 'Ke pesan terbaru');
+    f.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
+    chatContainer.parentElement.appendChild(f);
+    f.onclick = () => { chatContainer.scrollTop = chatContainer.scrollHeight; };
+    chatContainer.addEventListener('scroll', () => {
+        f.classList.toggle('show', chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight > 220);
+    }, { passive: true });
+})();
+
+/* ===== CGO BRIDGE — responder untuk CGO Bridge Hub (aditif, hanya menjawab pesan 'cgo-hub') ===== */
+(function () {
+    const V = 1, ME = 'cgo-nexus', HUB = 'cgo-hub';
+    function reply(ev, type, id, payload) {
+        try { ev.source.postMessage({ source: ME, v: V, type: type, id: id, payload: payload || {} }, (ev.origin && ev.origin !== 'null') ? ev.origin : '*'); } catch (e) {}
+    }
+    function analyze(problem, labState) {
+        const seg = parsePrompt(String(problem || '')), issues = validateDAG(seg), sc = scorePrompt(seg);
+        const L = ['**CGO Research Nexus — ' + (labState ? 'sanggahan' : 'kompilasi intent') + '**', '', 'Skor spesifikasi **' + sc.total + '/100**. Pemetaan kalimat:'];
+        [['role', 'Role'], ['context', 'Context'], ['rules', 'Rules'], ['objective', 'Objective'], ['validation', 'Validation']].forEach(p => {
+            L.push('- **' + p[1] + '** (' + sc.scores[p[0]] + '): ' + (seg[p[0]].length ? seg[p[0]].join(' ').slice(0, 160) : '_kosong_'));
+        });
+        L.push('', 'Validator:');
+        issues.forEach(i => L.push('- `' + i.type + '` ' + i.msg));
+        if (labState) L.push('', 'Status Lab diterima: `' + JSON.stringify(labState).slice(0, 200) + '`');
+        return { text: L.join('\n'), compile: { ok: !issues.some(i => i.type === 'error'), score: sc.total } };
+    }
+    window.addEventListener('message', ev => {
+        const d = ev.data;
+        if (!d || d.source !== HUB || d.v !== V || !d.id) return;
+        if (d.type === 'PING' || d.type === 'HELLO') { reply(ev, 'HELLO_ACK', d.id, { app: 'cgo-nexus' }); return; }
+        if (d.type === 'DISCUSS') {
+            try { const p = d.payload || {}; reply(ev, 'DISCUSS_ACK', d.id, analyze(p.problem, p.labState)); }
+            catch (e) { reply(ev, 'ERROR', d.id, { error: String(e && e.message || e) }); }
+            return;
+        }
+        reply(ev, 'ERROR', d.id, { error: 'unsupported ' + d.type });
+    });
+})();
 
 </script>
 </body>
