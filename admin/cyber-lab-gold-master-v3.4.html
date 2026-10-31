@@ -2213,6 +2213,15 @@ async function fetchUrlFromBar() {
     if (!url) return log('[SYS] URL kosong.', 'warn');
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
     const cfg = getHttpConfig();
+    // --- GUARDRAIL CHECK ---
+    const guard = enforceUniversalRoE(url, cfg.method, cfg.body);
+    if (!guard.safe) {
+        log(guard.reason, 'danger');
+        showToast(guard.reason, 4000, true);
+        return;
+    }
+    log(`[ROE] ${guard.reason}`, 'success');
+    // -----------------------
     log(`[SYS] FETCH manual: ${trunc(url, 60)} (${cfg.method})`, 'info');
     try {
         const opts = { cache: 'no-store', method: cfg.method, headers: cfg.headers || {} };
@@ -2830,8 +2839,43 @@ function renderResultCard(cardId, result, state) {
     $('monitorStatus').textContent = `${count} hasil probe`;
     $('monitorStatus').className = 'pill ok';
 }
-
+/* ============================================================
+   FASE 12: UNIVERSAL RED TEAM GUARDRAIL (GENERIK & ADAPTIF)
+   ============================================================ */
+function enforceUniversalRoE(url, method = 'GET', body = '') {
+    if (!url) return { safe: false, reason: '[ROE] URL kosong.' };
+    // 1. DYNAMIC SCOPE ENFORCEMENT
+    let currentScope = localStorage.getItem('cyber_lab_target_scope');
+    try {
+        const parsedUrl = new URL(url);
+        const hostname = parsedUrl.hostname;
+        // Jika belum ada scope, atau target berbeda dengan scope sebelumnya
+        if (!currentScope || !hostname.includes(currentScope)) {
+            const newScope = prompt(`[TARGET SCOPE BARU]\nKamu akan menembak: ${hostname}\n\nKetik nama domain ini (contoh: ${hostname}) untuk mengonfirmasi bahwa ini adalah target resmi/Bug Bounty Anda:`, currentScope || hostname);            
+            if (!newScope || !hostname.includes(newScope)) {
+                return { safe: false, reason: `[SCOPE BLOCKED] Domain ${hostname} ditolak. Tembakan dibatalkan untuk mencegah pidana.` };
+            }
+            localStorage.setItem('cyber_lab_target_scope', newScope);
+            log(`[ROE] Target Scope disetel ke: ${newScope}`, 'success');
+        }
+    } catch (e) {
+        return { safe: false, reason: `[FORMAT ERROR] URL tidak valid.` };
+    }
+    // 2. ANTI-DDOS (Batas ukuran payload: 50KB)
+    if (body && body.length > 50000) {
+        return { safe: false, reason: `[DDOS ALERT] Payload terlalu besar (${body.length} byte). Dibatalkan.` };
+    }
+    // 3. DESTRUCTIVE ACTION WARNING (Hanya untuk method berbahaya)
+    if (['DELETE', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
+        const confirmDestructive = confirm(`[DESTRUCTIVE ACTION WARNING]\nKamu akan menembakkan metode ${method.toUpperCase()} ke:\n${url}\n\nIni berpotensi mengubah/menghapus data. Lanjutkan hanya jika ini bagian dari Proof of Concept (PoC) yang aman!`);
+        if (!confirmDestructive) {
+            return { safe: false, reason: `[CANCELLED] Aksi destruktif dibatalkan oleh Operator.` };
+        }
+    }
+    return { safe: true, reason: 'Guardrail passed. Eksekusi dilanjutkan.' };
+}
 /* ---------- PROBE CONTROLS ---------- */
+   
 async function probeOne() {
     const raw = $('universalInput').value.trim();
     if (!raw) { log('[SYS] Input kosong.', 'warn'); return; }
@@ -2839,11 +2883,21 @@ async function probeOne() {
     if (lines.length > 1) return probeBatch();
     const profile = Profile.analyze(lines[0]);
     if (!profile) { log('[SYS] URL tidak valid.', 'warn'); return; }
+    // --- GUARDRAIL CHECK ---
+    const method = document.getElementById('httpMethod') ? document.getElementById('httpMethod').value : 'GET';
+    const body = document.getElementById('reqBody') ? document.getElementById('reqBody').value : '';
+    const guard = enforceUniversalRoE(profile.href, method, body);
+    if (!guard.safe) {
+        log(guard.reason, 'danger');
+        showToast(guard.reason, 4000, true);
+        return;
+    }
+    log(`[ROE] ${guard.reason}`, 'success');
+    // -----------------------
     $('probeBtn').disabled = true; $('probeBatchBtn').disabled = true;
     try { await probeUrl(lines[0]); }
     finally { $('probeBtn').disabled = false; $('probeBatchBtn').disabled = false; }
 }
-
 async function probeBatch() {
     if (batchRunning) { log('[SYS] Batch masih berjalan.', 'warn'); return; }
     const raw = $('universalInput').value.trim();
