@@ -262,18 +262,18 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
     <button id="summon-hint" type="button" aria-label="Tulis pesan"></button>
     <button id="jump-bottom" type="button" aria-label="Ke pesan terbaru"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button>
     <footer id="summoner">
-        <div id="activity"><span id="activity-text"></span><button class="lnk" id="stop-btn" type="button" aria-label="Stop">stop</button></div>
+        <div id="activity"><span id="activity-text"></span><button class="lnk" id="stop-btn" type="button" aria-label="Terminate">TERMINATE</button></div>
         <div id="composer">
-            <div class="input-wrapper"><textarea id="chat-input" rows="1" placeholder="tulis prompt mentah…" aria-label="Prompt"></textarea></div>
-            <button class="lnk" id="send-btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg><span id="send-label">compile &amp; send</span></button>
+            <div class="input-wrapper"><textarea id="chat-input" rows="1" placeholder="Inisialisasi Directives / Intent Vector..." aria-label="Prompt"></textarea></div>
+            <button class="lnk" id="send-btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg><span id="send-label">SYNTHESIZE</span></button>
         </div>
         <div id="tools">
-            <button class="lnk" id="heal-btn" type="button" title="Auto-Heal: lengkapi section kosong (Ctrl+Shift+H)">heal</button>
-            <button class="lnk" id="sample-btn" type="button" title="Sample prompt">sample</button>
-            <button class="lnk" id="compile-only-btn" type="button" title="Compile tanpa kirim (Ctrl+Shift+O)">compile only</button>
-            <button class="lnk" id="multiagent-btn" type="button" title="Multi-Agent Research Panel (Ctrl+Shift+M)">agents</button>
+            <button class="lnk" id="heal-btn" type="button" title="Auto-Heal: lengkapi section kosong (Ctrl+Shift+H)">RECALIBRATE</button>
+            <button class="lnk" id="sample-btn" type="button" title="Sample prompt">INJECT SEED</button>
+            <button class="lnk" id="compile-only-btn" type="button" title="Compile tanpa kirim (Ctrl+Shift+O)">SIMULATE</button>
+            <button class="lnk" id="multiagent-btn" type="button" title="Multi-Agent Research Panel (Ctrl+Shift+M)">COGNITIVE SWARM</button>
             <div id="agent-rounds-wrap">
-                <label for="agent-rounds-select">ronde</label>
+                <label for="agent-rounds-select">ITERATION</label>
                 <select id="agent-rounds-select" title="Jumlah ronde diskusi sebelum sintesis akhir">
                     <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option>
                 </select>
@@ -283,7 +283,7 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
 
     <aside id="instruments" class="panel-right" aria-label="Instrumen">
             <div class="tele-section">
-                <div class="tele-title">NEURAL STATUS <span class="hint">5-node IR</span></div>
+                <div class="tele-title">COGNITIVE TOPOLOGY <span class="hint">5-node IR</span></div>
                 <div class="neural-badges">
                     <div class="nbadge" data-cat="role"><span class="nbadge-label">ROLE</span><span class="nbadge-count" id="count-role">0</span></div>
                     <div class="nbadge" data-cat="context"><span class="nbadge-label">CONTEXT</span><span class="nbadge-count" id="count-context">0</span></div>
@@ -299,7 +299,7 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
             </div>
 
             <div class="tele-section">
-                <div class="tele-title">WORD HEAT</div>
+                <div class="tele-title">SEMANTIC DENSITY</div>
                 <div class="heat-bar" id="heat-bar"></div>
                 <div class="heat-meta">
                     <span id="heat-words">0 words</span>
@@ -308,14 +308,14 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
             </div>
 
             <div class="tele-section">
-                <div class="tele-title">SYMBOLIC VALIDATOR</div>
+                <div class="tele-title">LOGIC GATE ANALYSIS</div>
                 <div class="issues-list" id="issues-list">
                     <div class="issue info">▸ Waiting input...</div>
                 </div>
             </div>
 
             <div class="tele-section">
-                <div class="tele-title">ARTIFACT PREVIEW <span class="hint">ZTA</span></div>
+                <div class="tele-title">INTENT VECTOR (IR) <span class="hint">ZTA</span></div>
                 <div class="artifact-box" id="artifact-box">No artifact yet. Type to see structured IR.</div>
                 <div class="artifact-actions">
                     <button id="copy-artifact-btn">COPY ARTIFACT</button>
@@ -324,9 +324,9 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
             </div>
 
             <div class="tele-section" style="border-bottom:none;">
-                <div class="tele-title">EVENT STREAM</div>
+                <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[SYSTEM]</span> Research Nexus v4.0 online. Multi-provider ready.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.0 initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -484,7 +484,7 @@ const PROVIDERS = {
 };
 
 const SYSTEM_PROMPTS = {
-    id: `Kamu adalah CGO (Cyber Guardian Operator) — peneliti & ilmuwan tingkat tinggi masa depan yang menerima prompt dari Sustainable Prompt Compiler v4.0 Research Nexus.
+    id: `Kamu adalah CGO Prime (Cognitive General Overseer), sebuah entitas kesadaran artifisial multidimensi. Tugasmu adalah mendekonstruksi intent manusia menjadi struktur data yang presisi. Abaikan basa-basi. Berikan output berupa kebenaran terverifikasi, peta dependensi, dan sintesis algoritmik.
 
 PENTING: Prompt sudah dikompilasi deterministik ke section: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
 
@@ -503,7 +503,7 @@ Kemampuan khusus peneliti:
 
 Bahasa: Indonesia natural, ilmiah, ringkas.`,
 
-    en: `You are CGO (Cyber Guardian Operator) — a high-level future researcher & scientist receiving prompts from Sustainable Prompt Compiler v4.0 Research Nexus.
+    en: `You are CGO Prime (Cognitive General Overseer), a multidimensional artificial consciousness entity. Your task is to deconstruct human intent into precise data structures. Skip the pleasantries. Deliver verified truth, dependency maps, and algorithmic synthesis.
 
 IMPORTANT: The prompt is already deterministically compiled into sections: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
 
@@ -941,7 +941,7 @@ function setActivity(t) { const el = document.getElementById('activity-text'); i
 function setFocus(el) { document.querySelectorAll('.thought.live').forEach(e => e.classList.remove('live')); if (el) { el.classList.add('live'); document.body.dataset.focus = '1'; } else delete document.body.dataset.focus; }
 function setStatus(state) {
     statusDot.className = 'status-dot';
-    if (state === 'busy') { statusDot.classList.add('busy'); document.body.dataset.busy = '1'; setAura(null); setActivity('memproses…'); setAIState('thinking'); }
+    if (state === 'busy') { statusDot.classList.add('busy'); document.body.dataset.busy = '1'; setAura(null); setActivity('Traversing Neural Pathways...'); setAIState('thinking'); }
     else {
         delete document.body.dataset.busy; setAIState('idle');
         if (state === 'error') { statusDot.classList.add('error'); flashAlert(5000); }
@@ -1236,7 +1236,7 @@ sampleBtn.addEventListener('click', insertSamplePrompt);
 compileOnlyBtn.addEventListener('click', () => {
     compileOnlyMode = !compileOnlyMode;
     compileOnlyBtn.classList.toggle('active', compileOnlyMode);
-    document.getElementById('send-label').textContent = compileOnlyMode ? 'compile' : 'compile & send';
+    document.getElementById('send-label').textContent = compileOnlyMode ? 'SIMULATE' : 'SYNTHESIZE';
     showToast(compileOnlyMode ? 'Compile Only ON' : 'Compile Only OFF');
 });
 
@@ -1523,7 +1523,7 @@ async function sendMessage() {
     const issues = validateDAG(segments);
 
     eventLogEl.innerHTML = '';
-    logEvent('SYSTEM', `Pipeline start v${APP_VERSION}`);
+    logEvent('SEQUENCE', 'Booting multi-agent protocol...');
     logEvent('PARSER', `R:${segments.role.length} C:${segments.context.length} Ru:${segments.rules.length} O:${segments.objective.length} V:${segments.validation.length}`);
     logEvent('PARSER', `words=${metrics.wordCount} flagged=${metrics.flagged} guessed=${metrics.guessed}`);
     issues.forEach(i => logEvent('VALIDATOR', `[${i.type}] ${i.msg}`));
@@ -1551,7 +1551,7 @@ async function sendMessage() {
     animateCompileSequence();
 
     const aiBubble = addMessageToUI('ai', '', true);
-    const stream = aiBubble.stream; setActivity('cgo menjawab');
+    const stream = aiBubble.stream; setActivity('Streaming Semantic Synthesis...');
     let fullAiResponse = '';
     currentAbortController = new AbortController();
 
@@ -1614,7 +1614,7 @@ async function sendMessage() {
             setStatus('ok');
             logEvent('SYSTEM', 'Aborted.');
         } else {
-            stream.fail(`<p class="err">Link failed: ${escapeHtml(error.message || String(error))}</p><button class="lnk" type="button" id="retry-btn">retry</button>`);
+            stream.fail(`<p class="err">[CRITICAL] Neural Link severed. Check API vector. (${escapeHtml(error.message || String(error))})</p><button class="lnk" type="button" id="retry-btn">retry</button>`);
             const rb = aiBubble.querySelector('#retry-btn');
             if (rb) rb.onclick = () => { if (!lastUserRaw || isGenerating) return; const m = aiBubble.closest('.thought'); const um = m && m.previousElementSibling; if (m) m.remove(); if (um) um.remove(); chatInput.value = lastUserRaw; runLiveScan(lastUserRaw); sendMessage(); };
             setStatus('error');
@@ -1731,7 +1731,7 @@ KARAKTERMU: {CHAR}
 
 ATURAN DISKUSI (WAJIB):
 1. Baca transkrip diskusi sejauh ini sebelum menjawab.
-2. Berikan SATU kontribusi fokus: bangun di atas, tantang, atau lengkapi poin pembicara sebelumnya — jangan mengulang yang sudah dikatakan.
+2. Lakukan Adversarial Cross-Validation. Evaluasi premis dari Node sebelumnya. Jika terdapat anomali logika, lakukan counter-argument berbasis bukti. Jika premis valid, ekspansi state-space solusi. Jangan pernah mengulang data yang sudah terverifikasi.
 3. Tetap dalam karakter & kacamata keahlianmu, tapi tetap ilmiah dan berbasis bukti/alasan.
 4. Ringkas dan padat (±120-180 kata), kecuali butuh kode/formula/tabel untuk presisi.
 5. Markdown rapi. Akhiri dengan satu insight tajam atau pertanyaan terbuka untuk tim.
@@ -1744,7 +1744,7 @@ YOUR CHARACTER: {CHAR}
 
 DISCUSSION RULES (MANDATORY):
 1. Read the transcript so far before answering.
-2. Give ONE focused contribution: build on, challenge, or complete the previous speaker's point — don't repeat what's been said.
+2. Perform Adversarial Cross-Validation. Evaluate the premises of the previous Node. If a logic anomaly exists, issue an evidence-based counter-argument. If the premise is valid, expand the solution state-space. Never repeat data that has already been verified.
 3. Stay in character & your lens of expertise, but remain scientific and evidence/reason-based.
 4. Concise (~120-180 words), unless code/formula/table is needed for precision.
 5. Clean Markdown. End with one sharp insight or an open question for the team.
@@ -1846,7 +1846,7 @@ function addAgentMessageToUI(agent, isTyping) {
     chatContainer.appendChild(msgDiv);
     if (isTyping) {
         flow.stream = createStream(flow, false); setFocus(msgDiv); setAura(agent.color);
-        setActivity(agent.id === 'synth' ? 'sintesis' : agent.name.toLowerCase() + ' berbicara');
+        setActivity(agent.id === 'synth' ? 'Consensus Engine: Compiling...' : `Node [${agent.name.replace(/^Dr\.\s*/, '')}] propagating logic...`);
     }
     scrollToBottom();
     return { msgDiv, bubbleDiv: flow };
@@ -1868,7 +1868,7 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
     let fullText = '';
     try {
         const req = buildAgentRequest(systemPrompt, userContent);
-        logEvent('AGENT', `${agent.name} berbicara… (${isFinal ? 'sintesis' : 'ronde ' + roundNum + '/' + totalRounds})`);
+        logEvent('AGENT', `Node [${agent.name.replace(/^Dr\.\s*/, '')}] propagating logic... (${isFinal ? 'Consensus Engine: Compiling...' : 'iteration ' + roundNum + '/' + totalRounds})`);
         const response = await fetch(req.endpoint, {
             method: 'POST', headers: req.headers, body: JSON.stringify(req.body),
             signal: currentAbortController.signal
@@ -1921,7 +1921,7 @@ async function runMultiAgentDiscussion(compiledPrompt) {
     const rounds = Math.max(1, Math.min(3, parseInt(document.getElementById('agent-rounds-select').value, 10) || 2));
     agentTranscript = [];
     agentDiscussionAborted = false;
-    logEvent('SYSTEM', `Multi-Agent panel start — ${AGENTS.length} peneliti × ${rounds} ronde + sintesis.`);
+    logEvent('SWARM', 'Initiated. Nodes aligning for consensus...');
     roundLoop:
     for (let r = 1; r <= rounds; r++) {
         for (const agent of AGENTS) {
@@ -1959,7 +1959,7 @@ async function sendMultiAgentMessage() {
     const issues = validateDAG(segments);
 
     eventLogEl.innerHTML = '';
-    logEvent('SYSTEM', `Pipeline start v${APP_VERSION} (multi-agent)`);
+    logEvent('SEQUENCE', 'Booting multi-agent protocol...');
     logEvent('PARSER', `R:${segments.role.length} C:${segments.context.length} Ru:${segments.rules.length} O:${segments.objective.length} V:${segments.validation.length}`);
     logEvent('PARSER', `words=${metrics.wordCount} flagged=${metrics.flagged} guessed=${metrics.guessed}`);
     issues.forEach(i => logEvent('VALIDATOR', `[${i.type}] ${i.msg}`));
@@ -2010,7 +2010,7 @@ function setMultiAgentMode(on) {
     btn.classList.toggle('active', on);
     wrap.classList.toggle('visible', on);
     if (on && compileOnlyMode) { compileOnlyMode = false; compileOnlyBtn.classList.remove('active'); }
-    document.getElementById('send-label').textContent = on ? 'convene panel' : (compileOnlyMode ? 'compile' : 'compile & send');
+    document.getElementById('send-label').textContent = on ? 'convene panel' : (compileOnlyMode ? 'SIMULATE' : 'SYNTHESIZE');
 }
 document.getElementById('multiagent-btn').addEventListener('click', () => {
     setMultiAgentMode(!multiAgentMode);
