@@ -231,6 +231,37 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
 .ui-scene3d .s3d-bar .lnk{min-height:34px;padding:.3rem .5rem;font-size:.68rem}
 .ui-scene3d .s3d-st{margin-left:auto;font:400 .68rem var(--mono);color:var(--dim)}
 .ui-scene3d .s3d-st.s3d-err{color:#fca5a5}
+
+/* ===== v6.1 FUTURE LAYER ===== */
+.tag-sys{color:#93c5fd}.tag-pars{color:var(--c-context)}.tag-val{color:var(--warning)}.tag-comp{color:var(--c-validation)}.tag-err{color:var(--danger)}.tag-ok{color:var(--success)}
+#void::before{content:'';position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(var(--aura-a),.055) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--aura-a),.055) 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(70% 60% at 50% 45%,#000,transparent 82%);mask-image:radial-gradient(70% 60% at 50% 45%,#000,transparent 82%);animation:gridDrift 48s linear infinite}
+@keyframes gridDrift{to{background-position:56px 56px}}
+#void::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:1;background:radial-gradient(440px circle at var(--mx,50%) var(--my,40%),rgba(var(--aura-a),.09),transparent 70%)}
+body[data-theme="light"] #void::after,body[data-theme="light"] #void::before{display:none}
+#instruments,#settings-panel{-webkit-backdrop-filter:blur(24px) saturate(1.5);backdrop-filter:blur(24px) saturate(1.5);box-shadow:inset 1px 0 0 rgba(var(--aura-a),.28)}
+.tele-section{border-bottom:1px solid rgba(var(--aura-a),.14)}
+.artifact-box,.event-log{background:rgba(0,0,0,.55)!important;border-color:rgba(var(--aura-a),.22)!important}
+.thought.agent{padding-left:1.1rem;border-left:1px solid color-mix(in srgb,var(--hue) 55%,transparent);box-shadow:-16px 0 30px -24px var(--hue)}
+.thought.agent.synth{border-left-width:2px;padding-top:.9rem;padding-bottom:.5rem;border-radius:0 14px 14px 0;background:linear-gradient(90deg,color-mix(in srgb,var(--hue) 10%,transparent),transparent 65%)}
+.ui-code{background:rgba(10,16,30,.8)}
+.ui-code:hover,.ui-scene3d:hover{box-shadow:0 0 0 1px rgba(var(--aura-a),.45),0 36px 70px -34px #000,0 0 70px -24px rgba(var(--aura-a),.8)}
+.ui-scene3d{border-radius:16px;border-color:rgba(var(--aura-a),.4);box-shadow:0 0 50px -26px rgba(var(--aura-a),.9)}
+.ui-scene3d:fullscreen{border-radius:0;background:#05070d;display:flex;flex-direction:column}.ui-scene3d:fullscreen iframe{flex:1;height:auto}
+#swarm{display:none;gap:1rem;flex-wrap:wrap;justify-content:center;padding:.2rem 0 .5rem;font:400 .68rem var(--mono);color:var(--dim)}
+body[data-swarm][data-busy] #swarm{display:flex}
+#swarm span{display:inline-flex;align-items:center;gap:.4rem;opacity:.45;transition:opacity .3s,color .3s}
+#swarm i{width:7px;height:7px;border-radius:50%;border:1px solid var(--hue);transition:background .3s,box-shadow .3s}
+#swarm .on{opacity:1;color:var(--ink)}#swarm .on i{background:var(--hue);box-shadow:0 0 12px var(--hue);animation:breathe 1.1s ease-in-out infinite}
+#swarm .done{opacity:.85}#swarm .done i{background:var(--hue)}#swarm .err i{border-color:var(--danger);background:var(--danger)}
+#palette{position:fixed;inset:0;z-index:70;display:none;align-items:flex-start;justify-content:center;padding-top:14vh;background:rgba(2,4,9,.62);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+#palette.open{display:flex;animation:fade .25s ease}
+#palette .box{width:min(34rem,calc(100% - 2rem));border-radius:18px;background:var(--layer);overflow:hidden;box-shadow:0 0 0 1px rgba(var(--aura-a),.38),0 40px 90px -30px #000,0 0 90px -30px rgba(var(--aura-a),.75)}
+#palette input{width:100%;background:transparent;border:0;border-bottom:1px solid rgba(160,180,220,.15);color:var(--ink);font:300 1.12rem var(--serif);padding:1rem 1.1rem;outline:none}
+#palette ul{list-style:none;max-height:50vh;overflow-y:auto}
+#palette li{padding:.72rem 1.1rem;font:400 .78rem var(--mono);color:var(--dim);cursor:pointer}
+#palette li.sel,#palette li:hover{color:var(--ink);background:rgba(var(--aura-a),.16)}
+.field-ops{display:flex;flex-wrap:wrap;gap:.2rem}
+@media(prefers-reduced-motion:reduce){#void::before,#swarm .on i{animation:none!important}}
 </style>
 </head>
 <body data-theme="cyber" data-state="idle">
@@ -268,6 +299,7 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
     <button id="summon-hint" type="button" aria-label="Tulis pesan"></button>
     <button id="jump-bottom" type="button" aria-label="Ke pesan terbaru"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button>
     <footer id="summoner">
+        <div id="swarm" aria-hidden="true"></div>
         <div id="activity"><span id="activity-text"></span><button class="lnk" id="stop-btn" type="button" aria-label="Terminate">TERMINATE</button></div>
         <div id="composer">
             <div class="input-wrapper"><textarea id="chat-input" rows="1" placeholder="Inisialisasi Directives / Intent Vector..." aria-label="Prompt"></textarea></div>
@@ -387,7 +419,7 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
         <div class="settings-hint">
             <b>Multi-Provider:</b> Setiap provider punya key sendiri. Pollinations tanpa key = free. Compile Only = hanya kompilasi tanpa kirim.
             <b>Agents:</b> 4 peneliti berkarakter beda berdiskusi bergiliran lalu disintesis — pakai provider/model yang sama.
-            Esc = Stop · Ctrl+Shift+C = Copy Artifact · Ctrl+Shift+O = Compile Only · Ctrl+Shift+H = Auto-Heal · Ctrl+Shift+M = Agent Panel.
+            Esc = Stop · Ctrl+Shift+C = Copy Artifact · Ctrl+Shift+O = Compile Only · Ctrl+Shift+H = Auto-Heal · Ctrl+Shift+M = Agent Panel · Ctrl+K = Palet perintah.
         </div>
     </section>
 </div>
@@ -399,10 +431,11 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
    Multi-provider · Compile Only · Multi-lang · Theme · Researcher mode
    Zero regression from v3.1
    ================================================================ */
-const APP_VERSION = '5.0-ambient';
+const APP_VERSION = '6.1-future';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
+const STORE_MAX = 60;
 const MAX_CACHE = 30;
 const DEBOUNCE_MS = 260;
 const MAX_INPUT_CHARS = 14000;
@@ -605,6 +638,7 @@ const hasPurify = typeof DOMPurify !== 'undefined';
 const hasChart = typeof Chart !== 'undefined';
 const hasHljs = typeof hljs !== 'undefined';
 if (hasMarked) marked.setOptions({ gfm: true, breaks: true });
+if (hasPurify) DOMPurify.addHook('afterSanitizeAttributes', n => { if (n.tagName === 'A') { n.setAttribute('target', '_blank'); n.setAttribute('rel', 'noopener noreferrer'); } });
 if (hasChart) { Chart.defaults.color = '#cbd5e1'; Chart.defaults.borderColor = 'rgba(148,163,184,.18)'; }
 
 /* ===================== SETTINGS ===================== */
@@ -618,7 +652,7 @@ function loadSettings() {
                 if (!settings.keys) settings.keys = {};
                 if (!settings.models) settings.models = {};
             }
-            if (Array.isArray(data.history)) chatHistory = data.history.slice(-MAX_HISTORY);
+            if (Array.isArray(data.history)) chatHistory = data.history.slice(-STORE_MAX);
             if (data.lastArtifact) lastCompiledArtifact = data.lastArtifact;
         }
     } catch (e) { console.warn(e); }
@@ -638,13 +672,14 @@ function loadSettings() {
 }
 
 function saveToStorage() {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            settings,
-            history: chatHistory.slice(-MAX_HISTORY),
-            lastArtifact: lastCompiledArtifact
-        }));
-    } catch (e) { console.warn(e); }
+    let n = STORE_MAX, warned = false;
+    while (n >= 0) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, history: chatHistory.slice(-n), lastArtifact: lastCompiledArtifact }));
+            if (warned) logEvent('SYSTEM', 'Storage penuh: riwayat tersimpan dipangkas ke ' + n + ' pesan.');
+            return;
+        } catch (e) { warned = true; n = n > 4 ? Math.floor(n / 2) : -1; }
+    }
 }
 
 function refreshModelList() {
@@ -842,7 +877,7 @@ function getCacheStats() {
 /* ===================== TELEMETRY ===================== */
 function logEvent(tag, message) {
     const ts = new Date().toTimeString().slice(0, 8);
-    const tagClass = { SYSTEM:'tag-sys', PARSER:'tag-pars', VALIDATOR:'tag-val', COMPILER:'tag-comp', ERROR:'tag-err', OK:'tag-ok', CACHE:'tag-ok', DIAG:'tag-sys', PROVIDER:'tag-sys' }[tag] || 'tag-sys';
+    const tagClass = { SYSTEM:'tag-sys', PARSER:'tag-pars', VALIDATOR:'tag-val', COMPILER:'tag-comp', ERROR:'tag-err', OK:'tag-ok', CACHE:'tag-ok', DIAG:'tag-sys', PROVIDER:'tag-sys', AGENT:'tag-pars', SWARM:'tag-pars', SEQUENCE:'tag-comp' }[tag] || 'tag-sys';
     const div = document.createElement('div');
     div.className = 'log-line';
     div.innerHTML = `<span class="ts">${ts}</span><span class="${tagClass}">[${tag}]</span> ${escapeHtml(message)}`;
@@ -1060,10 +1095,10 @@ const s3dReg = {}; let s3dN = 0, s3dHeals = 0;
 function scene3dHtml(code) { return '<div class="ui-scene3d" data-code="' + escapeHtml(String(code).trim()) + '"></div>'; }
 function sceneDoc(code, id) {
     const safe = String(code).replace(/<\/script/gi, '<\\/script');
-    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m){parent.postMessage({cgo3d:ID,type:t,msg:m},'*')}window.onerror=function(m,s,l){send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
+    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m){parent.postMessage({cgo3d:ID,type:t,msg:m},'*')}window.onerror=function(m,s,l){send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
 if(typeof THREE==='undefined'){send('error','Three.js gagal dimuat (cek koneksi)');return}
 var renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});document.body.appendChild(renderer.domElement);
-var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,1,.1,1000),frames=[],paused=false,clock=new THREE.Clock(),ok=false,target=new THREE.Vector3(),az=0,el=.3,dist=6;
+var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,1,.1,1000),frames=[],paused=false,off=false,clock=new THREE.Clock(),ok=false,target=new THREE.Vector3(),az=0,el=.3,dist=6;
 camera.position.set(0,2,6);scene.add(new THREE.AmbientLight(0xffffff,.6));var dl=new THREE.DirectionalLight(0xffffff,.9);dl.position.set(5,8,5);scene.add(dl);
 function onFrame(f){frames.push(f)}
 function fit(){var w=innerWidth,h=innerHeight;renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}
@@ -1072,17 +1107,18 @@ try{(function(THREE,scene,camera,renderer,onFrame){
 ${safe}
 }).call(window,THREE,scene,camera,renderer,onFrame)}catch(e){send('error',String(e&&e.message||e));return}
 var v=camera.position.clone().sub(target);dist=v.length()||6;az=Math.atan2(v.x,v.z);el=Math.asin(Math.max(-1,Math.min(1,v.y/dist)));
-var drag=null,cv=renderer.domElement;
+var drag=null,cv=renderer.domElement;cv.addEventListener('webglcontextlost',function(e){e.preventDefault();send('error','WebGL context hilang (GPU sibuk)')});
 cv.addEventListener('pointerdown',function(e){drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId)});
 cv.addEventListener('pointerup',function(){drag=null});
 cv.addEventListener('pointermove',function(e){if(!drag)return;az-=(e.clientX-drag[0])*.008;el=Math.max(-1.5,Math.min(1.5,el+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY]});
 cv.addEventListener('wheel',function(e){e.preventDefault();dist=Math.max(.5,Math.min(200,dist*(1+e.deltaY*.001)))},{passive:false});
-function loop(){requestAnimationFrame(loop);if(paused)return;try{var dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;for(var i=0;i<frames.length;i++)frames[i](t,dt);
+function loop(){requestAnimationFrame(loop);if(paused||off)return;try{var dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;for(var i=0;i<frames.length;i++)frames[i](t,dt);
 camera.position.set(target.x+dist*Math.cos(el)*Math.sin(az),target.y+dist*Math.sin(el),target.z+dist*Math.cos(el)*Math.cos(az));camera.lookAt(target);renderer.render(scene,camera)}catch(e){paused=true;send('error',String(e&&e.message||e));return}
 if(!ok){ok=true;send('ok','LIVE')}}
 var rec,chunks;
 addEventListener('message',function(e){var d=e.data;if(!d||d.cgo3d!==ID)return;
 if(d.cmd==='pause'){paused=!paused;if(!paused)clock.getDelta();send('state',paused?'PAUSED':'LIVE')}
+if(d.cmd==='vis')off=!d.v;if(d.cmd==='snap'){try{renderer.render(scene,camera);var sa=document.createElement('a');sa.href=cv.toDataURL('image/png');sa.download='scene3d.png';sa.click()}catch(x){send('state','SNAP gagal')}}
 if(d.cmd==='rec'){try{if(rec&&rec.state==='recording'){rec.stop();return}chunks=[];rec=new MediaRecorder(cv.captureStream(30),{mimeType:'video/webm'});
 rec.ondataavailable=function(x){chunks.push(x.data)};rec.onstop=function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));a.download='scene3d.webm';a.click();send('state','LIVE')};rec.start();send('state','● REC')}catch(x){send('state','REC tidak didukung')}}});
 loop()})();<\/script></body></html>`;
@@ -1091,24 +1127,27 @@ function whenIdle(fn, n = 120) { if (!isGenerating) return fn(); if (n > 0) setT
 function healScene3d(msg, code) {
     if (isGenerating) return;
     chatInput.value = 'Scene3D gagal dirender: ' + msg + '\n\nPerbaiki dan kirim ulang HANYA satu blok ```scene3d lengkap. Global tersedia: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)). Tanpa import, tanpa jaringan.\n\nKode bermasalah:\n' + String(code).slice(0, 3500);
-    runLiveScan(chatInput.value); sendMessage();
+    runLiveScan(chatInput.value); sendMessage(true);
 }
 function buildScene3d(el) {
     el.classList.add('ready');
+    Object.keys(s3dReg).forEach(k => { if (!s3dReg[k].fr.isConnected) delete s3dReg[k]; });
     const code = el.dataset.code || ''; el.removeAttribute('data-code');
     const id = 's3d' + (++s3dN) + Math.random().toString(36).slice(2, 7), live = !!isGenerating, doc = sceneDoc(code, id);
     const fr = document.createElement('iframe'); fr.setAttribute('sandbox', 'allow-scripts allow-downloads'); fr.title = 'Scene 3D'; fr.srcdoc = doc;
     const bar = document.createElement('div'); bar.className = 's3d-bar';
     const st = document.createElement('span'); st.className = 's3d-st'; st.textContent = 'RENDERING...';
     const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'lnk'; b.textContent = label; b.onclick = fn; bar.appendChild(b); return b; };
-    const post = cmd => { try { fr.contentWindow.postMessage({ cgo3d: id, cmd }, '*'); } catch (e) {} };
+    let vis = true;
+    const post = (cmd, v) => { try { fr.contentWindow.postMessage({ cgo3d: id, cmd, v }, '*'); } catch (e) {} };
     let lastErr = '', healed = false;
-    mk('PAUSE', () => post('pause')); mk('REC', () => post('rec'));
+    mk('PAUSE', () => post('pause')); mk('REC', () => post('rec')); mk('SNAP', () => post('snap')); mk('FULL', () => { try { (el.requestFullscreen || el.webkitRequestFullscreen).call(el); } catch (e) {} });
     mk('EXPORT HTML', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([doc], { type: 'text/html' })); a.download = 'scene3d.html'; a.click(); });
     const heal = mk('RECALIBRATE', () => healScene3d(lastErr, code)); heal.style.display = 'none';
     bar.appendChild(st); el.append(fr, bar);
+    if (window.IntersectionObserver) new IntersectionObserver(es => { vis = es[0].isIntersecting; post('vis', vis); }, { threshold: 0.05 }).observe(el);
     s3dReg[id] = { fr, fn: d => {
-        if (d.type === 'ok') { s3dHeals = 0; st.className = 's3d-st'; st.textContent = 'LIVE'; }
+        if (d.type === 'ok') { s3dHeals = 0; st.className = 's3d-st'; st.textContent = 'LIVE'; post('vis', vis); }
         else if (d.type === 'state') st.textContent = d.msg;
         else if (d.type === 'error') {
             lastErr = String(d.msg).slice(0, 300); st.className = 's3d-st s3d-err'; st.textContent = 'ERR: ' + lastErr.slice(0, 70); heal.style.display = '';
@@ -1405,7 +1444,7 @@ function addMessageToUI(role, text, isTyping = false) {
 function renderBootMessage(force = false) {
     if (!force && chatHistory.length > 0) return;
     destroyCharts();
-    chatContainer.innerHTML = '<article class="thought ai boot"><div class="flow"><h1>CGO Research Nexus</h1><p>Kompilasi deterministik, validasi, lalu kirim ke model mana pun yang terhubung.</p><p class="aside">OpenAI · Anthropic · xAI · Gemini · DeepSeek · Custom · Compile only · Multi-agent. Ketik apa saja, atau sentuh bagian bawah layar.</p></div></article>';
+    chatContainer.innerHTML = '<article class="thought ai boot"><div class="flow"><h1>CGO Research Nexus</h1><p>Kompilasi deterministik, validasi, lalu kirim ke model mana pun yang terhubung.</p><p class="aside">OpenAI · Anthropic · xAI · Gemini · DeepSeek · Custom · Compile only · Multi-agent. Ketik apa saja, atau sentuh bagian bawah layar. Ctrl+K membuka palet perintah.</p></div></article>';
 }
 function restoreHistoryUI() {
     destroyCharts(); chatContainer.innerHTML = '';
@@ -1433,7 +1472,7 @@ async function* parseSSE(reader) {
         try { return JSON.parse(p); } catch { return undefined; }
     };
     while (true) {
-        const { done, value } = await reader.read();
+        const { done, value } = await readStall(reader);
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split(/\r?\n/);
@@ -1468,14 +1507,7 @@ const BUCKETS = 2048;
 const DB_NAME = 'cgo-semantic-db';
 const ZERO_EPSILON = 1e-9;
 
-function fnv1a(str) {
-  let h = 0xcbf29ce484222325n;
-  for (let i = 0; i < str.length; i++) {
-    h ^= BigInt(str.charCodeAt(i));
-    h = (h * 0x100000001b3n) & 0xFFFFFFFFFFFFFFFFn;
-  }
-  return Number(h & 0xFFFFFFFFn); // keep in 32-bit range for stable bucket
-}
+function fnv1a(str) { let h = 0x84222325; for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 0x1b3) >>> 0; return h >>> 0; }
 function signedBucket(h) {
   const m = h % BUCKETS;
   return m < 0 ? m + BUCKETS : m;
@@ -1514,7 +1546,7 @@ class IDBStorage {
   async save(vector, text) {
     await this.open();
     const id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : ('m' + Date.now() + Math.random().toString(36).slice(2));
-    const entry = { id, text: String(text || '').slice(0, 12000), vector: Array.from(vector), ts: Date.now() };
+    const entry = { id, text: String(text || '').slice(0, 6000), vector: Array.from(vector), ts: Date.now() };
     return new Promise((res, rej) => {
       const tx = this.db.transaction(this.store, 'readwrite');
       const ob = tx.objectStore(this.store);
@@ -1522,6 +1554,16 @@ class IDBStorage {
       tx.oncomplete = () => res(id);
       tx.onerror = ev => rej(ev.target.error);
     });
+  }
+  async prune(max) {
+    const all = await this.getAll(); if (all.length <= max) return;
+    all.sort((a, b) => a.ts - b.ts);
+    const del = all.slice(0, all.length - max);
+    await new Promise((res, rej) => { const tx = this.db.transaction(this.store, 'readwrite'); del.forEach(e => tx.objectStore(this.store).delete(e.id)); tx.oncomplete = res; tx.onerror = ev => rej(ev.target.error); });
+  }
+  async clear() {
+    await this.open();
+    return new Promise((res, rej) => { const tx = this.db.transaction(this.store, 'readwrite'); tx.objectStore(this.store).clear(); tx.oncomplete = res; tx.onerror = ev => rej(ev.target.error); });
   }
   async getAll() {
     await this.open();
@@ -1577,13 +1619,17 @@ class SemanticMemoryCortex {
     if (!text || !String(text).trim()) return null;
     try {
       const vec = vectorize(text);
-      return await this.store.save(vec, text);
+      const id = await this.store.save(vec, text); this.store.prune(200).catch(() => {}); return id;
     } catch (e) {
       console.warn('[CORTEX] addMemory failed', e);
       return null;
     }
   }
-  async recall(query, topK = 3) {
+  async recall(query, topK = 3, minSim = 0.15) {
+    const r = await Promise.race([this._recall(query, topK), new Promise(res => setTimeout(() => res([]), 4000))]);
+    return (r || []).filter(m => m.sim >= minSim).map(m => ({ ...m, text: String(m.text).slice(0, 1200) }));
+  }
+  async _recall(query, topK = 3) {
     try {
       const qvec = vectorize(query);
       const entries = await this.store.getAll();
@@ -1640,6 +1686,24 @@ class SemanticMemoryCortex {
 const cortex = new SemanticMemoryCortex();
     
 /* ===================== PROVIDER REQUEST BUILDERS ===================== */
+async function guardedFetch(req, ms = 60000) {
+    const outer = currentAbortController, ctl = new AbortController();
+    let timedOut = false;
+    const onAbort = () => ctl.abort();
+    if (outer) outer.signal.addEventListener('abort', onAbort, { once: true });
+    const to = setTimeout(() => { timedOut = true; ctl.abort(); }, ms);
+    try {
+        return await fetch(req.endpoint, { method: 'POST', headers: req.headers, body: JSON.stringify(req.body), signal: ctl.signal });
+    } catch (e) {
+        if (timedOut) throw new Error('Server tidak merespons dalam ' + ms / 1000 + ' detik.');
+        if (e.name === 'TypeError') throw new Error('Koneksi gagal (offline, CORS, atau endpoint salah).');
+        throw e;
+    } finally { clearTimeout(to); if (outer) outer.signal.removeEventListener('abort', onAbort); }
+}
+function readStall(reader, ms = 60000) {
+    let t;
+    return Promise.race([reader.read(), new Promise((_, rej) => { t = setTimeout(() => { try { reader.cancel(); } catch (e) {} rej(new Error('Stream macet: tidak ada data ' + ms / 1000 + ' detik.')); }, ms); })]).finally(() => clearTimeout(t));
+}
 function buildRequest(compiledPrompt, systemPrompt) {
     const p = PROVIDERS[settings.provider];
     const key = (settings.keys[settings.provider] || '').trim();
@@ -1651,7 +1715,7 @@ function buildRequest(compiledPrompt, systemPrompt) {
     }
 
     const apiHistory = [];
-    chatHistory.slice(0, -1).forEach(m => {
+    chatHistory.slice(0, -1).filter(m => m.role !== 'agent').slice(-MAX_HISTORY).forEach(m => {
         if (m.role === 'agent') return; // giliran panel Multi-Agent tidak masuk riwayat chat normal
         const role = m.role === 'assistant' ? 'assistant' : 'user';
         const content = m.compiled || m.content;
@@ -1739,12 +1803,12 @@ async function animateCompileSequence() {
     }
 }
 
-async function sendMessage() {
-    if (compileOnlyMode) {
+async function sendMessage(forceNormal) {
+    if (!forceNormal && compileOnlyMode) {
         doCompileOnly();
         return;
     }
-    if (multiAgentMode) {
+    if (!forceNormal && multiAgentMode) {
         await sendMultiAgentMessage();
         return;
     }
@@ -1759,7 +1823,7 @@ async function sendMessage() {
     isGenerating = true;
     setStatus('busy');
     lastUserRaw = userText;
-    chatInput.value = '';
+    chatInput.value = ''; try { localStorage.removeItem('spc_draft'); } catch (e) {}
     chatInput.style.height = 'auto';
     chatInput.disabled = true;
     sendBtn.disabled = true;
@@ -1824,12 +1888,7 @@ async function sendMessage() {
 
         logEvent('SYSTEM', `POST ${req.endpoint.split('?')[0]}`);
 
-        const response = await fetch(req.endpoint, {
-            method: 'POST',
-            headers: req.headers,
-            body: JSON.stringify(req.body),
-            signal: currentAbortController.signal
-        });
+        const response = await guardedFetch(req);
 
         if (!response.ok) {
             let errMsg = `HTTP ${response.status}`;
@@ -1862,7 +1921,7 @@ async function sendMessage() {
         stream.push(fullAiResponse || '_No response._');
         await stream.finish();
         chatHistory.push({ role: 'assistant', content: fullAiResponse });
-        if (chatHistory.length > MAX_HISTORY) chatHistory = chatHistory.slice(-MAX_HISTORY);
+        if (chatHistory.length > STORE_MAX) chatHistory = chatHistory.slice(-STORE_MAX);
         saveToStorage();
         setStatus('ok');
         updateEngineBadge();
@@ -1910,7 +1969,7 @@ async function sendMessage() {
         sendBtn.disabled = false;
         sendBtn.style.display = 'flex';
         stopBtn.style.display = 'none';
-        currentAbortController = null;
+        currentAbortController = null; delete document.body.dataset.swarm;
         if (finePointer) chatInput.focus();
         setActivity('');
         scrollToBottom();
@@ -1952,6 +2011,9 @@ function runDiagnostics() {
     assert('Multi-Agent personas defined', AGENTS.length === 4 && !!SYNTH_AGENT);
     assert('Agent system prompt builds', buildAgentSystemPrompt(AGENTS[0]).includes(AGENTS[0].name));
     assert('Agent request builder works', !!buildAgentRequest('sys', 'hello').endpoint);
+    assert('FNV-1a kompatibel', fnv1a('abc') === 88168267);
+    assert('Guarded fetch + stall guard', typeof guardedFetch === 'function' && typeof readStall === 'function');
+    assert('Palet perintah', !!document.getElementById('palette'));
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
 }
@@ -2060,10 +2122,10 @@ function buildAgentSystemPrompt(agent) {
     return tpl
         .replace('{NAME}', agent.name)
         .replace('{ROLE}', en ? agent.role_en : agent.role_id)
-        .replace('{CHAR}', en ? agent.char_en : agent.char_id) + '\n\n' + uiHint();
+        .replace('{CHAR}', en ? agent.char_en : agent.char_id) + '\n\n' + uiHint() + agent3d(false);
 }
 function buildSynthSystemPrompt() {
-    return (settings.lang === 'en' ? SYNTH_PROTOCOL_EN : SYNTH_PROTOCOL_ID) + '\n\n' + uiHint();
+    return (settings.lang === 'en' ? SYNTH_PROTOCOL_EN : SYNTH_PROTOCOL_ID) + '\n\n' + uiHint() + agent3d(true);
 }
 function formatTranscript(entries, maxChars) {
     maxChars = maxChars || 7000;
@@ -2100,7 +2162,7 @@ function buildAgentRequest(systemPrompt, userContent) {
         return {
             endpoint: conf.endpoint,
             headers: { 'Content-Type': 'application/json', ...conf.headers },
-            body: { model: conf.model, max_tokens: 2048, stream: true, system: systemPrompt, messages: [{ role: 'user', content: userContent }] },
+            body: { model: conf.model, max_tokens: 3072, stream: true, system: systemPrompt, messages: [{ role: 'user', content: userContent }] },
             parse: 'anthropic'
         };
     }
@@ -2150,16 +2212,14 @@ function classifyAgentHttpError(status) {
    false jika fatal (hentikan seluruh diskusi — misal API key salah). */
 async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFinal) {
     const { msgDiv, bubbleDiv } = addAgentMessageToUI(agent, true);
+    swarmSet(agent.id, 'on');
     const systemPrompt = isFinal ? buildSynthSystemPrompt() : buildAgentSystemPrompt(agent);
     const userContent = buildAgentTurnContent(compiledPrompt, agent, roundNum, totalRounds, isFinal);
     let fullText = '';
     try {
         const req = buildAgentRequest(systemPrompt, userContent);
         logEvent('AGENT', `Node [${agent.name.replace(/^Dr\.\s*/, '')}] propagating logic... (${isFinal ? 'Consensus Engine: Compiling...' : 'iteration ' + roundNum + '/' + totalRounds})`);
-        const response = await fetch(req.endpoint, {
-            method: 'POST', headers: req.headers, body: JSON.stringify(req.body),
-            signal: currentAbortController.signal
-        });
+        const response = await guardedFetch(req);
         if (!response.ok) {
             const info = classifyAgentHttpError(response.status);
             let detail = info.msg;
@@ -2188,8 +2248,10 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
         agentTranscript.push({ id: agent.id, name: agent.name, text: fullText });
         chatHistory.push({ role: 'agent', agentId: agent.id, agentName: agent.name, agentColor: agent.color, agentRole: isFinal ? (settings.lang === 'en' ? SYNTH_AGENT.role_en : SYNTH_AGENT.role_id) : (settings.lang === 'en' ? agent.role_en : agent.role_id), content: fullText, isSynth: !!isFinal });
         logEvent('OK', `${agent.name}: ${fullText.length} chars.`);
+        swarmSet(agent.id, 'done');
         return true;
     } catch (error) {
+        swarmSet(agent.id, error.name === 'AbortError' ? 'done' : 'err');
         msgDiv.classList.remove('agent-thinking');
         if (error.name === 'AbortError') {
             bubbleDiv.stream.skip(fullText || ''); bubbleDiv.insertAdjacentHTML('beforeend', '<p class="err">[dihentikan oleh operator]</p>');
@@ -2208,6 +2270,7 @@ async function runMultiAgentDiscussion(compiledPrompt) {
     const rounds = Math.max(1, Math.min(3, parseInt(document.getElementById('agent-rounds-select').value, 10) || 2));
     agentTranscript = [];
     agentDiscussionAborted = false;
+    swarmInit();
     logEvent('SWARM', 'Initiated. Nodes aligning for consensus...');
     roundLoop:
     for (let r = 1; r <= rounds; r++) {
@@ -2236,7 +2299,7 @@ async function sendMultiAgentMessage() {
     isGenerating = true;
     setStatus('busy');
     lastUserRaw = userText;
-    chatInput.value = '';
+    chatInput.value = ''; try { localStorage.removeItem('spc_draft'); } catch (e) {}
     chatInput.style.height = 'auto';
     chatInput.disabled = true;
     sendBtn.disabled = true;
@@ -2291,7 +2354,7 @@ async function sendMultiAgentMessage() {
     currentAbortController = new AbortController();
     try {
         await runMultiAgentDiscussion(compiledPrompt);
-        if (chatHistory.length > MAX_HISTORY * 3) chatHistory = chatHistory.slice(-MAX_HISTORY * 3);
+        if (chatHistory.length > STORE_MAX) chatHistory = chatHistory.slice(-STORE_MAX);
         saveToStorage();
         setStatus('ok');
 
@@ -2315,7 +2378,7 @@ async function sendMultiAgentMessage() {
         sendBtn.disabled = false;
         sendBtn.style.display = 'flex';
         stopBtn.style.display = 'none';
-        currentAbortController = null;
+        currentAbortController = null; delete document.body.dataset.swarm;
         if (finePointer) chatInput.focus();
         setActivity('');
         scrollToBottom();
@@ -2402,6 +2465,100 @@ document.getElementById('multiagent-btn').addEventListener('click', () => {
     });
 })();
 
+
+/* ===== v6.1 FUTURE LAYER: agen 3D, swarm board, palet, suara, cadangan, ketahanan ===== */
+function agent3d(final) {
+    const en = settings.lang === 'en';
+    const core = en
+        ? '\n\n3D VISUAL: if a moving 3D model clarifies your point, add ONE ```scene3d block (plain JS; globals THREE r128, scene, camera, renderer, onFrame(fn(t,dt)); no imports/network/OrbitControls; under 60 lines; animate via onFrame).'
+        : '\n\nVISUAL 3D: jika model 3D bergerak memperjelas gagasanmu, tambahkan SATU blok ```scene3d (JS murni; global THREE r128, scene, camera, renderer, onFrame(fn(t,dt)); tanpa import/jaringan/OrbitControls; maks 60 baris; animasikan lewat onFrame).';
+    const fin = en ? ' SYNTHESIS: include one scene3d visualizing the final solution when it can be visualized.' : ' SYNTHESIS: sertakan satu scene3d yang memvisualkan solusi akhir bila bisa divisualkan.';
+    return core + (final ? fin : '');
+}
+const swarmEl = document.getElementById('swarm');
+function swarmInit() {
+    swarmEl.innerHTML = AGENTS.concat(SYNTH_AGENT).map(a => '<span data-a="' + a.id + '" style="--hue:' + a.color + '"><i></i>' + escapeHtml(a.name.replace(/^Dr\.\s*/, '')) + '</span>').join('');
+    document.body.dataset.swarm = '1';
+}
+function swarmSet(id, st) {
+    const e = swarmEl.querySelector('[data-a="' + id + '"]'); if (!e) return;
+    swarmEl.querySelectorAll('.on').forEach(x => x.classList.remove('on'));
+    e.classList.remove('done', 'err'); e.classList.add(st);
+}
+async function wipeCortex() {
+    if (!confirm('Hapus seluruh memori Cortex? Tindakan ini tidak bisa dibatalkan.')) return;
+    try { await cortex.store.clear(); showToast('Memori Cortex dikosongkan'); logEvent('SYSTEM', '[CORTEX] Memori dikosongkan.'); }
+    catch (e) { showToast('Gagal mengosongkan memori', 2500, true); }
+}
+function exportBackup() {
+    let arts = {}; try { arts = JSON.parse(localStorage.getItem(ARTIFACT_CACHE_KEY) || '{}'); } catch (e) {}
+    const data = { app: 'cgo-nexus', version: APP_VERSION, exportedAt: new Date().toISOString(), settings: { ...settings, keys: {} }, history: chatHistory, artifacts: arts };
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    a.download = 'cgo-nexus-backup-' + Date.now() + '.json'; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    showToast('Cadangan JSON diekspor (tanpa API key)');
+}
+(function () {
+    const ops = document.createElement('div'); ops.className = 'field field-wide';
+    ops.innerHTML = '<label>DATA</label><div class="field-ops"><button class="lnk" type="button" data-o="bk">EKSPOR JSON</button><button class="lnk" type="button" data-o="wp">HAPUS MEMORI CORTEX</button></div>';
+    ops.addEventListener('click', e => { const o = e.target.dataset && e.target.dataset.o; if (o === 'bk') exportBackup(); if (o === 'wp') wipeCortex(); });
+    settingsPanel.insertBefore(ops, settingsPanel.querySelector('.settings-hint'));
+
+    const CMDS = [
+        ['Swarm: aktifkan / matikan panel agen', () => setMultiAgentMode(!multiAgentMode)],
+        ['Simulate: kompilasi tanpa kirim', () => compileOnlyBtn.click()],
+        ['Recalibrate prompt (auto-heal)', healPrompt],
+        ['Inject seed', insertSamplePrompt],
+        ['Buka / tutup telemetri', () => toggleTelemetryBtn.click()],
+        ['Pengaturan provider', () => settingsBtn.click()],
+        ['Ganti tema', () => themeBtn.click()],
+        ['Salin artifact', copyLastArtifact],
+        ['Ekspor Markdown', exportHistoryMarkdown],
+        ['Ekspor cadangan JSON', exportBackup],
+        ['Jalankan self-test', runDiagnostics],
+        ['Hapus memori Cortex', wipeCortex],
+        ['Bersihkan riwayat', () => clearBtn.click()]
+    ];
+    const pal = document.createElement('div'); pal.id = 'palette';
+    pal.innerHTML = '<div class="box"><input type="text" placeholder="Ketik perintah…" aria-label="Palet perintah" autocomplete="off"><ul role="listbox"></ul></div>';
+    document.body.appendChild(pal);
+    const inp = pal.querySelector('input'), ul = pal.querySelector('ul'); let sel = 0, list = CMDS;
+    const draw = () => { ul.innerHTML = ''; list.forEach((c, i) => { const li = document.createElement('li'); li.textContent = c[0]; if (i === sel) li.className = 'sel'; li.onclick = () => run(i); ul.appendChild(li); }); };
+    const filt = () => { const q = inp.value.toLowerCase().trim(); list = CMDS.filter(c => c[0].toLowerCase().includes(q)); sel = 0; draw(); };
+    const close = () => pal.classList.remove('open');
+    const open = () => { pal.classList.add('open'); inp.value = ''; filt(); inp.focus(); };
+    function run(i) { const c = list[i]; if (!c) return; close(); try { c[1](); } catch (e) { showToast('Perintah gagal: ' + e.message, 3000, true); } }
+    inp.addEventListener('input', filt);
+    inp.addEventListener('keydown', e => {
+        if (e.key === 'Escape') { e.stopPropagation(); close(); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(list.length - 1, sel + 1); draw(); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); draw(); }
+        else if (e.key === 'Enter') { e.preventDefault(); run(sel); }
+    });
+    pal.addEventListener('click', e => { if (e.target === pal) close(); });
+    document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 'k') { e.preventDefault(); pal.classList.contains('open') ? close() : open(); } });
+
+    const tools = document.getElementById('tools');
+    const mk = (label, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'lnk'; b.textContent = label; b.title = title; b.onclick = fn; tools.insertBefore(b, document.getElementById('agent-rounds-wrap')); return b; };
+    mk('PALETTE', 'Palet perintah (Ctrl+K)', open);
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SR) {
+        let rec = null;
+        const vb = mk('VOICE', 'Input suara', () => {
+            if (rec) { rec.stop(); return; }
+            const base = chatInput.value; rec = new SR(); rec.lang = settings.lang === 'en' ? 'en-US' : 'id-ID'; rec.interimResults = true;
+            rec.onresult = ev => { chatInput.value = (base + ' ' + Array.from(ev.results).map(r => r[0].transcript).join('')).trim(); chatInput.dispatchEvent(new Event('input')); };
+            rec.onerror = ev => showToast('Suara: ' + (ev.error || 'gagal'), 2500, true);
+            rec.onend = () => { rec = null; vb.classList.remove('active'); };
+            try { rec.start(); vb.classList.add('active'); } catch (e) { rec = null; }
+        });
+    }
+    chatInput.addEventListener('input', () => { try { chatInput.value ? localStorage.setItem('spc_draft', chatInput.value) : localStorage.removeItem('spc_draft'); } catch (e) {} });
+    window.addEventListener('load', () => { try { const d = localStorage.getItem('spc_draft'); if (d && !chatInput.value) { chatInput.value = d; chatInput.dispatchEvent(new Event('input')); } } catch (e) {} });
+    window.addEventListener('offline', () => { showToast('Offline: tautan neural terputus', 3500, true); logEvent('ERROR', 'Jaringan offline.'); });
+    window.addEventListener('online', () => { showToast('Online kembali'); logEvent('OK', 'Jaringan pulih.'); });
+    if (finePointer) window.addEventListener('pointermove', e => { const r = document.documentElement.style; r.setProperty('--mx', e.clientX + 'px'); r.setProperty('--my', e.clientY + 'px'); }, { passive: true });
+})();
 </script>
 </body>
 </html>
