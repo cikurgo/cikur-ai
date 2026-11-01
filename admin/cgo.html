@@ -1461,7 +1461,123 @@ function doCompileOnly() {
     addMessageToUI('ai', `**Compile Only** (score ${total}/100)\n\n\`\`\`\`\n${compiled}\n\`\`\`\`\n\nArtifact cached. Copy via button or Ctrl+Shift+C.`);
     showToast(`Compiled · score ${total}`);
 }
+/* ============================================================
+   ZERO-CLOUD SEMANTIC MEMORY CORTEX (RARE CODE)
+   ============================================================ */
+const BUCKETS = 2048;
+const DB_NAME = 'cgo-semantic-db';
+const ZERO_EPSILON = 1e-9;
 
+function fnv1a(str) {
+  let h = 0xcbf29ce484222325n;
+  for (let i = 0; i < str.length; i++) {
+    h ^= BigInt(str.charCodeAt(i));
+    h = (h * 0x100000001b3n) & 0xFFFFFFFFFFFFFFFFn;
+  }
+  return Number(h & 0xFFFFFFFFFFFFFFFFn);
+}
+function signedBucket(h) { return (h % BUCKETS) | 0; }
+function tokenizeMemory(text) {
+  return text.toLowerCase().replace(/[^\w]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+}
+function vectorize(text) {
+  const w = tokenizeMemory(text);
+  const vec = new Float32Array(BUCKETS); 
+  w.forEach(t => {
+    const idx = signedBucket(fnv1a(t));
+    vec[idx] += 1; 
+  });
+  return vec;
+}
+class IDBStorage {
+  constructor() { this.db = null; this.store = 'entries'; }
+  async open() {
+    if (this.db) return;
+    this.db = await new Promise((res, rej) => {
+      const req = indexedDB.open(DB_NAME, 2);
+      req.onupgradeneeded = ev => {
+        const db = ev.target.result;
+        if (!db.objectStoreNames.contains(this.store)) db.createObjectStore(this.store, { keyPath: 'id' });
+      };
+      req.onsuccess = ev => res(ev.target.result);
+      req.onerror = ev => rej(ev.target.error);
+    });
+  }
+  async save(vector, text) {
+    await this.open();
+    const id = crypto.randomUUID();
+    const entry = { id, text, vector: Array.from(vector), ts: Date.now() };
+    return new Promise((res, rej) => {
+      const tx = this.db.transaction(this.store, 'readwrite');
+      const ob = tx.objectStore(this.store);
+      ob.put(entry);
+      tx.oncomplete = () => res(id);
+      tx.onerror = ev => rej(ev.target.error);
+    });
+  }
+  async getAll() {
+    await this.open();
+    return new Promise((res, rej) => {
+      const tx = this.db.transaction(this.store, 'readonly');
+      const req = tx.objectStore(this.store).getAll();
+      req.onsuccess = ev => res(ev.target.result);
+      req.onerror = ev => rej(ev.target.error);
+    });
+  }
+}
+function makeRecallWorker() {
+  const code = `
+    const dot=(a,b)=>{let r=0;for(let i=0;i<a.length;i++)r+=a[i]*b[i];return r;}
+    self.onmessage=e=>{
+      const {qvec,entries,topK}=e.data;
+      const q=new Float32Array(qvec);
+      const qmag=Math.hypot(...q);
+      const heap=[];
+      for(const {id,text,vecBuf} of entries){
+        const v=new Float32Array(vecBuf);
+        const vmag=Math.hypot(...v);
+        let sim=0;
+        if(qmag>0.0 && vmag>0.0) sim=dot(q,v)/(qmag*vmag);
+        if(heap.length<topK){
+          heap.push({id,text,sim});
+          heap.sort((x,y)=>x.sim-y.sim);
+        }else if(sim>heap[0].sim){
+          heap[0]={id,text,sim};
+          heap.sort((x,y)=>x.sim-y.sim);
+        }
+      }
+      self.postMessage({top:heap.reverse()});
+    };`;
+  return new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+}
+class SemanticMemoryCortex {
+  constructor() {
+    this.store = new IDBStorage();
+    this.worker = makeRecallWorker();
+  }
+  async addMemory(text) {
+    const vec = vectorize(text);
+    await this.store.save(vec, text);
+  }
+  async recall(query, topK = 3) {
+    const qvec = vectorize(query);
+    const entries = await this.store.getAll();
+    if (entries.length === 0) return [];
+    
+    const transferEntries = entries.map(e => ({
+      id: e.id, text: e.text, vecBuf: new Float32Array(e.vector).buffer
+    }));
+    const transferable = [qvec.buffer, ...transferEntries.map(e => e.vecBuf)];
+
+    return new Promise((resolve, reject) => {
+      this.worker.onmessage = ev => resolve(ev.data.top);
+      this.worker.onerror = ev => reject(ev.error);
+      this.worker.postMessage({ qvec: qvec.buffer, entries: transferEntries, topK }, transferable);
+    });
+  }
+}
+const cortex = new SemanticMemoryCortex();
+    
 /* ===================== PROVIDER REQUEST BUILDERS ===================== */
 function buildRequest(compiledPrompt, systemPrompt) {
     const p = PROVIDERS[settings.provider];
@@ -1600,17 +1716,23 @@ async function sendMessage() {
     logEvent('PARSER', `words=${metrics.wordCount} flagged=${metrics.flagged} guessed=${metrics.guessed}`);
     issues.forEach(i => logEvent('VALIDATOR', `[${i.type}] ${i.msg}`));
 
-    const hash = hashSegments(segments);
-    let cached = getArtifact(hash);
-    let compiledPrompt;
-    if (cached?.prompt) {
-        compiledPrompt = cached.prompt;
-        logEvent('CACHE', `Hit ${hash} · cache ${getCacheStats()}`);
-    } else {
-        compiledPrompt = compilePrompt(segments);
-        putArtifact(hash, compiledPrompt);
-        logEvent('COMPILER', `Generated ${hash} · cache ${getCacheStats()}`);
-    }
+    // --- CORTEX RECALL (SWARM) ---
+const pastMemories = await cortex.recall(userText, 3);
+let memoryContext = "";
+if (pastMemories.length > 0) {
+    memoryContext = "\n\n[INGATAN MASA LALU YANG RELEVAN]:\n" + pastMemories.map(m => m.text).join('\n');
+    logEvent('SYSTEM', `[CORTEX] Mengingat ${pastMemories.length} memori masa lalu.`);
+}
+// -----------------------------
+
+const hash = hashSegments(segments);
+let cached = getArtifact(hash);
+let compiledPrompt;
+if (cached?.prompt) { compiledPrompt = cached.prompt; logEvent('CACHE', `Hit ${hash} · cache ${getCacheStats()}`); }
+else { compiledPrompt = compilePrompt(segments); putArtifact(hash, compiledPrompt); logEvent('COMPILER', `Generated ${hash} · cache ${getCacheStats()}`); }
+
+compiledPrompt += memoryContext; // <-- TAMBAHKAN BARIS INI UNTUK MENYUNTIKKAN MEMORI
+    
     lastCompiledArtifact = compiledPrompt;
     updateArtifactPreview(compiledPrompt);
     saveToStorage();
@@ -1622,17 +1744,26 @@ async function sendMessage() {
     saveToStorage();
     animateCompileSequence();
 
-    const aiBubble = addMessageToUI('ai', '', true);
-    const stream = aiBubble.stream; setActivity('Streaming Semantic Synthesis...');
-    let fullAiResponse = '';
-    currentAbortController = new AbortController();
+const aiBubble = addMessageToUI('ai', '', true);
+const stream = aiBubble.stream; setActivity('Streaming Semantic Synthesis...');
+let fullAiResponse = '';
+currentAbortController = new AbortController();
 
-    try {
-        const systemPrompt = getSystemPrompt();
-        const req = buildRequest(compiledPrompt, systemPrompt);
+try {
+    // --- CORTEX RECALL ---
+    const pastMemories = await cortex.recall(userText, 3);
+    let memoryContext = "";
+    if (pastMemories.length > 0) {
+        memoryContext = "\n\n[INGATAN MASA LALU YANG RELEVAN]:\n" + pastMemories.map(m => m.text).join('\n');
+        logEvent('SYSTEM', `[CORTEX] Mengingat ${pastMemories.length} memori masa lalu.`);
+    }
+    // ---------------------
 
-        logEvent('SYSTEM', `POST ${req.endpoint.split('?')[0]}`);
+    const systemPrompt = getSystemPrompt() + memoryContext;
+    const req = buildRequest(compiledPrompt, systemPrompt);
 
+    logEvent('SYSTEM', `POST ${req.endpoint.split('?')[0]}`);
+    
         const response = await fetch(req.endpoint, {
             method: 'POST',
             headers: req.headers,
@@ -1677,6 +1808,10 @@ async function sendMessage() {
         setStatus('ok');
         updateEngineBadge();
         logEvent('OK', `Received ${fullAiResponse.length} chars.`);
+    // --- CORTEX SAVE ---
+await cortex.addMemory("User: " + userText + "\nCGO: " + fullAiResponse);
+logEvent('SYSTEM', '[CORTEX] Memori baru berhasil disimpan.');
+    
     } catch (error) {
         if (error.name === 'AbortError') {
             stream.skip(fullAiResponse || ''); aiBubble.insertAdjacentHTML('beforeend', '<p class="err">[stopped by operator]</p>');
@@ -1756,6 +1891,11 @@ window.addEventListener('load', () => {
     updateBadges({ role:[], context:[], rules:[], objective:[], validation:[] });
     updateSpecScore(0);
     if (finePointer) chatInput.focus();
+    cortex.store.open().then(() => {
+    logEvent('SYSTEM', '[CORTEX] Semantic Memory Cortex online. Koneksi database terjalin.');
+}).catch(err => {
+    logEvent('ERROR', '[CORTEX] Gagal membuka database memori: ' + err.message);
+});
     runLiveScan('');
     logEvent('SYSTEM', `Research Nexus v${APP_VERSION} ready. Providers: ${Object.keys(PROVIDERS).join(', ')}. Cache: ${getCacheStats()}`);
 });
@@ -2055,6 +2195,11 @@ async function sendMultiAgentMessage() {
 
     currentAbortController = new AbortController();
     try {
+        // --- CORTEX SAVE (DEWAN) ---
+let fullDiscussion = "User: " + userText + "\n";
+agentTranscript.forEach(t => { fullDiscussion += t.name + ": " + t.text + "\n"; });
+await cortex.addMemory(fullDiscussion);
+logEvent('SYSTEM', '[CORTEX] Memori diskusi dewan berhasil disimpan.');
         await runMultiAgentDiscussion(compiledPrompt);
         if (chatHistory.length > MAX_HISTORY * 3) chatHistory = chatHistory.slice(-MAX_HISTORY * 3);
         saveToStorage();
