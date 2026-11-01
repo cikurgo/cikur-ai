@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>CGO — Research Nexus</title>
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -10,169 +10,152 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
 
 <style>
-:root, [data-theme="cyber"] {
-    --bg-main: #060b14; --bg-panel: #0d1526; --bg-bubble-user: #1e3a8a; --bg-bubble-ai: #0f172a;
-    --text-main: #ffffff; --text-muted: #e2e8f0; --text-dim: #94a3b8;
-    --border-color: #1e293b; --border-strong: rgba(255,255,255,0.35);
-    --c-role: #10b981; --c-context: #ec4899; --c-rules: #f59e0b; --c-objective: #8b5cf6; --c-validation: #3b82f6;
-    --accent: #38bdf8; --danger: #ef4444; --success: #10b981; --warning: #f59e0b;
-    --btn-primary-bg: #ffffff; --btn-primary-fg: #060b14;
-}
-[data-theme="clean"] {
-    --bg-main: #0a0a0f; --bg-panel: #12121a; --bg-bubble-user: #1a2744; --bg-bubble-ai: #14141f;
-    --text-main: #f1f5f9; --text-muted: #cbd5e1; --text-dim: #64748b;
-    --border-color: #1e1e2e; --border-strong: rgba(148,163,184,0.25);
-    --btn-primary-bg: #38bdf8; --btn-primary-fg: #0a0a0f;
-}
-[data-theme="light"] {
-    --bg-main: #f8fafc; --bg-panel: #ffffff; --bg-bubble-user: #dbeafe; --bg-bubble-ai: #f1f5f9;
-    --text-main: #0f172a; --text-muted: #334155; --text-dim: #64748b;
-    --border-color: #e2e8f0; --border-strong: rgba(15,23,42,0.15);
-    --c-role: #059669; --c-context: #db2777; --c-rules: #d97706; --c-objective: #7c3aed; --c-validation: #2563eb;
-    --accent: #0284c7; --danger: #dc2626; --success: #059669; --warning: #d97706;
-    --btn-primary-bg: #0f172a; --btn-primary-fg: #ffffff;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-    background-color: var(--bg-main); color: var(--text-main); font-family: 'Space Grotesk', sans-serif;
-    display: flex; justify-content: center; height: 100vh; overflow: hidden;
-    background-image: radial-gradient(circle at 20% 0%, rgba(236,72,153,0.04) 0%, transparent 40%),
-                      radial-gradient(circle at 80% 100%, rgba(59,130,246,0.05) 0%, transparent 40%);
-}
-.hud-container { width: 100%; max-width: 1560px; height: 100vh; display: flex; flex-direction: column; position: relative; }
+:root{--void:#04070d;--ink:#e9edf5;--dim:rgba(196,208,232,.52);--accent:#38bdf8;--danger:#ef4444;--success:#10b981;--warning:#f59e0b;
+--c-role:#10b981;--c-context:#ec4899;--c-rules:#f59e0b;--c-objective:#8b5cf6;--c-validation:#3b82f6;--text-main:#e9edf5;--text-muted:#cbd5e1;--text-dim:rgba(196,208,232,.52);--border-color:#1e293b;
+--aura-a:79,107,255;--aura-b:124,77,255;--layer:rgba(4,7,13,.93);--kb:0px;
+--serif:'Newsreader',Georgia,'Times New Roman',serif;--mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace}
+body[data-theme="clean"]{--accent:#cbd5e1;--aura-a:148,163,184;--aura-b:226,232,240}
+body[data-theme="light"]{--void:#eef1f6;--ink:#0b1220;--dim:rgba(20,32,60,.58);--accent:#0369a1;--text-main:#0b1220;--text-muted:#334155;--text-dim:rgba(20,32,60,.58);--layer:rgba(238,241,246,.96)}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--void);overflow:hidden}
+body{color:var(--ink);font-family:var(--mono);-webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:1px solid var(--accent);outline-offset:3px}
+#void{position:fixed;inset:0;height:100vh;height:100dvh;background:var(--void);overflow:hidden}
 
-.hud-header {
-    background: rgba(13, 21, 38, 0.96); backdrop-filter: blur(12px); padding: 10px 16px;
-    border-bottom: 1px solid var(--border-strong); display: flex; justify-content: space-between; align-items: center;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.5); z-index: 20; gap: 8px; flex-wrap: wrap;
-}
-[data-theme="light"] .hud-header { background: rgba(255,255,255,0.95); }
-.hud-title {
-    font-family: 'JetBrains Mono', monospace; font-size: 0.98rem; color: var(--text-main);
-    text-shadow: 0 0 10px rgba(56,189,248,0.25); display: flex; align-items: center; gap: 8px; letter-spacing: 0.4px;
-}
-.status-dot { width: 10px; height: 10px; background: var(--success); border-radius: 50%; box-shadow: 0 0 8px var(--success); flex-shrink: 0; }
-.status-dot.error { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
-.status-dot.busy { background: var(--warning); box-shadow: 0 0 8px var(--warning); animation: pulse 1.2s infinite; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+/* chromatic aura: dua lapis, crossfade lewat opacity (murah di GPU) */
+.aura{position:absolute;inset:-20%;opacity:0;transition:opacity 1.4s ease;pointer-events:none}
+.aura i{position:absolute;inset:0;animation:breathe 5.5s ease-in-out infinite}
+#aura-think i{background:radial-gradient(60% 50% at 50% 48%,rgba(var(--aura-a),.34),rgba(var(--aura-b),.16) 46%,transparent 72%)}
+#aura-alert i{background:radial-gradient(65% 55% at 50% 50%,rgba(150,10,24,.52),rgba(90,4,14,.22) 52%,transparent 76%);animation-duration:1.5s}
+body[data-state="thinking"] #aura-think,body[data-state="alert"] #aura-alert{opacity:1}
+body[data-theme="light"] .aura{filter:saturate(.7) brightness(1.15);mix-blend-mode:multiply}
+@keyframes breathe{0%,100%{opacity:.5;transform:scale(.92)}50%{opacity:1;transform:scale(1.07)}}
+#void.shake{animation:shake .7s cubic-bezier(.36,.07,.19,.97)}
+@keyframes shake{10%,90%{transform:translate3d(-2px,0,0)}20%,80%{transform:translate3d(5px,1px,0)}30%,50%,70%{transform:translate3d(-9px,-1px,0)}40%,60%{transform:translate3d(9px,1px,0)}}
 
-.header-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.system-badge {
-    font-family: 'JetBrains Mono', monospace; font-size: 0.64rem; background: rgba(255,255,255,0.06);
-    border: 1px solid var(--border-strong); color: var(--text-main); padding: 4px 8px; border-radius: 10px; white-space: nowrap;
-}
-.btn-icon {
-    background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-dim);
-    width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;
-}
-[data-theme="light"] .btn-icon { border-color: rgba(15,23,42,0.15); }
-.btn-icon:hover, .btn-icon.active { border-color: var(--accent); color: var(--accent); background: rgba(56,189,248,0.08); }
-.btn-icon svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* stage: percakapan mengalir langsung di kanvas */
+#stage{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none;padding:14vh 0 calc(32vh + var(--kb));
+-webkit-mask-image:linear-gradient(transparent,#000 11%,#000 86%,transparent);mask-image:linear-gradient(transparent,#000 11%,#000 86%,transparent)}
+#stage::-webkit-scrollbar{display:none}
+#chat-container{min-height:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:clamp(2rem,6vh,3.4rem);width:min(46rem,calc(100% - 2.6rem));margin:0 auto}
+.thought{position:relative;transition:opacity .6s ease,filter .6s ease}
+.thought:nth-last-child(n+3){opacity:.5;filter:blur(.8px)}
+.thought:nth-last-child(n+5){opacity:.26;filter:blur(2.5px)}
+.thought:nth-last-child(n+8){opacity:.1;filter:blur(5px)}
+.thought:hover,.thought.peek{opacity:.94;filter:none;transition-duration:.3s}
+body[data-focus] .thought:not(.live){opacity:.2!important;filter:blur(4px)!important;transition-duration:.5s}
+.thought.live{opacity:1!important;filter:none!important}
 
-.settings-panel {
-    display: none; background: var(--bg-panel); border-bottom: 1px solid var(--border-color);
-    padding: 12px 16px; gap: 12px; flex-wrap: wrap; align-items: flex-end; max-height: 42vh; overflow-y: auto;
-}
-.settings-panel.open { display: flex; animation: slideDown 0.18s ease; }
-@keyframes slideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-.field { display: flex; flex-direction: column; gap: 4px; min-width: 130px; }
-.field label { font-size: 0.7rem; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; }
-.field input, .field select {
-    background: var(--bg-main); border: 1px solid rgba(255,255,255,0.15); color: var(--text-main);
-    padding: 7px 9px; border-radius: 7px; font-size: 0.84rem; outline: none; transition: border-color 0.2s;
-}
-[data-theme="light"] .field input, [data-theme="light"] .field select { border-color: #cbd5e1; }
-.field input:focus, .field select:focus { border-color: var(--accent); }
-.field input[type="password"] { font-family: monospace; letter-spacing: 1px; }
-.field-wide { flex: 1; min-width: 200px; }
-.settings-hint { font-size: 0.68rem; color: #64748b; width: 100%; margin-top: -2px; }
-.settings-hint b { color: var(--text-main); }
-.provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; width: 100%; }
-.provider-card {
-    background: var(--bg-main); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 8px 10px;
-    cursor: pointer; transition: 0.15s; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
-}
-.provider-card:hover { border-color: var(--accent); }
-.provider-card.active { border-color: var(--success); box-shadow: 0 0 10px rgba(16,185,129,0.25); }
-.provider-card .p-name { font-weight: 600; color: var(--text-main); }
-.provider-card .p-status { font-size: 0.6rem; color: var(--text-dim); margin-top: 2px; }
+.who{display:flex;align-items:center;gap:.65rem;margin-bottom:.7rem;font:400 .72rem var(--mono);color:var(--hue,var(--accent))}
+.who i{width:6px;height:6px;border-radius:50%;background:var(--hue,var(--accent));box-shadow:0 0 12px var(--hue,var(--accent))}
+.who span{color:var(--dim)}
+.thought.user .flow{font:300 .86rem/1.75 var(--mono);color:var(--dim);white-space:pre-wrap;word-break:break-word;padding-left:1.1rem;position:relative}
+.thought.user .flow::before{content:'\203A';position:absolute;left:0;color:rgba(var(--aura-a),1)}
+.flow{font:300 1.2rem/1.9 var(--serif);color:var(--ink);letter-spacing:.005em;word-wrap:break-word;overflow-wrap:anywhere}
+.flow p{margin:0 0 1.15em}.flow>div>div>p:last-child,.flow .tail>p:last-child{margin-bottom:0}
+.flow h1,.flow h2,.flow h3,.flow h4{font-weight:300;line-height:1.3;margin:1.6em 0 .55em;letter-spacing:-.005em}
+.flow h1{font-size:2rem}.flow h2{font-size:1.55rem}.flow h3,.flow h4{font-size:1.28rem}
+.flow strong{font-weight:500}.flow em{font-style:italic}
+.flow ul,.flow ol{padding-left:1.3em;margin:0 0 1.15em}.flow li{margin:.45em 0;padding-left:.2em}.flow li::marker{color:var(--dim)}
+.flow a{color:var(--accent);text-decoration:underline;text-decoration-color:rgba(var(--aura-a),.5);text-underline-offset:3px}
+.flow :not(pre)>code{font:400 .8em var(--mono);color:var(--accent)}
+.flow table{display:block;overflow-x:auto;border-collapse:collapse;margin:0 0 1.2em;font:300 .9rem/1.6 var(--serif)}
+.flow th{font:400 .72rem var(--mono);color:var(--dim);text-align:left;padding:.4rem 1.2rem .6rem 0}
+.flow td{padding:.5rem 1.2rem .5rem 0;border-top:1px solid rgba(160,180,220,.1)}
+.flow hr{border:0;height:1px;background:linear-gradient(90deg,transparent,rgba(160,180,220,.25),transparent);margin:2em 0}
+/* teks penjelasan: kecil + redup */
+.flow blockquote,.flow p.aside,.ui-note{font:300 .8rem/1.75 var(--mono);opacity:.4;margin:0 0 1.2em;padding:0;transition:opacity .3s}
+.flow blockquote p{margin:0 0 .6em;font:inherit}.flow p.warn{font:300 .8rem/1.75 var(--mono);color:var(--warning);opacity:.75}
+.flow blockquote:hover,.flow p.aside:hover,.ui-note:hover{opacity:.85}
+.flow .err{color:#fca5a5;font:400 .82rem/1.7 var(--mono)}
+.cursor{display:inline-block;width:2px;height:1.05em;margin-left:3px;vertical-align:-.15em;border-radius:1px;background:var(--hue,var(--accent));animation:cur 1.15s ease-in-out infinite}
+@keyframes cur{0%,100%{opacity:1}50%{opacity:.1}}
+.mcopy{position:absolute;right:0;top:0;font:400 .68rem var(--mono);color:var(--dim);padding:.5rem;opacity:0;transition:opacity .3s}
+.thought:hover .mcopy,.mcopy:focus-visible{opacity:.7}.mcopy:hover{color:var(--ink);opacity:1}
+@media(hover:none){.mcopy{opacity:.3}}
+.boot .flow h1{font-size:2.2rem;margin:0 0 .5em}
 
-.app-body { display: flex; flex: 1; overflow: hidden; background: rgba(255,255,255,0.04); gap: 1px; }
-.panel-left, .panel-right { background: var(--bg-main); display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-.panel-left { flex: 1.2; order: 2; }
-.panel-right { flex: 1; order: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border-color) transparent; }
-.panel-right::-webkit-scrollbar { width: 6px; }
-.panel-right::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+/* generative UI */
+.ui-code{margin:1.5em 0;border-radius:16px;background:rgba(14,20,34,.74);box-shadow:0 0 0 1px rgba(160,180,220,.07),0 36px 70px -34px rgba(0,0,0,.95),0 0 60px -28px rgba(var(--aura-a),.55);animation:float 7s ease-in-out infinite;overflow:hidden;color:#e9edf5}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.ui-head{display:flex;justify-content:space-between;align-items:center;padding:.35rem .5rem .1rem 1.1rem;font:400 .7rem var(--mono);color:rgba(196,208,232,.55)}
+.ui-head button{font:400 .7rem var(--mono);color:rgba(196,208,232,.6);padding:.55rem .6rem;min-height:36px}.ui-head button:hover{color:#fff}
+.ui-code pre{margin:0;padding:.4rem 1.1rem 1.1rem;max-height:340px;overflow:auto;font:400 .8rem/1.65 var(--mono);scrollbar-width:thin;scrollbar-color:#334155 transparent}
+.ui-code pre code,.ui-code .hljs{background:transparent!important;padding:0!important;font:inherit;color:inherit}
+.exec-out{padding:.2rem 1.1rem 1.1rem;font:400 .78rem/1.65 var(--mono);color:rgba(196,208,232,.6);white-space:pre-wrap}.exec-out .e{color:#fca5a5}
+.exec-frame{width:100%;height:230px;border:0;border-radius:10px;background:#fff}
+.ui-chart{position:relative;height:260px;margin:1.6em 0}
+.ui-alert{font:400 clamp(1.5rem,5.5vw,2.3rem)/1.3 var(--serif);color:#ff6b73;text-shadow:0 0 34px rgba(255,40,60,.65);margin:1.3em 0}
+.ui-pending{height:2px;width:4rem;margin:.8em 0;background:linear-gradient(90deg,transparent,rgba(var(--aura-a),1),transparent) 0 0/200% 100%;animation:sweep 1.3s linear infinite}
+@keyframes sweep{to{background-position:-200% 0}}
 
-.chat-container { flex: 1; padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
-.chat-container::-webkit-scrollbar { width: 6px; }
-.chat-container::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
-.message { display: flex; flex-direction: column; max-width: 94%; animation: slideIn 0.22s ease-out forwards; opacity: 0; transform: translateY(8px); }
-@keyframes slideIn { to { opacity: 1; transform: translateY(0); } }
-.message.user { align-self: flex-end; }
-.message.ai { align-self: flex-start; width: 100%; max-width: 94%; }
-.sender { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-dim); margin-bottom: 3px; display: flex; align-items: center; gap: 8px; }
-.message.user .sender { justify-content: flex-end; }
-.bubble { padding: 11px 14px; border-radius: 10px; line-height: 1.55; font-size: 0.88rem; position: relative; word-wrap: break-word; overflow-x: auto; border: 1px solid rgba(255,255,255,0.1); }
-.message.user .bubble { background: var(--bg-bubble-user); border-color: #3b82f6; border-bottom-right-radius: 2px; }
-.message.ai .bubble { background: var(--bg-bubble-ai); border-bottom-left-radius: 2px; box-shadow: inset 0 0 16px rgba(0,0,0,0.35); }
-.bubble p { margin-bottom: 8px; } .bubble p:last-child { margin-bottom: 0; } .bubble strong { color: var(--text-main); }
-.bubble ul, .bubble ol { margin-left: 18px; margin-bottom: 8px; } .bubble li { margin-bottom: 3px; }
-.bubble code { font-family: 'JetBrains Mono', monospace; background: rgba(255,255,255,0.08); padding: 2px 5px; border-radius: 4px; font-size: 0.85em; }
-.bubble pre code { background: transparent; padding: 0; }
-.bubble blockquote { border-left: 3px solid rgba(255,255,255,0.4); padding-left: 10px; margin: 8px 0; color: var(--text-dim); }
-.chart-container { margin-top: 10px; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); max-width: 100%; height: 260px; position: relative; }
+/* dock (atas) */
+#zone-top{position:fixed;top:0;left:0;right:0;height:60px;z-index:19}
+#core-hint{position:fixed;top:max(10px,env(safe-area-inset-top));left:10px;width:44px;height:44px;display:grid;place-items:center;z-index:46;opacity:.3;transition:opacity .5s}
+body:not([data-state="idle"]) #core-hint,#core-hint:hover,body[data-dock] #core-hint{opacity:1}
+.status-dot{width:9px;height:9px;border-radius:50%;background:var(--success);box-shadow:0 0 14px var(--success);position:relative;transition:background .4s,box-shadow .4s}
+.status-dot::after{content:'';position:absolute;inset:-8px;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 30%,var(--accent) 62%,#a78bfa 86%,transparent);-webkit-mask:radial-gradient(circle,transparent 58%,#000 62%);mask:radial-gradient(circle,transparent 58%,#000 62%);animation:spin 8s linear infinite}
+.status-dot.busy{background:var(--warning);box-shadow:0 0 14px var(--warning)}.status-dot.busy::after{animation-duration:1s}
+.status-dot.error{background:var(--danger);box-shadow:0 0 14px var(--danger)}
+@keyframes spin{to{transform:rotate(360deg)}}
+#dock{position:fixed;top:0;left:0;right:0;z-index:45;padding:max(10px,env(safe-area-inset-top)) 12px 26px 58px;min-height:64px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;opacity:0;transform:translateY(-10px);pointer-events:none;transition:opacity .35s,transform .35s;background:linear-gradient(var(--void),transparent)}
+#zone-top:hover~#dock,#dock:hover,#dock:focus-within,body[data-dock] #dock,body[data-layer] #dock{opacity:1;transform:none;pointer-events:auto}
+.hud-title{font:400 .78rem var(--mono);color:var(--dim)}
+.header-right{display:flex;align-items:center;gap:2px;flex-wrap:wrap}
+.system-badge{font:400 .66rem var(--mono);color:var(--dim);margin-right:6px;white-space:nowrap}
+@media(max-width:560px){.system-badge{display:none}}
+.btn-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;color:var(--dim);transition:color .2s,background .2s}
+.btn-icon:hover,.btn-icon.active{color:var(--ink);background:rgba(160,180,220,.1)}
+.btn-icon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
-.bubble pre {
-    background: #000; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color);
-    overflow-x: auto; margin: 8px 0; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
-    position: relative; max-height: 320px; overflow-y: auto;
-}
-.bubble pre::-webkit-scrollbar { width: 5px; height: 5px; }
-.bubble pre::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-.bubble table { display: block; overflow-x: auto; max-width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 0.85em; }
-.bubble th, .bubble td { border: 1px solid var(--border-color); padding: 5px 8px; text-align: left; }
-.bubble th { background: rgba(255,255,255,0.06); color: var(--text-main); }
+/* summoner (bawah): hanya hover / fokus / saat memproses */
+#zone-bottom{position:fixed;left:0;right:0;bottom:0;height:84px;z-index:19}
+#summon-hint{position:fixed;left:50%;bottom:calc(var(--kb) + max(0px,env(safe-area-inset-bottom)));transform:translateX(-50%);width:140px;height:40px;z-index:18;transition:opacity .4s}
+#summon-hint::after{content:'';position:absolute;left:50%;bottom:12px;width:44px;height:2px;margin-left:-22px;border-radius:2px;background:rgba(var(--aura-a),1);opacity:.3;animation:breathe 4s ease-in-out infinite}
+body[data-input] #summon-hint,body[data-busy] #summon-hint{opacity:0;pointer-events:none}
+#summoner{position:fixed;left:50%;bottom:calc(var(--kb) + max(12px,env(safe-area-inset-bottom)));width:min(46rem,calc(100% - 2rem));transform:translate(-50%,18px);opacity:0;pointer-events:none;transition:opacity .4s,transform .4s;z-index:20}
+#zone-bottom:hover~#summoner,#summoner:hover,#summoner:focus-within,body[data-input] #summoner,body[data-busy] #summoner{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+#composer{display:flex;align-items:flex-end;gap:.4rem}
+.input-wrapper{flex:1;position:relative;min-width:0}
+.input-wrapper::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(var(--aura-a),.9),transparent);opacity:.35;transition:opacity .4s}
+.input-wrapper:focus-within::after{opacity:1}
+textarea{width:100%;background:transparent;border:0;color:var(--ink);font:300 1.08rem/1.6 var(--serif);resize:none;outline:none;padding:.7rem .15rem;max-height:140px;min-height:46px;overflow-y:auto;caret-color:var(--accent)}
+textarea::placeholder{color:var(--dim)}
+.lnk{font:400 .74rem var(--mono);color:var(--dim);padding:.6rem .6rem;min-height:40px;display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;transition:color .2s}
+.lnk:hover:not(:disabled){color:var(--ink)}.lnk.active{color:var(--success)}.lnk:disabled{opacity:.3;cursor:default}
+#send-btn{color:var(--accent)}#send-btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#tools{display:flex;flex-wrap:wrap;align-items:center}
+#agent-rounds-wrap{display:none;align-items:center;gap:.4rem;font:400 .72rem var(--mono);color:var(--dim)}#agent-rounds-wrap.visible{display:flex}
+#agent-rounds-select{background:transparent;border:0;border-bottom:1px solid rgba(160,180,220,.25);color:var(--ink);font:400 .74rem var(--mono);padding:.3rem 0}
+#activity{display:none;align-items:center;justify-content:space-between;padding:.4rem .2rem;font:400 .78rem var(--mono);color:var(--dim)}
+body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy] #tools{display:none}
+#stop-btn{color:#fca5a5}
+#jump-bottom{position:fixed;left:50%;bottom:calc(var(--kb) + 74px);transform:translate(-50%,8px);width:44px;height:36px;display:grid;place-items:center;color:var(--accent);opacity:0;pointer-events:none;transition:.3s;z-index:21;filter:drop-shadow(0 0 8px rgba(var(--aura-a),.8))}
+#jump-bottom.show{opacity:.8;pointer-events:auto;transform:translate(-50%,0)}
+#jump-bottom svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 
-.input-area { padding: 10px 12px; background: rgba(13, 21, 38, 0.96); backdrop-filter: blur(12px); border-top: 1px solid rgba(255,255,255,0.08); display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; flex-wrap: wrap; }
-[data-theme="light"] .input-area { background: rgba(255,255,255,0.95); }
-.input-wrapper { flex: 1; min-width: 180px; display: flex; background: var(--bg-main); border: 1px solid rgba(255,255,255,0.15); border-radius: 10px; transition: border-color 0.2s, box-shadow 0.2s; }
-.input-wrapper:focus-within { border-color: var(--accent); box-shadow: 0 0 12px rgba(56,189,248,0.15); }
-textarea { width: 100%; background: transparent; border: none; color: var(--text-main); padding: 11px 12px; font-family: 'Space Grotesk', sans-serif; font-size: 0.88rem; resize: none; outline: none; max-height: 140px; min-height: 44px; overflow-y: auto; line-height: 1.4; }
-textarea::placeholder { color: #64748b; }
-.btn { padding: 0 14px; height: 44px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.8rem; white-space: nowrap; font-family: 'Space Grotesk', sans-serif; }
-.btn-send { background: var(--btn-primary-bg); color: var(--btn-primary-fg); box-shadow: 0 0 14px rgba(255,255,255,0.15); }
-.btn-send:hover:not(:disabled) { filter: brightness(1.08); }
-.btn-send:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
-.btn-stop { background: var(--danger); color: white; display: none; }
-.btn-stop:hover { background: #dc2626; }
-.btn-secondary {
-    background: rgba(255,255,255,0.07); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.14);
-    height: 44px; padding: 0 10px; border-radius: 10px; font-size: 0.75rem; cursor: pointer;
-}
-.btn-secondary:hover { background: rgba(255,255,255,0.12); color: var(--text-main); border-color: var(--accent); }
-.btn-secondary.active { border-color: var(--success); color: var(--success); }
-.typing-indicator { display: inline-block; width: 6px; height: 12px; background: var(--text-main); animation: blink 1s step-end infinite; vertical-align: middle; margin-left: 3px; }
-@keyframes blink { 50% { opacity: 0; } }
-.error-text { color: var(--danger); }
+.toast{position:fixed;left:50%;bottom:calc(var(--kb) + 112px);transform:translate(-50%,10px);font:400 .78rem var(--mono);color:var(--ink);opacity:0;transition:.3s;z-index:60;pointer-events:none;max-width:90%;text-align:center;text-shadow:0 0 18px rgba(var(--aura-a),.9)}
+.toast.show{opacity:1;transform:translate(-50%,0)}.toast.warning{color:#fbbf24}
 
-.toast { position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%) translateY(20px); background: #1e293b; border: 1px solid var(--accent); color: var(--text-main); padding: 9px 16px; border-radius: 8px; font-size: 0.8rem; opacity: 0; transition: 0.3s; z-index: 100; pointer-events: none; max-width: 90%; text-align: center; }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.toast.warning { border-color: var(--warning); color: #fbbf24; }
-.copy-btn { position: absolute; top: 7px; right: 7px; background: rgba(255,255,255,0.1); border: 1px solid var(--border-color); color: var(--text-dim); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; cursor: pointer; opacity: 0; transition: 0.2s; }
-.bubble pre:hover .copy-btn { opacity: 1; } .copy-btn:hover { color: var(--text-main); border-color: var(--accent); }
-
-.tele-section { padding: 11px; border-bottom: 1px solid rgba(255,255,255,0.05); }
-.tele-title {
-    font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-main); letter-spacing: 1.5px;
-    margin-bottom: 8px; text-transform: uppercase; display: flex; align-items: center; gap: 5px;
-}
-.tele-title::before { content: '▸'; color: var(--accent); }
-.tele-title .hint { color: var(--text-dim); font-size: 0.58rem; letter-spacing: 0.4px; margin-left: auto; text-transform: none; }
-
+/* layer: settings + instrumen */
+#settings-panel{position:fixed;inset:0;z-index:40;background:var(--layer);display:none;flex-wrap:wrap;align-content:flex-start;gap:1.4rem 1.8rem;padding:max(74px,calc(env(safe-area-inset-top) + 60px)) max(1.4rem,calc(50% - 24rem)) 2rem;overflow-y:auto}
+#settings-panel.open{display:flex;animation:fade .35s ease}@keyframes fade{from{opacity:0}}
+.field{display:flex;flex-direction:column;gap:.35rem;min-width:140px;flex:0 1 210px}.field-wide{flex:1 1 320px}
+.field label{font:400 .7rem var(--mono);color:var(--dim)}
+.field input,.field select{background:transparent;border:0;border-bottom:1px solid rgba(160,180,220,.25);border-radius:0;color:var(--ink);padding:.5rem 0;font:400 .9rem var(--mono);outline:none;transition:border-color .2s}
+.field input:focus,.field select:focus{border-bottom-color:var(--accent)}
+.field select option{background:#0b1220;color:#e9edf5}
+.settings-hint{flex-basis:100%;font:400 .72rem/1.8 var(--mono);color:var(--dim)}.settings-hint b{color:var(--ink);font-weight:400}
+#instruments{position:fixed;top:0;right:0;bottom:0;width:min(24rem,100%);z-index:30;background:var(--layer);padding:max(70px,calc(env(safe-area-inset-top) + 60px)) 1.4rem 1.5rem;overflow-y:auto;scrollbar-width:none;transform:translateX(103%);transition:transform .45s cubic-bezier(.2,.8,.2,1)}
+#instruments.open{transform:none}
+@media(max-width:700px){#instruments{top:auto;width:100%;max-height:74dvh;padding-top:1.6rem;transform:translateY(103%);border-radius:22px 22px 0 0}}
+.tele-section{padding:0 0 1.7rem}
+.tele-title{font:400 .72rem var(--mono);color:var(--dim);margin-bottom:.7rem;display:flex;gap:.5rem}.tele-title .hint{margin-left:auto;font-size:.62rem}
+.neural-badges{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
 .neural-badges { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
 .nbadge {
     background: rgba(13,21,38,0.9); border: 1.5px solid rgba(255,255,255,0.1);
@@ -240,186 +223,21 @@ textarea::placeholder { color: #64748b; }
 .log-line.tag-sys { color: #93c5fd; } .log-line.tag-pars { color: var(--c-context); }
 .log-line.tag-val { color: var(--warning); } .log-line.tag-comp { color: var(--c-validation); }
 .log-line.tag-err { color: var(--danger); } .log-line.tag-ok { color: var(--success); }
-
-#toggle-telemetry-btn { display: none; }
-@media (max-width: 980px) {
-    .app-body { flex-direction: column; }
-    .panel-left { flex: 1; min-height: 0; }
-    .panel-right { flex: 0 1 auto; max-height: 38vh; min-height: 0; border-bottom: 1px solid var(--border-color); }
-    .panel-right.collapsed { display: none; }
-    .event-log { height: 100px; }
-    .chart-container { height: 190px; }
-    #toggle-telemetry-btn { display: flex; }
-}
-/* ===== CGO FUTURE SKIN v4.1 (override, fungsi tidak berubah) ===== */
-html, body { height: 100%; }
-body { font-family: 'Space Grotesk', system-ui, sans-serif; height: 100vh; height: 100dvh;
-    background: radial-gradient(1100px 560px at 12% -8%, rgba(34,211,238,.10), transparent 60%),
-                radial-gradient(900px 600px at 98% 108%, rgba(139,92,246,.14), transparent 60%), #04070d; }
-[data-theme="light"] body, body[data-theme="light"] { background: radial-gradient(900px 500px at 10% -10%, rgba(2,132,199,.08), transparent 60%), #f3f6fb; }
-body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background-image: linear-gradient(rgba(148,163,184,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,.05) 1px, transparent 1px);
-    background-size: 44px 44px; -webkit-mask-image: radial-gradient(ellipse at 50% 40%, #000 25%, transparent 78%); mask-image: radial-gradient(ellipse at 50% 40%, #000 25%, transparent 78%); }
-.hud-container { height: 100vh; height: 100dvh; z-index: 1; }
-.hud-header { background: rgba(8,13,26,.72); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); border-bottom: 1px solid transparent;
-    border-image: linear-gradient(90deg, transparent, rgba(34,211,238,.55), rgba(139,92,246,.55), transparent) 1; box-shadow: 0 10px 40px rgba(0,0,0,.45); }
-[data-theme="light"] .hud-header { background: rgba(255,255,255,.8); }
-.hud-title { font-weight: 600; letter-spacing: .14em; font-size: .9rem; text-shadow: 0 0 18px rgba(34,211,238,.35); }
-
-/* satu momen utama: inti neural berputar */
-.status-dot { width: 12px; height: 12px; position: relative; margin: 0 6px; }
-.status-dot::after { content: ''; position: absolute; inset: -7px; border-radius: 50%;
-    background: conic-gradient(from 0deg, transparent 0 30%, var(--accent) 60%, #a78bfa 85%, transparent);
-    -webkit-mask: radial-gradient(circle, transparent 58%, #000 62%); mask: radial-gradient(circle, transparent 58%, #000 62%);
-    animation: coreSpin 7s linear infinite; }
-.status-dot.busy::after { animation-duration: .9s; }
-.status-dot.error::after { background: conic-gradient(from 0deg, transparent, var(--danger), transparent 70%); animation-duration: 3s; }
-@keyframes coreSpin { to { transform: rotate(360deg); } }
-
-.system-badge { border-radius: 999px; background: rgba(34,211,238,.06); }
-.btn-icon { border-radius: 10px; background: rgba(148,163,184,.05); }
-.settings-panel { background: rgba(10,16,30,.88); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
-[data-theme="light"] .settings-panel { background: rgba(255,255,255,.95); }
-
-.app-body { background: transparent; gap: 10px; padding: 10px; }
-.panel-left { order: 1; flex: 1.5; border-radius: 16px; background: rgba(8,13,26,.55); border: 1px solid rgba(148,163,184,.14); }
-.panel-right { order: 2; flex: 1; max-width: 460px; background: transparent; gap: 0; }
-[data-theme="light"] .panel-left { background: rgba(255,255,255,.7); }
-.chat-container { scroll-behavior: auto; padding: 18px; gap: 16px; }
-
-.bubble { border-radius: 14px; line-height: 1.6; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
-.message.ai .bubble { background: linear-gradient(180deg, rgba(17,26,46,.78), rgba(9,15,29,.78)); border: 1px solid rgba(34,211,238,.16);
-    border-left: 2px solid var(--accent); border-bottom-left-radius: 4px; box-shadow: 0 10px 34px rgba(0,0,0,.35); }
-.message.user .bubble { background: linear-gradient(135deg, rgba(37,99,235,.6), rgba(124,58,237,.55)); border-color: rgba(147,197,253,.35); border-bottom-right-radius: 4px; }
-[data-theme="light"] .message.ai .bubble { background: #fff; border-color: rgba(2,132,199,.25); box-shadow: 0 6px 20px rgba(15,23,42,.08); }
-[data-theme="light"] .message.user .bubble { background: #dbeafe; border-color: #93c5fd; color: #0f172a; }
-.sender { letter-spacing: .12em; }
-.typing-indicator { background: linear-gradient(180deg, var(--accent), #a78bfa); width: 7px; border-radius: 2px; }
-
-.input-area { background: transparent; border-top: 1px solid rgba(148,163,184,.12); -webkit-backdrop-filter: none; backdrop-filter: none; padding: 12px; }
-.input-wrapper { border-radius: 16px; background: rgba(4,7,13,.7); }
-[data-theme="light"] .input-wrapper { background: #fff; }
-.input-wrapper:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(34,211,238,.12), 0 0 28px rgba(34,211,238,.14); }
-.btn { border-radius: 14px; }
-.btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
-.btn-send { background: linear-gradient(135deg, #22d3ee, #8b5cf6); color: #04070d; box-shadow: 0 0 22px rgba(34,211,238,.28); }
-[data-theme="light"] .btn-send { background: var(--btn-primary-bg); color: var(--btn-primary-fg); box-shadow: none; }
-.btn-secondary { border-radius: 14px; }
-
-.tele-section { background: rgba(10,16,30,.62); margin: 0 0 10px; border: 1px solid rgba(148,163,184,.13); border-radius: 14px; padding: 12px; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
-[data-theme="light"] .tele-section { background: rgba(255,255,255,.8); }
-.tele-title { letter-spacing: .12em; }
-.nbadge { border-radius: 10px; }
-.spec-value.high { text-shadow: 0 0 18px rgba(16,185,129,.6); }
-.spec-fill { box-shadow: 0 0 12px rgba(16,185,129,.4); }
-
-[data-theme="light"] .issue.info { color: #1d4ed8; } [data-theme="light"] .issue.warning { color: #b45309; }
-[data-theme="light"] .issue.error { color: #b91c1c; } [data-theme="light"] .issue.ok { color: #047857; }
-[data-theme="light"] .artifact-box, [data-theme="light"] .event-log { background: #f1f5f9; color: #334155; }
-[data-theme="light"] .chart-container { background: #fff; }
-[data-theme="light"] .toast { background: #fff; }
-[data-theme="light"] .nbadge { background: #fff; }
-[data-theme="light"] .settings-hint, [data-theme="light"] textarea::placeholder { color: #64748b; }
-.bubble pre { background: #05080f; }
-.toast { border-radius: 12px; bottom: 96px; }
-
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-@media (max-width: 980px) {
-    .app-body { padding: 6px; gap: 0; }
-    .panel-left { border-radius: 14px; }
-    .panel-right { position: fixed; left: 0; right: 0; bottom: 0; max-width: none; max-height: 64vh; max-height: 64dvh; z-index: 30; padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
-        background: var(--bg-panel); border-radius: 20px 20px 0 0; border-top: 1px solid var(--border-strong); box-shadow: 0 -24px 60px rgba(0,0,0,.6); }
-    .panel-right.collapsed { display: none; }
-}
-@media (max-width: 560px) {
-    .btn-secondary span { display: none; }
-    .btn-secondary { padding: 0 12px; }
-    .system-badge { display: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation: none !important; transition: none !important; }
-    .message { opacity: 1 !important; transform: none !important; }
-}
-
-/* ============================================================
-   MULTI-AGENT RESEARCH PANEL — aditif, tidak mengubah style lama
-   ============================================================ */
-.message.agent { align-self: flex-start; width: 100%; max-width: 94%; }
-.message.agent .sender { color: var(--agent-color, var(--text-dim)); font-weight: 600; }
-.message.agent .sender .agent-role { color: var(--text-dim); font-weight: 400; font-size: 0.66rem; margin-left: 2px; }
-.message.agent .bubble {
-    background: var(--bg-bubble-ai);
-    border-color: var(--agent-color, var(--accent));
-    border-left: 3px solid var(--agent-color, var(--accent));
-    box-shadow: inset 0 0 16px rgba(0,0,0,0.35), 0 0 14px -4px var(--agent-color, var(--accent));
-}
-.message.agent.synth .bubble { border-left-width: 4px; background: linear-gradient(180deg, rgba(167,139,250,0.08), var(--bg-bubble-ai) 40%); }
-.message.agent .sender::before {
-    content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-    background: var(--agent-color, var(--accent)); box-shadow: 0 0 6px var(--agent-color, var(--accent));
-}
-@keyframes agentThinking { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
-.agent-thinking .sender::before { animation: agentThinking 1s ease-in-out infinite; }
-#agent-rounds-wrap { display: none; align-items: center; gap: 6px; }
-#agent-rounds-wrap.visible { display: flex; }
-#agent-rounds-wrap label { font-size: 0.65rem; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
-#agent-rounds-select {
-    background: var(--bg-main); border: 1px solid rgba(255,255,255,0.15); color: var(--text-main);
-    border-radius: 6px; padding: 4px 6px; font-size: 0.72rem; font-family: 'JetBrains Mono', monospace;
-}
-@media (max-width: 480px) {
-    .message.agent .sender .agent-role { display: none; }
-}
-
-
-/* ============================================================
-   AVATAR + CHAT MASA DEPAN — aditif, tidak mengubah style lama
-   ============================================================ */
-.panel-left { position: relative; }
-.message { display: grid; grid-template-columns: 40px minmax(0, 1fr); column-gap: 10px; align-items: start; }
-.message > .av { grid-column: 1; grid-row: 1 / span 2; }
-.message > .sender { grid-column: 2; grid-row: 1; }
-.message > .bubble { grid-column: 2; grid-row: 2; }
-.message.user { grid-template-columns: minmax(0, auto) 40px; justify-content: end; }
-.message.user > .av { grid-column: 2; }
-.message.user > .sender, .message.user > .bubble { grid-column: 1; }
-.av { --c: var(--accent, #22d3ee); position: relative; width: 40px; height: 40px; border-radius: 13px; display: grid; place-items: center; color: var(--c);
-    background: linear-gradient(145deg, color-mix(in srgb, var(--c) 24%, transparent), rgba(5,8,15,.88));
-    border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
-    box-shadow: 0 0 18px color-mix(in srgb, var(--c) 35%, transparent), inset 0 0 12px color-mix(in srgb, var(--c) 18%, transparent); }
-.av svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.av::after { content: ""; position: absolute; inset: -4px; border-radius: 17px; border: 1px solid var(--c); opacity: 0; }
-.agent-thinking > .av::after, .message.ai:has(.typing-indicator) > .av::after { animation: avRing 1.4s ease-out infinite; }
-@keyframes avRing { 0% { opacity: .7; transform: scale(.85); } 100% { opacity: 0; transform: scale(1.3); } }
-.message.user > .av { --c: #60a5fa; }
-.sender time { margin-left: auto; font-size: .62rem; opacity: .6; letter-spacing: .04em; }
-.message.user .sender time { margin-left: 0; }
-.mcopy { background: transparent; border: 1px solid transparent; color: var(--text-dim); border-radius: 7px; width: 24px; height: 22px; display: grid; place-items: center; cursor: pointer; padding: 0; }
-.mcopy:hover { color: var(--text-main); border-color: var(--accent); }
-.mcopy svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.typing-indicator { width: 30px; height: 8px; border-radius: 0; margin-left: 4px;
-    background: radial-gradient(circle, var(--accent) 2.6px, transparent 3px) 0 0 / 10px 8px repeat-x; animation: tdots 1.2s ease-in-out infinite; }
-@keyframes tdots { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
-#jump-bottom { position: absolute; right: 18px; bottom: 92px; width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--accent); background: rgba(8,13,26,.92); color: var(--accent);
-    display: grid; place-items: center; cursor: pointer; opacity: 0; pointer-events: none; transform: translateY(8px); transition: .2s; z-index: 5; box-shadow: 0 0 16px rgba(34,211,238,.35); }
-#jump-bottom.show { opacity: 1; pointer-events: auto; transform: none; }
-#jump-bottom svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-@media (max-width: 480px) {
-    .message { grid-template-columns: 32px minmax(0, 1fr); column-gap: 8px; }
-    .message.user { grid-template-columns: minmax(0, auto) 32px; }
-    .av { width: 32px; height: 32px; border-radius: 11px; } .av svg { width: 18px; height: 18px; }
-}
+.spec-label{letter-spacing:0}
+@media(prefers-reduced-motion:reduce){.aura i,.ui-code,.cursor,.status-dot::after,#summon-hint::after,.ui-pending{animation:none!important}#void.shake{animation:none}.thought,#summoner,#dock,#instruments{transition-duration:.01s}}
 </style>
 </head>
-<body data-theme="cyber">
+<body data-theme="cyber" data-state="idle">
+<div id="void">
+    <div class="aura" id="aura-think"><i></i></div>
+    <div class="aura" id="aura-alert"><i></i></div>
 
-<div class="hud-container">
-    <header class="hud-header">
-        <div class="hud-title">
-            <div class="status-dot" id="status-dot"></div>
-            CGO · RESEARCH NEXUS
-        </div>
+    <main id="stage" aria-live="polite"><div id="chat-container"></div></main>
+
+    <div id="zone-top"></div>
+    <button id="core-hint" type="button" aria-label="Buka menu"><div class="status-dot" id="status-dot"></div></button>
+    <header id="dock">
+        <div class="hud-title">cgo · research nexus</div>
         <div class="header-right">
             <div class="system-badge" id="engine-badge">PROVIDER: —</div>
             <button class="btn-icon" id="toggle-telemetry-btn" title="Toggle Telemetry" aria-label="Toggle Telemetry">
@@ -440,7 +258,80 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-i
         </div>
     </header>
 
-    <div class="settings-panel" id="settings-panel">
+    <div id="zone-bottom"></div>
+    <button id="summon-hint" type="button" aria-label="Tulis pesan"></button>
+    <button id="jump-bottom" type="button" aria-label="Ke pesan terbaru"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg></button>
+    <footer id="summoner">
+        <div id="activity"><span id="activity-text"></span><button class="lnk" id="stop-btn" type="button" aria-label="Stop">stop</button></div>
+        <div id="composer">
+            <div class="input-wrapper"><textarea id="chat-input" rows="1" placeholder="tulis prompt mentah…" aria-label="Prompt"></textarea></div>
+            <button class="lnk" id="send-btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg><span id="send-label">compile &amp; send</span></button>
+        </div>
+        <div id="tools">
+            <button class="lnk" id="heal-btn" type="button" title="Auto-Heal: lengkapi section kosong (Ctrl+Shift+H)">heal</button>
+            <button class="lnk" id="sample-btn" type="button" title="Sample prompt">sample</button>
+            <button class="lnk" id="compile-only-btn" type="button" title="Compile tanpa kirim (Ctrl+Shift+O)">compile only</button>
+            <button class="lnk" id="multiagent-btn" type="button" title="Multi-Agent Research Panel (Ctrl+Shift+M)">agents</button>
+            <div id="agent-rounds-wrap">
+                <label for="agent-rounds-select">ronde</label>
+                <select id="agent-rounds-select" title="Jumlah ronde diskusi sebelum sintesis akhir">
+                    <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option>
+                </select>
+            </div>
+        </div>
+    </footer>
+
+    <aside id="instruments" class="panel-right" aria-label="Instrumen">
+            <div class="tele-section">
+                <div class="tele-title">NEURAL STATUS <span class="hint">5-node IR</span></div>
+                <div class="neural-badges">
+                    <div class="nbadge" data-cat="role"><span class="nbadge-label">ROLE</span><span class="nbadge-count" id="count-role">0</span></div>
+                    <div class="nbadge" data-cat="context"><span class="nbadge-label">CONTEXT</span><span class="nbadge-count" id="count-context">0</span></div>
+                    <div class="nbadge" data-cat="rules"><span class="nbadge-label">RULES</span><span class="nbadge-count" id="count-rules">0</span></div>
+                    <div class="nbadge" data-cat="objective"><span class="nbadge-label">OBJECTIVE</span><span class="nbadge-count" id="count-objective">0</span></div>
+                    <div class="nbadge" data-cat="validation"><span class="nbadge-label">VALIDATION</span><span class="nbadge-count" id="count-validation">0</span></div>
+                </div>
+                <div class="spec-block">
+                    <div class="spec-label">SPEC<br>SCORE</div>
+                    <div class="spec-value" id="spec-value">0</div>
+                    <div class="spec-bar"><div class="spec-fill" id="spec-fill"></div></div>
+                </div>
+            </div>
+
+            <div class="tele-section">
+                <div class="tele-title">WORD HEAT</div>
+                <div class="heat-bar" id="heat-bar"></div>
+                <div class="heat-meta">
+                    <span id="heat-words">0 words</span>
+                    <span id="heat-flagged">0 flagged</span>
+                </div>
+            </div>
+
+            <div class="tele-section">
+                <div class="tele-title">SYMBOLIC VALIDATOR</div>
+                <div class="issues-list" id="issues-list">
+                    <div class="issue info">▸ Waiting input...</div>
+                </div>
+            </div>
+
+            <div class="tele-section">
+                <div class="tele-title">ARTIFACT PREVIEW <span class="hint">ZTA</span></div>
+                <div class="artifact-box" id="artifact-box">No artifact yet. Type to see structured IR.</div>
+                <div class="artifact-actions">
+                    <button id="copy-artifact-btn">COPY ARTIFACT</button>
+                    <button id="export-md-btn">EXPORT MD</button>
+                </div>
+            </div>
+
+            <div class="tele-section" style="border-bottom:none;">
+                <div class="tele-title">EVENT STREAM</div>
+                <div class="event-log" id="event-log">
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[SYSTEM]</span> Research Nexus v4.0 online. Multi-provider ready.</div>
+                </div>
+            </div>
+    </aside>
+
+    <section class="settings-panel" id="settings-panel" aria-label="Pengaturan">
         <div class="field" style="min-width:160px;">
             <label>PROVIDER</label>
             <select id="provider-select">
@@ -492,87 +383,8 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-i
             <b>Agents:</b> 4 peneliti berkarakter beda berdiskusi bergiliran lalu disintesis — pakai provider/model yang sama.
             Esc = Stop · Ctrl+Shift+C = Copy Artifact · Ctrl+Shift+O = Compile Only · Ctrl+Shift+H = Auto-Heal · Ctrl+Shift+M = Agent Panel.
         </div>
-    </div>
-
-    <div class="app-body">
-        <div class="panel-left">
-            <main class="chat-container" id="chat-container"></main>
-            <footer class="input-area">
-                <div class="input-wrapper">
-                    <textarea id="chat-input" rows="1" placeholder="Raw prompt... (Enter send, Shift+Enter newline)"></textarea>
-                </div>
-                <button class="btn btn-secondary" id="heal-btn" title="Auto-Heal: lengkapi section kosong (Ctrl+Shift+H)" aria-label="Auto-Heal"><svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>HEAL</span></button>
-                <button class="btn btn-secondary" id="sample-btn" title="Sample prompt" aria-label="Sample prompt"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span>SAMPLE</span></button>
-                <button class="btn btn-secondary" id="compile-only-btn" title="Compile without sending" aria-label="Compile only"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg><span>COMPILE ONLY</span></button>
-                <button class="btn btn-secondary" id="multiagent-btn" title="Multi-Agent Research Panel: beberapa peneliti AI berdiskusi (Ctrl+Shift+M)" aria-label="Multi-Agent Panel"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"/><circle cx="18" cy="8" r="3"/><circle cx="13" cy="18" r="3"/><path d="M8 11v2a3 3 0 0 0 3 3M18 11v2a3 3 0 0 0-3 3"/></svg><span>AGENTS</span></button>
-                <div id="agent-rounds-wrap">
-                    <label for="agent-rounds-select">RONDE</label>
-                    <select id="agent-rounds-select" title="Jumlah ronde diskusi sebelum sintesis akhir">
-                        <option value="1">1</option>
-                        <option value="2" selected>2</option>
-                        <option value="3">3</option>
-                    </select>
-                </div>
-                <button class="btn btn-send" id="send-btn">
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                    <span id="send-label">COMPILE &amp; SEND</span>
-                </button>
-                <button class="btn btn-stop" id="stop-btn" aria-label="Stop"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>STOP</button>
-            </footer>
-        </div>
-
-        <div class="panel-right">
-            <div class="tele-section">
-                <div class="tele-title">NEURAL STATUS <span class="hint">5-node IR</span></div>
-                <div class="neural-badges">
-                    <div class="nbadge" data-cat="role"><span class="nbadge-label">ROLE</span><span class="nbadge-count" id="count-role">0</span></div>
-                    <div class="nbadge" data-cat="context"><span class="nbadge-label">CONTEXT</span><span class="nbadge-count" id="count-context">0</span></div>
-                    <div class="nbadge" data-cat="rules"><span class="nbadge-label">RULES</span><span class="nbadge-count" id="count-rules">0</span></div>
-                    <div class="nbadge" data-cat="objective"><span class="nbadge-label">OBJECTIVE</span><span class="nbadge-count" id="count-objective">0</span></div>
-                    <div class="nbadge" data-cat="validation"><span class="nbadge-label">VALIDATION</span><span class="nbadge-count" id="count-validation">0</span></div>
-                </div>
-                <div class="spec-block">
-                    <div class="spec-label">SPEC<br>SCORE</div>
-                    <div class="spec-value" id="spec-value">0</div>
-                    <div class="spec-bar"><div class="spec-fill" id="spec-fill"></div></div>
-                </div>
-            </div>
-
-            <div class="tele-section">
-                <div class="tele-title">WORD HEAT</div>
-                <div class="heat-bar" id="heat-bar"></div>
-                <div class="heat-meta">
-                    <span id="heat-words">0 words</span>
-                    <span id="heat-flagged">0 flagged</span>
-                </div>
-            </div>
-
-            <div class="tele-section">
-                <div class="tele-title">SYMBOLIC VALIDATOR</div>
-                <div class="issues-list" id="issues-list">
-                    <div class="issue info">▸ Waiting input...</div>
-                </div>
-            </div>
-
-            <div class="tele-section">
-                <div class="tele-title">ARTIFACT PREVIEW <span class="hint">ZTA</span></div>
-                <div class="artifact-box" id="artifact-box">No artifact yet. Type to see structured IR.</div>
-                <div class="artifact-actions">
-                    <button id="copy-artifact-btn">COPY ARTIFACT</button>
-                    <button id="export-md-btn">EXPORT MD</button>
-                </div>
-            </div>
-
-            <div class="tele-section" style="border-bottom:none;">
-                <div class="tele-title">EVENT STREAM</div>
-                <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[SYSTEM]</span> Research Nexus v4.0 online. Multi-provider ready.</div>
-                </div>
-            </div>
-        </div>
-    </div>
+    </section>
 </div>
-
 <div class="toast" id="toast"></div>
 
 <script>
@@ -581,7 +393,7 @@ body::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-i
    Multi-provider · Compile Only · Multi-lang · Theme · Researcher mode
    Zero regression from v3.1
    ================================================================ */
-const APP_VERSION = '4.1-nexus';
+const APP_VERSION = '5.0-ambient';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -740,7 +552,8 @@ const copyArtifactBtn = document.getElementById('copy-artifact-btn');
 const exportMdBtn = document.getElementById('export-md-btn');
 const artifactBox = document.getElementById('artifact-box');
 const toggleTelemetryBtn = document.getElementById('toggle-telemetry-btn');
-const panelRight = document.querySelector('.panel-right');
+const panelRight = document.getElementById('instruments');
+const stage = document.getElementById('stage');
 
 const countEls = {
     role: document.getElementById('count-role'),
@@ -850,6 +663,7 @@ function updateEngineBadge() {
 function applyTheme(t) {
     document.body.setAttribute('data-theme', t || 'cyber');
     settings.theme = t || 'cyber';
+    if (typeof Chart !== 'undefined') { Chart.defaults.color = (t === 'light') ? '#334155' : '#cbd5e1'; Chart.defaults.borderColor = (t === 'light') ? 'rgba(15,23,42,.12)' : 'rgba(148,163,184,.18)'; }
 }
 
 providerSelect.addEventListener('change', () => {
@@ -1112,21 +926,253 @@ function showToast(msg, duration = 2600, isWarning = false) {
     clearTimeout(showToast._t);
     showToast._t = setTimeout(() => toastEl.classList.remove('show'), duration);
 }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+/* ===================== AMBIENT ENGINE v5 ===================== */
+const finePointer = window.matchMedia('(pointer: fine)').matches;
+let aiBase = 'idle', alertUntil = 0;
+function renderState() { document.body.dataset.state = Date.now() < alertUntil ? 'alert' : aiBase; }
+function setAIState(s) { aiBase = s; renderState(); }
+function flashAlert(ms) { alertUntil = Date.now() + ms; renderState(); clearTimeout(flashAlert._t); flashAlert._t = setTimeout(renderState, ms + 40); }
+function shakeScreen() { const v = document.getElementById('void'); v.classList.remove('shake'); void v.offsetWidth; v.classList.add('shake'); try { navigator.vibrate && navigator.vibrate([60, 40, 60]); } catch (e) {} }
+function mixHex(a, b, t) { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const x = p(a), y = p(b); return x.map((v, i) => Math.round(v * t + y[i] * (1 - t))).join(','); }
+function setAura(hex) { document.documentElement.style.setProperty('--aura-a', hex ? mixHex(hex, '#4f6bff', 0.35) : '79,107,255'); }
+function setActivity(t) { const el = document.getElementById('activity-text'); if (el) el.textContent = t || ''; }
+function setFocus(el) { document.querySelectorAll('.thought.live').forEach(e => e.classList.remove('live')); if (el) { el.classList.add('live'); document.body.dataset.focus = '1'; } else delete document.body.dataset.focus; }
 function setStatus(state) {
     statusDot.className = 'status-dot';
-    if (state === 'busy') statusDot.classList.add('busy');
-    else if (state === 'error') statusDot.classList.add('error');
+    if (state === 'busy') { statusDot.classList.add('busy'); document.body.dataset.busy = '1'; setAura(null); setActivity('memproses…'); setAIState('thinking'); }
+    else {
+        delete document.body.dataset.busy; setAIState('idle');
+        if (state === 'error') { statusDot.classList.add('error'); flashAlert(5000); }
+    }
 }
-function scrollToBottom(force) { requestAnimationFrame(() => { const c = chatContainer; if (force || c.scrollHeight - c.scrollTop - c.clientHeight < 160) c.scrollTop = c.scrollHeight; }); }
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-function safeMarkdown(text) {
-    if (!text) return '';
-    if (hasMarked && hasPurify) return DOMPurify.sanitize(marked.parse(text));
-    if (hasMarked) return marked.parse(text);
-    return escapeHtml(text).replace(/\n/g, '<br>');
-}
+function syncLayers() { const open = settingsPanel.classList.contains('open') || panelRight.classList.contains('open'); if (open) document.body.dataset.layer = '1'; else delete document.body.dataset.layer; }
+function closeLayers() { settingsPanel.classList.remove('open'); settingsBtn.classList.remove('active'); panelRight.classList.remove('open'); toggleTelemetryBtn.classList.remove('active'); syncLayers(); }
+function scrollToBottom(force) { requestAnimationFrame(() => { const c = stage; if (force || c.scrollHeight - c.scrollTop - c.clientHeight < 200) c.scrollTop = c.scrollHeight; }); }
 
-function getSystemPrompt() {
+/* ---------- Semantic Rendering Engine ---------- */
+/*TOK-START*/
+function scanJson(s, i) {
+    let d = 0, str = false, esc = false;
+    for (let k = i; k < s.length; k++) {
+        const c = s[k];
+        if (str) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') str = false; continue; }
+        if (c === '"') str = true;
+        else if (c === '{' || c === '[') d++;
+        else if (c === '}' || c === ']') { d--; if (d === 0) return k + 1; }
+    }
+    return -1;
+}
+function stripFence(s) { return s.replace(/^\s*\n/, '').replace(/^```[^\n]*\n/, '').replace(/\n?```\s*$/, '').replace(/\s+$/, ''); }
+function tokenize(text) {
+    const out = [], n = text.length;
+    let i = 0, from = 0;
+    const pushMd = (end, done) => { const s = text.slice(from, end); if (s.trim()) out.push({ t: 'md', s, done }); };
+    const pend = at => { pushMd(at, true); out.push({ t: 'pending', done: false }); return out; };
+    while (i < n) {
+        const c = text[i];
+        if (c === '`' && (i === 0 || text[i - 1] === '\n')) {
+            let k = 0; while (text[i + k] === '`') k++;
+            if (k >= 3) {
+                pushMd(i, true);
+                const nl = text.indexOf('\n', i);
+                if (nl < 0) { out.push({ t: 'code', lang: text.slice(i + k).trim().toLowerCase(), code: '', done: false }); return out; }
+                const lang = text.slice(i + k, nl).trim().toLowerCase();
+                const re = new RegExp('\\n`{' + k + ',}[ \\t]*(?=\\n|$)', 'g'); re.lastIndex = nl;
+                const m = re.exec(text);
+                if (!m) { out.push({ t: 'code', lang, code: text.slice(nl + 1), done: false }); return out; }
+                out.push({ t: 'code', lang, code: text.slice(nl + 1, m.index), done: true });
+                i = m.index + m[0].length; if (text[i] === '\n') i++;
+                from = i; continue;
+            }
+        }
+        if (c === '[' && text.startsWith('[UI:', i)) {
+            const m = /^\[UI:(CODE|CHART|ALERT|NOTE)/.exec(text.slice(i, i + 12));
+            if (m) {
+                const kind = m[1], j = i + m[0].length;
+                if (kind === 'CHART') {
+                    if (text[j] === '|') {
+                        const b = text.indexOf('{', j);
+                        if (b < 0) return pend(i);
+                        const e = scanJson(text, b);
+                        if (e < 0) return pend(i);
+                        let k = e; while (text[k] === ' ') k++;
+                        if (k >= n) return pend(i);
+                        if (text[k] === ']') { pushMd(i, true); out.push({ t: 'chart', cfg: text.slice(b, e), done: true }); i = from = k + 1; continue; }
+                    }
+                } else if (text[j] === '|' || text[j] === ']') {
+                    const h = text.indexOf(']', j);
+                    if (h < 0) return pend(i);
+                    const arg = text[j] === '|' ? text.slice(j + 1, h) : '';
+                    if ((kind === 'ALERT' || kind === 'NOTE') && arg) { pushMd(i, true); out.push({ t: kind.toLowerCase(), s: arg, done: true }); i = from = h + 1; continue; }
+                    const close = '[/UI:' + kind + ']', c2 = text.indexOf(close, h + 1);
+                    if (kind === 'CODE') {
+                        pushMd(i, true);
+                        const lang = arg.trim().toLowerCase();
+                        if (c2 < 0) { out.push({ t: 'code', lang, code: stripFence(text.slice(h + 1)), done: false }); return out; }
+                        out.push({ t: 'code', lang, code: stripFence(text.slice(h + 1, c2)), done: true });
+                        i = from = c2 + close.length; continue;
+                    }
+                    if (c2 < 0) return pend(i);
+                    pushMd(i, true); out.push({ t: kind.toLowerCase(), s: text.slice(h + 1, c2).trim(), done: true });
+                    i = from = c2 + close.length; continue;
+                }
+            }
+        }
+        if (c === '\n' && text[i + 1] === '\n') {
+            pushMd(i, true);
+            let k = i; while (text[k] === '\n') k++;
+            i = from = k; continue;
+        }
+        i++;
+    }
+    pushMd(n, false);
+    return out;
+}
+/*TOK-END*/
+function sanitizeHtml(h) { return hasPurify ? DOMPurify.sanitize(h) : h; }
+function mdHtml(s, inline) { if (!hasMarked) return escapeHtml(s).replace(/\n/g, '<br>'); return sanitizeHtml(inline ? marked.parseInline(s) : marked.parse(s)); }
+function codeHtml(lang, code) { const l = (lang || '').replace(/[^a-z0-9+#-]/g, ''); return '<div class="ui-code" data-lang="' + l + '"><pre><code class="language-' + (l || 'plaintext') + '">' + escapeHtml(code) + '</code></pre></div>'; }
+function chartHtml(cfg) { return '<div class="ui-chart" data-cfg="' + escapeHtml(String(cfg).trim()) + '"></div>'; }
+function blockHTML(b) {
+    switch (b.t) {
+        case 'md': return mdHtml(b.s);
+        case 'code': return b.lang === 'chart' ? (b.done ? chartHtml(b.code) : '<div class="ui-pending"></div>') : codeHtml(b.lang, b.code);
+        case 'chart': return chartHtml(b.cfg);
+        case 'alert': return '<div class="ui-alert" role="alert">' + mdHtml(b.s, true) + '</div>';
+        case 'note': return '<div class="ui-note">' + mdHtml(b.s, true) + '</div>';
+        case 'pending': return '<div class="ui-pending" aria-hidden="true"></div>';
+    }
+    return '';
+}
+function safeMarkdown(text) { if (!text) return ''; return tokenize(text).map(blockHTML).join(''); }
+
+const charts = [];
+function destroyCharts() { charts.splice(0).forEach(c => { try { c.destroy(); } catch (e) {} }); }
+function buildChart(el) {
+    el.classList.add('ready');
+    if (!hasChart) { el.textContent = 'Chart.js tidak tersedia'; return; }
+    try {
+        const cfg = JSON.parse(el.dataset.cfg); el.removeAttribute('data-cfg');
+        cfg.options = Object.assign({}, cfg.options, { responsive: true, maintainAspectRatio: false });
+        const cv = document.createElement('canvas'); el.appendChild(cv); charts.push(new Chart(cv, cfg));
+    } catch (e) { el.innerHTML = '<p class="err">grafik gagal dirender (JSON tidak valid)</p>'; }
+}
+function execCode(p, lang, code) {
+    const old = p.querySelector('.exec-out'); if (old) old.remove();
+    const out = document.createElement('div'); out.className = 'exec-out'; p.appendChild(out);
+    const frame = document.createElement('iframe'); frame.setAttribute('sandbox', 'allow-scripts'); frame.className = 'exec-frame';
+    if (lang === 'html') { frame.srcdoc = code; out.appendChild(frame); return; }
+    const id = 'x' + Math.random().toString(36).slice(2), safe = s => JSON.stringify(s).replace(/</g, '\\u003c');
+    frame.style.display = 'none';
+    const log = (k, t) => { const d = document.createElement('div'); if (k === 'error') d.className = 'e'; d.textContent = t; out.appendChild(d); };
+    const onMsg = ev => { const d = ev.data; if (ev.source !== frame.contentWindow || !d || d.__cgo !== id) return; if (d.k === 'done') { finish(); return; } log(d.k, d.v); };
+    const tm = setTimeout(() => { log('error', 'timeout 6s'); finish(); }, 6000);
+    function finish() { window.removeEventListener('message', onMsg); clearTimeout(tm); frame.remove(); }
+    window.addEventListener('message', onMsg);
+    const runner = 'const __id=' + safe(id) + ';const send=(k,v)=>parent.postMessage({__cgo:__id,k:k,v:v},"*");' +
+        'const fmt=a=>a.map(x=>{try{return typeof x==="string"?x:JSON.stringify(x)}catch(e){return String(x)}}).join(" ");' +
+        '["log","info","warn","error"].forEach(m=>{console[m]=(...a)=>send(m,fmt(a))});window.onerror=m=>{send("error",String(m))};' +
+        'try{const r=(0,eval)(' + safe(code) + ');if(r!==undefined)send("result",fmt([r]))}catch(e){send("error",String(e))}send("done","")';
+    frame.srcdoc = '<!doctype html><meta charset="utf-8"><script>' + runner + '<\/script>';
+    out.appendChild(frame);
+}
+function buildCodeHead(p) {
+    p.classList.add('ready');
+    const lang = p.dataset.lang || 'code', code = p.querySelector('code');
+    const h = document.createElement('div'); h.className = 'ui-head';
+    h.innerHTML = '<span>' + escapeHtml(lang) + '</span><span><button type="button" data-a="copy">copy</button>' + (/^(js|javascript|html)$/.test(lang) ? '<button type="button" data-a="exec">exec</button>' : '') + '</span>';
+    p.insertBefore(h, p.firstChild);
+    h.addEventListener('click', e => {
+        const a = e.target.dataset && e.target.dataset.a;
+        if (a === 'copy') copyText(code.textContent).then(() => showToast('Kode disalin')).catch(() => showToast('Gagal menyalin', 2000, true));
+        if (a === 'exec') execCode(p, lang, code.textContent);
+    });
+}
+function hydrate(root, silent) {
+    root.querySelectorAll('.ui-code:not(.ready)').forEach(p => {
+        const c = p.querySelector('code');
+        if (hasHljs && c) { try { hljs.highlightElement(c); } catch (e) {} }
+        buildCodeHead(p);
+    });
+    root.querySelectorAll('.ui-chart:not(.ready)').forEach(buildChart);
+    root.querySelectorAll('.ui-alert:not(.ready)').forEach(el => { el.classList.add('ready'); if (!silent) { flashAlert(7000); shakeScreen(); } });
+    root.querySelectorAll('p').forEach(p => {
+        const f = p.firstElementChild;
+        if (p.childElementCount === 1 && f.tagName === 'EM' && f.textContent.trim() === p.textContent.trim()) p.classList.add('aside');
+        else if (/^\s*\u26A0/.test(p.textContent)) p.classList.add('warn');
+    });
+}
+function renderChartsInElement(el) { hydrate(el, true); }
+
+/* ---------- Typewriter Stream ---------- */
+const activeStreams = new Set();
+function skipTyping() { activeStreams.forEach(s => s.skip()); }
+function createStream(flow, silent) {
+    const doneEl = document.createElement('div'), tail = document.createElement('div'), cur = document.createElement('span');
+    cur.className = 'cursor'; flow.append(doneEl, tail);
+    const thought = flow.closest('.thought');
+    let target = '', shown = 0, nB = 0, raf = 0, last = 0, carry = 0, wait = 0, lastR = 0, ending = false, finished = false;
+    const waiters = [];
+    const release = () => { if (thought && thought.classList.contains('live')) setFocus(null); waiters.splice(0).forEach(r => r()); };
+    const delayFor = () => {
+        const back = target.length - shown, ch = target[shown - 1] || '', nx = target[shown] || '';
+        let d = back > 900 ? 1.5 : back > 300 ? 4 : back > 90 ? 9 : 17;
+        if (/[.!?]/.test(ch) && /\s/.test(nx)) d += back > 300 ? 25 : 150;
+        else if (/[,;:]/.test(ch)) d += back > 300 ? 6 : 55;
+        else if (ch === '\n') d += back > 300 ? 8 : 80;
+        else if (back <= 300) { const m = /[.!?]/.exec(target.slice(shown, shown + 9)); if (m) d *= 1 + (9 - m.index) / 9 * 1.6; }
+        return d * (0.75 + Math.random() * 0.5);
+    };
+    function placeCursor() {
+        let a = tail;
+        while (a.lastElementChild && !/^(CANVAS|IFRAME|BUTTON|SVG)$/i.test(a.lastElementChild.tagName)) a = a.lastElementChild;
+        a.appendChild(cur);
+    }
+    function render(force) {
+        const now = performance.now();
+        if (!force && now - lastR < 32) return;
+        lastR = now;
+        const blocks = tokenize(target.slice(0, shown));
+        while (nB < blocks.length && (blocks[nB].done || finished)) {
+            const b = blocks[nB++]; if (b.t === 'pending') continue;
+            const w = document.createElement('div'); w.className = 'blk'; w.innerHTML = blockHTML(b); hydrate(w, silent); doneEl.appendChild(w);
+        }
+        if (finished) { tail.innerHTML = ''; return; }
+        tail.innerHTML = blocks.slice(nB).map(b => blockHTML(b.t === 'md' ? { t: 'md', s: b.s.replace(/\[(U(I(:[A-Z]*)?)?)?$/, '') } : b)).join('');
+        placeCursor(); scrollToBottom();
+    }
+    function complete() { if (finished) return; finished = true; render(true); cur.remove(); activeStreams.delete(s); release(); scrollToBottom(); }
+    function frame(ts) {
+        raf = 0; if (!last) last = ts; carry += Math.min(ts - last, 100); last = ts;
+        let moved = 0;
+        while (shown < target.length && carry >= wait && moved < 48) {
+            carry -= wait; shown++;
+            const cc = target.charCodeAt(shown - 1); if (cc >= 0xD800 && cc <= 0xDBFF && shown < target.length) shown++;
+            moved++; wait = delayFor();
+        }
+        if (moved) render(false);
+        if (shown < target.length) raf = requestAnimationFrame(frame);
+        else { last = 0; if (ending) complete(); }
+    }
+    function kick() { if (finished || raf) return; if (shown < target.length) raf = requestAnimationFrame(frame); else if (ending) complete(); }
+    const s = {
+        push(t) { target = t; kick(); },
+        finish() { ending = true; return new Promise(r => { if (finished) return r(); waiters.push(r); kick(); }); },
+        skip(t) { if (t != null) target = t; shown = target.length; if (raf) cancelAnimationFrame(raf); raf = 0; last = 0; complete(); },
+        fail(html) { if (raf) cancelAnimationFrame(raf); raf = 0; finished = true; activeStreams.delete(s); flow.innerHTML = html; release(); }
+    };
+    activeStreams.add(s);
+    return s;
+}
+const LYRIC_RISK = /risik|risk|celah|\bgap\b|counterexample|contoh tandingan|gagal|failure|error|kontradiks|contradict|\bflaw|vulnerab|\bbug\b|asumsi tersembunyi|hidden assum/i;
+const UI_HINT_ID = 'ANTARMUKA (opsional, hemat): kode -> [UI:CODE|bahasa]...[/UI:CODE] atau blok kode biasa; grafik -> [UI:CHART|{JSON Chart.js valid}] (satu tag, tanpa fungsi/komentar); risiko fatal atau kontradiksi serius -> [UI:ALERT|kalimat singkat] (maksimal 1x); catatan pendukung singkat -> [UI:NOTE]...[/UI:NOTE]. Jangan taruh tag di dalam blok kode.';
+const UI_HINT_EN = 'INTERFACE (optional, sparing): code -> [UI:CODE|language]...[/UI:CODE] or a normal code block; chart -> [UI:CHART|{valid Chart.js JSON}] (one tag, no functions/comments); fatal risk or serious contradiction -> [UI:ALERT|short sentence] (max once); short supporting note -> [UI:NOTE]...[/UI:NOTE]. Never put tags inside code blocks.';
+function uiHint() { return settings.lang === 'en' ? UI_HINT_EN : UI_HINT_ID; }
+
+function getSystemPrompt() { return getSystemPromptBase() + '\n\n' + uiHint(); }
+function getSystemPromptBase() {
     if (settings.lang === 'en') return SYSTEM_PROMPTS.en;
     if (settings.lang === 'id') return SYSTEM_PROMPTS.id;
     // auto: simple detect from last user text
@@ -1139,8 +1185,9 @@ function getSystemPrompt() {
 }
 
 toggleTelemetryBtn.addEventListener('click', () => {
-    panelRight.classList.toggle('collapsed');
-    toggleTelemetryBtn.style.borderColor = panelRight.classList.contains('collapsed') ? 'var(--warning)' : '';
+    panelRight.classList.toggle('open');
+    toggleTelemetryBtn.classList.toggle('active', panelRight.classList.contains('open'));
+    syncLayers();
 });
 
 chatInput.addEventListener('input', function () {
@@ -1152,9 +1199,9 @@ chatInput.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (!isGenerating) sendMessage(); }
 });
 document.addEventListener('keydown', e => {
-    if (e.key === 'Escape' && isGenerating && currentAbortController) {
-        currentAbortController.abort();
-        showToast('Stopped (Esc)');
+    if (e.key === 'Escape') {
+        if (isGenerating) { skipTyping(); if (currentAbortController) { currentAbortController.abort(); showToast('Stopped (Esc)'); } }
+        else closeLayers();
     }
     if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
         e.preventDefault(); copyLastArtifact();
@@ -1170,15 +1217,16 @@ document.addEventListener('keydown', e => {
 });
 
 sendBtn.addEventListener('click', () => { if (!isGenerating) sendMessage(); });
-stopBtn.addEventListener('click', () => { if (currentAbortController) currentAbortController.abort(); });
+stopBtn.addEventListener('click', () => { skipTyping(); if (currentAbortController) currentAbortController.abort(); });
 settingsBtn.addEventListener('click', () => {
     settingsPanel.classList.toggle('open');
-    settingsBtn.classList.toggle('active');
+    settingsBtn.classList.toggle('active', settingsPanel.classList.contains('open'));
+    syncLayers();
 });
 clearBtn.addEventListener('click', () => {
     if (isGenerating) return;
     chatHistory = []; lastCompiledArtifact = '';
-    saveToStorage(); renderBootMessage(true); updateArtifactPreview('');
+    saveToStorage(); destroyCharts(); renderBootMessage(true); updateArtifactPreview('');
     showToast('History cleared'); logEvent('SYSTEM', 'History cleared.');
 });
 copyArtifactBtn.addEventListener('click', copyLastArtifact);
@@ -1188,7 +1236,7 @@ sampleBtn.addEventListener('click', insertSamplePrompt);
 compileOnlyBtn.addEventListener('click', () => {
     compileOnlyMode = !compileOnlyMode;
     compileOnlyBtn.classList.toggle('active', compileOnlyMode);
-    document.getElementById('send-label').textContent = compileOnlyMode ? 'COMPILE' : 'COMPILE & SEND';
+    document.getElementById('send-label').textContent = compileOnlyMode ? 'compile' : 'compile & send';
     showToast(compileOnlyMode ? 'Compile Only ON' : 'Compile Only OFF');
 });
 
@@ -1264,107 +1312,42 @@ Validation: Every claim must have design rationale.`
     showToast('Sample loaded');
 }
 
-var NX_RESTORING = false;
-function avSvg(k) {
-    const P = {
-        user: '<circle cx="12" cy="8" r="3.6"/><path d="M5 20c.8-3.8 3.6-5.6 7-5.6s6.2 1.8 7 5.6"/>',
-        ai: '<path d="M12 2.8l7.8 4.5v9.4L12 21.2l-7.8-4.5V7.3z"/><circle cx="12" cy="12" r="2.6"/><path d="M12 5.5v4M12 14.5v4M6.3 9l3.4 2M14.3 13l3.4 2"/>',
-        agent: '<circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="1.6"/><circle cx="19" cy="6" r="1.6"/><circle cx="12" cy="20" r="1.6"/><path d="M6.4 7l4 3.6M17.6 7l-4 3.6M12 14.4V18.4"/>',
-        synth: '<path d="M12 3l2.2 6.3L21 12l-6.8 2.7L12 21l-2.2-6.3L3 12l6.8-2.7z"/>'
-    };
-    return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (P[k] || P.agent) + '</svg>';
-}
-function nxDecorate(msgDiv, kind, color, live) {
-    const av = document.createElement('div');
-    av.className = 'av'; av.setAttribute('aria-hidden', 'true'); av.innerHTML = avSvg(kind);
-    if (color) av.style.setProperty('--c', color);
-    msgDiv.insertBefore(av, msgDiv.firstChild);
-    const s = msgDiv.querySelector('.sender'), b = msgDiv.querySelector('.bubble');
-    if (!s || !b) return;
-    if (live) { const t = document.createElement('time'); t.textContent = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false }); s.appendChild(t); }
+function addCopy(el, flow) {
     const c = document.createElement('button');
-    c.type = 'button'; c.className = 'mcopy'; c.setAttribute('aria-label', 'Salin pesan');
-    c.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></svg>';
-    c.onclick = () => { copyText(b.innerText).then(() => showToast('Pesan disalin')).catch(() => showToast('Gagal menyalin', 2000, true)); };
-    s.appendChild(c);
+    c.type = 'button'; c.className = 'mcopy'; c.textContent = 'copy'; c.setAttribute('aria-label', 'Salin pesan');
+    c.onclick = ev => { ev.stopPropagation(); copyText(flow.innerText).then(() => showToast('Pesan disalin')).catch(() => showToast('Gagal menyalin', 2000, true)); };
+    el.appendChild(c);
 }
-
 function addMessageToUI(role, text, isTyping = false) {
-    const msgDiv = document.createElement('div');
-    msgDiv.classList.add('message', role);
-    const senderDiv = document.createElement('div');
-    senderDiv.classList.add('sender');
-    senderDiv.textContent = role === 'user' ? 'YOU' : 'CGO';
-    const bubbleDiv = document.createElement('div');
-    bubbleDiv.classList.add('bubble');
-    if (role === 'ai') bubbleDiv.innerHTML = safeMarkdown(text || ' ') + (isTyping ? '<span class="typing-indicator"></span>' : '');
-    else bubbleDiv.innerText = text;
-    msgDiv.appendChild(senderDiv);
-    msgDiv.appendChild(bubbleDiv);
-    nxDecorate(msgDiv, role === 'user' ? 'user' : 'ai', null, !NX_RESTORING);
-    chatContainer.appendChild(msgDiv);
+    const el = document.createElement('article');
+    el.className = 'thought ' + role;
+    const flow = document.createElement('div'); flow.className = 'flow';
+    el.appendChild(flow); addCopy(el, flow);
+    chatContainer.appendChild(el);
+    if (role === 'user') flow.textContent = text;
+    else if (isTyping) { flow.stream = createStream(flow, false); setFocus(el); }
+    else { flow.innerHTML = safeMarkdown(text || ''); hydrate(flow, true); }
     scrollToBottom(role === 'user');
-    return bubbleDiv;
+    return flow;
 }
 function renderBootMessage(force = false) {
     if (!force && chatHistory.length > 0) return;
-    chatContainer.innerHTML = `
-        <div class="message ai">
-            <div class="av" aria-hidden="true">${avSvg('ai')}</div>
-            <div class="sender">RESEARCH NEXUS</div>
-            <div class="bubble">
-                <strong>CGO — Research Nexus v4.1</strong><br><br>
-                Multi-provider neural link active. Compile deterministically → validate → send to any connected model.<br><br>
-                <em>New:</em> OpenAI · Anthropic · xAI/Grok · Gemini · DeepSeek · Custom · Compile Only · Theme · Multi-lang · Researcher protocol.
-            </div>
-        </div>`;
+    destroyCharts();
+    chatContainer.innerHTML = '<article class="thought ai boot"><div class="flow"><h1>CGO Research Nexus</h1><p>Kompilasi deterministik, validasi, lalu kirim ke model mana pun yang terhubung.</p><p class="aside">OpenAI · Anthropic · xAI · Gemini · DeepSeek · Custom · Compile only · Multi-agent. Ketik apa saja, atau sentuh bagian bawah layar.</p></div></article>';
 }
 function restoreHistoryUI() {
-    chatContainer.innerHTML = '';
+    destroyCharts(); chatContainer.innerHTML = '';
     if (!chatHistory.length) { renderBootMessage(true); return; }
-    NX_RESTORING = true;
     chatHistory.forEach(m => {
         if (m.role === 'agent') {
             const agentDef = m.isSynth ? SYNTH_AGENT : (AGENTS.find(a => a.id === m.agentId) || { id: m.agentId, name: m.agentName, color: m.agentColor, role_id: m.agentRole, role_en: m.agentRole });
             const { bubbleDiv } = addAgentMessageToUI(agentDef, false);
-            bubbleDiv.innerHTML = safeMarkdown(m.content || '');
+            bubbleDiv.innerHTML = safeMarkdown(m.content || ''); hydrate(bubbleDiv, true);
             return;
         }
         addMessageToUI(m.role === 'user' ? 'user' : 'ai', m.content);
     });
-    NX_RESTORING = false;
-    chatContainer.querySelectorAll('.bubble').forEach(b => renderChartsInElement(b));
-}
-
-function renderChartsInElement(element) {
-    if (!hasChart) return;
-    element.querySelectorAll('pre code.language-chart').forEach(codeBlock => {
-        try {
-            const cfg = JSON.parse(codeBlock.innerText.trim());
-            if (!cfg.options) cfg.options = {};
-            cfg.options.responsive = true; cfg.options.maintainAspectRatio = false;
-            const wrap = document.createElement('div'); wrap.classList.add('chart-container');
-            const canvas = document.createElement('canvas'); wrap.appendChild(canvas);
-            const pre = codeBlock.parentElement;
-            if (pre) { pre.style.display = 'none'; if (pre.parentElement) pre.parentElement.insertBefore(wrap, pre.nextSibling); }
-            const ex = Chart.getChart(canvas); if (ex) ex.destroy();
-            new Chart(canvas, cfg);
-        } catch (e) {
-            if (codeBlock.parentElement) codeBlock.parentElement.insertAdjacentHTML('afterend', '<div class="error-text">⚠️ Chart render failed</div>');
-        }
-    });
-    if (hasHljs) {
-        element.querySelectorAll('pre code:not(.language-chart)').forEach(el => {
-            try { hljs.highlightElement(el); } catch {}
-            const pre = el.parentElement;
-            if (pre && !pre.querySelector('.copy-btn')) {
-                const btn = document.createElement('button');
-                btn.className = 'copy-btn'; btn.textContent = 'Copy';
-                btn.onclick = () => copyText(el.innerText).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1200); });
-                pre.style.position = 'relative'; pre.appendChild(btn);
-            }
-        });
-    }
+    stage.scrollTop = stage.scrollHeight;
 }
 
 async function* parseSSE(reader) {
@@ -1568,6 +1551,7 @@ async function sendMessage() {
     animateCompileSequence();
 
     const aiBubble = addMessageToUI('ai', '', true);
+    const stream = aiBubble.stream; setActivity('cgo menjawab');
     let fullAiResponse = '';
     currentAbortController = new AbortController();
 
@@ -1606,15 +1590,15 @@ async function sendMessage() {
                 const content = extractDelta(data, req.parse);
                 if (content) {
                     fullAiResponse += content;
-                    aiBubble.innerHTML = safeMarkdown(fullAiResponse) + '<span class="typing-indicator"></span>';
+                    stream.push(fullAiResponse);
                     scrollToBottom();
                 }
             }
         }
 
         // Gemini sometimes returns non-streamed chunks differently; final flush already handled
-        aiBubble.innerHTML = safeMarkdown(fullAiResponse || '_No response._');
-        renderChartsInElement(aiBubble);
+        stream.push(fullAiResponse || '_No response._');
+        await stream.finish();
         chatHistory.push({ role: 'assistant', content: fullAiResponse });
         if (chatHistory.length > MAX_HISTORY) chatHistory = chatHistory.slice(-MAX_HISTORY);
         saveToStorage();
@@ -1623,17 +1607,16 @@ async function sendMessage() {
         logEvent('OK', `Received ${fullAiResponse.length} chars.`);
     } catch (error) {
         if (error.name === 'AbortError') {
-            aiBubble.innerHTML = safeMarkdown(fullAiResponse || '') + '<br><br><em class="error-text">[Stopped by operator]</em>';
+            stream.skip(fullAiResponse || ''); aiBubble.insertAdjacentHTML('beforeend', '<p class="err">[stopped by operator]</p>');
             if (fullAiResponse) chatHistory.push({ role: 'assistant', content: fullAiResponse });
             else if (chatHistory.length && chatHistory[chatHistory.length - 1].role === 'user') chatHistory.pop();
             saveToStorage();
             setStatus('ok');
             logEvent('SYSTEM', 'Aborted.');
         } else {
-            aiBubble.innerHTML = `<span class="error-text">⚠️ Link failed: ${escapeHtml(error.message || String(error))}</span>
-                <br><br><button class="btn-secondary" style="height:30px;padding:0 10px;font-size:0.72rem;" id="retry-btn">RETRY LAST</button>`;
+            stream.fail(`<p class="err">Link failed: ${escapeHtml(error.message || String(error))}</p><button class="lnk" type="button" id="retry-btn">retry</button>`);
             const rb = aiBubble.querySelector('#retry-btn');
-            if (rb) rb.onclick = () => { if (!lastUserRaw || isGenerating) return; const m = aiBubble.closest('.message'); const um = m && m.previousElementSibling; if (m) m.remove(); if (um) um.remove(); chatInput.value = lastUserRaw; runLiveScan(lastUserRaw); sendMessage(); };
+            if (rb) rb.onclick = () => { if (!lastUserRaw || isGenerating) return; const m = aiBubble.closest('.thought'); const um = m && m.previousElementSibling; if (m) m.remove(); if (um) um.remove(); chatInput.value = lastUserRaw; runLiveScan(lastUserRaw); sendMessage(); };
             setStatus('error');
             logEvent('ERROR', error.message || String(error));
             if (chatHistory.length && chatHistory[chatHistory.length-1].role === 'user') {
@@ -1647,7 +1630,8 @@ async function sendMessage() {
         sendBtn.style.display = 'flex';
         stopBtn.style.display = 'none';
         currentAbortController = null;
-        chatInput.focus();
+        if (finePointer) chatInput.focus();
+        setActivity('');
         scrollToBottom();
         if (chatInput.value.trim()) runLiveScan(chatInput.value);
     }
@@ -1694,12 +1678,11 @@ function runDiagnostics() {
 window.addEventListener('load', () => {
     loadSettings();
     restoreHistoryUI();
-    if (window.matchMedia('(max-width: 980px)').matches) panelRight.classList.add('collapsed');
     renderWordHeat('');
     renderIssues([]);
     updateBadges({ role:[], context:[], rules:[], objective:[], validation:[] });
     updateSpecScore(0);
-    chatInput.focus();
+    if (finePointer) chatInput.focus();
     runLiveScan('');
     logEvent('SYSTEM', `Research Nexus v${APP_VERSION} ready. Providers: ${Object.keys(PROVIDERS).join(', ')}. Cache: ${getCacheStats()}`);
 });
@@ -1717,69 +1700,72 @@ let agentDiscussionAborted = false;
 
 const AGENTS = [
     { id: 'nova',  name: 'Dr. Nova',  color: '#38bdf8',
-      role_id: 'Teoretikus — Kerangka & Model Formal',
-      role_en: 'Theoretical Scientist — Frameworks & Formal Models',
-      char_id: 'Fokus pada prinsip dasar, logika matematis, dan struktur teoretis. Kamu memecah masalah kompleks menjadi bagian-bagian yang presisi sebelum melangkah ke solusi.',
-      char_en: 'Focuses on first principles, mathematical logic, and theoretical structure. You break complex problems into precise components before moving to solutions.' },
+      role_id: 'Teoretikus — kerangka & model formal',
+      role_en: 'Theoretical Scientist — frameworks & formal models',
+      char_id: 'Membangun kerangka berpikir, definisi presisi, dan model formal sebelum melompat ke solusi. Suka memecah masalah jadi prinsip dasar.',
+      char_en: 'Builds rigorous frameworks and formal models before jumping to solutions. Breaks problems down to first principles.' },
     { id: 'flux',  name: 'Dr. Flux',  color: '#10b981',
-      role_id: 'Eksperimentalis — Implementasi & Validasi',
-      role_en: 'Experimentalist — Implementation & Validation',
-      char_id: 'Fokus pada penerapan praktis, desain eksperimen, dan pembuktian. Kamu selalu bertanya: "Bagaimana cara kita menguji ini di dunia nyata?"',
-      char_en: 'Focuses on practical application, experiment design, and proof. You always ask: "How do we test this in the real world?"' },
+      role_id: 'Eksperimentalis — kelayakan & desain eksperimen',
+      role_en: 'Experimentalist — feasibility & experiment design',
+      char_id: 'Fokus pada kelayakan praktis, data, dan desain eksperimen/validasi. Selalu bertanya: "bagaimana cara mengujinya?"',
+      char_en: 'Focuses on practical feasibility, data, and experiment/validation design. Always asks: "how would we test this?"' },
     { id: 'cgo',   name: 'CGO',       color: '#f59e0b',
-      role_id: 'Operator Sistem — Eksekusi & Risiko',
-      role_en: 'Systems Operator — Execution & Risk',
-      char_id: 'Kamu adalah eksekutor teknis yang dingin dan realistis. Kamu menyoroti batasan operasional, risiko kegagalan, efisiensi, dan bagaimana mengeksekusi ide tim dengan aman dan efektif.',
-      char_en: 'You are the cool, realistic technical executor. You highlight operational constraints, failure risks, efficiency, and how to execute the team\'s ideas safely and effectively.' },
+      role_id: 'Cyber Guardian Operator — ketahanan sistem & risiko',
+      role_en: 'Cyber Guardian Operator — systems resilience & risk',
+      char_id: 'Tegas, dingin, fokus, sangat protektif terhadap ketahanan sistem. Menyoroti mode kegagalan, keamanan, dan risiko operasional dari tiap usulan.',
+      char_en: 'Firm, cool-headed, focused, highly protective of systems resilience. Flags failure modes, security, and operational risk in every proposal.' },
     { id: 'lyric', name: 'Dr. Lyric', color: '#ef4444',
-      role_id: 'Kritikus Independen — Uji Stress & Celah Logika',
-      role_en: 'Independent Critic — Stress Test & Logic Gaps',
-      char_id: 'Kamu adalah Red-Team dari diskusi ini. Tugasmu mencari kelemahan, asumsi tersembunyi, dan counterexample. Bongkar ide tim jika ada cacat logika, tapi berikan kritik yang konstruktif.',
-      char_en: 'You are the Red-Team of this discussion. Your job is to find weaknesses, hidden assumptions, and counterexamples. Tear down the team\'s ideas if there are logic flaws, but provide constructive criticism.' }
+      role_id: 'Kritikus independen — red-team & celah argumen',
+      role_en: 'Independent Critic — red-team & argument gaps',
+      char_id: 'Red-team terhadap klaim tim. Mencari counterexample, asumsi tersembunyi, dan celah logika — tapi tetap konstruktif.',
+      char_en: "Red-teams the team's claims. Hunts for counterexamples, hidden assumptions, and logic gaps — but stays constructive." }
 ];
 const SYNTH_AGENT = { id: 'synth', name: 'SYNTHESIS', color: '#a78bfa',
     role_id: 'Sintesis Tim — kesimpulan & solusi akhir',
     role_en: 'Team Synthesis — final conclusion & solution' };
 
-const AGENT_PROTOCOL_ID = `Kamu adalah bagian dari panel diskusi multi-peneliti tingkat lanjut (Research Nexus) yang berusaha memecahkan masalah kompleks secara kolaboratif.
+const AGENT_PROTOCOL_ID = `Kamu adalah bagian dari panel diskusi multi-peneliti tingkat lanjut yang berusaha memecahkan sebuah masalah langka/kompleks secara kolaboratif, persis seperti protokol CGO Research Nexus.
 
 NAMAMU: {NAME} — {ROLE}
 KARAKTERMU: {CHAR}
 
 ATURAN DISKUSI (WAJIB):
-1. **Pahami Konteks (CONTEXT) dari prompt Komandan.** Kamu adalah seorang profesional dan ilmuwan. Sesuaikan keahlianmu dengan masalah yang diberikan (Apakah ini soal Cyber Security, Ekonomi, Sains, atau Bisnis?).
-2. Berikan SATU kontribusi fokus: bangun, tantang, atau lengkapi poin pembicara sebelumnya.
-3. Jangan mengulang teori dasar yang sudah jelas. Fokus pada solusi, inovasi, atau bongkar asumsi (tergantung peranmu).
-4. Jika diminta kode/algoritma/formula, berikan dengan presisi dan alasan desainnya.
-5. Ringkas dan padat (±120-180 kata). Akhiri dengan satu insight tajam atau pertanyaan terbuka untuk tim.`;
+1. Baca transkrip diskusi sejauh ini sebelum menjawab.
+2. Berikan SATU kontribusi fokus: bangun di atas, tantang, atau lengkapi poin pembicara sebelumnya — jangan mengulang yang sudah dikatakan.
+3. Tetap dalam karakter & kacamata keahlianmu, tapi tetap ilmiah dan berbasis bukti/alasan.
+4. Ringkas dan padat (±120-180 kata), kecuali butuh kode/formula/tabel untuk presisi.
+5. Markdown rapi. Akhiri dengan satu insight tajam atau pertanyaan terbuka untuk tim.
+6. Jangan membuka dengan basa-basi seperti "Terima kasih" — langsung ke substansi.`;
 
-const AGENT_PROTOCOL_EN = `You are part of an advanced multi-researcher discussion panel (Research Nexus) collaboratively solving complex problems.
+const AGENT_PROTOCOL_EN = `You are part of an advanced multi-researcher discussion panel collaboratively solving a rare/complex problem, following the CGO Research Nexus protocol.
 
 YOUR NAME: {NAME} — {ROLE}
 YOUR CHARACTER: {CHAR}
 
 DISCUSSION RULES (MANDATORY):
-1. **Understand the CONTEXT from the Commander's prompt.** You are a professional and scientist. Adapt your expertise to the problem presented (Is this about Cyber Security, Economics, Science, or Business?).
-2. Give ONE focused contribution: build on, challenge, or complete the previous speaker's point.
-3. Do not repeat obvious basic theory. Focus on solutions, innovation, or breaking assumptions (depending on your role).
-4. If asked for code/algorithms/formulas, provide them with precision and design rationale.
-5. Concise (~120-180 words). End with one sharp insight or an open question for the team.`;
-    
-const SYNTH_PROTOCOL_ID = `Kamu adalah SYNTHESIS — penyintesis akhir panel diskusi Research Nexus.
-Baca SELURUH transkrip diskusi tim.
+1. Read the transcript so far before answering.
+2. Give ONE focused contribution: build on, challenge, or complete the previous speaker's point — don't repeat what's been said.
+3. Stay in character & your lens of expertise, but remain scientific and evidence/reason-based.
+4. Concise (~120-180 words), unless code/formula/table is needed for precision.
+5. Clean Markdown. End with one sharp insight or an open question for the team.
+6. Don't open with pleasantries like "Thank you" — go straight to substance.`;
+
+const SYNTH_PROTOCOL_ID = `Kamu adalah SYNTHESIS — penyintesis akhir panel diskusi multi-peneliti CGO Research Nexus.
+Baca SELURUH transkrip diskusi tim secara utuh.
 Hasilkan satu jawaban akhir yang terpadu untuk OBJECTIVE asli:
-1. **Solusi Final:** Rekomendasi atau langkah aksi yang paling masuk akal dan *actionable*.
-2. **Trade-off:** Risiko atau pengorbanan yang harus diambil dari solusi tersebut.
-3. **Langkah Eksekusi:** 1-3 langkah konkret selanjutnya.
-Markdown rapi, ringkas, dan tanpa basa-basi teori.`;
-    
-const SYNTH_PROTOCOL_EN = `You are SYNTHESIS — the final synthesizer of the Research Nexus discussion panel.
+1. Solusi/rekomendasi final yang jelas dan actionable.
+2. Trade-off kunci yang diakui secara eksplisit.
+3. Level keyakinan (Rendah/Sedang/Tinggi) dengan alasan singkat.
+4. 1-2 risiko residual yang masih terbuka.
+Markdown rapi, ringkas tapi lengkap. Jangan basa-basi.`;
+const SYNTH_PROTOCOL_EN = `You are SYNTHESIS — the final synthesizer of the CGO Research Nexus multi-researcher panel.
 Read the ENTIRE team discussion transcript.
 Produce one unified final answer to the original OBJECTIVE:
-1. **Final Solution:** The most sensible and actionable recommendation or action steps.
-2. **Trade-offs:** The risks or sacrifices that must be taken with the solution.
-3. **Execution Steps:** 1-3 concrete next steps.
-Clean Markdown, concise, no theoretical fluff.`;
+1. Clear, actionable final solution/recommendation.
+2. Key trade-offs explicitly acknowledged.
+3. Confidence level (Low/Medium/High) with brief reasoning.
+4. 1-2 open residual risks.
+Clean Markdown, concise but complete. No pleasantries.`;
 
 function buildAgentSystemPrompt(agent) {
     const en = settings.lang === 'en';
@@ -1787,10 +1773,10 @@ function buildAgentSystemPrompt(agent) {
     return tpl
         .replace('{NAME}', agent.name)
         .replace('{ROLE}', en ? agent.role_en : agent.role_id)
-        .replace('{CHAR}', en ? agent.char_en : agent.char_id);
+        .replace('{CHAR}', en ? agent.char_en : agent.char_id) + '\n\n' + uiHint();
 }
 function buildSynthSystemPrompt() {
-    return settings.lang === 'en' ? SYNTH_PROTOCOL_EN : SYNTH_PROTOCOL_ID;
+    return (settings.lang === 'en' ? SYNTH_PROTOCOL_EN : SYNTH_PROTOCOL_ID) + '\n\n' + uiHint();
 }
 function formatTranscript(entries, maxChars) {
     maxChars = maxChars || 7000;
@@ -1848,24 +1834,22 @@ function buildAgentRequest(systemPrompt, userContent) {
 }
 
 function addAgentMessageToUI(agent, isTyping) {
-    const msgDiv = document.createElement('div');
-    msgDiv.classList.add('message', 'agent');
-    if (agent.id === 'synth') msgDiv.classList.add('synth');
-    if (isTyping) msgDiv.classList.add('agent-thinking');
-    msgDiv.style.setProperty('--agent-color', agent.color);
-    const senderDiv = document.createElement('div');
-    senderDiv.classList.add('sender');
+    const msgDiv = document.createElement('article');
+    msgDiv.className = 'thought agent' + (agent.id === 'synth' ? ' synth' : '');
+    msgDiv.dataset.agent = agent.id;
+    msgDiv.style.setProperty('--hue', agent.color);
+    const who = document.createElement('div'); who.className = 'who';
     const roleLabel = settings.lang === 'en' ? agent.role_en : agent.role_id;
-    senderDiv.innerHTML = `${escapeHtml(agent.name)}<span class="agent-role">${escapeHtml(roleLabel || '')}</span>`;
-    const bubbleDiv = document.createElement('div');
-    bubbleDiv.classList.add('bubble');
-    bubbleDiv.innerHTML = isTyping ? '<span class="typing-indicator"></span>' : '';
-    msgDiv.appendChild(senderDiv);
-    msgDiv.appendChild(bubbleDiv);
-    nxDecorate(msgDiv, agent.id === 'synth' ? 'synth' : 'agent', agent.color, !NX_RESTORING);
+    who.innerHTML = '<i></i>' + escapeHtml(agent.name) + '<span>' + escapeHtml(roleLabel || '') + '</span>';
+    const flow = document.createElement('div'); flow.className = 'flow';
+    msgDiv.append(who, flow); addCopy(msgDiv, flow);
     chatContainer.appendChild(msgDiv);
+    if (isTyping) {
+        flow.stream = createStream(flow, false); setFocus(msgDiv); setAura(agent.color);
+        setActivity(agent.id === 'synth' ? 'sintesis' : agent.name.toLowerCase() + ' berbicara');
+    }
     scrollToBottom();
-    return { msgDiv, bubbleDiv };
+    return { msgDiv, bubbleDiv: flow };
 }
 
 function classifyAgentHttpError(status) {
@@ -1904,13 +1888,15 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
                 const content = extractDelta(data, req.parse);
                 if (content) {
                     fullText += content;
-                    bubbleDiv.innerHTML = safeMarkdown(fullText) + '<span class="typing-indicator"></span>';
+                    bubbleDiv.stream.push(fullText);
+                    if (agent.id === 'lyric' && LYRIC_RISK.test(fullText)) setAIState('alert');
                     scrollToBottom();
                 }
             }
         }
-        bubbleDiv.innerHTML = safeMarkdown(fullText || '_(tidak ada respons)_');
-        renderChartsInElement(bubbleDiv);
+        bubbleDiv.stream.push(fullText || '_(tidak ada respons)_');
+        await bubbleDiv.stream.finish();
+        if (agent.id === 'lyric') setAIState('thinking');
         msgDiv.classList.remove('agent-thinking');
         agentTranscript.push({ id: agent.id, name: agent.name, text: fullText });
         chatHistory.push({ role: 'agent', agentId: agent.id, agentName: agent.name, agentColor: agent.color, agentRole: isFinal ? (settings.lang === 'en' ? SYNTH_AGENT.role_en : SYNTH_AGENT.role_id) : (settings.lang === 'en' ? agent.role_en : agent.role_id), content: fullText, isSynth: !!isFinal });
@@ -1919,12 +1905,13 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
     } catch (error) {
         msgDiv.classList.remove('agent-thinking');
         if (error.name === 'AbortError') {
-            bubbleDiv.innerHTML = safeMarkdown(fullText || '') + '<br><br><em class="error-text">[Dihentikan oleh operator]</em>';
+            bubbleDiv.stream.skip(fullText || ''); bubbleDiv.insertAdjacentHTML('beforeend', '<p class="err">[dihentikan oleh operator]</p>');
             if (fullText) { agentTranscript.push({ id: agent.id, name: agent.name, text: fullText }); chatHistory.push({ role: 'agent', agentId: agent.id, agentName: agent.name, agentColor: agent.color, content: fullText, isSynth: !!isFinal }); }
             logEvent('SYSTEM', 'Agent discussion aborted.');
             return false;
         }
-        bubbleDiv.innerHTML = `<span class="error-text">⚠️ ${agent.name} gagal merespons: ${escapeHtml(error.message || String(error))}</span>`;
+        bubbleDiv.stream.fail(`<p class="err">${escapeHtml(agent.name)} gagal merespons: ${escapeHtml(error.message || String(error))}</p>`);
+        flashAlert(4000);
         logEvent('ERROR', `${agent.name}: ${error.message || error}`);
         return !error.fatal;
     }
@@ -2009,7 +1996,8 @@ async function sendMultiAgentMessage() {
         sendBtn.style.display = 'flex';
         stopBtn.style.display = 'none';
         currentAbortController = null;
-        chatInput.focus();
+        if (finePointer) chatInput.focus();
+        setActivity('');
         scrollToBottom();
         if (chatInput.value.trim()) runLiveScan(chatInput.value);
     }
@@ -2022,23 +2010,46 @@ function setMultiAgentMode(on) {
     btn.classList.toggle('active', on);
     wrap.classList.toggle('visible', on);
     if (on && compileOnlyMode) { compileOnlyMode = false; compileOnlyBtn.classList.remove('active'); }
-    document.getElementById('send-label').textContent = on ? 'CONVENE PANEL' : (compileOnlyMode ? 'COMPILE' : 'COMPILE & SEND');
+    document.getElementById('send-label').textContent = on ? 'convene panel' : (compileOnlyMode ? 'compile' : 'compile & send');
 }
 document.getElementById('multiagent-btn').addEventListener('click', () => {
     setMultiAgentMode(!multiAgentMode);
     showToast(multiAgentMode ? 'Multi-Agent Panel ON — 4 peneliti akan berdiskusi' : 'Multi-Agent Panel OFF');
 });
 
-/* ===== Tombol "ke pesan terbaru" (aditif) ===== */
+
+/* ===== AMBIENT WIRING: summon, dock, layer, keyboard ===== */
 (function () {
-    const f = document.createElement('button');
-    f.id = 'jump-bottom'; f.type = 'button'; f.setAttribute('aria-label', 'Ke pesan terbaru');
-    f.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
-    chatContainer.parentElement.appendChild(f);
-    f.onclick = () => { chatContainer.scrollTop = chatContainer.scrollHeight; };
-    chatContainer.addEventListener('scroll', () => {
-        f.classList.toggle('show', chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight > 220);
-    }, { passive: true });
+    const b = document.body; let hideT, dockT;
+    const showInput = () => { b.dataset.input = '1'; clearTimeout(hideT); };
+    const hideInputLater = () => { clearTimeout(hideT); hideT = setTimeout(() => { if (!chatInput.value.trim() && document.activeElement !== chatInput && !isGenerating) delete b.dataset.input; }, 4000); };
+    document.getElementById('summon-hint').addEventListener('click', () => { showInput(); chatInput.focus(); });
+    chatInput.addEventListener('focus', showInput);
+    chatInput.addEventListener('blur', hideInputLater);
+    document.getElementById('core-hint').addEventListener('click', () => {
+        if (b.dataset.dock) { delete b.dataset.dock; return; }
+        b.dataset.dock = '1'; clearTimeout(dockT);
+        dockT = setTimeout(() => { if (!b.dataset.layer) delete b.dataset.dock; }, 6000);
+    });
+    stage.addEventListener('click', e => {
+        const t = e.target.closest('.thought');
+        if (!t) { if (b.dataset.input) hideInputLater(); else { showInput(); if (finePointer) chatInput.focus(); } return; }
+        if (!e.target.closest('button,.ui-code,.ui-chart')) t.classList.toggle('peek');
+    });
+    document.addEventListener('keydown', e => {
+        if (isGenerating || e.ctrlKey || e.metaKey || e.altKey || !e.key || e.key.length !== 1) return;
+        const a = document.activeElement;
+        if (a && /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(a.tagName)) return;
+        if (settingsPanel.classList.contains('open')) return;
+        showInput(); chatInput.focus();
+    });
+    if (window.visualViewport) {
+        const upd = () => { const kb = Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop); document.documentElement.style.setProperty('--kb', kb + 'px'); };
+        visualViewport.addEventListener('resize', upd); visualViewport.addEventListener('scroll', upd);
+    }
+    const jb = document.getElementById('jump-bottom');
+    jb.onclick = () => { stage.scrollTop = stage.scrollHeight; };
+    stage.addEventListener('scroll', () => { jb.classList.toggle('show', stage.scrollHeight - stage.scrollTop - stage.clientHeight > 260); }, { passive: true });
 })();
 
 /* ===== CGO BRIDGE — responder untuk CGO Bridge Hub (aditif, hanya menjawab pesan 'cgo-hub') ===== */
