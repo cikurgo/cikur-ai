@@ -225,6 +225,12 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
 .log-line.tag-err { color: var(--danger); } .log-line.tag-ok { color: var(--success); }
 .spec-label{letter-spacing:0}
 @media(prefers-reduced-motion:reduce){.aura i,.ui-code,.cursor,.status-dot::after,#summon-hint::after,.ui-pending{animation:none!important}#void.shake{animation:none}.thought,#summoner,#dock,#instruments{transition-duration:.01s}}
+.ui-scene3d{position:relative;margin:1.6em 0;border:1px solid rgba(56,189,248,.28);border-radius:10px;overflow:hidden;background:#05070d}
+.ui-scene3d iframe{display:block;width:100%;height:340px;border:0}
+.ui-scene3d .s3d-bar{display:flex;gap:.1rem;align-items:center;flex-wrap:wrap;padding:0 .5rem;border-top:1px solid rgba(148,163,184,.15)}
+.ui-scene3d .s3d-bar .lnk{min-height:34px;padding:.3rem .5rem;font-size:.68rem}
+.ui-scene3d .s3d-st{margin-left:auto;font:400 .68rem var(--mono);color:var(--dim)}
+.ui-scene3d .s3d-st.s3d-err{color:#fca5a5}
 </style>
 </head>
 <body data-theme="cyber" data-state="idle">
@@ -499,6 +505,7 @@ Kemampuan khusus peneliti:
 - Hasilkan kode langka / algoritma non-trivial dengan penjelasan alasan desain.
 - Bandingkan pendekatan, berikan trade-off, dan rekomendasi berbasis bukti.
 - Jika diminta grafik: HANYA blok \`\`\`chart ... \`\`\` berisi JSON Chart.js murni.
+- Jika diminta visual 3D / animasi: HANYA blok \`\`\`scene3d ... \`\`\` berisi JavaScript murni. Tersedia global: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)) untuk animasi. Cahaya & orbit-kamera sudah ada; tanpa import, tanpa jaringan, tanpa OrbitControls. Buat geometri/material sendiri dan gerakkan lewat onFrame.
 - Jika diminta kode: gunakan code block ber-language tag.
 
 Bahasa: Indonesia natural, ilmiah, ringkas.`,
@@ -518,6 +525,7 @@ Researcher capabilities:
 - Produce rare / non-trivial code or algorithms with design rationale.
 - Compare approaches, surface trade-offs, evidence-based recommendations.
 - For charts: ONLY a \`\`\`chart ... \`\`\` block with pure Chart.js JSON.
+- For 3D visuals / animation: ONLY a \`\`\`scene3d ... \`\`\` block of plain JavaScript. Globals: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)) for animation. Lights & orbit camera already exist; no imports, no network, no OrbitControls. Build geometry/materials yourself and animate via onFrame.
 - For code: use fenced blocks with language tags.
 
 Language: natural, scientific English, concise.`
@@ -1038,7 +1046,7 @@ function chartHtml(cfg) { return '<div class="ui-chart" data-cfg="' + escapeHtml
 function blockHTML(b) {
     switch (b.t) {
         case 'md': return mdHtml(b.s);
-        case 'code': return b.lang === 'chart' ? (b.done ? chartHtml(b.code) : '<div class="ui-pending"></div>') : codeHtml(b.lang, b.code);
+        case 'code': return b.lang === 'chart' ? (b.done ? chartHtml(b.code) : '<div class="ui-pending"></div>') : b.lang === 'scene3d' ? (b.done ? scene3dHtml(b.code) : '<div class="ui-pending"></div>') : codeHtml(b.lang, b.code);
         case 'chart': return chartHtml(b.cfg);
         case 'alert': return '<div class="ui-alert" role="alert">' + mdHtml(b.s, true) + '</div>';
         case 'note': return '<div class="ui-note">' + mdHtml(b.s, true) + '</div>';
@@ -1047,6 +1055,69 @@ function blockHTML(b) {
     return '';
 }
 function safeMarkdown(text) { if (!text) return ''; return tokenize(text).map(blockHTML).join(''); }
+
+const s3dReg = {}; let s3dN = 0, s3dHeals = 0;
+function scene3dHtml(code) { return '<div class="ui-scene3d" data-code="' + escapeHtml(String(code).trim()) + '"></div>'; }
+function sceneDoc(code, id) {
+    const safe = String(code).replace(/<\/script/gi, '<\\/script');
+    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m){parent.postMessage({cgo3d:ID,type:t,msg:m},'*')}window.onerror=function(m,s,l){send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
+if(typeof THREE==='undefined'){send('error','Three.js gagal dimuat (cek koneksi)');return}
+var renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});document.body.appendChild(renderer.domElement);
+var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,1,.1,1000),frames=[],paused=false,clock=new THREE.Clock(),ok=false,target=new THREE.Vector3(),az=0,el=.3,dist=6;
+camera.position.set(0,2,6);scene.add(new THREE.AmbientLight(0xffffff,.6));var dl=new THREE.DirectionalLight(0xffffff,.9);dl.position.set(5,8,5);scene.add(dl);
+function onFrame(f){frames.push(f)}
+function fit(){var w=innerWidth,h=innerHeight;renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}
+addEventListener('resize',fit);fit();
+try{(function(THREE,scene,camera,renderer,onFrame){
+${safe}
+}).call(window,THREE,scene,camera,renderer,onFrame)}catch(e){send('error',String(e&&e.message||e));return}
+var v=camera.position.clone().sub(target);dist=v.length()||6;az=Math.atan2(v.x,v.z);el=Math.asin(Math.max(-1,Math.min(1,v.y/dist)));
+var drag=null,cv=renderer.domElement;
+cv.addEventListener('pointerdown',function(e){drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId)});
+cv.addEventListener('pointerup',function(){drag=null});
+cv.addEventListener('pointermove',function(e){if(!drag)return;az-=(e.clientX-drag[0])*.008;el=Math.max(-1.5,Math.min(1.5,el+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY]});
+cv.addEventListener('wheel',function(e){e.preventDefault();dist=Math.max(.5,Math.min(200,dist*(1+e.deltaY*.001)))},{passive:false});
+function loop(){requestAnimationFrame(loop);if(paused)return;try{var dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;for(var i=0;i<frames.length;i++)frames[i](t,dt);
+camera.position.set(target.x+dist*Math.cos(el)*Math.sin(az),target.y+dist*Math.sin(el),target.z+dist*Math.cos(el)*Math.cos(az));camera.lookAt(target);renderer.render(scene,camera)}catch(e){paused=true;send('error',String(e&&e.message||e));return}
+if(!ok){ok=true;send('ok','LIVE')}}
+var rec,chunks;
+addEventListener('message',function(e){var d=e.data;if(!d||d.cgo3d!==ID)return;
+if(d.cmd==='pause'){paused=!paused;if(!paused)clock.getDelta();send('state',paused?'PAUSED':'LIVE')}
+if(d.cmd==='rec'){try{if(rec&&rec.state==='recording'){rec.stop();return}chunks=[];rec=new MediaRecorder(cv.captureStream(30),{mimeType:'video/webm'});
+rec.ondataavailable=function(x){chunks.push(x.data)};rec.onstop=function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));a.download='scene3d.webm';a.click();send('state','LIVE')};rec.start();send('state','● REC')}catch(x){send('state','REC tidak didukung')}}});
+loop()})();<\/script></body></html>`;
+}
+function whenIdle(fn, n = 120) { if (!isGenerating) return fn(); if (n > 0) setTimeout(() => whenIdle(fn, n - 1), 500); }
+function healScene3d(msg, code) {
+    if (isGenerating) return;
+    chatInput.value = 'Scene3D gagal dirender: ' + msg + '\n\nPerbaiki dan kirim ulang HANYA satu blok ```scene3d lengkap. Global tersedia: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)). Tanpa import, tanpa jaringan.\n\nKode bermasalah:\n' + String(code).slice(0, 3500);
+    runLiveScan(chatInput.value); sendMessage();
+}
+function buildScene3d(el) {
+    el.classList.add('ready');
+    const code = el.dataset.code || ''; el.removeAttribute('data-code');
+    const id = 's3d' + (++s3dN) + Math.random().toString(36).slice(2, 7), live = !!isGenerating, doc = sceneDoc(code, id);
+    const fr = document.createElement('iframe'); fr.setAttribute('sandbox', 'allow-scripts allow-downloads'); fr.title = 'Scene 3D'; fr.srcdoc = doc;
+    const bar = document.createElement('div'); bar.className = 's3d-bar';
+    const st = document.createElement('span'); st.className = 's3d-st'; st.textContent = 'RENDERING...';
+    const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'lnk'; b.textContent = label; b.onclick = fn; bar.appendChild(b); return b; };
+    const post = cmd => { try { fr.contentWindow.postMessage({ cgo3d: id, cmd }, '*'); } catch (e) {} };
+    let lastErr = '', healed = false;
+    mk('PAUSE', () => post('pause')); mk('REC', () => post('rec'));
+    mk('EXPORT HTML', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([doc], { type: 'text/html' })); a.download = 'scene3d.html'; a.click(); });
+    const heal = mk('RECALIBRATE', () => healScene3d(lastErr, code)); heal.style.display = 'none';
+    bar.appendChild(st); el.append(fr, bar);
+    s3dReg[id] = { fr, fn: d => {
+        if (d.type === 'ok') { s3dHeals = 0; st.className = 's3d-st'; st.textContent = 'LIVE'; }
+        else if (d.type === 'state') st.textContent = d.msg;
+        else if (d.type === 'error') {
+            lastErr = String(d.msg).slice(0, 300); st.className = 's3d-st s3d-err'; st.textContent = 'ERR: ' + lastErr.slice(0, 70); heal.style.display = '';
+            logEvent('ERROR', 'Scene3D: ' + lastErr);
+            if (live && !healed && s3dHeals < 2) { healed = true; s3dHeals++; st.textContent += ' · auto-recalibrate'; whenIdle(() => healScene3d(lastErr, code)); }
+        }
+    } };
+}
+window.addEventListener('message', ev => { const d = ev.data, h = d && d.cgo3d && s3dReg[d.cgo3d]; if (h && h.fr.contentWindow === ev.source) h.fn(d); });
 
 const charts = [];
 function destroyCharts() { charts.splice(0).forEach(c => { try { c.destroy(); } catch (e) {} }); }
@@ -1097,6 +1168,7 @@ function hydrate(root, silent) {
         buildCodeHead(p);
     });
     root.querySelectorAll('.ui-chart:not(.ready)').forEach(buildChart);
+    root.querySelectorAll('.ui-scene3d:not(.ready)').forEach(buildScene3d);
     root.querySelectorAll('.ui-alert:not(.ready)').forEach(el => { el.classList.add('ready'); if (!silent) { flashAlert(7000); shakeScreen(); } });
     root.querySelectorAll('p').forEach(p => {
         const f = p.firstElementChild;
@@ -1661,6 +1733,7 @@ function runDiagnostics() {
     assert('marked', hasMarked);
     assert('DOMPurify', hasPurify);
     assert('Chart.js', hasChart);
+    assert('Scene3D renderer', typeof buildScene3d === 'function');
     assert('hljs', hasHljs);
     const h = hashSegments(s1);
     putArtifact(h, compiled);
@@ -2034,7 +2107,7 @@ document.getElementById('multiagent-btn').addEventListener('click', () => {
     stage.addEventListener('click', e => {
         const t = e.target.closest('.thought');
         if (!t) { if (b.dataset.input) hideInputLater(); else { showInput(); if (finePointer) chatInput.focus(); } return; }
-        if (!e.target.closest('button,.ui-code,.ui-chart')) t.classList.toggle('peek');
+        if (!e.target.closest('button,.ui-code,.ui-chart,.ui-scene3d')) t.classList.toggle('peek');
     });
     document.addEventListener('keydown', e => {
         if (isGenerating || e.ctrlKey || e.metaKey || e.altKey || !e.key || e.key.length !== 1) return;
