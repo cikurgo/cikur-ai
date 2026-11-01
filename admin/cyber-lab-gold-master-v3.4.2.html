@@ -940,6 +940,19 @@ const esc   = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;'
 const trunc = (s, n = 110) => { s = String(s); return s.length > n ? s.slice(0, n) + '…' : s; };
 const now   = () => new Date().toLocaleTimeString('id-ID', { hour12: false });
 
+/* Safe toast — main lab must not depend on CGO IIFE locals */
+function showToast(msg, dur, warn) {
+    try {
+        if (window.__cgoShowToast) return window.__cgoShowToast(msg, dur, warn);
+    } catch (_) {}
+    try {
+        log(String(msg), warn ? 'warn' : 'sys');
+    } catch (_) {
+        try { console.log('[toast]', msg); } catch (e) {}
+    }
+}
+
+
 const termEl    = $('terminal');
 const resultsEl = $('resultStream');
 const stats     = { req: 0, leak: 0, scan: 0 };
@@ -3049,11 +3062,18 @@ function enforceUniversalRoE(url, method = 'GET', body = '') {
     let currentScope = localStorage.getItem('cyber_lab_target_scope');
     try {
         const parsedUrl = new URL(url);
-        const hostname = parsedUrl.hostname;
-        // Jika belum ada scope, atau target berbeda dengan scope sebelumnya
-        if (!currentScope || !hostname.includes(currentScope)) {
-            const newScope = prompt(`[TARGET SCOPE BARU]\nKamu akan menembak: ${hostname}\n\nKetik nama domain ini (contoh: ${hostname}) untuk mengonfirmasi bahwa ini adalah target resmi/Bug Bounty Anda:`, currentScope || hostname);            
-            if (!newScope || !hostname.includes(newScope)) {
+        const hostname = parsedUrl.hostname.toLowerCase();
+        // Host demo/publik lab — tidak perlu prompt (UX mobile & smoke test)
+        const PUBLIC_LAB_HOSTS = [
+            'api.github.com','httpbin.org','jsonplaceholder.typicode.com','dummyjson.com',
+            'api.ipify.org','ipapi.co','ipwho.is','dog.ceo','api.coindesk.com','api.binance.com',
+            'stream.wikimedia.org','test-streams.mux.dev','example.com','www.example.com',
+            'postman-echo.com','reqres.in','pokeapi.co','api.publicapis.org'
+        ];
+        const isPublicLab = PUBLIC_LAB_HOSTS.some(h => hostname === h || hostname.endsWith('.' + h));
+        if (!isPublicLab && (!currentScope || !hostname.includes(String(currentScope).toLowerCase()))) {
+            const newScope = prompt(`[TARGET SCOPE BARU]\nKamu akan menembak: ${hostname}\n\nKetik nama domain ini (contoh: ${hostname}) untuk mengonfirmasi bahwa ini adalah target resmi/Bug Bounty Anda:`, currentScope || hostname);
+            if (!newScope || !hostname.includes(String(newScope).toLowerCase())) {
                 return { safe: false, reason: `[SCOPE BLOCKED] Domain ${hostname} ditolak. Tembakan dibatalkan untuk mencegah pidana.` };
             }
             localStorage.setItem('cyber_lab_target_scope', newScope);
@@ -3496,7 +3516,7 @@ function removeHooks() {
     $('targetStatus').innerHTML = '<span class="dot"></span>ONLINE (Native)';
     $('targetStatus').className = 'pill ok';
     $('restoreLbl').textContent = 'REAPPLY';
-    log('[SYS] Semua hook dilepas. Sistem kembali normal.', 'success';
+    log('[SYS] Semua hook dilepas. Sistem kembali normal.', 'success');
     // Phase-1: baseline CGO mengikuti native refs (cegah false lockdown)
     try { if (typeof window.__cgoAcceptRefs === 'function') window.__cgoAcceptRefs('hooks-off'); } catch (_) {}
 }
@@ -3600,7 +3620,7 @@ $('universalInput').addEventListener('input', updateProfileBadge);
 $('universalInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); probeOne(); }
 });
-$('vaultCopyAllBtn').onclick = copyAllVaultData
+$('vaultCopyAllBtn').onclick = copyAllVaultData;
 try { $('vaultExportOldBtn').onclick = () => exportOldestVault(100); } catch (_) {}
 $('vaultPrevBtn').onclick = () => renderVaultPage(currentVaultPage - 1);
 $('vaultNextBtn').onclick = () => renderVaultPage(currentVaultPage + 1);
@@ -4027,6 +4047,8 @@ function showToast(msg, dur, warn){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.toast.classList.remove('cgo-show'), dur || 2600);
 }
+window.__cgoShowToast = showToast;
+window.showToast = showToast;
 
 /* ============================================================
    TERMINAL LOGGING
