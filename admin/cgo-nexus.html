@@ -1157,11 +1157,59 @@ function blockHTML(b) {
     return '';
 }
 function safeMarkdown(text) { if (!text) return ''; return tokenize(text).map(blockHTML).join(''); }
+/**
+ * The Omni-Bridge Sanitizer (Lexer Level)
+ */
+function sanitize3DCode(src) {
+  const forbidden = new Set(['scene', 'camera', 'renderer', 'import']);
+  const out = [];
+  const len = src.length;
+  let depth = 0, inStr = null, isEsc = false, tplDepth = 0, lineC = false, blockC = false;
 
+  for (let i = 0; i < len; ) {
+    const ch = src[i], nxt = src[i + 1] || '';
+    if (isEsc) { isEsc = false; out.push(ch); i++; continue; }
+    if (inStr && ch === '\\') { isEsc = true; out.push(ch); i++; continue; }
+    if (lineC) { out.push(ch); if (ch === '\n') lineC = false; i++; continue; }
+    if (blockC) { if (ch === '*' && nxt === '/') { out.push(ch, nxt); blockC = false; i += 2; } else { out.push(ch); i++; } continue; }
+    if (!inStr && ch === '/' && nxt === '/') { lineC = true; out.push(ch, nxt); i += 2; continue; }
+    if (!inStr && ch === '/' && nxt === '*') { blockC = true; out.push(ch, nxt); i += 2; continue; }
+    if (!inStr && (ch === '\'' || ch === '"' || ch === '`')) { inStr = ch; out.push(ch); i++; continue; }
+    if (inStr) {
+      out.push(ch);
+      if (inStr === '`' && ch === '$' && nxt === '{') { out.push(nxt); tplDepth++; i += 2; continue; }
+      if (inStr === '`' && ch === '}' && tplDepth > 0) { tplDepth--; i++; continue; }
+      if ((inStr === '\'' || inStr === '"') && ch === inStr) inStr = null;
+      else if (inStr === '`' && ch === '`' && tplDepth === 0) inStr = null;
+      i++; continue;
+    }
+    if (ch === '{') depth++;
+    if (ch === '}') depth--;
+    if (depth === 0 && !inStr) {
+      let matched = false;
+      if (src.startsWith('import', i)) {
+        const endLine = src.indexOf('\n', i);
+        i = endLine === -1 ? len : endLine + 1; matched = true;
+      } else if (src.startsWith('const', i) || src.startsWith('let', i) || src.startsWith('var', i)) {
+        for (const word of forbidden) {
+          if (word === 'import') continue;
+          const regex = new RegExp(`^(const|let|var)\\s+${word}\\b`, 'i');
+          if (regex.test(src.slice(i, i + 20))) {
+            const endSemi = src.indexOf(';', i);
+            i = endSemi === -1 ? len : endSemi + 1; matched = true; break;
+          }
+        }
+      }
+      if (matched) continue;
+    }
+    out.push(ch); i++;
+  }
+  return out.join('');
+                                                                                                                                                                                                               }
 const s3dReg = {}; let s3dN = 0, s3dHeals = 0;
 function scene3dHtml(code) { return '<div class="ui-scene3d" data-code="' + escapeHtml(String(code).trim()) + '"></div>'; }
 function sceneDoc(code, id) {
-    const safe = String(code).replace(/<\/script/gi, '<\\/script');
+    const safe = sanitize3DCode(String(code)).replace(/<\/script/gi, '<\\/script');
     return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m,x){parent.postMessage({cgo3d:ID,type:t,msg:m,x:x},'*')}window.onerror=function(m,s,l){send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
 if(typeof THREE==='undefined'){send('error','Three.js gagal dimuat (cek koneksi)');return}
 var renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});document.body.appendChild(renderer.domElement);
@@ -1185,7 +1233,17 @@ function loop(){requestAnimationFrame(loop);if(paused||off)return;try{var dt=Mat
 camera.position.set(target.x+dist*Math.cos(el)*Math.sin(az),target.y+dist*Math.sin(el),target.z+dist*Math.cos(el)*Math.cos(az));camera.lookAt(target);renderer.render(scene,camera)}catch(e){paused=true;send('error',String(e&&e.message||e));return}
 if(!ok){ok=true;send('ok','LIVE')}}
 var rec,chunks;
+
 addEventListener('message',function(e){var d=e.data;if(!d||d.cgo3d!==ID)return;
+if(d.cmd === 'agent_state'){
+  var tNode = scene.getObjectByName(d.agent);
+  if(tNode && tNode.material) {
+    if(d.state === 'thinking') { tNode.material.color.setHex(0x10b981); tNode.userData.speed = 0.05; }
+    else if(d.state === 'alert') { tNode.material.color.setHex(0xef4444); tNode.userData.speed = 0.1; }
+    else { tNode.material.color.setHex(0x38bdf8); tNode.userData.speed = 0.01; }
+  }
+}
+if(d.cmd === 'node_clicked') { parent.postMessage({ type: 'node_clicked', agent: d.agent }, '*'); }
 if(d.cmd==='pause'){paused=!paused;if(!paused)clock.getDelta();send('state',paused?'PAUSED':'LIVE')}
 if(d.cmd==='vis')off=!d.v;if(d.cmd==='shot'){try{renderer.render(scene,camera);var sw=d.v||320,sc=document.createElement('canvas'),sx;sc.width=sw;sc.height=Math.max(1,Math.round(sw*cv.height/cv.width));sx=sc.getContext('2d');sx.fillStyle='#05070d';sx.fillRect(0,0,sc.width,sc.height);sx.drawImage(cv,0,0,sc.width,sc.height);send('shot',sc.toDataURL('image/jpeg',.85),d.tag||'')}catch(x){send('state','SHOT gagal')}}if(d.cmd==='snap'){try{renderer.render(scene,camera);var sa=document.createElement('a');sa.href=cv.toDataURL('image/png');sa.download='scene3d.png';sa.click()}catch(x){send('state','SNAP gagal')}}
 if(d.cmd==='rec'){try{if(rec&&rec.state==='recording'){rec.stop();return}chunks=[];rec=new MediaRecorder(cv.captureStream(30),{mimeType:'video/webm'});
@@ -1197,6 +1255,12 @@ function healScene3d(msg, code) {
     if (isGenerating) return;
     chatInput.value = 'Scene3D gagal dirender: ' + msg + '\n\nPerbaiki dan kirim ulang HANYA satu blok ```scene3d lengkap. Global tersedia: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)). Tanpa import, tanpa jaringan.\n\nKode bermasalah:\n' + String(code).slice(0, 3500);
     runLiveScan(chatInput.value); sendMessage(true);
+}
+    function set3DAgentState(agentId, state) {
+    const frames = document.querySelectorAll('.ui-scene3d iframe');
+    frames.forEach(fr => {
+        try { fr.contentWindow.postMessage({ cmd: 'agent_state', agent: agentId, state: state }, '*'); } catch(e) {}
+    });
 }
 function buildScene3d(el, opt) {
     const o = opt && typeof opt === 'object' ? opt : {};
@@ -2049,6 +2113,7 @@ async function sendMessage(forceNormal) {
 
     isGenerating = true;
     setStatus('busy');
+    set3DAgentState('cgo', 'thinking');
     lastUserRaw = userText;
     chatInput.value = ''; try { localStorage.removeItem('spc_draft'); } catch (e) {}
     chatInput.style.height = 'auto';
@@ -2201,6 +2266,7 @@ async function sendMessage(forceNormal) {
         setActivity('');
         scrollToBottom();
         if (chatInput.value.trim()) runLiveScan(chatInput.value);
+        set3DAgentState('cgo', 'idle');
     }
 }
 
@@ -2441,6 +2507,7 @@ function classifyAgentHttpError(status) {
    false jika fatal (hentikan seluruh diskusi — misal API key salah). */
 async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFinal) {
     const { msgDiv, bubbleDiv } = addAgentMessageToUI(agent, true);
+    set3DAgentState(agent.id, 'thinking');
     swarmSet(agent.id, 'on');
     const systemPrompt = isFinal ? buildSynthSystemPrompt() : buildAgentSystemPrompt(agent);
     const userContent = buildAgentTurnContent(compiledPrompt, agent, roundNum, totalRounds, isFinal);
@@ -2478,6 +2545,7 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
         chatHistory.push({ role: 'agent', agentId: agent.id, agentName: agent.name, agentColor: agent.color, agentRole: isFinal ? (settings.lang === 'en' ? SYNTH_AGENT.role_en : SYNTH_AGENT.role_id) : (settings.lang === 'en' ? agent.role_en : agent.role_id), content: fullText, isSynth: !!isFinal });
         logEvent('OK', `${agent.name}: ${fullText.length} chars.`);
         swarmSet(agent.id, 'done');
+        set3DAgentState(agent.id, 'idle');
         return true;
     } catch (error) {
         swarmSet(agent.id, error.name === 'AbortError' ? 'done' : 'err');
@@ -2788,6 +2856,13 @@ function exportBackup() {
     window.addEventListener('online', () => { showToast('Online kembali'); logEvent('OK', 'Jaringan pulih.'); });
     if (finePointer) window.addEventListener('pointermove', e => { const r = document.documentElement.style; r.setProperty('--mx', e.clientX + 'px'); r.setProperty('--my', e.clientY + 'px'); }, { passive: true });
 })();
+    window.addEventListener('message', ev => {
+    if (ev.data && ev.data.type === 'node_clicked') {
+        showToast('Membuka logika ' + ev.data.agent.toUpperCase());
+        const agentMsg = document.querySelector(`.thought.agent[data-agent="${ev.data.agent}"]`);
+        if (agentMsg) agentMsg.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+});
 </script>
 </body>
 </html>
