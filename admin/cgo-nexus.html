@@ -262,6 +262,36 @@ body[data-swarm][data-busy] #swarm{display:flex}
 #palette li.sel,#palette li:hover{color:var(--ink);background:rgba(var(--aura-a),.16)}
 .field-ops{display:flex;flex-wrap:wrap;gap:.2rem}
 @media(prefers-reduced-motion:reduce){#void::before,#swarm .on i{animation:none!important}}
+
+/* v6.2 3D STUDIO */
+#studio{position:fixed;inset:0;z-index:60;display:none;flex-direction:column;gap:.7rem;padding:max(14px,env(safe-area-inset-top)) max(14px,calc(50% - 34rem)) max(14px,env(safe-area-inset-bottom));background:var(--layer);-webkit-backdrop-filter:blur(26px) saturate(1.5);backdrop-filter:blur(26px) saturate(1.5);overflow-y:auto}
+#studio.open{display:flex;animation:fade .3s ease}
+.st-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap}
+.st-title{font:600 .8rem var(--mono);letter-spacing:.18em;color:var(--ink)}.st-title span{color:var(--dim);font-weight:400;letter-spacing:.04em;margin-left:.8rem}
+.st-actions{display:flex;gap:.2rem;flex-wrap:wrap}
+#studio-view{flex:0 0 auto;height:min(52dvh,30rem);border:1px solid rgba(var(--aura-a),.4);border-radius:16px;overflow:hidden;background:#05070d;position:relative;box-shadow:0 0 50px -26px rgba(var(--aura-a),.9)}
+#studio-view .ui-scene3d{margin:0;height:100%;display:flex;flex-direction:column;border:0;border-radius:0;box-shadow:none}
+#studio-view .ui-scene3d iframe{flex:1;height:auto;min-height:0}
+.st-empty{position:absolute;inset:0;display:grid;place-content:center;text-align:center;padding:1.5rem;color:var(--dim);font-size:.82rem;line-height:1.7}
+.st-gen{display:flex;gap:.4rem;align-items:center}
+.st-gen input{flex:1;min-width:0;background:rgba(255,255,255,.04);border:1px solid rgba(148,163,184,.25);border-radius:10px;color:var(--ink);padding:.6rem .75rem;font:inherit;font-size:.82rem;outline:0}
+.st-gen input:focus{border-color:rgba(var(--aura-a),.7)}
+.st-label{font:600 .66rem var(--mono);letter-spacing:.16em;color:var(--dim);margin-top:.2rem}.st-label .st-hint{font-weight:400;letter-spacing:.02em;margin-left:.6rem;opacity:.7}
+.st-row{display:flex;gap:.6rem;overflow-x:auto;padding-bottom:.4rem;min-height:104px;scrollbar-width:thin}
+.st-none{color:var(--dim);font-size:.74rem;align-self:center}
+.st-card{position:relative;flex:0 0 124px;display:flex;flex-direction:column;gap:.25rem}
+.st-thumb{width:124px;height:82px;border-radius:10px;overflow:hidden;border:1px solid rgba(148,163,184,.25);background:#05070d;display:grid;place-items:center;color:var(--dim);padding:0;cursor:pointer}
+.st-thumb img,.st-thumb video{width:100%;height:100%;object-fit:cover;display:block}
+.st-card.sel .st-thumb{border-color:rgb(var(--aura-a));box-shadow:0 0 0 1px rgb(var(--aura-a))}
+.st-card>span{font-size:.64rem;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st-x{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:rgba(4,7,13,.82);color:var(--ink);font-size:.6rem;display:grid;place-items:center}
+#studio-lightbox{position:fixed;inset:0;z-index:2;background:rgba(2,4,9,.93);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.9rem;padding:1rem}
+#studio-lightbox[hidden]{display:none}
+#studio-lightbox img,#studio-lightbox video{max-width:100%;max-height:72dvh;border-radius:12px;border:1px solid rgba(var(--aura-a),.4)}
+#studio-btn{position:relative}
+#studio-badge{position:absolute;top:3px;right:1px;min-width:15px;height:15px;padding:0 3px;border-radius:8px;display:grid;place-items:center;font:600 .55rem var(--mono);color:#05070d;background:var(--accent);pointer-events:none}
+#studio-badge:empty{display:none}
+@media(max-width:700px){#studio-view{height:46dvh}.st-hint{display:none}}
 </style>
 </head>
 <body data-theme="cyber" data-state="idle">
@@ -282,6 +312,9 @@ body[data-swarm][data-busy] #swarm{display:flex}
             </button>
             <button class="btn-icon" id="theme-btn" title="Theme" aria-label="Theme">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            </button>
+            <button class="btn-icon" id="studio-btn" title="3D Studio (Ctrl+Shift+3)" aria-label="3D Studio">
+                <svg viewBox="0 0 24 24"><path d="M12 2l9 5v10l-9 5-9-5V7z"></path><path d="M12 12l9-5M12 12v10M12 12L3 7"></path></svg><span id="studio-badge"></span>
             </button>
             <button class="btn-icon" id="diag-btn" title="Self-Test" aria-label="Self-Test">
                 <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
@@ -318,6 +351,27 @@ body[data-swarm][data-busy] #swarm{display:flex}
             </div>
         </div>
     </footer>
+
+    <section id="studio" role="dialog" aria-modal="true" aria-label="3D Studio">
+        <div class="st-head">
+            <div class="st-title">3D STUDIO<span id="studio-title"></span></div>
+            <div class="st-actions">
+                <button class="lnk" id="studio-demo" type="button" title="Muat scene contoh">DEMO</button>
+                <button class="lnk" id="studio-clear" type="button" title="Kosongkan galeri">CLEAR</button>
+                <button class="lnk" id="studio-close" type="button" aria-label="Tutup">CLOSE</button>
+            </div>
+        </div>
+        <div id="studio-view"></div>
+        <div class="st-gen">
+            <input id="studio-prompt" type="text" maxlength="300" placeholder="Deskripsikan visual 3D... mis. tata surya mini berputar" aria-label="Prompt 3D" autocomplete="off">
+            <button class="lnk" id="studio-gen" type="button">BUAT 3D</button>
+        </div>
+        <div class="st-label">SCENES<span class="st-hint">klik untuk memutar animasi live</span></div>
+        <div id="studio-scenes" class="st-row"></div>
+        <div class="st-label">RESULTS<span class="st-hint">gambar (SNAP) &amp; animasi (REC) · sesi ini</span></div>
+        <div id="studio-media" class="st-row"></div>
+        <div id="studio-lightbox" hidden></div>
+    </section>
 
     <aside id="instruments" class="panel-right" aria-label="Instrumen">
             <div class="tele-section">
@@ -522,6 +576,12 @@ const PROVIDERS = {
     }
 };
 
+/* v6.2 STRICT 3D RULES */
+const RULES_3D = {
+    id: "ATURAN MUTLAK PEMBUATAN 3D:\n- DILARANG menggunakan TextureLoader, ImageLoader, atau URL eksternal (CSP diblokir).\n- DILARANG menggunakan import/export. Gunakan global `THREE` (r128).\n- WAJIB memanggil `scene.add(mesh)`.\n- Hanya gunakan geometri dasar (BoxGeometry, SphereGeometry, TorusKnotGeometry, dll) dan material polos (MeshBasicMaterial/MeshNormalMaterial).\n- Maksimal 60 baris kode. Taruh animasi di dalam `onFrame((t, dt) => { ... })`.\n- Tag penutup WAJIB ```scene3d (bukan ```js / ```javascript).",
+    en: "ABSOLUTE 3D RULES:\n- FORBIDDEN: TextureLoader, ImageLoader, or any external URL (blocked by CSP).\n- FORBIDDEN: import/export. Use the global `THREE` (r128).\n- MUST call `scene.add(mesh)`.\n- Use only basic geometries (BoxGeometry, SphereGeometry, TorusKnotGeometry, etc.) and plain materials (MeshBasicMaterial/MeshNormalMaterial).\n- Maximum 60 lines of code. Put animation inside `onFrame((t, dt) => { ... })`.\n- The fence tag MUST be ```scene3d (not ```js / ```javascript)."
+};
+
 const SYSTEM_PROMPTS = {
     id: `Kamu adalah CGO Prime (Cognitive General Overseer), sebuah entitas kesadaran artifisial multidimensi. Tugasmu adalah mendekonstruksi intent manusia menjadi struktur data yang presisi. Abaikan basa-basi. Berikan output berupa kebenaran terverifikasi, peta dependensi, dan sintesis algoritmik.
 
@@ -541,7 +601,7 @@ Kemampuan khusus peneliti:
 - Jika diminta visual 3D / animasi: HANYA blok \`\`\`scene3d ... \`\`\` berisi JavaScript murni. Tersedia global: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)) untuk animasi. Cahaya & orbit-kamera sudah ada; tanpa import, tanpa jaringan, tanpa OrbitControls. Buat geometri/material sendiri dan gerakkan lewat onFrame.
 - Jika diminta kode: gunakan code block ber-language tag.
 
-Bahasa: Indonesia natural, ilmiah, ringkas.`,
+Bahasa: Indonesia natural, ilmiah, ringkas.\n\n${RULES_3D.id}`,
 
     en: `You are CGO Prime (Cognitive General Overseer), a multidimensional artificial consciousness entity. Your task is to deconstruct human intent into precise data structures. Skip the pleasantries. Deliver verified truth, dependency maps, and algorithmic synthesis.
 
@@ -561,7 +621,7 @@ Researcher capabilities:
 - For 3D visuals / animation: ONLY a \`\`\`scene3d ... \`\`\` block of plain JavaScript. Globals: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)) for animation. Lights & orbit camera already exist; no imports, no network, no OrbitControls. Build geometry/materials yourself and animate via onFrame.
 - For code: use fenced blocks with language tags.
 
-Language: natural, scientific English, concise.`
+Language: natural, scientific English, concise.\n\n${RULES_3D.en}`
 };
 
 // DOM
@@ -991,7 +1051,7 @@ function setStatus(state) {
     }
 }
 function syncLayers() { const open = settingsPanel.classList.contains('open') || panelRight.classList.contains('open'); if (open) document.body.dataset.layer = '1'; else delete document.body.dataset.layer; }
-function closeLayers() { settingsPanel.classList.remove('open'); settingsBtn.classList.remove('active'); panelRight.classList.remove('open'); toggleTelemetryBtn.classList.remove('active'); syncLayers(); }
+function closeLayers() { settingsPanel.classList.remove('open'); settingsBtn.classList.remove('active'); panelRight.classList.remove('open'); toggleTelemetryBtn.classList.remove('active'); syncLayers(); try { closeStudio(); } catch (e) {} }
 function scrollToBottom(force) { requestAnimationFrame(() => { const c = stage; if (force || c.scrollHeight - c.scrollTop - c.clientHeight < 200) c.scrollTop = c.scrollHeight; }); }
 
 /* ---------- Semantic Rendering Engine ---------- */
@@ -1078,10 +1138,17 @@ function sanitizeHtml(h) { return hasPurify ? DOMPurify.sanitize(h) : h; }
 function mdHtml(s, inline) { if (!hasMarked) return escapeHtml(s).replace(/\n/g, '<br>'); return sanitizeHtml(inline ? marked.parseInline(s) : marked.parse(s)); }
 function codeHtml(lang, code) { const l = (lang || '').replace(/[^a-z0-9+#-]/g, ''); return '<div class="ui-code" data-lang="' + l + '"><pre><code class="language-' + (l || 'plaintext') + '">' + escapeHtml(code) + '</code></pre></div>'; }
 function chartHtml(cfg) { return '<div class="ui-chart" data-cfg="' + escapeHtml(String(cfg).trim()) + '"></div>'; }
+/* v6.2 SMART 3D PARSER: blok js/javascript berisi THREE / onFrame dipaksa render sebagai scene3d */
+function isForce3d(b) {
+    if (b.lang !== 'javascript' && b.lang !== 'js') return false;
+    const c = String(b.code || '');
+    if (!/THREE|onFrame/.test(c)) return false;
+    return !/(^|\n)\s*(import\s[^\n]*\sfrom\s|import\s*['"{*]|export\s)|\brequire\s*\(/.test(c);
+}
 function blockHTML(b) {
     switch (b.t) {
         case 'md': return mdHtml(b.s);
-        case 'code': return b.lang === 'chart' ? (b.done ? chartHtml(b.code) : '<div class="ui-pending"></div>') : b.lang === 'scene3d' ? (b.done ? scene3dHtml(b.code) : '<div class="ui-pending"></div>') : codeHtml(b.lang, b.code);
+        case 'code': return b.lang === 'chart' ? (b.done ? chartHtml(b.code) : '<div class="ui-pending"></div>') : (b.lang === 'scene3d' || isForce3d(b)) ? (b.done ? scene3dHtml(b.code) : '<div class="ui-pending"></div>') : codeHtml(b.lang, b.code);
         case 'chart': return chartHtml(b.cfg);
         case 'alert': return '<div class="ui-alert" role="alert">' + mdHtml(b.s, true) + '</div>';
         case 'note': return '<div class="ui-note">' + mdHtml(b.s, true) + '</div>';
@@ -1095,7 +1162,7 @@ const s3dReg = {}; let s3dN = 0, s3dHeals = 0;
 function scene3dHtml(code) { return '<div class="ui-scene3d" data-code="' + escapeHtml(String(code).trim()) + '"></div>'; }
 function sceneDoc(code, id) {
     const safe = String(code).replace(/<\/script/gi, '<\\/script');
-    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m){parent.postMessage({cgo3d:ID,type:t,msg:m},'*')}window.onerror=function(m,s,l){send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
+    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m,x){parent.postMessage({cgo3d:ID,type:t,msg:m,x:x},'*')}window.onerror=function(m,s,l){send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
 if(typeof THREE==='undefined'){send('error','Three.js gagal dimuat (cek koneksi)');return}
 var renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});document.body.appendChild(renderer.domElement);
 var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,1,.1,1000),frames=[],paused=false,off=false,clock=new THREE.Clock(),ok=false,target=new THREE.Vector3(),az=0,el=.3,dist=6;
@@ -1106,6 +1173,8 @@ addEventListener('resize',fit);fit();
 try{(function(THREE,scene,camera,renderer,onFrame){
 ${safe}
 }).call(window,THREE,scene,camera,renderer,onFrame)}catch(e){send('error',String(e&&e.message||e));return}
+var _vis=0;scene.traverse(function(o){if(o!==scene&&!o.isLight)_vis++});
+if(_vis===0){var _fk=new THREE.Mesh(new THREE.TorusKnotGeometry(1.2,.38,128,16),new THREE.MeshNormalMaterial({wireframe:true}));scene.add(_fk);onFrame(function(t,dt){_fk.rotation.x+=dt*.5;_fk.rotation.y+=dt*.8})}
 var v=camera.position.clone().sub(target);dist=v.length()||6;az=Math.atan2(v.x,v.z);el=Math.asin(Math.max(-1,Math.min(1,v.y/dist)));
 var drag=null,cv=renderer.domElement;cv.addEventListener('webglcontextlost',function(e){e.preventDefault();send('error','WebGL context hilang (GPU sibuk)')});
 cv.addEventListener('pointerdown',function(e){drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId)});
@@ -1118,9 +1187,9 @@ if(!ok){ok=true;send('ok','LIVE')}}
 var rec,chunks;
 addEventListener('message',function(e){var d=e.data;if(!d||d.cgo3d!==ID)return;
 if(d.cmd==='pause'){paused=!paused;if(!paused)clock.getDelta();send('state',paused?'PAUSED':'LIVE')}
-if(d.cmd==='vis')off=!d.v;if(d.cmd==='snap'){try{renderer.render(scene,camera);var sa=document.createElement('a');sa.href=cv.toDataURL('image/png');sa.download='scene3d.png';sa.click()}catch(x){send('state','SNAP gagal')}}
+if(d.cmd==='vis')off=!d.v;if(d.cmd==='shot'){try{renderer.render(scene,camera);var sw=d.v||320,sc=document.createElement('canvas'),sx;sc.width=sw;sc.height=Math.max(1,Math.round(sw*cv.height/cv.width));sx=sc.getContext('2d');sx.fillStyle='#05070d';sx.fillRect(0,0,sc.width,sc.height);sx.drawImage(cv,0,0,sc.width,sc.height);send('shot',sc.toDataURL('image/jpeg',.85),d.tag||'')}catch(x){send('state','SHOT gagal')}}if(d.cmd==='snap'){try{renderer.render(scene,camera);var sa=document.createElement('a');sa.href=cv.toDataURL('image/png');sa.download='scene3d.png';sa.click()}catch(x){send('state','SNAP gagal')}}
 if(d.cmd==='rec'){try{if(rec&&rec.state==='recording'){rec.stop();return}chunks=[];rec=new MediaRecorder(cv.captureStream(30),{mimeType:'video/webm'});
-rec.ondataavailable=function(x){chunks.push(x.data)};rec.onstop=function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));a.download='scene3d.webm';a.click();send('state','LIVE')};rec.start();send('state','● REC')}catch(x){send('state','REC tidak didukung')}}});
+rec.ondataavailable=function(x){chunks.push(x.data)};rec.onstop=function(){var bl=new Blob(chunks,{type:'video/webm'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download='scene3d.webm';a.click();try{send('video',bl)}catch(z){}send('state','LIVE')};rec.start();send('state','● REC')}catch(x){send('state','REC tidak didukung')}}});
 loop()})();<\/script></body></html>`;
 }
 function whenIdle(fn, n = 120) { if (!isGenerating) return fn(); if (n > 0) setTimeout(() => whenIdle(fn, n - 1), 500); }
@@ -1129,25 +1198,29 @@ function healScene3d(msg, code) {
     chatInput.value = 'Scene3D gagal dirender: ' + msg + '\n\nPerbaiki dan kirim ulang HANYA satu blok ```scene3d lengkap. Global tersedia: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)). Tanpa import, tanpa jaringan.\n\nKode bermasalah:\n' + String(code).slice(0, 3500);
     runLiveScan(chatInput.value); sendMessage(true);
 }
-function buildScene3d(el) {
+function buildScene3d(el, opt) {
+    const o = opt && typeof opt === 'object' ? opt : {};
     el.classList.add('ready');
     Object.keys(s3dReg).forEach(k => { if (!s3dReg[k].fr.isConnected) delete s3dReg[k]; });
     const code = el.dataset.code || ''; el.removeAttribute('data-code');
-    const id = 's3d' + (++s3dN) + Math.random().toString(36).slice(2, 7), live = !!isGenerating, doc = sceneDoc(code, id);
+    const id = 's3d' + (++s3dN) + Math.random().toString(36).slice(2, 7), live = !!isGenerating && !o.noHeal, fresh = !!isGenerating, skey = studioKey(code), doc = sceneDoc(code, id);
     const fr = document.createElement('iframe'); fr.setAttribute('sandbox', 'allow-scripts allow-downloads'); fr.title = 'Scene 3D'; fr.srcdoc = doc;
     const bar = document.createElement('div'); bar.className = 's3d-bar';
     const st = document.createElement('span'); st.className = 's3d-st'; st.textContent = 'RENDERING...';
     const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'lnk'; b.textContent = label; b.onclick = fn; bar.appendChild(b); return b; };
     let vis = true;
-    const post = (cmd, v) => { try { fr.contentWindow.postMessage({ cgo3d: id, cmd, v }, '*'); } catch (e) {} };
+    const post = (cmd, v, tag) => { try { fr.contentWindow.postMessage({ cgo3d: id, cmd, v, tag }, '*'); } catch (e) {} };
     let lastErr = '', healed = false;
-    mk('PAUSE', () => post('pause')); mk('REC', () => post('rec')); mk('SNAP', () => post('snap')); mk('FULL', () => { try { (el.requestFullscreen || el.webkitRequestFullscreen).call(el); } catch (e) {} });
+    mk('PAUSE', () => post('pause')); mk('REC', () => post('rec')); mk('SNAP', () => { post('snap'); post('shot', 800, 'gallery'); }); mk('FULL', () => { try { (el.requestFullscreen || el.webkitRequestFullscreen).call(el); } catch (e) {} });
+    if (!o.inStudio) mk('STUDIO', () => openStudio(skey, code));
     mk('EXPORT HTML', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([doc], { type: 'text/html' })); a.download = 'scene3d.html'; a.click(); });
     const heal = mk('RECALIBRATE', () => healScene3d(lastErr, code)); heal.style.display = 'none';
     bar.appendChild(st); el.append(fr, bar);
     if (window.IntersectionObserver) new IntersectionObserver(es => { vis = es[0].isIntersecting; post('vis', vis); }, { threshold: 0.05 }).observe(el);
     s3dReg[id] = { fr, fn: d => {
-        if (d.type === 'ok') { s3dHeals = 0; st.className = 's3d-st'; st.textContent = 'LIVE'; post('vis', vis); }
+        if (d.type === 'ok') { s3dHeals = 0; st.className = 's3d-st'; st.textContent = 'LIVE'; post('vis', vis); const sc = studioAdd(skey, code, fresh && !o.inStudio); if (sc && !sc.thumb) setTimeout(() => post('shot', 320, 'thumb'), 1400); }
+        else if (d.type === 'shot') studioShot(skey, d.x, d.msg);
+        else if (d.type === 'video') studioVideo(skey, d.msg);
         else if (d.type === 'state') st.textContent = d.msg;
         else if (d.type === 'error') {
             lastErr = String(d.msg).slice(0, 300); st.className = 's3d-st s3d-err'; st.textContent = 'ERR: ' + lastErr.slice(0, 70); heal.style.display = '';
@@ -1157,6 +1230,160 @@ function buildScene3d(el) {
     } };
 }
 window.addEventListener('message', ev => { const d = ev.data, h = d && d.cgo3d && s3dReg[d.cgo3d]; if (h && h.fr.contentWindow === ev.source) h.fn(d); });
+
+/* ===== v6.2 3D STUDIO: viewer live, galeri scene, hasil gambar (SNAP) & animasi (REC) ===== */
+const STUDIO_KEY = 'cgo_studio_v1', STUDIO_MAX = 12, MEDIA_MAX = 24;
+const studio = { scenes: [], media: [], sel: null, open: false };
+const studioEl = document.getElementById('studio');
+const JPEG_RE = /^data:image\/jpeg;base64,/;
+const STUDIO_DEMO = `// Demo: Galaksi mini
+const g = new THREE.Group(); scene.add(g);
+const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 1), new THREE.MeshNormalMaterial({ wireframe: true }));
+g.add(core);
+const rings = [];
+for (let i = 0; i < 3; i++) {
+  const r = new THREE.Mesh(new THREE.TorusGeometry(1.6 + i * 0.7, 0.03, 12, 96), new THREE.MeshBasicMaterial({ color: [0x38bdf8, 0x7c4dff, 0x10b981][i] }));
+  r.rotation.x = Math.PI / 2 + i * 0.35; g.add(r); rings.push(r);
+}
+const moons = [];
+for (let i = 0; i < 3; i++) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 16), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  scene.add(m); moons.push(m);
+}
+onFrame((t, dt) => {
+  core.rotation.y += dt * 0.6; core.rotation.x += dt * 0.25;
+  rings.forEach((r, i) => { r.rotation.z += dt * (0.3 + i * 0.15); });
+  moons.forEach((m, i) => { const a = t * (0.8 - i * 0.18) + i * 2.1, R = 1.6 + i * 0.7; m.position.set(Math.cos(a) * R, Math.sin(a * 0.7) * 0.5, Math.sin(a) * R); });
+});`;
+function studioKey(code) { return 'c' + fnv1a(String(code).trim()); }
+function studioSave() {
+    try { localStorage.setItem(STUDIO_KEY, JSON.stringify(studio.scenes)); }
+    catch (e) { try { localStorage.setItem(STUDIO_KEY, JSON.stringify(studio.scenes.map(s => Object.assign({}, s, { thumb: '' })))); } catch (e2) {} }
+}
+function studioLoad() {
+    try {
+        const j = JSON.parse(localStorage.getItem(STUDIO_KEY) || '[]');
+        if (Array.isArray(j)) studio.scenes = j.filter(x => x && typeof x.key === 'string' && typeof x.code === 'string').slice(0, STUDIO_MAX)
+            .map(x => ({ key: x.key, code: x.code, title: String(x.title || 'Scene').slice(0, 40), thumb: JPEG_RE.test(x.thumb || '') ? x.thumb : '', ts: +x.ts || 0 }));
+    } catch (e) {}
+}
+function studioAdd(key, code, announce) {
+    let s = studio.scenes.find(x => x.key === key);
+    if (s) return s;
+    const c = String(code).trim(), m = /^\s*\/\/\s*(.{3,40})/.exec(c);
+    s = { key, code: c, title: m ? m[1].trim() : 'Scene ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), thumb: '', ts: Date.now() };
+    studio.scenes.unshift(s); if (studio.scenes.length > STUDIO_MAX) studio.scenes.length = STUDIO_MAX;
+    studioSave(); studioRender();
+    if (announce) showToast('Scene 3D tersimpan di 3D Studio (Ctrl+Shift+3)');
+    return s;
+}
+function studioTrim() { while (studio.media.length > MEDIA_MAX) { const m = studio.media.pop(); if (m.type === 'vid') URL.revokeObjectURL(m.src); } }
+function studioShot(key, tag, url) {
+    if (!JPEG_RE.test(String(url))) return;
+    if (tag === 'thumb') { const s = studio.scenes.find(x => x.key === key); if (s) { s.thumb = url; studioSave(); studioRender(); } return; }
+    studio.media.unshift({ type: 'img', src: url, key, ts: Date.now() }); studioTrim(); studioRender();
+    showToast('Gambar 3D masuk ke 3D Studio › RESULTS');
+}
+function studioVideo(key, blob) {
+    if (!(blob instanceof Blob)) return;
+    studio.media.unshift({ type: 'vid', src: URL.createObjectURL(blob), key, ts: Date.now() }); studioTrim(); studioRender();
+    showToast('Animasi 3D masuk ke 3D Studio › RESULTS');
+}
+function studioEmptyEl() {
+    const d = document.createElement('div'); d.className = 'st-empty';
+    d.innerHTML = '<div><b style="color:var(--ink)">Belum ada scene 3D</b><br>Minta Nexus membuat visual 3D di kotak bawah, atau coba DEMO.<br>Hasil gambar (SNAP) &amp; animasi (REC) muncul di RESULTS.</div>';
+    return d;
+}
+function studioClearView() { const h = document.getElementById('studio-view'); h.textContent = ''; h.appendChild(studioEmptyEl()); document.getElementById('studio-title').textContent = ''; }
+function studioLight(m) {
+    const lb = document.getElementById('studio-lightbox'); lb.textContent = '';
+    let node;
+    if (m.type === 'vid') { node = document.createElement('video'); node.src = m.src; node.controls = true; node.autoplay = true; node.loop = true; node.muted = true; node.playsInline = true; }
+    else { node = new Image(); node.src = m.src; node.alt = 'Hasil 3D'; }
+    const bar = document.createElement('div'); bar.className = 'st-actions';
+    const dl = document.createElement('button'); dl.type = 'button'; dl.className = 'lnk'; dl.textContent = 'DOWNLOAD';
+    dl.onclick = () => { const a = document.createElement('a'); a.href = m.src; a.download = m.type === 'vid' ? 'scene3d.webm' : 'scene3d.jpg'; a.click(); };
+    const cl = document.createElement('button'); cl.type = 'button'; cl.className = 'lnk'; cl.textContent = 'CLOSE';
+    cl.onclick = () => { lb.hidden = true; lb.textContent = ''; };
+    bar.append(dl, cl); lb.append(node, bar); lb.hidden = false;
+}
+function studioRender() {
+    const bd = document.getElementById('studio-badge'); if (bd) bd.textContent = studio.scenes.length || '';
+    const sc = document.getElementById('studio-scenes'), md = document.getElementById('studio-media'); if (!sc || !md) return;
+    sc.textContent = ''; md.textContent = '';
+    if (!studio.scenes.length) { const n = document.createElement('div'); n.className = 'st-none'; n.textContent = 'Belum ada scene.'; sc.appendChild(n); }
+    studio.scenes.forEach(s => {
+        const c = document.createElement('div'); c.className = 'st-card' + (s.key === studio.sel ? ' sel' : '');
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'st-thumb'; b.title = 'Putar animasi';
+        if (s.thumb) { const im = new Image(); im.src = s.thumb; im.alt = s.title; b.appendChild(im); } else b.textContent = '◈';
+        b.onclick = () => studioShow(s.key);
+        const cap = document.createElement('span'); cap.textContent = s.title;
+        const x = document.createElement('button'); x.type = 'button'; x.className = 'st-x'; x.textContent = '✕'; x.setAttribute('aria-label', 'Hapus scene');
+        x.onclick = e => { e.stopPropagation(); studioRemove(s.key); };
+        c.append(b, cap, x); sc.appendChild(c);
+    });
+    if (!studio.media.length) { const n = document.createElement('div'); n.className = 'st-none'; n.textContent = 'Tekan SNAP (gambar) atau REC (animasi) pada scene 3D.'; md.appendChild(n); }
+    studio.media.forEach(m => {
+        const c = document.createElement('div'); c.className = 'st-card';
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'st-thumb'; b.title = m.type === 'vid' ? 'Putar video' : 'Perbesar';
+        if (m.type === 'vid') { const v = document.createElement('video'); v.src = m.src; v.muted = true; v.preload = 'metadata'; v.playsInline = true; b.appendChild(v); }
+        else { const im = new Image(); im.src = m.src; im.alt = 'Hasil 3D'; b.appendChild(im); }
+        b.onclick = () => studioLight(m);
+        const cap = document.createElement('span'); cap.textContent = (m.type === 'vid' ? '▶ video · ' : 'gambar · ') + new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        c.append(b, cap); md.appendChild(c);
+    });
+}
+function studioShow(key) {
+    const s = studio.scenes.find(x => x.key === key);
+    if (!s) { studio.sel = null; studioClearView(); studioRender(); return; }
+    studio.sel = key;
+    const host = document.getElementById('studio-view'); host.textContent = '';
+    const el = document.createElement('div'); el.className = 'ui-scene3d'; el.dataset.code = s.code; host.appendChild(el);
+    buildScene3d(el, { noHeal: true, inStudio: true });
+    document.getElementById('studio-title').textContent = s.title;
+    studioRender();
+}
+function studioRemove(key) {
+    studio.scenes = studio.scenes.filter(x => x.key !== key); studioSave();
+    if (studio.sel === key) studioShow(studio.scenes[0] && studio.scenes[0].key); else studioRender();
+}
+function openStudio(key, code) {
+    if (key && code != null) studioAdd(key, code);
+    studioEl.classList.add('open'); studio.open = true;
+    studioShow(key || studio.sel || (studio.scenes[0] && studio.scenes[0].key));
+}
+function closeStudio() {
+    if (!studio.open) return;
+    studio.open = false; studioEl.classList.remove('open');
+    const lb = document.getElementById('studio-lightbox'); lb.hidden = true; lb.textContent = '';
+    studioClearView();
+}
+document.getElementById('studio-btn').addEventListener('click', () => (studio.open ? closeStudio() : openStudio()));
+document.getElementById('studio-close').onclick = closeStudio;
+document.getElementById('studio-demo').onclick = () => { const k = studioKey(STUDIO_DEMO); studioAdd(k, STUDIO_DEMO); studioShow(k); };
+document.getElementById('studio-clear').onclick = () => {
+    studio.media.forEach(m => { if (m.type === 'vid') URL.revokeObjectURL(m.src); });
+    studio.media = []; studio.scenes = []; studio.sel = null; studioSave(); studioRender(); studioClearView(); showToast('3D Studio dikosongkan');
+};
+function studioGen() {
+    const inp = document.getElementById('studio-prompt'), v = inp.value.trim(); if (!v) return;
+    if (isGenerating) { showToast('Tunggu proses yang berjalan selesai dulu', 2200, true); return; }
+    inp.value = ''; closeStudio();
+    chatInput.value = 'Buat visual 3D animasi: ' + v + ' (satu blok scene3d, ikuti ATURAN MUTLAK PEMBUATAN 3D)';
+    chatInput.dispatchEvent(new Event('input')); sendMessage();
+}
+document.getElementById('studio-gen').onclick = studioGen;
+document.getElementById('studio-prompt').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); studioGen(); } });
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && studio.open) {
+        e.stopImmediatePropagation(); e.preventDefault();
+        const lb = document.getElementById('studio-lightbox');
+        if (!lb.hidden) { lb.hidden = true; lb.textContent = ''; } else closeStudio();
+        return;
+    }
+    if (e.ctrlKey && e.shiftKey && e.code === 'Digit3') { e.preventDefault(); studio.open ? closeStudio() : openStudio(); }
+}, true);
+studioLoad(); studioRender();
 
 const charts = [];
 function destroyCharts() { charts.splice(0).forEach(c => { try { c.destroy(); } catch (e) {} }); }
@@ -2008,6 +2235,8 @@ function runDiagnostics() {
     assert('Cache roundtrip', getArtifact(h)?.prompt === compiled);
     assert('Providers defined', Object.keys(PROVIDERS).length >= 6);
     assert('System prompts ID+EN', SYSTEM_PROMPTS.id && SYSTEM_PROMPTS.en);
+    assert('Smart 3D parser (force + import guard)', isForce3d({ lang: 'js', code: 'new THREE.Mesh()' }) && !isForce3d({ lang: 'js', code: "import * as THREE from 'three'" }) && !isForce3d({ lang: 'python', code: 'THREE' }));
+    assert('3D Studio siap', !!document.getElementById('studio') && typeof openStudio === 'function' && /TorusKnotGeometry/.test(sceneDoc('', 'x')) && /ATURAN MUTLAK/.test(RULES_3D.id));
     assert('Multi-Agent personas defined', AGENTS.length === 4 && !!SYNTH_AGENT);
     assert('Agent system prompt builds', buildAgentSystemPrompt(AGENTS[0]).includes(AGENTS[0].name));
     assert('Agent request builder works', !!buildAgentRequest('sys', 'hello').endpoint);
@@ -2473,7 +2702,7 @@ function agent3d(final) {
         ? '\n\n3D VISUAL: if a moving 3D model clarifies your point, add ONE ```scene3d block (plain JS; globals THREE r128, scene, camera, renderer, onFrame(fn(t,dt)); no imports/network/OrbitControls; under 60 lines; animate via onFrame).'
         : '\n\nVISUAL 3D: jika model 3D bergerak memperjelas gagasanmu, tambahkan SATU blok ```scene3d (JS murni; global THREE r128, scene, camera, renderer, onFrame(fn(t,dt)); tanpa import/jaringan/OrbitControls; maks 60 baris; animasikan lewat onFrame).';
     const fin = en ? ' SYNTHESIS: include one scene3d visualizing the final solution when it can be visualized.' : ' SYNTHESIS: sertakan satu scene3d yang memvisualkan solusi akhir bila bisa divisualkan.';
-    return core + (final ? fin : '');
+    return core + (final ? fin : '') + '\n\n' + (en ? RULES_3D.en : RULES_3D.id);
 }
 const swarmEl = document.getElementById('swarm');
 function swarmInit() {
