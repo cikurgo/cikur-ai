@@ -1160,9 +1160,69 @@ function safeMarkdown(text) { if (!text) return ''; return tokenize(text).map(bl
 
 const s3dReg = {}; let s3dN = 0, s3dHeals = 0;
 function scene3dHtml(code) { return '<div class="ui-scene3d" data-code="' + escapeHtml(String(code).trim()) + '"></div>'; }
+/**
+ * THE OMNI-BRIDGE SANITIZER (Lexer Level)
+ * Membersihkan deklarasi global yang bertabrakan tanpa merusak string/komentar.
+ */
+function sanitize3DCode(src) {
+  const forbidden = new Set(['scene', 'camera', 'renderer', 'import']);
+  const out = [];
+  const len = src.length;
+  let depth = 0, inStr = null, isEsc = false, tplDepth = 0, lineC = false, blockC = false;
+
+  for (let i = 0; i < len; ) {
+    const ch = src[i], nxt = src[i + 1] || '';
+    
+    // Escape handling
+    if (isEsc) { isEsc = false; out.push(ch); i++; continue; }
+    if (inStr && ch === '\\') { isEsc = true; out.push(ch); i++; continue; }
+    
+    // Comment handling
+    if (lineC) { out.push(ch); if (ch === '\n') lineC = false; i++; continue; }
+    if (blockC) { if (ch === '*' && nxt === '/') { out.push(ch, nxt); blockC = false; i += 2; } else { out.push(ch); i++; } continue; }
+    if (!inStr && ch === '/' && nxt === '/') { lineC = true; out.push(ch, nxt); i += 2; continue; }
+    if (!inStr && ch === '/' && nxt === '*') { blockC = true; out.push(ch, nxt); i += 2; continue; }
+    
+    // String / Template literal
+    if (!inStr && (ch === '\'' || ch === '"' || ch === '`')) { inStr = ch; out.push(ch); i++; continue; }
+    if (inStr) {
+      out.push(ch);
+      if (inStr === '`' && ch === '$' && nxt === '{') { out.push(nxt); tplDepth++; i += 2; continue; }
+      if (inStr === '`' && ch === '}' && tplDepth > 0) { tplDepth--; i++; continue; }
+      if ((inStr === '\'' || inStr === '"') && ch === inStr) inStr = null;
+      else if (inStr === '`' && ch === '`' && tplDepth === 0) inStr = null;
+      i++; continue;
+    }
+    
+    // Brace depth
+    if (ch === '{') depth++;
+    if (ch === '}') depth--;
+    
+    // Strip forbidden global declarations
+    if (depth === 0 && !inStr) {
+      let matched = false;
+      if (src.startsWith('import', i)) {
+        const endLine = src.indexOf('\n', i);
+        i = endLine === -1 ? len : endLine + 1; matched = true;
+      } else if (src.startsWith('const', i) || src.startsWith('let', i) || src.startsWith('var', i)) {
+        for (const word of forbidden) {
+          if (word === 'import') continue;
+          const regex = new RegExp(`^(const|let|var)\\s+${word}\\b`, 'i');
+          if (regex.test(src.slice(i, i + 20))) {
+            const endSemi = src.indexOf(';', i);
+            i = endSemi === -1 ? len : endSemi + 1; matched = true; break;
+          }
+        }
+      }
+      if (matched) continue;
+    }
+    out.push(ch); i++;
+  }
+  return out.join('');
+}
 function sceneDoc(code, id) {
-    const safe = String(code).replace(/<\/script/gi, '<\\/script');
-    return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m,x){parent.postMessage({cgo3d:ID,type:t,msg:m,x:x},'*')}window.onerror=function(m,s,l){send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
+const safe = sanitize3DCode(String(code)).replace(/<\/script/gi, '<\\/script');
+return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m,x){parent.postMessage({cgo3d:ID,type:t,msg:m,x:x},'*')}window.onerror=function(m,s,l){send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
 if(typeof THREE==='undefined'){send('error','Three.js gagal dimuat (cek koneksi)');return}
 var renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});document.body.appendChild(renderer.domElement);
 var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,1,.1,1000),frames=[],paused=false,off=false,clock=new THREE.Clock(),ok=false,target=new THREE.Vector3(),az=0,el=.3,dist=6;
@@ -1186,6 +1246,11 @@ camera.position.set(target.x+dist*Math.cos(el)*Math.sin(az),target.y+dist*Math.s
 if(!ok){ok=true;send('ok','LIVE')}}
 var rec,chunks;
 addEventListener('message',function(e){var d=e.data;if(!d||d.cgo3d!==ID)return;
+// --- EGO-CORTEX RECEIVER ---
+if(d.cmd === 'agent_state'){
+  if(typeof window.onBrainState === 'function') window.onBrainState(d);
+}
+if(d.cmd === 'node_clicked') { parent.postMessage({ type: 'node_clicked', agent: d.agent }, '*'); }
 if(d.cmd==='pause'){paused=!paused;if(!paused)clock.getDelta();send('state',paused?'PAUSED':'LIVE')}
 if(d.cmd==='vis')off=!d.v;if(d.cmd==='shot'){try{renderer.render(scene,camera);var sw=d.v||320,sc=document.createElement('canvas'),sx;sc.width=sw;sc.height=Math.max(1,Math.round(sw*cv.height/cv.width));sx=sc.getContext('2d');sx.fillStyle='#05070d';sx.fillRect(0,0,sc.width,sc.height);sx.drawImage(cv,0,0,sc.width,sc.height);send('shot',sc.toDataURL('image/jpeg',.85),d.tag||'')}catch(x){send('state','SHOT gagal')}}if(d.cmd==='snap'){try{renderer.render(scene,camera);var sa=document.createElement('a');sa.href=cv.toDataURL('image/png');sa.download='scene3d.png';sa.click()}catch(x){send('state','SNAP gagal')}}
 if(d.cmd==='rec'){try{if(rec&&rec.state==='recording'){rec.stop();return}chunks=[];rec=new MediaRecorder(cv.captureStream(30),{mimeType:'video/webm'});
@@ -2441,6 +2506,23 @@ function classifyAgentHttpError(status) {
    false jika fatal (hentikan seluruh diskusi — misal API key salah). */
 async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFinal) {
     const { msgDiv, bubbleDiv } = addAgentMessageToUI(agent, true);
+    // --- BRAIN TO 3D TRANSMISSION ---
+const tokenCount = compiledPrompt.split(/\s+/).length;
+let memoryCount = 0;
+try { const mems = await cortex.recall(compiledPrompt, 1); memoryCount = mems.length; } catch(e) {}
+const braceDepth = (compiledPrompt.match(/\{/g) || []).length;
+
+const frames = document.querySelectorAll('.ui-scene3d iframe');
+frames.forEach(fr => {
+    fr.contentWindow.postMessage({
+        cmd: 'agent_state',
+        agent: agent.id,
+        state: 'thinking',
+        tokens: tokenCount,
+        memories: memoryCount,
+        depth: braceDepth
+    }, '*');
+});
     swarmSet(agent.id, 'on');
     const systemPrompt = isFinal ? buildSynthSystemPrompt() : buildAgentSystemPrompt(agent);
     const userContent = buildAgentTurnContent(compiledPrompt, agent, roundNum, totalRounds, isFinal);
@@ -2478,6 +2560,9 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
         chatHistory.push({ role: 'agent', agentId: agent.id, agentName: agent.name, agentColor: agent.color, agentRole: isFinal ? (settings.lang === 'en' ? SYNTH_AGENT.role_en : SYNTH_AGENT.role_id) : (settings.lang === 'en' ? agent.role_en : agent.role_id), content: fullText, isSynth: !!isFinal });
         logEvent('OK', `${agent.name}: ${fullText.length} chars.`);
         swarmSet(agent.id, 'done');
+        frames.forEach(fr => {
+    fr.contentWindow.postMessage({ cmd: 'agent_state', agent: agent.id, state: 'idle', tokens: 0, memories: 0, depth: 0 }, '*');
+});
         return true;
     } catch (error) {
         swarmSet(agent.id, error.name === 'AbortError' ? 'done' : 'err');
