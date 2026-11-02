@@ -485,7 +485,7 @@ body[data-swarm][data-busy] #swarm{display:flex}
    Multi-provider · Compile Only · Multi-lang · Theme · Researcher mode
    Zero regression from v3.1
    ================================================================ */
-const APP_VERSION = '6.1-future';
+const APP_VERSION = '6.2-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -520,8 +520,8 @@ const PROVIDERS = {
     anthropic: {
         name: 'Anthropic',
         free: false,
-        models: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5', 'claude-sonnet-4-6', 'claude-sonnet-4-20250514'],
-        defaultModel: 'claude-sonnet-5-5',
+        models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'],
+        defaultModel: 'claude-sonnet-4-20250514',
         build: (key, model) => ({
             endpoint: 'https://api.anthropic.com/v1/messages',
             headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
@@ -532,7 +532,7 @@ const PROVIDERS = {
     xai: {
         name: 'xAI (Grok)',
         free: false,
-        models: ['grok-3', 'grok-3-mini', 'grok-2', 'grok-2-mini'],
+        models: ['grok-3', 'grok-3-mini', 'grok-2-1212', 'grok-2-vision-1212'],
         defaultModel: 'grok-3-mini',
         build: (key, model) => ({
             endpoint: 'https://api.x.ai/v1/chat/completions',
@@ -1245,12 +1245,14 @@ function loop(){requestAnimationFrame(loop);if(paused||off)return;try{var dt=Mat
 camera.position.set(target.x+dist*Math.cos(el)*Math.sin(az),target.y+dist*Math.sin(el),target.z+dist*Math.cos(el)*Math.cos(az));camera.lookAt(target);renderer.render(scene,camera)}catch(e){paused=true;send('error',String(e&&e.message||e));return}
 if(!ok){ok=true;send('ok','LIVE')}}
 var rec,chunks;
-addEventListener('message',function(e){var d=e.data;if(!d||d.cgo3d!==ID)return;
-// --- EGO-CORTEX RECEIVER ---
-if(d.cmd === 'agent_state'){
-  if(typeof window.onBrainState === 'function') window.onBrainState(d);
+addEventListener('message',function(e){var d=e.data;if(!d)return;
+// --- EGO-CORTEX RECEIVER (agent_state may arrive without cgo3d id) ---
+if(d.cmd==='agent_state'){
+  if(typeof window.onBrainState==='function') try{window.onBrainState(d)}catch(err){console.warn(err)}
+  return;
 }
-if(d.cmd === 'node_clicked') { parent.postMessage({ type: 'node_clicked', agent: d.agent }, '*'); }
+if(d.cmd==='node_clicked'){try{parent.postMessage({type:'node_clicked',agent:d.agent},'*')}catch(z){}return}
+if(d.cgo3d!==ID)return;
 if(d.cmd==='pause'){paused=!paused;if(!paused)clock.getDelta();send('state',paused?'PAUSED':'LIVE')}
 if(d.cmd==='vis')off=!d.v;if(d.cmd==='shot'){try{renderer.render(scene,camera);var sw=d.v||320,sc=document.createElement('canvas'),sx;sc.width=sw;sc.height=Math.max(1,Math.round(sw*cv.height/cv.width));sx=sc.getContext('2d');sx.fillStyle='#05070d';sx.fillRect(0,0,sc.width,sc.height);sx.drawImage(cv,0,0,sc.width,sc.height);send('shot',sc.toDataURL('image/jpeg',.85),d.tag||'')}catch(x){send('state','SHOT gagal')}}if(d.cmd==='snap'){try{renderer.render(scene,camera);var sa=document.createElement('a');sa.href=cv.toDataURL('image/png');sa.download='scene3d.png';sa.click()}catch(x){send('state','SNAP gagal')}}
 if(d.cmd==='rec'){try{if(rec&&rec.state==='recording'){rec.stop();return}chunks=[];rec=new MediaRecorder(cv.captureStream(30),{mimeType:'video/webm'});
@@ -1301,6 +1303,67 @@ const STUDIO_KEY = 'cgo_studio_v1', STUDIO_MAX = 12, MEDIA_MAX = 24;
 const studio = { scenes: [], media: [], sel: null, open: false };
 const studioEl = document.getElementById('studio');
 const JPEG_RE = /^data:image\/jpeg;base64,/;
+const SWARM_BRAIN_SCENE = `// Neural Swarm Topology — live agent activity
+const root = new THREE.Group(); scene.add(root);
+const AGENTS = [
+  {id:'nova',  color:0x38bdf8, label:'Nova',  ang:0},
+  {id:'flux',  color:0x10b981, label:'Flux',  ang:Math.PI/2},
+  {id:'cgo',   color:0xf59e0b, label:'CGO',   ang:Math.PI},
+  {id:'lyric', color:0xef4444, label:'Lyric', ang:3*Math.PI/2},
+  {id:'synth', color:0xa78bfa, label:'Synth', ang:0, r:0}
+];
+const nodes = {};
+const links = [];
+const R = 2.4;
+AGENTS.forEach((a,i) => {
+  const g = new THREE.Group();
+  const mesh = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(a.id==='synth'?0.55:0.38, 1),
+    new THREE.MeshBasicMaterial({ color: a.color, wireframe: true })
+  );
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(a.id==='synth'?0.22:0.14, 12, 12),
+    new THREE.MeshBasicMaterial({ color: a.color })
+  );
+  g.add(mesh); g.add(core);
+  const r = a.r === 0 ? 0 : R;
+  g.position.set(Math.cos(a.ang)*r, a.id==='synth'?0.15:0, Math.sin(a.ang)*r);
+  root.add(g);
+  nodes[a.id] = {g, mesh, core, color:a.color, heat:0, spin:0.4+i*0.12};
+  if (a.id !== 'synth') {
+    const geo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(Math.cos(a.ang)*R,0,Math.sin(a.ang)*R),
+      new THREE.Vector3(0,0.15,0)
+    ]);
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: a.color, transparent:true, opacity:0.25 }));
+    root.add(line); links.push(line);
+  }
+});
+const ring = new THREE.Mesh(
+  new THREE.TorusGeometry(R, 0.02, 8, 64),
+  new THREE.MeshBasicMaterial({ color: 0x334155 })
+);
+ring.rotation.x = Math.PI/2; root.add(ring);
+window.onBrainState = function(d) {
+  const n = nodes[d.agent];
+  if (!n) return;
+  if (d.state === 'thinking') { n.heat = 1; n.spin = 1.8; }
+  else { n.heat = Math.max(n.heat, 0.35); n.spin = 0.5; }
+};
+onFrame((t, dt) => {
+  root.rotation.y += dt * 0.12;
+  Object.keys(nodes).forEach(id => {
+    const n = nodes[id];
+    n.heat = Math.max(0, n.heat - dt * 0.35);
+    n.mesh.rotation.x += dt * n.spin;
+    n.mesh.rotation.y += dt * n.spin * 0.7;
+    const s = 1 + n.heat * 0.45;
+    n.core.scale.setScalar(s);
+    n.mesh.scale.setScalar(1 + n.heat * 0.15);
+  });
+});
+`;
+
 const STUDIO_DEMO = `// Demo: Galaksi mini
 const g = new THREE.Group(); scene.add(g);
 const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 1), new THREE.MeshNormalMaterial({ wireframe: true }));
@@ -2308,6 +2371,8 @@ function runDiagnostics() {
     assert('FNV-1a kompatibel', fnv1a('abc') === 88168267);
     assert('Guarded fetch + stall guard', typeof guardedFetch === 'function' && typeof readStall === 'function');
     assert('Palet perintah', !!document.getElementById('palette'));
+    assert('Neural Swarm scene defined', typeof SWARM_BRAIN_SCENE === 'string' && /onBrainState/.test(SWARM_BRAIN_SCENE));
+    assert('EGO-CORTEX receiver in sceneDoc', /agent_state/.test(sceneDoc('//test','t0')));
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
 }
@@ -2507,22 +2572,22 @@ function classifyAgentHttpError(status) {
 async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFinal) {
     const { msgDiv, bubbleDiv } = addAgentMessageToUI(agent, true);
     // --- BRAIN TO 3D TRANSMISSION ---
-const tokenCount = compiledPrompt.split(/\s+/).length;
-let memoryCount = 0;
-try { const mems = await cortex.recall(compiledPrompt, 1); memoryCount = mems.length; } catch(e) {}
-const braceDepth = (compiledPrompt.match(/\{/g) || []).length;
-
-const frames = document.querySelectorAll('.ui-scene3d iframe');
-frames.forEach(fr => {
-    fr.contentWindow.postMessage({
-        cmd: 'agent_state',
-        agent: agent.id,
-        state: 'thinking',
-        tokens: tokenCount,
-        memories: memoryCount,
-        depth: braceDepth
-    }, '*');
-});
+    const tokenCount = compiledPrompt.split(/\s+/).length;
+    let memoryCount = 0;
+    try { const mems = await cortex.recall(compiledPrompt, 1); memoryCount = mems.length; } catch (e) {}
+    const braceDepth = (compiledPrompt.match(/\{/g) || []).length;
+    const frames = document.querySelectorAll('.ui-scene3d iframe');
+    const postBrain = (state) => {
+        const payload = { cmd: 'agent_state', agent: agent.id, state, tokens: state === 'thinking' ? tokenCount : 0, memories: state === 'thinking' ? memoryCount : 0, depth: state === 'thinking' ? braceDepth : 0 };
+        frames.forEach(fr => { try { fr.contentWindow.postMessage(payload, '*'); } catch (e) {} });
+        Object.keys(s3dReg).forEach(id => {
+            try {
+                const h = s3dReg[id];
+                if (h && h.fr && h.fr.contentWindow) h.fr.contentWindow.postMessage(Object.assign({ cgo3d: id }, payload), '*');
+            } catch (e) {}
+        });
+    };
+    postBrain('thinking');
     swarmSet(agent.id, 'on');
     const systemPrompt = isFinal ? buildSynthSystemPrompt() : buildAgentSystemPrompt(agent);
     const userContent = buildAgentTurnContent(compiledPrompt, agent, roundNum, totalRounds, isFinal);
@@ -2560,9 +2625,7 @@ frames.forEach(fr => {
         chatHistory.push({ role: 'agent', agentId: agent.id, agentName: agent.name, agentColor: agent.color, agentRole: isFinal ? (settings.lang === 'en' ? SYNTH_AGENT.role_en : SYNTH_AGENT.role_id) : (settings.lang === 'en' ? agent.role_en : agent.role_id), content: fullText, isSynth: !!isFinal });
         logEvent('OK', `${agent.name}: ${fullText.length} chars.`);
         swarmSet(agent.id, 'done');
-        frames.forEach(fr => {
-    fr.contentWindow.postMessage({ cmd: 'agent_state', agent: agent.id, state: 'idle', tokens: 0, memories: 0, depth: 0 }, '*');
-});
+        postBrain('idle');
         return true;
     } catch (error) {
         swarmSet(agent.id, error.name === 'AbortError' ? 'done' : 'err');
@@ -2585,6 +2648,22 @@ async function runMultiAgentDiscussion(compiledPrompt) {
     agentTranscript = [];
     agentDiscussionAborted = false;
     swarmInit();
+    // Live Neural Swarm 3D topology (EGO-CORTEX visual) — extraordinary multi-agent radar
+    try {
+        const host = document.createElement('article');
+        host.className = 'thought agent synth';
+        host.style.setProperty('--hue', '#a78bfa');
+        host.innerHTML = '<div class="who"><i></i>NEURAL SWARM<span>live topology</span></div><div class="flow"></div>';
+        const flow = host.querySelector('.flow');
+        const sceneEl = document.createElement('div');
+        sceneEl.className = 'ui-scene3d';
+        sceneEl.dataset.code = SWARM_BRAIN_SCENE;
+        flow.appendChild(sceneEl);
+        chatContainer.appendChild(host);
+        buildScene3d(sceneEl, { noHeal: true });
+        scrollToBottom(true);
+        logEvent('SWARM', 'Neural topology scene online.');
+    } catch (e) { logEvent('ERROR', 'Swarm 3D: ' + (e.message || e)); }
     logEvent('SWARM', 'Initiated. Nodes aligning for consensus...');
     roundLoop:
     for (let r = 1; r <= rounds; r++) {
