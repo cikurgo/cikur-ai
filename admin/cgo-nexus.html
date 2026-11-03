@@ -437,7 +437,7 @@ body[data-swarm][data-busy] #swarm{display:flex}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.0 initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.6-robust initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -500,11 +500,11 @@ body[data-swarm][data-busy] #swarm{display:flex}
 
 <script>
 /* ================================================================
-   SPC v4.0 — RESEARCH NEXUS
+   SPC v4.0 — RESEARCH NEXUS  (v6.6-robust)
    Multi-provider · Compile Only · Multi-lang · Theme · Researcher mode
-   Zero regression from v3.1
+   Zero regression from v3.1 · Hardened free-tier retry + CDN guard
    ================================================================ */
-const APP_VERSION = '6.4-merged';
+const APP_VERSION = '6.6-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -517,13 +517,185 @@ const PROVIDERS = {
     pollinations: {
         name: 'Pollinations',
         free: true,
-        models: ['openai', 'openai-fast', 'mistral', 'deepseek', 'gemini', 'grok', 'claude', 'openai-large'],
+
+        // ============ KONFIGURASI ============
+        ENDPOINTS: {
+            free:    'https://text.pollinations.ai/openai',
+            premium: 'https://gen.pollinations.ai/v1/chat/completions'
+        },
+        DEFAULT_MODEL:      'openai',
+        FALLBACK_MODEL:     'openai',
+        MAX_RETRIES:        3,
+        BASE_DELAY_MS:      1000,
+        MAX_DELAY_MS:       8000,
+        REQUEST_TIMEOUT_MS: 120000,
+
+        // ============ DAFTAR MODEL (UI) ============
+        models: [
+            'openai', 'openai-fast', 'openai-large',
+            'qwen-coder', 'qwen-coder-large',
+            'mistral', 'deepseek', 'grok',
+            'gemini-flash-lite-3.1',
+            'perplexity-fast', 'perplexity-reasoning',
+            'claude-hybridspace', 'claude-fast', 'claude-large',
+            'llamascout', 'phi'
+        ],
         defaultModel: 'openai',
-        build: (key, model) => ({
-            endpoint: key ? 'https://gen.pollinations.ai/v1/chat/completions' : 'https://text.pollinations.ai/openai',
-            headers: key ? { 'Authorization': `Bearer ${key}` } : {},
-            model: key ? model : (['openai','openai-fast'].includes(model) ? model : 'openai')
-        })
+
+        // Model yang aman untuk tier gratis (target fallback)
+        freeSafeModels: [
+            'openai', 'openai-fast', 'openai-large',
+            'qwen-coder', 'mistral', 'deepseek', 'grok',
+            'gemini-flash-lite-3.1',
+            'perplexity-fast', 'perplexity-reasoning'
+        ],
+
+        // ============ HELPER ============
+        _log(level, msg) {
+            try {
+                if (typeof logEvent === 'function') logEvent(level, msg);
+                else if (typeof console !== 'undefined') console.warn(msg);
+            } catch (e) { /* noop */ }
+        },
+
+        _sleep(ms) {
+            return new Promise(r => setTimeout(r, ms));
+        },
+
+        _computeDelay(attempt, retryAfterHeader) {
+            if (retryAfterHeader) {
+                const seconds = parseFloat(retryAfterHeader);
+                if (!Number.isNaN(seconds) && seconds >= 0) {
+                    return Math.min(seconds * 1000, this.MAX_DELAY_MS);
+                }
+                const dateMs = Date.parse(retryAfterHeader);
+                if (!Number.isNaN(dateMs)) {
+                    return Math.max(0, Math.min(dateMs - Date.now(), this.MAX_DELAY_MS));
+                }
+            }
+            const exp = this.BASE_DELAY_MS * Math.pow(2, attempt);
+            const jitter = Math.random() * 500;
+            return Math.min(exp + jitter, this.MAX_DELAY_MS);
+        },
+
+        resolveModel(key, model) {
+            const requested = (typeof model === 'string' && model.trim()) || this.DEFAULT_MODEL;
+            if (key) return requested; // premium: user bebas pilih
+            return this.freeSafeModels.includes(requested) ? requested : this.FALLBACK_MODEL;
+        },
+
+        // ============ BUILDER ============
+        build(key, model) {
+            const isPremium      = Boolean(key);
+            const effectiveModel = this.resolveModel(key, model);
+
+            return {
+                endpoint: isPremium ? this.ENDPOINTS.premium : this.ENDPOINTS.free,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept':       'text/event-stream',
+                    ...(isPremium ? { 'Authorization': 'Bearer ' + key } : {})
+                },
+                model: effectiveModel,
+                isPremium
+            };
+        },
+
+        // ============ FETCH + RETRY + TIMEOUT ============
+        async fetchWithRetry(url, options, maxRetries) {
+            if (maxRetries == null) maxRetries = this.MAX_RETRIES;
+            const callerSignal = options && options.signal;
+            let lastError;
+
+            const fetchWithTimeout = () => {
+                if (callerSignal && callerSignal.aborted) {
+                    const e = new DOMException('Aborted by caller', 'AbortError');
+                    throw e;
+                }
+
+                const controller = new AbortController();
+
+                const timeoutId = setTimeout(() => {
+                    try {
+                        controller.abort(new DOMException('Request timeout', 'TimeoutError'));
+                    } catch (e) {
+                        // Safari lama: abort tanpa reason
+                        try { controller.abort(); } catch (z) {}
+                    }
+                }, this.REQUEST_TIMEOUT_MS);
+
+                const onCallerAbort = () => {
+                    try {
+                        controller.abort(new DOMException('Aborted by caller', 'AbortError'));
+                    } catch (e) {
+                        try { controller.abort(); } catch (z) {}
+                    }
+                };
+                if (callerSignal) {
+                    callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+                }
+
+                return fetch(url, Object.assign({}, options, { signal: controller.signal })).finally(() => {
+                    clearTimeout(timeoutId);
+                    if (callerSignal) callerSignal.removeEventListener('abort', onCallerAbort);
+                });
+            };
+
+            for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                const isLastAttempt = attempt === maxRetries;
+
+                try {
+                    const res = await fetchWithTimeout();
+
+                    if (res.ok) return res;
+
+                    // 402 = free-tier rate limit (Pollinations mengirim Retry-After)
+                    const retryable = res.status === 429 || res.status === 402 || res.status >= 500;
+
+                    if (retryable && !isLastAttempt) {
+                        const delay = this._computeDelay(attempt, res.headers.get('Retry-After'));
+                        this._log(
+                            'SYSTEM',
+                            '[POLLINATIONS] HTTP ' + res.status + (res.status === 402 ? ' (free rate-limit)' : '') + '. Retry ' + (attempt + 1) + '/' + maxRetries + ' dalam ' + Math.round(delay) + 'ms...'
+                        );
+
+                        // Buang body agar koneksi tidak menggantung
+                        try {
+                            if (res.body && typeof res.body.cancel === 'function') await res.body.cancel();
+                            else await res.text();
+                        } catch (e) { /* noop */ }
+
+                        await this._sleep(delay);
+                        continue;
+                    }
+
+                    // Non-retryable ATAU attempt terakhir → serahkan ke caller
+                    return res;
+
+                } catch (err) {
+                    // User klik STOP → langsung lempar, jangan retry
+                    if (err && err.name === 'AbortError') throw err;
+
+                    lastError = err;
+                    if (isLastAttempt) break;
+
+                    const delay  = this._computeDelay(attempt);
+                    const reason = (err && err.name === 'TimeoutError')
+                        ? 'Timeout'
+                        : ('Network Error: ' + ((err && err.message) || err));
+
+                    this._log(
+                        'SYSTEM',
+                        '[POLLINATIONS] ' + reason + '. Retry ' + (attempt + 1) + '/' + maxRetries + ' dalam ' + Math.round(delay) + 'ms...'
+                    );
+                    await this._sleep(delay);
+                }
+            }
+
+            throw new Error(
+                '[POLLINATIONS] Gagal setelah ' + (maxRetries + 1) + ' percobaan: ' + ((lastError && lastError.message) || 'Unknown error')
+            );
+        }
     },
     openai: {
         name: 'OpenAI',
@@ -721,6 +893,23 @@ const hasHljs = typeof hljs !== 'undefined';
 if (hasMarked) marked.setOptions({ gfm: true, breaks: true });
 if (hasPurify) DOMPurify.addHook('afterSanitizeAttributes', n => { if (n.tagName === 'A') { n.setAttribute('target', '_blank'); n.setAttribute('rel', 'noopener noreferrer'); } });
 if (hasChart) { Chart.defaults.color = '#cbd5e1'; Chart.defaults.borderColor = 'rgba(148,163,184,.18)'; }
+
+// Soft-warn if critical CDNs failed (offline / blocked)
+(function checkCdnHealth() {
+    const missing = [];
+    if (!hasMarked) missing.push('marked');
+    if (!hasPurify) missing.push('DOMPurify');
+    if (!hasChart) missing.push('Chart.js');
+    if (!hasHljs) missing.push('highlight.js');
+    if (missing.length) {
+        try {
+            setTimeout(() => {
+                if (typeof logEvent === 'function') logEvent('WARN', '[CDN] Library tidak termuat: ' + missing.join(', ') + ' — beberapa fitur degradasi.');
+                if (typeof showToast === 'function') showToast('CDN offline: ' + missing.join(', '), 4000, true);
+            }, 1200);
+        } catch (e) { /* noop */ }
+    }
+})();
 
 /* ===================== SETTINGS ===================== */
 function loadSettings() {
@@ -2401,38 +2590,144 @@ function deactivateLocalBrain() {
 
 /* ===================== PROVIDER REQUEST BUILDERS ===================== */
 async function guardedFetch(req, ms = 60000, _retry = 0) {
-    if (req && req.local) {   // LOCAL BRAIN: WebLLM (stream dibungkus ke format SSE)
-        if (localBrainActive && mlcEngine) {
-            try { return await localBrainFetch(req, ms); }
-            catch (e) { if (e && e.name === 'AbortError') throw e; localBrainFailed(e, 'request'); }
+    // ============ VALIDASI AWAL ============
+    if (!req || typeof req !== 'object') {
+        throw new Error('guardedFetch: parameter req tidak valid.');
+    }
+
+    // ============ 1. JALUR LOCAL BRAIN (WEBLLM) ============
+    if (req.local) {
+        if (typeof localBrainActive !== 'undefined' && localBrainActive &&
+            typeof mlcEngine !== 'undefined' && mlcEngine) {
+            try {
+                return await localBrainFetch(req, ms);
+            } catch (e) {
+                // User klik STOP → jangan fallback, langsung lempar
+                if (e && e.name === 'AbortError') throw e;
+
+                if (typeof localBrainFailed === 'function') localBrainFailed(e, 'request');
+                else try { logEvent('SYSTEM', '[LOCAL BRAIN] Gagal: ' + ((e && e.message) || e)); } catch (z) {}
+            }
         }
-        if (typeof req.rebuild !== 'function') throw new Error('Local Brain tidak tersedia.');
-        req = req.rebuild();   // fallback otomatis ke ONLINE API
+
+        if (typeof req.rebuild !== 'function') {
+            throw new Error('Local Brain tidak tersedia dan tidak ada fallback online.');
+        }
+
+        req = req.rebuild();
+        if (!req || typeof req !== 'object' || !req.endpoint) {
+            throw new Error('Local Brain rebuild() mengembalikan request tidak valid.');
+        }
         logEvent('SYSTEM', '[LOCAL BRAIN] Fallback ke ONLINE API.');
     }
-    const outer = currentAbortController, ctl = new AbortController();
-    let timedOut = false;
-    const onAbort = () => ctl.abort();
-    if (outer) outer.signal.addEventListener('abort', onAbort, { once: true });
-    const to = setTimeout(() => { timedOut = true; ctl.abort(); }, ms);
+
+    if (!req.endpoint || typeof req.endpoint !== 'string') {
+        throw new Error('guardedFetch: req.endpoint wajib diisi.');
+    }
+
+    // ============ 2. PERSIAPAN FETCH OPTIONS ============
+    const outer = currentAbortController;
+
+    // AbortSignal yang sudah fired TIDAK memicu listener baru
+    if (outer && outer.signal && outer.signal.aborted) {
+        const e = new DOMException('Request sudah di-abort sebelum dikirim.', 'AbortError');
+        throw e;
+    }
+
+    // JSON.stringify bisa throw (circular ref) & double-encode string
+    let bodySerialized;
     try {
-        const res = await fetch(req.endpoint, { method: 'POST', headers: req.headers, body: JSON.stringify(req.body), signal: ctl.signal });
-        // Soft retry sekali untuk 429 (rate limit) — backoff ~1.6s
+        if (req.body == null) bodySerialized = undefined;
+        else if (typeof req.body === 'string') bodySerialized = req.body;
+        else bodySerialized = JSON.stringify(req.body);
+    } catch (e) {
+        throw new Error('Gagal serialize request body: ' + ((e && e.message) || e));
+    }
+
+    // ============ 3. JALUR POLLINATIONS (RETRY-AWARE) ============
+    if (settings && settings.provider === 'pollinations'
+        && PROVIDERS && PROVIDERS.pollinations
+        && typeof PROVIDERS.pollinations.fetchWithRetry === 'function') {
+
+        const pollOptions = {
+            method:  'POST',
+            headers: req.headers || { 'Content-Type': 'application/json' },
+            body:    bodySerialized,
+            signal:  outer && outer.signal
+        };
+
+        try {
+            return await PROVIDERS.pollinations.fetchWithRetry(
+                req.endpoint,
+                pollOptions,
+                PROVIDERS.pollinations.MAX_RETRIES != null ? PROVIDERS.pollinations.MAX_RETRIES : 3
+            );
+        } catch (e) {
+            if (e && e.name === 'AbortError') throw e;
+            try { logEvent('SYSTEM', '[POLLINATIONS] fetchWithRetry gagal: ' + ((e && e.message) || e)); } catch (z) {}
+            throw e;
+        }
+        // Catatan: `ms` diabaikan untuk jalur ini — Pollinations punya
+        // strategi timeout/retry sendiri (REQUEST_TIMEOUT_MS × MAX_RETRIES).
+    }
+
+    // ============ 4. JALUR PROVIDER LAIN ============
+    const ctl = new AbortController();
+    let timedOut = false;
+    let outerAborted = false;
+
+    const onOuterAbort = () => {
+        outerAborted = true;
+        ctl.abort();
+    };
+
+    if (outer && outer.signal) {
+        outer.signal.addEventListener('abort', onOuterAbort, { once: true });
+    }
+
+    const to = setTimeout(() => {
+        timedOut = true;
+        ctl.abort();
+    }, ms);
+
+    try {
+        const res = await fetch(req.endpoint, {
+            method:  'POST',
+            headers: req.headers || { 'Content-Type': 'application/json' },
+            body:    bodySerialized,
+            signal:  ctl.signal
+        });
+        // Soft retry sekali untuk 429 (non-Pollinations) — zero regression dari Titanium
         if (res.status === 429 && _retry < 1) {
             clearTimeout(to);
-            if (outer) outer.signal.removeEventListener('abort', onAbort);
+            if (outer && outer.signal) outer.signal.removeEventListener('abort', onOuterAbort);
             try { logEvent('PROVIDER', 'HTTP 429 — retry setelah 1.6s…'); } catch (e) {}
             try { showToast('Rate limited — mencoba ulang…', 2000, true); } catch (e) {}
             await sleep(1600);
-            if (outer && outer.signal.aborted) { const e = new Error('Aborted'); e.name = 'AbortError'; throw e; }
+            if (outer && outer.signal && outer.signal.aborted) {
+                const e = new DOMException('Request dihentikan oleh user.', 'AbortError');
+                throw e;
+            }
             return guardedFetch(req, ms, _retry + 1);
         }
         return res;
     } catch (e) {
-        if (timedOut) throw new Error('Server tidak merespons dalam ' + ms / 1000 + ' detik.');
-        if (e.name === 'TypeError') throw new Error('Koneksi gagal (offline, CORS, atau endpoint salah).');
+        // Urutan diagnosa: timeout → user-abort → network
+        if (timedOut) {
+            throw new Error('Server tidak merespons dalam ' + (ms / 1000).toFixed(1) + ' detik.');
+        }
+        if (outerAborted || (e && e.name === 'AbortError')) {
+            const err = new DOMException('Request dihentikan oleh user.', 'AbortError');
+            throw err;
+        }
+        if (e && e.name === 'TypeError') {
+            throw new Error('Koneksi gagal (offline, CORS, atau endpoint salah).');
+        }
         throw e;
-    } finally { clearTimeout(to); if (outer) outer.signal.removeEventListener('abort', onAbort); }
+    } finally {
+        clearTimeout(to);
+        if (outer && outer.signal) outer.signal.removeEventListener('abort', onOuterAbort);
+    }
 }
 function readStall(reader, ms = 60000) {
     let t;
@@ -2622,7 +2917,7 @@ async function sendMessage(forceNormal) {
         if (!response.ok) {
             let errMsg = `HTTP ${response.status}`;
             if (response.status === 401 || response.status === 403) errMsg = 'Invalid or missing API key.';
-            else if (response.status === 402) errMsg = 'Payment / quota required.';
+            else if (response.status === 402) errMsg = 'Free-tier rate limit / quota. Tunggu sebentar atau isi API key Pollinations (enter.pollinations.ai).';
             else if (response.status === 429) errMsg = 'Rate limited. Wait and retry.';
             try {
                 const errBody = await response.text();
@@ -2754,7 +3049,9 @@ function runDiagnostics() {
     assert('destroyScene3d helper', typeof destroyScene3d === 'function');
     assert('Thermal watchdog merged', typeof initThermalWatchdog === 'function' && typeof emergencyMemoryCleanup === 'function' && typeof setThermalAlert === 'function' && typeof thermalEmergencyCleanup === 'function');
     assert('WebLLM cache clearer', typeof clearWebLLMCaches === 'function');
-    assert('APP_VERSION merged', typeof APP_VERSION === 'string' && /merged|titanium/i.test(APP_VERSION));
+    assert('APP_VERSION pollinations', typeof APP_VERSION === 'string' && /pollinations|merged|titanium|robust/i.test(APP_VERSION));
+    assert('Pollinations fetchWithRetry', typeof PROVIDERS.pollinations.fetchWithRetry === 'function' && Array.isArray(PROVIDERS.pollinations.freeSafeModels) && PROVIDERS.pollinations.freeSafeModels.length >= 5);
+    assert('Pollinations resolveModel free fallback', PROVIDERS.pollinations.resolveModel('', 'not-a-real-model') === 'openai' && PROVIDERS.pollinations.resolveModel('sk-x', 'grok') === 'grok');
     assert('Thermal guard CSS', !!document.querySelector('style') || true);
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
@@ -3058,7 +3355,7 @@ function addAgentMessageToUI(agent, isTyping) {
 
 function classifyAgentHttpError(status) {
     if (status === 401 || status === 403) return { msg: 'Invalid or missing API key.', fatal: true };
-    if (status === 402) return { msg: 'Payment / quota required.', fatal: true };
+    if (status === 402) return { msg: 'Free-tier rate limit / quota. Tunggu atau isi API key Pollinations.', fatal: false };
     if (status === 429) return { msg: 'Rate limited. Wait and retry.', fatal: false };
     return { msg: `HTTP ${status}`, fatal: false };
 }
