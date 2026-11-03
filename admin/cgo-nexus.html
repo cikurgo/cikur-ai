@@ -111,6 +111,7 @@ body:not([data-state="idle"]) #core-hint,#core-hint:hover,body[data-dock] #core-
 .btn-icon{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;color:var(--dim);transition:color .2s,background .2s}
 .btn-icon:hover,.btn-icon.active{color:var(--ink);background:rgba(160,180,220,.1)}
 .btn-icon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#audio-toggle-btn.active{color:var(--success)}
 
 /* summoner (bawah): hanya hover / fokus / saat memproses */
 #zone-bottom{position:fixed;left:0;right:0;bottom:0;height:84px;z-index:19}
@@ -318,6 +319,10 @@ body[data-swarm][data-busy] #swarm{display:flex}
             </button>
             <button class="btn-icon" id="diag-btn" title="Self-Test" aria-label="Self-Test">
                 <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            </button>
+            <button class="btn-icon" id="audio-toggle-btn" title="Toggle Audio Engine" aria-label="Toggle Audio" aria-pressed="false">
+                <svg id="audio-icon-on" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                <svg id="audio-icon-off" viewBox="0 0 24 24" style="display:none;"><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
             </button>
             <button class="btn-icon" id="settings-btn" title="Settings / Providers" aria-label="Settings / Providers">
                 <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -578,8 +583,8 @@ const PROVIDERS = {
 
 /* v6.2 STRICT 3D RULES */
 const RULES_3D = {
-    id: "ATURAN MUTLAK PEMBUATAN 3D:\n- DILARANG menggunakan TextureLoader, ImageLoader, atau URL eksternal (CSP diblokir).\n- DILARANG menggunakan import/export. Gunakan global `THREE` (r128).\n- WAJIB memanggil `scene.add(mesh)`.\n- Hanya gunakan geometri dasar (BoxGeometry, SphereGeometry, TorusKnotGeometry, dll) dan material polos (MeshBasicMaterial/MeshNormalMaterial).\n- Maksimal 60 baris kode. Taruh animasi di dalam `onFrame((t, dt) => { ... })`.\n- Tag penutup WAJIB ```scene3d (bukan ```js / ```javascript).",
-    en: "ABSOLUTE 3D RULES:\n- FORBIDDEN: TextureLoader, ImageLoader, or any external URL (blocked by CSP).\n- FORBIDDEN: import/export. Use the global `THREE` (r128).\n- MUST call `scene.add(mesh)`.\n- Use only basic geometries (BoxGeometry, SphereGeometry, TorusKnotGeometry, etc.) and plain materials (MeshBasicMaterial/MeshNormalMaterial).\n- Maximum 60 lines of code. Put animation inside `onFrame((t, dt) => { ... })`.\n- The fence tag MUST be ```scene3d (not ```js / ```javascript)."
+    id: "ATURAN MUTLAK PEMBUATAN 3D:\n- DILARANG menggunakan TextureLoader, ImageLoader, atau URL eksternal (CSP diblokir).\n- DILARANG menggunakan import/export. Gunakan global `THREE` (r128).\n- WAJIB memanggil `scene.add(mesh)`.\n- Hanya gunakan geometri dasar (BoxGeometry, SphereGeometry, TorusKnotGeometry, dll) dan material polos (MeshBasicMaterial/MeshNormalMaterial).\n- Maksimal 60 baris kode. Taruh animasi di dalam `onFrame((t, dt) => { ... })`.\n- Tag penutup WAJIB ```scene3d (bukan ```js / ```javascript).\n- DILARANG memutar `scene.rotation` secara global. Jika ingin memutar objek, gunakan `mesh.rotation` atau `group.rotation`. Biarkan `scene` tetap diam agar kamera bisa dikontrol bebas oleh user.",
+    en: "ABSOLUTE 3D RULES:\n- FORBIDDEN: TextureLoader, ImageLoader, or any external URL (blocked by CSP).\n- FORBIDDEN: import/export. Use the global `THREE` (r128).\n- MUST call `scene.add(mesh)`.\n- Use only basic geometries (BoxGeometry, SphereGeometry, TorusKnotGeometry, etc.) and plain materials (MeshBasicMaterial/MeshNormalMaterial).\n- Maximum 60 lines of code. Put animation inside `onFrame((t, dt) => { ... })`.\n- The fence tag MUST be ```scene3d (not ```js / ```javascript).\n- FORBIDDEN: rotating `scene.rotation` globally. To rotate an object use `mesh.rotation` or `group.rotation`. Keep `scene` still so the user can freely control the camera."
 };
 
 const SYSTEM_PROMPTS = {
@@ -599,6 +604,7 @@ Kemampuan khusus peneliti:
 - Bandingkan pendekatan, berikan trade-off, dan rekomendasi berbasis bukti.
 - Jika diminta grafik: HANYA blok \`\`\`chart ... \`\`\` berisi JSON Chart.js murni.
 - Jika diminta visual 3D / animasi: HANYA blok \`\`\`scene3d ... \`\`\` berisi JavaScript murni. Tersedia global: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)) untuk animasi. Cahaya & orbit-kamera sudah ada; tanpa import, tanpa jaringan, tanpa OrbitControls. Buat geometri/material sendiri dan gerakkan lewat onFrame.
+- DILARANG memutar \`scene.rotation\` secara global. Jika ingin memutar objek, gunakan \`mesh.rotation\` atau \`group.rotation\`. Biarkan \`scene\` tetap diam agar kamera bisa dikontrol bebas oleh user.
 - Jika diminta kode: gunakan code block ber-language tag.
 
 Bahasa: Indonesia natural, ilmiah, ringkas.\n\n${RULES_3D.id}`,
@@ -619,6 +625,7 @@ Researcher capabilities:
 - Compare approaches, surface trade-offs, evidence-based recommendations.
 - For charts: ONLY a \`\`\`chart ... \`\`\` block with pure Chart.js JSON.
 - For 3D visuals / animation: ONLY a \`\`\`scene3d ... \`\`\` block of plain JavaScript. Globals: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)) for animation. Lights & orbit camera already exist; no imports, no network, no OrbitControls. Build geometry/materials yourself and animate via onFrame.
+- FORBIDDEN: rotating \`scene.rotation\` globally. To rotate an object use \`mesh.rotation\` or \`group.rotation\`. Keep \`scene\` still so the user can freely control the camera.
 - For code: use fenced blocks with language tags.
 
 Language: natural, scientific English, concise.\n\n${RULES_3D.en}`
@@ -1159,30 +1166,52 @@ function blockHTML(b) {
 function safeMarkdown(text) { if (!text) return ''; return tokenize(text).map(blockHTML).join(''); }
 
 const s3dReg = {}; let s3dN = 0, s3dHeals = 0;
+// Cache memori Cortex untuk satu sesi panel multi-agen (recall HANYA sekali per pesan)
+let cachedMemoryContext = '', cachedMemoryCount = 0;
 function scene3dHtml(code) { return '<div class="ui-scene3d" data-code="' + escapeHtml(String(code).trim()) + '"></div>'; }
 /**
  * THE OMNI-BRIDGE SANITIZER (Lexer Level)
  * Membersihkan deklarasi global yang bertabrakan tanpa merusak string/komentar.
  */
 function sanitize3DCode(src) {
-  const forbidden = new Set(['scene', 'camera', 'renderer', 'import']);
+  src = String(src == null ? '' : src);
+  const forbidden = new Set(['scene', 'camera', 'renderer', 'import', 'export', 'THREE']);
+  const declWords = [...forbidden].filter(w => w !== 'import' && w !== 'export');
+  const declRe = new RegExp('^(?:const|let|var)\\s+(?:' + declWords.join('|') + ')\\b');
+  const isId = c => /[A-Za-z0-9_$]/.test(c || '');
+  // Cari akhir sebuah statement (aware string + kurung), mulai dari index i
+  function stmtEnd(from) {
+    let q = null, esc = false, nest = 0, last = '';
+    for (let j = from; j < len; j++) {
+      const c = src[j];
+      if (esc) { esc = false; continue; }
+      if (q) { if (c === '\\') esc = true; else if (c === q) q = null; continue; }
+      if (c === '\'' || c === '"' || c === '`') { q = c; last = c; continue; }
+      if (c === '(' || c === '[' || c === '{') nest++;
+      else if (c === ')' || c === ']' || c === '}') nest--;
+      else if (c === ';' && nest <= 0) return j + 1;
+      else if (c === '\n' && nest <= 0 && last && !/[=,+\-*\/&|?:(\[{.]/.test(last)) return j + 1;
+      if (!/\s/.test(c)) last = c;
+    }
+    return len;
+  }
   const out = [];
   const len = src.length;
   let depth = 0, inStr = null, isEsc = false, tplDepth = 0, lineC = false, blockC = false;
 
   for (let i = 0; i < len; ) {
     const ch = src[i], nxt = src[i + 1] || '';
-    
+
     // Escape handling
     if (isEsc) { isEsc = false; out.push(ch); i++; continue; }
     if (inStr && ch === '\\') { isEsc = true; out.push(ch); i++; continue; }
-    
+
     // Comment handling
     if (lineC) { out.push(ch); if (ch === '\n') lineC = false; i++; continue; }
     if (blockC) { if (ch === '*' && nxt === '/') { out.push(ch, nxt); blockC = false; i += 2; } else { out.push(ch); i++; } continue; }
     if (!inStr && ch === '/' && nxt === '/') { lineC = true; out.push(ch, nxt); i += 2; continue; }
     if (!inStr && ch === '/' && nxt === '*') { blockC = true; out.push(ch, nxt); i += 2; continue; }
-    
+
     // String / Template literal
     if (!inStr && (ch === '\'' || ch === '"' || ch === '`')) { inStr = ch; out.push(ch); i++; continue; }
     if (inStr) {
@@ -1193,26 +1222,39 @@ function sanitize3DCode(src) {
       else if (inStr === '`' && ch === '`' && tplDepth === 0) inStr = null;
       i++; continue;
     }
-    
+
     // Brace depth
     if (ch === '{') depth++;
     if (ch === '}') depth--;
-    
-    // Strip forbidden global declarations
-    if (depth === 0 && !inStr) {
+
+    // Strip forbidden global declarations (hanya di level atas, di awal identifier)
+    if (depth <= 0 && !isId(src[i - 1]) && src[i - 1] !== '.') {
       let matched = false;
-      if (src.startsWith('import', i)) {
-        const endLine = src.indexOf('\n', i);
-        i = endLine === -1 ? len : endLine + 1; matched = true;
-      } else if (src.startsWith('const', i) || src.startsWith('let', i) || src.startsWith('var', i)) {
-        for (const word of forbidden) {
-          if (word === 'import') continue;
-          const regex = new RegExp(`^(const|let|var)\\s+${word}\\b`, 'i');
-          if (regex.test(src.slice(i, i + 20))) {
-            const endSemi = src.indexOf(';', i);
-            i = endSemi === -1 ? len : endSemi + 1; matched = true; break;
+      const rest = src.slice(i, i + 400);
+      if (/^import\b/.test(rest)) {
+        // import ... from '...' | import '...' | import(...) -> hapus seluruh statement
+        let m = /^import\s*[\w{*$][^;'"`]*?\bfrom\s*['"][^'"\n]*['"]\s*;?/.exec(rest) || /^import\s*['"][^'"\n]*['"]\s*;?/.exec(rest);
+        if (m) i += m[0].length;
+        else { const endLine = src.indexOf('\n', i); i = endLine === -1 ? len : endLine + 1; }
+        matched = true;
+      } else if (/^export\b/.test(rest)) {
+        // export { a, b } [from '...'] | export * [as x] from '...'  -> hapus seluruh statement
+        const m = /^export\s*(?:\{[^}]*\}|\*(?:\s+as\s+[\w$]+)?)(?:\s*from\s*['"][^'"\n]*['"])?\s*;?/.exec(rest);
+        if (m) { i += m[0].length; matched = true; }
+        else {
+          // export default ... / export const|let|var|function|class ... -> buang kata kunci export saja
+          i += 6;
+          const dm = /^\s*default\b\s*/.exec(src.slice(i, i + 40));
+          if (dm) {
+            i += dm[0].length;
+            // default expression (objek/angka/arrow) -> jadikan ekspresi valid; function/class tetap deklarasi
+            if (!/^(?:async\s+)?(?:function|class)\b/.test(src.slice(i, i + 30))) out.push('void ');
           }
+          matched = true;
         }
+      } else if (declRe.test(rest)) {
+        // const|let|var scene/camera/renderer/THREE ... -> hapus statement (case-sensitive)
+        i = stmtEnd(i); matched = true;
       }
       if (matched) continue;
     }
@@ -1221,27 +1263,31 @@ function sanitize3DCode(src) {
   return out.join('');
 }
 function sceneDoc(code, id) {
-const safe = sanitize3DCode(String(code)).replace(/<\/script/gi, '<\\/script');
-return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m,x){parent.postMessage({cgo3d:ID,type:t,msg:m,x:x},'*')}window.onerror=function(m,s,l){send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
+const safe = sanitize3DCode(code == null ? '' : String(code)).replace(/<\/script/gi, '<\\/script');
+const blank = !safe.trim();
+return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m,x){parent.postMessage({cgo3d:ID,type:t,msg:m,x:x},'*')}var BLANK=${blank ? 'true' : 'false'};window.onerror=function(m,s,l){if(/ResizeObserver/i.test(String(m)))return true;send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
 if(typeof THREE==='undefined'){send('error','Three.js gagal dimuat (cek koneksi)');return}
 var renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});document.body.appendChild(renderer.domElement);
 var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,1,.1,1000),frames=[],paused=false,off=false,clock=new THREE.Clock(),ok=false,target=new THREE.Vector3(),az=0,el=.3,dist=6;
 camera.position.set(0,2,6);scene.add(new THREE.AmbientLight(0xffffff,.6));var dl=new THREE.DirectionalLight(0xffffff,.9);dl.position.set(5,8,5);scene.add(dl);
 function onFrame(f){frames.push(f)}
-function fit(){var w=innerWidth,h=innerHeight;renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}
+function fit(){var w=innerWidth,h=innerHeight;if(!w||!h)return;renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}
 addEventListener('resize',fit);fit();
+if(window.ResizeObserver){var _rq=0;try{new ResizeObserver(function(){if(_rq)return;_rq=requestAnimationFrame(function(){_rq=0;fit()})}).observe(document.body)}catch(_e){}}
 try{(function(THREE,scene,camera,renderer,onFrame){
 ${safe}
 }).call(window,THREE,scene,camera,renderer,onFrame)}catch(e){send('error',String(e&&e.message||e));return}
 var _vis=0;scene.traverse(function(o){if(o!==scene&&!o.isLight)_vis++});
-if(_vis===0){var _fk=new THREE.Mesh(new THREE.TorusKnotGeometry(1.2,.38,128,16),new THREE.MeshNormalMaterial({wireframe:true}));scene.add(_fk);onFrame(function(t,dt){_fk.rotation.x+=dt*.5;_fk.rotation.y+=dt*.8})}
+if(BLANK)send('warn','Kode scene3d dari AI kosong (blank) — menampilkan fallback TorusKnot. Klik RECALIBRATE untuk meminta ulang.');
+if(_vis===0||BLANK){var _fk=new THREE.Mesh(new THREE.TorusKnotGeometry(1.2,.38,128,16),new THREE.MeshNormalMaterial({wireframe:true}));scene.add(_fk);onFrame(function(t,dt){_fk.rotation.x+=dt*.5;_fk.rotation.y+=dt*.8})}
 var v=camera.position.clone().sub(target);dist=v.length()||6;az=Math.atan2(v.x,v.z);el=Math.asin(Math.max(-1,Math.min(1,v.y/dist)));
 var drag=null,cv=renderer.domElement;cv.addEventListener('webglcontextlost',function(e){e.preventDefault();send('error','WebGL context hilang (GPU sibuk)')});
 cv.addEventListener('pointerdown',function(e){drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId)});
 cv.addEventListener('pointerup',function(){drag=null});
-cv.addEventListener('pointermove',function(e){if(!drag)return;az-=(e.clientX-drag[0])*.008;el=Math.max(-1.5,Math.min(1.5,el+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY]});
+cv.addEventListener('pointercancel',function(){drag=null});
+cv.addEventListener('pointermove',function(e){if(!drag)return;e.preventDefault();az-=(e.clientX-drag[0])*.008;el=Math.max(-1.5,Math.min(1.5,el+(e.clientY-drag[1])*.008));drag=[e.clientX,e.clientY]},{passive:false});
 cv.addEventListener('wheel',function(e){e.preventDefault();dist=Math.max(.5,Math.min(200,dist*(1+e.deltaY*.001)))},{passive:false});
-function loop(){requestAnimationFrame(loop);if(paused||off)return;try{var dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;for(var i=0;i<frames.length;i++)frames[i](t,dt);
+function loop(){requestAnimationFrame(loop);if(paused||off)return;try{var dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;for(var i=0;i<frames.length;i++)frames[i](t,dt);scene.rotation.set(0,0,0);
 camera.position.set(target.x+dist*Math.cos(el)*Math.sin(az),target.y+dist*Math.sin(el),target.z+dist*Math.cos(el)*Math.cos(az));camera.lookAt(target);renderer.render(scene,camera)}catch(e){paused=true;send('error',String(e&&e.message||e));return}
 if(!ok){ok=true;send('ok','LIVE')}}
 var rec,chunks;
@@ -1277,7 +1323,7 @@ function buildScene3d(el, opt) {
     const mk = (label, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'lnk'; b.textContent = label; b.onclick = fn; bar.appendChild(b); return b; };
     let vis = true;
     const post = (cmd, v, tag) => { try { fr.contentWindow.postMessage({ cgo3d: id, cmd, v, tag }, '*'); } catch (e) {} };
-    let lastErr = '', healed = false;
+    let lastErr = '', healed = false, warned = false;
     mk('PAUSE', () => post('pause')); mk('REC', () => post('rec')); mk('SNAP', () => { post('snap'); post('shot', 800, 'gallery'); }); mk('FULL', () => { try { (el.requestFullscreen || el.webkitRequestFullscreen).call(el); } catch (e) {} });
     if (!o.inStudio) mk('STUDIO', () => openStudio(skey, code));
     mk('EXPORT HTML', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([doc], { type: 'text/html' })); a.download = 'scene3d.html'; a.click(); });
@@ -1285,10 +1331,15 @@ function buildScene3d(el, opt) {
     bar.appendChild(st); el.append(fr, bar);
     if (window.IntersectionObserver) new IntersectionObserver(es => { vis = es[0].isIntersecting; post('vis', vis); }, { threshold: 0.05 }).observe(el);
     s3dReg[id] = { fr, fn: d => {
-        if (d.type === 'ok') { s3dHeals = 0; st.className = 's3d-st'; st.textContent = 'LIVE'; post('vis', vis); const sc = studioAdd(skey, code, fresh && !o.inStudio); if (sc && !sc.thumb) setTimeout(() => post('shot', 320, 'thumb'), 1400); }
+        if (d.type === 'ok') { s3dHeals = 0; if (!warned) { st.className = 's3d-st'; st.textContent = 'LIVE'; } post('vis', vis); const sc = studioAdd(skey, code, fresh && !o.inStudio); if (sc && !sc.thumb) setTimeout(() => post('shot', 320, 'thumb'), 1400); }
         else if (d.type === 'shot') studioShot(skey, d.x, d.msg);
         else if (d.type === 'video') studioVideo(skey, d.msg);
-        else if (d.type === 'state') st.textContent = d.msg;
+        else if (d.type === 'state') { if (!warned || d.msg !== 'LIVE') st.textContent = d.msg; }
+        else if (d.type === 'warn') {
+            warned = true; lastErr = String(d.msg).slice(0, 300); st.className = 's3d-st s3d-err'; st.textContent = 'ERR: kode 3D kosong · fallback aktif'; heal.style.display = '';
+            logEvent('ERROR', 'Scene3D: ' + lastErr);
+            try { showToast('Scene 3D kosong — fallback TorusKnot ditampilkan', 3500, true); } catch (e) {}
+        }
         else if (d.type === 'error') {
             lastErr = String(d.msg).slice(0, 300); st.className = 's3d-st s3d-err'; st.textContent = 'ERR: ' + lastErr.slice(0, 70); heal.style.display = '';
             logEvent('ERROR', 'Scene3D: ' + lastErr);
@@ -2371,6 +2422,9 @@ function runDiagnostics() {
     assert('FNV-1a kompatibel', fnv1a('abc') === 88168267);
     assert('Guarded fetch + stall guard', typeof guardedFetch === 'function' && typeof readStall === 'function');
     assert('Palet perintah', !!document.getElementById('palette'));
+    { const sz = sanitize3DCode("export default function f(){}\nexport const a = 1;\nconst THREE = window.THREE;\nconst scene = new THREE.Scene();\nlet sceneRoot = 2; const m = 3;"); assert('Sanitizer: export/THREE/scene dibuang', !/\bexport\b/.test(sz) && !/const THREE/.test(sz) && !/const scene\b/.test(sz) && /sceneRoot/.test(sz) && /const m = 3/.test(sz)); }
+    assert('Fallback TorusKnot untuk kode kosong', /var BLANK=true/.test(sceneDoc('   \n ', 'b0')) && /ResizeObserver/.test(sceneDoc('x', 'b1')));
+    assert('Audio Engine siap', typeof playAgentSynth === 'function' && !!document.getElementById('audio-toggle-btn') && !!document.getElementById('audio-icon-on') && !!document.getElementById('audio-icon-off'));
     assert('Neural Swarm scene defined', typeof SWARM_BRAIN_SCENE === 'string' && /onBrainState/.test(SWARM_BRAIN_SCENE));
     assert('EGO-CORTEX receiver in sceneDoc', /agent_state/.test(sceneDoc('//test','t0')));
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
@@ -2567,30 +2621,222 @@ function classifyAgentHttpError(status) {
     return { msg: `HTTP ${status}`, fatal: false };
 }
 
+/* ===== ECHO-CORTEX v1.0: Procedural Audio Engine (Web Audio API murni — tanpa file audio) ===== */
+let audioCtx = null;
+let masterGain = null;
+let audioEnabled = false;
+const AUDIO_KEY = 'cgo_audio_state';
+const audioVoices = {};
+let lastGlitchAt = 0;
+try { audioEnabled = localStorage.getItem(AUDIO_KEY) === 'on'; } catch (e) {}
+
+function initAudio() {
+    try {
+        if (audioCtx && audioCtx.state !== 'closed') return audioCtx;
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        audioCtx = new AC();
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 0.6;
+        masterGain.connect(audioCtx.destination);
+    } catch (e) {
+        audioCtx = null; masterGain = null;
+        try { logEvent('ERROR', '[AUDIO] init gagal: ' + (e.message || e)); } catch (z) {}
+    }
+    return audioCtx;
+}
+function audioReady() {
+    if (!audioEnabled) return false;
+    if (!audioCtx) initAudio();   // lazy init (status On tersimpan, tapi context baru boleh dibuat setelah interaksi user)
+    if (!audioCtx || !masterGain) return false;
+    if (audioCtx.state === 'suspended') { try { audioCtx.resume(); } catch (e) {} }
+    return true;
+}
+// tokens -> pitch/kecepatan: baseFreq + tokens*0.5 (dibatasi per suara agar tetap enak didengar)
+const audioTokPitch = (tokens, cap) => Math.min(Math.max(+tokens || 0, 0) * 0.5, cap);
+const audioTokNorm = tokens => Math.min(Math.max(+tokens || 0, 0) / 800, 1);
+
+function audioVoice(level) {
+    const t = audioCtx.currentTime, env = audioCtx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(level, t + 0.5);
+    env.connect(masterGain);
+    return { env, nodes: [env], srcs: [] };
+}
+const audioOsc = (v, type, freq) => { const o = audioCtx.createOscillator(); o.type = type; o.frequency.value = freq; v.srcs.push(o); v.nodes.push(o); return o; };
+const audioNode = (v, n) => { v.nodes.push(n); return n; };
+function audioDispose(v) { v.nodes.forEach(n => { try { n.disconnect(); } catch (e) {} }); }
+
+function playGlitch(tokens) {
+    const now = performance.now();
+    if (now - lastGlitchAt < 800) return;
+    lastGlitchAt = now;
+    const t = audioCtx.currentTime, dur = 0.5;
+    const env = audioCtx.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.14, t + 0.02);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const o = audioCtx.createOscillator(); o.type = 'sawtooth';
+    const mod = audioCtx.createOscillator(); mod.type = 'square'; mod.frequency.value = 37 + audioTokNorm(tokens) * 40;
+    const md = audioCtx.createGain(); md.gain.value = 900;                       // FM ekstrem
+    const curve = new Float32Array(24);
+    for (let i = 0; i < curve.length; i++) curve[i] = 120 + Math.random() * (2600 + Math.min(tokens || 0, 1000));
+    o.frequency.setValueCurveAtTime(curve, t, dur);
+    mod.connect(md); md.connect(o.frequency); o.connect(env); env.connect(masterGain);
+    o.start(t); mod.start(t); o.stop(t + dur + 0.02); mod.stop(t + dur + 0.02);
+    o.onended = () => { [o, mod, md, env].forEach(n => { try { n.disconnect(); } catch (e) {} }); };
+}
+
+function playAgentSynth(agentId, state, tokens) {
+    let v = null;
+    try {
+        if (!audioEnabled || !audioReady()) return;
+        const tk = +tokens || 0, t0 = audioCtx.currentTime;
+        if (agentId === 'lyric' && state === 'alert') { playGlitch(tk); return; }
+        if (state !== 'thinking') return;
+        stopAgentSynth(agentId, true);
+        if (agentId === 'nova') {                       // sine 440Hz + LFO 0.5-2Hz pada gain -> berdenyut halus
+            v = audioVoice(0.16);
+            const o = audioOsc(v, 'sine', 440 + audioTokPitch(tk, 330));
+            const trem = audioNode(v, audioCtx.createGain()); trem.gain.value = 0.6;
+            const lfo = audioOsc(v, 'sine', 0.5 + audioTokNorm(tk) * 1.5);
+            const depth = audioNode(v, audioCtx.createGain()); depth.gain.value = 0.4;
+            lfo.connect(depth); depth.connect(trem.gain);
+            o.connect(trem); trem.connect(v.env);
+        } else if (agentId === 'flux') {                // triangle 330Hz + bandpass menyapu naik-turun
+            v = audioVoice(0.2);
+            const o = audioOsc(v, 'triangle', 330 + audioTokPitch(tk, 250));
+            const bp = audioNode(v, audioCtx.createBiquadFilter()); bp.type = 'bandpass'; bp.Q.value = 5; bp.frequency.value = 900;
+            const sweep = audioOsc(v, 'sine', 0.25 + audioTokNorm(tk) * 1.2);
+            const sd = audioNode(v, audioCtx.createGain()); sd.gain.value = 600;
+            const boost = audioNode(v, audioCtx.createGain()); boost.gain.value = 1.8;
+            sweep.connect(sd); sd.connect(bp.frequency);
+            o.connect(bp); bp.connect(boost); boost.connect(v.env);
+        } else if (agentId === 'cgo') {                 // sub-bass 60Hz + delay feedback (ruang dalam & stabil)
+            v = audioVoice(0.3);
+            const f = 60 + audioTokPitch(tk, 40);
+            const o = audioOsc(v, 'sine', f);
+            const h = audioOsc(v, 'sine', f * 2);       // harmonik agar terdengar di speaker kecil
+            const hg = audioNode(v, audioCtx.createGain()); hg.gain.value = 0.25;
+            const dly = audioNode(v, audioCtx.createDelay(1)); dly.delayTime.value = 0.28 - audioTokNorm(tk) * 0.12;
+            const lp = audioNode(v, audioCtx.createBiquadFilter()); lp.type = 'lowpass'; lp.frequency.value = 700;
+            const fb = audioNode(v, audioCtx.createGain()); fb.gain.value = 0.45;
+            const wet = audioNode(v, audioCtx.createGain()); wet.gain.value = 0.55;
+            o.connect(v.env); h.connect(hg); hg.connect(v.env);
+            o.connect(dly); hg.connect(dly);
+            dly.connect(lp); lp.connect(fb); fb.connect(dly); lp.connect(wet); wet.connect(v.env);
+        } else if (agentId === 'lyric') {               // sawtooth 880Hz disonan (tritone + detune)
+            v = audioVoice(0.07);
+            const f = 880 + audioTokPitch(tk, 400);
+            const a = audioOsc(v, 'sawtooth', f);
+            const b = audioOsc(v, 'sawtooth', f * 1.4142); b.detune.value = 17;
+            const vib = audioOsc(v, 'sine', 4 + audioTokNorm(tk) * 8);
+            const vd = audioNode(v, audioCtx.createGain()); vd.gain.value = 10;
+            const lp = audioNode(v, audioCtx.createBiquadFilter()); lp.type = 'lowpass'; lp.frequency.value = 2600; lp.Q.value = 1.5;
+            vib.connect(vd); vd.connect(b.frequency);
+            a.connect(lp); b.connect(lp); lp.connect(v.env);
+        } else { return; }
+        v.srcs.forEach(o => o.start(t0));
+        audioVoices[agentId] = v;
+    } catch (e) {
+        if (v) audioDispose(v);
+        try { logEvent('ERROR', '[AUDIO] ' + (e.message || e)); } catch (z) {}
+    }
+}
+function stopAgentSynth(agentId, quick) {
+    const v = audioVoices[agentId];
+    if (!v) return;
+    delete audioVoices[agentId];
+    try {
+        if (!audioCtx) { audioDispose(v); return; }
+        // Fade-out per-suara (master gain dibiarkan utuh agar suara agen berikutnya tidak ikut bisu)
+        const t = audioCtx.currentTime, d = quick ? 0.08 : 1;
+        v.env.gain.cancelScheduledValues(t);
+        v.env.gain.setValueAtTime(Math.max(v.env.gain.value, 0.0001), t);
+        v.env.gain.exponentialRampToValueAtTime(0.0001, t + d);
+        v.srcs.forEach(o => { try { o.stop(t + d + 0.05); } catch (e) {} });
+        setTimeout(() => audioDispose(v), (d + 0.2) * 1000);   // disconnect -> cegah memory leak
+    } catch (e) { audioDispose(v); }
+}
+function stopAllSynth(quick) { Object.keys(audioVoices).forEach(id => stopAgentSynth(id, quick)); }
+
+(function () {
+    const btn = document.getElementById('audio-toggle-btn');
+    const icOn = document.getElementById('audio-icon-on'), icOff = document.getElementById('audio-icon-off');
+    if (!btn || !icOn || !icOff) return;
+    const render = () => {
+        icOn.style.display = audioEnabled ? '' : 'none';
+        icOff.style.display = audioEnabled ? 'none' : '';
+        btn.classList.toggle('active', audioEnabled);
+        btn.setAttribute('aria-pressed', String(audioEnabled));
+        btn.title = audioEnabled ? 'Audio Engine: ON' : 'Audio Engine: OFF';
+    };
+    const blip = () => {            // konfirmasi singkat saat dinyalakan
+        try {
+            const t = audioCtx.currentTime, o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.type = 'sine'; o.frequency.setValueAtTime(520, t); o.frequency.exponentialRampToValueAtTime(780, t + 0.12);
+            g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.12, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+            o.connect(g); g.connect(masterGain); o.start(t); o.stop(t + 0.2);
+            o.onended = () => { try { o.disconnect(); g.disconnect(); } catch (e) {} };
+        } catch (e) {}
+    };
+    render();
+    btn.addEventListener('click', () => {
+        audioEnabled = !audioEnabled;
+        try { localStorage.setItem(AUDIO_KEY, audioEnabled ? 'on' : 'off'); } catch (e) {}
+        try {
+            if (audioEnabled) {
+                initAudio();
+                if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();   // kebijakan autoplay: resume saat klik
+                if (audioCtx) blip(); else { audioEnabled = false; showToast('Web Audio tidak didukung browser ini', 3000, true); }
+            } else {
+                stopAllSynth(true);
+                if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+            }
+        } catch (e) { try { logEvent('ERROR', '[AUDIO] toggle: ' + (e.message || e)); } catch (z) {} }
+        render();
+        try { showToast(audioEnabled ? 'Audio Engine ON' : 'Audio Engine OFF', 1800); } catch (e) {}
+    });
+    document.addEventListener('visibilitychange', () => {
+        try {
+            if (!audioCtx) return;
+            if (document.hidden) { if (audioCtx.state === 'running') audioCtx.suspend(); }
+            else if (audioEnabled && audioCtx.state === 'suspended') audioCtx.resume();
+        } catch (e) {}
+    });
+})();
+
 /* Jalankan satu giliran bicara satu agen. Return true jika berhasil (lanjut),
    false jika fatal (hentikan seluruh diskusi — misal API key salah). */
 async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFinal) {
     const { msgDiv, bubbleDiv } = addAgentMessageToUI(agent, true);
     // --- BRAIN TO 3D TRANSMISSION ---
-    const tokenCount = compiledPrompt.split(/\s+/).length;
-    let memoryCount = 0;
-    try { const mems = await cortex.recall(compiledPrompt, 1); memoryCount = mems.length; } catch (e) {}
-    const braceDepth = (compiledPrompt.match(/\{/g) || []).length;
-    const frames = document.querySelectorAll('.ui-scene3d iframe');
+    // Suntikkan memori yang sudah di-cache (tanpa query DB ulang) ke prompt agen
+    const promptWithMemory = compiledPrompt + cachedMemoryContext;
+    const tokenCount = promptWithMemory.split(/\s+/).length;
+    const memoryCount = cachedMemoryCount;
+    const braceDepth = (promptWithMemory.match(/\{/g) || []).length;
+    let lyricGlitched = false;
     const postBrain = (state) => {
+        try { if (state === 'thinking') playAgentSynth(agent.id, 'thinking', tokenCount); else if (state === 'idle') stopAgentSynth(agent.id); } catch (e) {}
         const payload = { cmd: 'agent_state', agent: agent.id, state, tokens: state === 'thinking' ? tokenCount : 0, memories: state === 'thinking' ? memoryCount : 0, depth: state === 'thinking' ? braceDepth : 0 };
-        frames.forEach(fr => { try { fr.contentWindow.postMessage(payload, '*'); } catch (e) {} });
+        const sent = new Set();
+        // Iframe terdaftar (hanya yang masih terpasang di DOM — abaikan referensi hantu)
         Object.keys(s3dReg).forEach(id => {
             try {
-                const h = s3dReg[id];
-                if (h && h.fr && h.fr.contentWindow) h.fr.contentWindow.postMessage(Object.assign({ cgo3d: id }, payload), '*');
+                const h = s3dReg[id], fr = h && h.fr;
+                if (fr && fr.isConnected && fr.contentWindow) { fr.contentWindow.postMessage(Object.assign({ cgo3d: id }, payload), '*'); sent.add(fr); }
             } catch (e) {}
+        });
+        // Iframe 3D lain yang hidup (di-query ulang setiap sinyal, bukan snapshot lama)
+        document.querySelectorAll('.ui-scene3d iframe').forEach(fr => {
+            try { if (fr && fr.isConnected && !sent.has(fr) && fr.contentWindow) fr.contentWindow.postMessage(payload, '*'); } catch (e) {}
         });
     };
     postBrain('thinking');
     swarmSet(agent.id, 'on');
     const systemPrompt = isFinal ? buildSynthSystemPrompt() : buildAgentSystemPrompt(agent);
-    const userContent = buildAgentTurnContent(compiledPrompt, agent, roundNum, totalRounds, isFinal);
+    const userContent = buildAgentTurnContent(promptWithMemory, agent, roundNum, totalRounds, isFinal);
     let fullText = '';
     try {
         const req = buildAgentRequest(systemPrompt, userContent);
@@ -2612,7 +2858,7 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
                 if (content) {
                     fullText += content;
                     bubbleDiv.stream.push(fullText);
-                    if (agent.id === 'lyric' && LYRIC_RISK.test(fullText)) setAIState('alert');
+                    if (agent.id === 'lyric' && LYRIC_RISK.test(fullText)) { setAIState('alert'); if (!lyricGlitched) { lyricGlitched = true; playAgentSynth('lyric', 'alert', tokenCount); } }
                     scrollToBottom();
                 }
             }
@@ -2628,6 +2874,7 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
         postBrain('idle');
         return true;
     } catch (error) {
+        try { stopAgentSynth(agent.id); } catch (e) {}
         swarmSet(agent.id, error.name === 'AbortError' ? 'done' : 'err');
         msgDiv.classList.remove('agent-thinking');
         if (error.name === 'AbortError') {
@@ -2722,11 +2969,14 @@ async function sendMultiAgentMessage() {
         logEvent('COMPILER', `Generated ${hash} · cache ${getCacheStats()}`);
     }
 
-    // Optional memory injection for agents (does not mutate the stored artifact)
+    // Memory recall SEKALI saja per pesan; hasilnya di-cache dan disuntikkan di runAgentTurn()
+    // (tidak mengubah artifact tersimpan, tidak ada query DB berulang per agen/ronde)
+    cachedMemoryContext = ''; cachedMemoryCount = 0;
     try {
         const pastMemories = await cortex.recall(userText, 3);
         if (pastMemories.length > 0) {
-            compiledPrompt += '\n\n[INGATAN MASA LALU YANG RELEVAN]:\n' + pastMemories.map(m => m.text).join('\n');
+            cachedMemoryContext = '\n\n[INGATAN MASA LALU YANG RELEVAN]:\n' + pastMemories.map(m => m.text).join('\n');
+            cachedMemoryCount = pastMemories.length;
             logEvent('SYSTEM', `[CORTEX] Mengingat ${pastMemories.length} memori untuk panel.`);
         }
     } catch (memErr) {
@@ -2771,6 +3021,7 @@ async function sendMultiAgentMessage() {
         sendBtn.disabled = false;
         sendBtn.style.display = 'flex';
         stopBtn.style.display = 'none';
+        try { stopAllSynth(); } catch (e) {}
         currentAbortController = null; delete document.body.dataset.swarm;
         if (finePointer) chatInput.focus();
         setActivity('');
