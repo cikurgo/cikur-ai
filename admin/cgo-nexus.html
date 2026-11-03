@@ -262,6 +262,13 @@ body[data-swarm][data-busy] #swarm{display:flex}
 #palette li{padding:.72rem 1.1rem;font:400 .78rem var(--mono);color:var(--dim);cursor:pointer}
 #palette li.sel,#palette li:hover{color:var(--ink);background:rgba(var(--aura-a),.16)}
 .field-ops{display:flex;flex-wrap:wrap;gap:.2rem}
+
+#local-brain-btn.active{color:var(--success);box-shadow:0 0 12px rgba(16,185,129,.45)}
+#local-brain-btn.loading{color:var(--warning);animation:spin 1.2s linear infinite}
+#local-brain-warning{display:none;font:400 .68rem var(--mono);color:var(--warning);padding:.3rem .6rem;background:rgba(245,158,11,.1);border-radius:6px;margin:.2rem 0}
+body[data-local-brain] #local-brain-warning{display:block}
+body[data-local-brain] #engine-badge{color:var(--success)}
+
 @media(prefers-reduced-motion:reduce){#void::before,#swarm .on i{animation:none!important}}
 
 /* v6.2 3D STUDIO */
@@ -308,6 +315,10 @@ body[data-swarm][data-busy] #swarm{display:flex}
         <div class="hud-title">cgo · research nexus</div>
         <div class="header-right">
             <div class="system-badge" id="engine-badge">PROVIDER: —</div>
+            <button class="btn-icon" id="local-brain-btn" title="Local Brain (WebLLM / WebGPU)" aria-label="Local Brain" aria-pressed="false">
+                <svg viewBox="0 0 24 24"><path d="M12 2a4 4 0 0 1 4 4c0 1.1-.4 2.1-1.1 2.9L17 11h2v2h-2.5l-1.2 1.2A4 4 0 0 1 12 18a4 4 0 0 1-3.3-1.8L7 17.5V19H5v-2.5l1.8-1.8A4 4 0 0 1 8 6a4 4 0 0 1 4-4z"/><circle cx="9.5" cy="9.5" r="1.2"/><circle cx="14.5" cy="9.5" r="1.2"/><path d="M9 14.5c.8.8 1.8 1.2 3 1.2s2.2-.4 3-1.2"/></svg>
+            </button>
+
             <button class="btn-icon" id="toggle-telemetry-btn" title="Toggle Telemetry" aria-label="Toggle Telemetry">
                 <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>
             </button>
@@ -343,6 +354,7 @@ body[data-swarm][data-busy] #swarm{display:flex}
             <div class="input-wrapper"><textarea id="chat-input" rows="1" placeholder="Inisialisasi Directives / Intent Vector..." aria-label="Prompt"></textarea></div>
             <button class="lnk" id="send-btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg><span id="send-label">SYNTHESIZE</span></button>
         </div>
+        <div id="local-brain-warning">Local Brain aktif. Multi-Agent Swarm dibatasi 1 Ronde untuk mencegah overheat.</div>
         <div id="tools">
             <button class="lnk" id="heal-btn" type="button" title="Auto-Heal: lengkapi section kosong (Ctrl+Shift+H)">RECALIBRATE</button>
             <button class="lnk" id="sample-btn" type="button" title="Sample prompt">INJECT SEED</button>
@@ -490,7 +502,152 @@ body[data-swarm][data-busy] #swarm{display:flex}
    Multi-provider · Compile Only · Multi-lang · Theme · Researcher mode
    Zero regression from v3.1
    ================================================================ */
-const APP_VERSION = '6.2-robust';
+const APP_VERSION = '6.2-robust-eternal';
+
+/* ===== ETERNAL TOKEN v2.0 — Local Brain (WebLLM) + RAG Budgeter ===== */
+let localBrainActive = false;
+let mlcEngine = null;
+let localBrainStatus = 'idle'; // idle | loading | ready | error
+const LOCAL_MODEL_ID = 'Phi-3-mini-4k-instruct-q4f16_1-MLC';
+const TOKEN_BUDGET = 3500; // leave headroom for generation inside 4k context
+
+function estimateTokens(str) {
+    if (!str) return 0;
+    return Math.ceil(String(str).split(/\s+/).filter(Boolean).length * 1.3);
+}
+
+function budgetHistory(systemPrompt, userContent, historyList, budget) {
+    // historyList: array of {role, content} newest-last
+    const sysTok = estimateTokens(systemPrompt);
+    const userTok = estimateTokens(userContent);
+    let remain = Math.max(200, (budget || TOKEN_BUDGET) - sysTok - userTok);
+    const kept = [];
+    for (let i = historyList.length - 1; i >= 0; i--) {
+        const t = estimateTokens(historyList[i].content);
+        if (t > remain) break;
+        kept.unshift(historyList[i]);
+        remain -= t;
+    }
+    return kept;
+}
+
+async function initLocalBrain() {
+    if (localBrainStatus === 'loading') return;
+    if (!navigator.gpu) {
+        alert('WebGPU tidak didukung di browser ini. Local Brain dibatalkan. Gunakan API online.');
+        localBrainActive = false;
+        localBrainStatus = 'error';
+        updateLocalBrainUI();
+        return;
+    }
+    localBrainStatus = 'loading';
+    updateLocalBrainUI();
+    logEvent('SYSTEM', '[LOCAL-BRAIN] Memuat WebLLM + ' + LOCAL_MODEL_ID + ' …');
+    try {
+        const webllm = await import('https://esm.run/@mlc-ai/web-llm');
+        const initProgressCallback = (report) => {
+            const pct = Math.round((report.progress || 0) * 100);
+            const txt = report.text || '';
+            logEvent('SYSTEM', `[LOCAL-BRAIN] ${pct}% ${txt}`);
+            setActivity(`Local Brain loading ${pct}%`);
+        };
+        mlcEngine = await webllm.CreateMLCEngine(LOCAL_MODEL_ID, {
+            initProgressCallback,
+            logLevel: 'WARN'
+        });
+        localBrainStatus = 'ready';
+        localBrainActive = true;
+        logEvent('OK', '[LOCAL-BRAIN] Engine siap. Model: ' + LOCAL_MODEL_ID);
+        showToast('Local Brain ONLINE — Phi-3-mini', 2800);
+        applyLocalBrainGuards(true);
+    } catch (e) {
+        localBrainStatus = 'error';
+        localBrainActive = false;
+        mlcEngine = null;
+        logEvent('ERROR', '[LOCAL-BRAIN] Gagal: ' + (e.message || e));
+        alert('Local Brain gagal dimuat: ' + (e.message || e) + '\nFallback ke API online.');
+        applyLocalBrainGuards(false);
+    }
+    updateLocalBrainUI();
+    setActivity('');
+}
+
+function updateLocalBrainUI() {
+    const btn = document.getElementById('local-brain-btn');
+    if (!btn) return;
+    btn.classList.toggle('active', localBrainActive && localBrainStatus === 'ready');
+    btn.classList.toggle('loading', localBrainStatus === 'loading');
+    btn.setAttribute('aria-pressed', String(localBrainActive));
+    btn.title = localBrainActive
+        ? 'Local Brain ON (WebLLM Phi-3-mini)'
+        : (localBrainStatus === 'loading' ? 'Loading Local Brain…' : 'Local Brain (WebLLM / WebGPU)');
+    if (localBrainActive) {
+        document.body.dataset.localBrain = '1';
+        if (engineBadge) engineBadge.textContent = 'LOCAL: Phi-3-mini';
+    } else {
+        delete document.body.dataset.localBrain;
+        try { updateEngineBadge(); } catch (e) {}
+    }
+}
+
+function applyLocalBrainGuards(on) {
+    const sel = document.getElementById('agent-rounds-select');
+    const warn = document.getElementById('local-brain-warning');
+    if (sel) {
+        if (on) {
+            sel.value = '1';
+            sel.disabled = true;
+            sel.title = 'Local Brain memaksa 1 ronde (anti-overheat)';
+        } else {
+            sel.disabled = false;
+            sel.title = 'Jumlah ronde diskusi sebelum sintesis akhir';
+        }
+    }
+    if (warn) warn.style.display = on ? 'block' : 'none';
+}
+
+async function toggleLocalBrain() {
+    if (localBrainStatus === 'loading') return;
+    if (localBrainActive) {
+        // turn OFF
+        localBrainActive = false;
+        localBrainStatus = 'idle';
+        // keep mlcEngine warm for fast re-toggle; user can free by reload
+        applyLocalBrainGuards(false);
+        updateLocalBrainUI();
+        logEvent('SYSTEM', '[LOCAL-BRAIN] Dinonaktifkan. Kembali ke API online.');
+        showToast('Local Brain OFF — menggunakan API');
+        return;
+    }
+    // turn ON
+    await initLocalBrain();
+}
+
+/* Stream adapter: WebLLM async iterable → SSE-like ReadableStream */
+function parseWebLLMStream(asyncIterable) {
+    const encoder = new TextEncoder();
+    let closed = false;
+    return new ReadableStream({
+        async start(controller) {
+            try {
+                for await (const chunk of asyncIterable) {
+                    if (closed) break;
+                    // OpenAI-compatible shape already
+                    const payload = JSON.stringify(chunk);
+                    controller.enqueue(encoder.encode('data: ' + payload + '\n\n'));
+                }
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+            } catch (e) {
+                try { controller.error(e); } catch (z) {}
+            } finally {
+                try { controller.close(); } catch (z) {}
+            }
+        },
+        cancel() { closed = true; }
+    });
+}
+
+
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -2093,6 +2250,49 @@ const cortex = new SemanticMemoryCortex();
     
 /* ===================== PROVIDER REQUEST BUILDERS ===================== */
 async function guardedFetch(req, ms = 60000) {
+    // ----- LOCAL BRAIN PATH (WebLLM) -----
+    if (localBrainActive && mlcEngine && localBrainStatus === 'ready') {
+        try {
+            const messages = (req.body && req.body.messages) ? req.body.messages
+                : (req.body && req.body.system)
+                    ? [{ role: 'system', content: req.body.system }, ...(req.body.messages || [])]
+                    : [];
+            // Anthropic / Gemini shape fallback: synthesize messages
+            if (!messages.length && req.body) {
+                if (req.body.systemInstruction) {
+                    messages.push({ role: 'system', content: (req.body.systemInstruction.parts || []).map(p => p.text).join('') });
+                }
+                (req.body.contents || []).forEach(c => {
+                    messages.push({ role: c.role === 'model' ? 'assistant' : 'user', content: (c.parts || []).map(p => p.text).join('') });
+                });
+            }
+            logEvent('SYSTEM', '[LOCAL-BRAIN] chat.completions.create · msgs=' + messages.length);
+            const stream = await mlcEngine.chat.completions.create({
+                messages,
+                stream: true,
+                temperature: 0.7,
+                max_tokens: 2048
+            });
+            const body = parseWebLLMStream(stream);
+            // Fake Response compatible with existing SSE consumer
+            return {
+                ok: true,
+                status: 200,
+                headers: { get: (k) => k.toLowerCase() === 'content-type' ? 'text/event-stream' : null },
+                body,
+                json: async () => ({}),
+                text: async () => ''
+            };
+        } catch (e) {
+            logEvent('ERROR', '[LOCAL-BRAIN] inference error: ' + (e.message || e));
+            // Fallback to online if possible
+            if (e.message && /vram|memory|OOM|out of memory/i.test(e.message)) {
+                showToast('Local Brain VRAM penuh — fallback API', 3500, true);
+            }
+            throw e;
+        }
+    }
+    // ----- ONLINE API PATH (original) -----
     const outer = currentAbortController, ctl = new AbortController();
     let timedOut = false;
     const onAbort = () => ctl.abort();
@@ -2120,17 +2320,20 @@ function buildRequest(compiledPrompt, systemPrompt) {
         throw new Error(`${p.name} requires an API key. Open Settings.`);
     }
 
-    const apiHistory = [];
+    // --- TOKEN BUDGETER (Eternal Token) ---
+    const rawHistory = [];
     chatHistory.slice(0, -1).filter(m => m.role !== 'agent').slice(-MAX_HISTORY).forEach(m => {
-        if (m.role === 'agent') return; // giliran panel Multi-Agent tidak masuk riwayat chat normal
+        if (m.role === 'agent') return;
         const role = m.role === 'assistant' ? 'assistant' : 'user';
         const content = m.compiled || m.content;
         if (!content) return;
-        const last = apiHistory[apiHistory.length - 1];
-        if (last && last.role === role) last.content += '\n\n' + content; else apiHistory.push({ role, content });
+        const last = rawHistory[rawHistory.length - 1];
+        if (last && last.role === role) last.content += '\n\n' + content; else rawHistory.push({ role, content });
     });
-    while (apiHistory.length && apiHistory[0].role !== 'user') apiHistory.shift();
-    if (apiHistory.length && apiHistory[apiHistory.length - 1].role === 'user') apiHistory.pop();
+    while (rawHistory.length && rawHistory[0].role !== 'user') rawHistory.shift();
+    if (rawHistory.length && rawHistory[rawHistory.length - 1].role === 'user') rawHistory.pop();
+    // Budget remaining tokens after system + current user turn
+    const apiHistory = budgetHistory(systemPrompt, compiledPrompt, rawHistory, TOKEN_BUDGET);
 
     // Anthropic
     if (conf.isAnthropic) {
@@ -2446,7 +2649,7 @@ window.addEventListener('load', () => {
     logEvent('ERROR', '[CORTEX] Gagal membuka database memori: ' + err.message);
 });
     runLiveScan('');
-    logEvent('SYSTEM', `Research Nexus v${APP_VERSION} ready. Providers: ${Object.keys(PROVIDERS).join(', ')}. Cache: ${getCacheStats()}`);
+    logEvent('SYSTEM', `Research Nexus v${APP_VERSION} (Eternal Token) ready. Providers: ${Object.keys(PROVIDERS).join(', ')}. Cache: ${getCacheStats()}`);
 });
 
 /* ============================================================
@@ -3031,6 +3234,15 @@ async function sendMultiAgentMessage() {
 }
 
 function setMultiAgentMode(on) {
+    if (on && localBrainActive) {
+        const sel = document.getElementById('agent-rounds-select');
+        if (sel && parseInt(sel.value, 10) > 1) {
+            if (!confirm('Local Brain aktif. Multi-Agent Swarm dibatasi 1 Ronde untuk mencegah overheat.\nLanjutkan dengan 1 ronde?')) {
+                return;
+            }
+            sel.value = '1';
+        }
+    }
     multiAgentMode = on;
     const btn = document.getElementById('multiagent-btn');
     const wrap = document.getElementById('agent-rounds-wrap');
@@ -3043,6 +3255,24 @@ document.getElementById('multiagent-btn').addEventListener('click', () => {
     setMultiAgentMode(!multiAgentMode);
     showToast(multiAgentMode ? 'Multi-Agent Panel ON — 4 peneliti akan berdiskusi' : 'Multi-Agent Panel OFF');
 });
+
+/* ===== LOCAL BRAIN TOGGLE ===== */
+(function () {
+    const btn = document.getElementById('local-brain-btn');
+    if (btn) btn.addEventListener('click', () => { toggleLocalBrain(); });
+    // Guard rounds select when local brain on
+    const sel = document.getElementById('agent-rounds-select');
+    if (sel) {
+        sel.addEventListener('change', () => {
+            if (localBrainActive && parseInt(sel.value, 10) > 1) {
+                if (!confirm('Local Brain aktif. Menjalankan >1 ronde berisiko overheat/VRAM. Lanjutkan?')) {
+                    sel.value = '1';
+                }
+            }
+        });
+    }
+})();
+
 
 
 /* ===== AMBIENT WIRING: summon, dock, layer, keyboard ===== */
