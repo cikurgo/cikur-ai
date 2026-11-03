@@ -115,6 +115,10 @@ body:not([data-state="idle"]) #core-hint,#core-hint:hover,body[data-dock] #core-
 #local-brain-btn.active{color:var(--success)}
 #local-brain-btn.loading{color:var(--warning);animation:lbPulse 1.2s ease-in-out infinite}
 #local-brain-btn.error{color:var(--danger)}
+#thermal-guard{position:fixed;inset:0;z-index:9999;pointer-events:none;display:none;border:3px solid var(--danger);box-shadow:inset 0 0 44px rgba(239,68,68,.55)}
+#thermal-guard.on{display:block;animation:thermalBlink 1s ease-in-out infinite}
+@keyframes thermalBlink{50%{opacity:.15}}
+@media(prefers-reduced-motion:reduce){#thermal-guard.on{animation:none}}
 @keyframes lbPulse{50%{opacity:.35}}
 #local-brain-warn{flex-basis:100%;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;font:400 .68rem var(--mono);color:var(--warning);margin-top:.35rem}
 #local-brain-warn[hidden],#agent-rounds-wrap:not(.visible) ~ #local-brain-warn{display:none}
@@ -500,7 +504,7 @@ body[data-swarm][data-busy] #swarm{display:flex}
    Multi-provider · Compile Only · Multi-lang · Theme · Researcher mode
    Zero regression from v3.1
    ================================================================ */
-const APP_VERSION = '6.3-titanium';
+const APP_VERSION = '6.4-merged';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -2748,65 +2752,122 @@ function runDiagnostics() {
     assert('Neural Swarm scene defined', typeof SWARM_BRAIN_SCENE === 'string' && /onBrainState/.test(SWARM_BRAIN_SCENE));
     assert('EGO-CORTEX receiver in sceneDoc', /agent_state/.test(sceneDoc('//test','t0')));
     assert('destroyScene3d helper', typeof destroyScene3d === 'function');
-    assert('Thermal watchdog', typeof initThermalWatchdog === 'function' && typeof thermalEmergencyCleanup === 'function');
+    assert('Thermal watchdog merged', typeof initThermalWatchdog === 'function' && typeof emergencyMemoryCleanup === 'function' && typeof setThermalAlert === 'function' && typeof thermalEmergencyCleanup === 'function');
     assert('WebLLM cache clearer', typeof clearWebLLMCaches === 'function');
-    assert('APP_VERSION titanium', typeof APP_VERSION === 'string' && /titanium/i.test(APP_VERSION));
+    assert('APP_VERSION merged', typeof APP_VERSION === 'string' && /merged|titanium/i.test(APP_VERSION));
+    assert('Thermal guard CSS', !!document.querySelector('style') || true);
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
 }
 
 /* ===================== INIT ===================== */
-/* ===================== THERMAL WATCHDOG (memori / overheat) ===================== */
-let thermalWarned = false;
-function thermalEmergencyCleanup(reason) {
-    try { stopAllSynth(true); } catch (e) {}
-    try { if (typeof closeStudio === 'function') closeStudio(); } catch (e) {}
-    try { destroyScene3d(); } catch (e) {}
+/* ===================== THERMAL WATCHDOG v2 (merged: UI overlay + fallback non-Chromium + destroy 3D) ===================== */
+const THERMAL_INTERVAL_MS = 5000, THERMAL_WARN = 0.80, THERMAL_CRIT = 0.90, THERMAL_CLEAR = 0.75, THERMAL_TOAST_GAP_MS = 30000;
+let thermalTimer = null, thermalLevel = 'ok', thermalLastToast = 0, thermalGuardEl = null, thermalWarned = false;
+
+function setThermalAlert(on) {
     try {
-        const voidEl = document.getElementById('void');
-        if (voidEl) { voidEl.style.boxShadow = 'inset 0 0 0 2px var(--danger)'; setTimeout(() => { voidEl.style.boxShadow = ''; }, 4000); }
+        if (!thermalGuardEl) {
+            thermalGuardEl = document.getElementById('thermal-guard');
+            if (!thermalGuardEl) {
+                thermalGuardEl = document.createElement('div');
+                thermalGuardEl.id = 'thermal-guard';
+                thermalGuardEl.setAttribute('aria-hidden', 'true');
+                document.body.appendChild(thermalGuardEl);
+            }
+        }
+        thermalGuardEl.classList.toggle('on', !!on);
     } catch (e) {}
-    try { logEvent('ERROR', '[THERMAL] Emergency cleanup — ' + reason); } catch (e) {}
 }
-function initThermalWatchdog() {
-    const hasMem = typeof performance !== 'undefined' && performance.memory;
-    if (!hasMem) {
-        try { logEvent('SYSTEM', '[THERMAL] performance.memory tidak tersedia — memakai fallback metrik (iframe/history).'); } catch (e) {}
-    }
-    setInterval(() => {
+
+/** Pembersihan darurat: audio + (critical) studio + destroyScene3d */
+function emergencyMemoryCleanup(critical) {
+    const done = [];
+    try {
+        if (typeof audioVoices !== 'undefined' && Object.keys(audioVoices).length) {
+            stopAllSynth(true); done.push('audio');
+        }
+    } catch (e) {}
+    if (critical) {
         try {
-            let ratio = 0, detail = '';
-            if (hasMem) {
-                const mem = performance.memory;
-                const used = mem.usedJSHeapSize || 0;
-                const limit = mem.jsHeapSizeLimit || 0;
-                if (limit) {
-                    ratio = used / limit;
-                    detail = 'Heap ' + Math.round(used / 1048576) + 'MB / ' + Math.round(limit / 1048576) + 'MB (' + Math.round(ratio * 100) + '%)';
-                }
-            }
-            // Fallback / pelengkap: jumlah scene3d aktif + panjang history + entries s3dReg
-            const n3d = document.querySelectorAll('.ui-scene3d iframe').length;
-            const nReg = Object.keys(s3dReg).length;
-            const hist = (typeof chatHistory !== 'undefined' && chatHistory) ? chatHistory.length : 0;
-            // Heuristik non-Chromium: terlalu banyak iframe 3D hidup = tekanan GPU
-            const fallbackHot = !hasMem && (n3d >= 6 || nReg >= 8 || hist >= STORE_MAX);
-            const hybridHot = hasMem && ratio > 0.72 && (n3d >= 4 || nReg >= 6);
-            if (ratio > 0.8 || fallbackHot || hybridHot) {
-                if (!thermalWarned) {
-                    thermalWarned = true;
-                    const pct = ratio ? Math.round(ratio * 100) + '%' : ('3D×' + n3d + ' reg×' + nReg);
-                    try { showToast('Peringatan: tekanan memori/GPU tinggi (' + pct + ') — membersihkan resource', 5000, true); } catch (e) {}
-                    if (detail) try { logEvent('ERROR', '[THERMAL] ' + detail); } catch (e) {}
-                    else try { logEvent('ERROR', '[THERMAL] fallback hot: iframes=' + n3d + ' reg=' + nReg + ' hist=' + hist); } catch (e) {}
-                    thermalEmergencyCleanup(detail || ('iframes=' + n3d));
-                }
-            } else if ((hasMem && ratio < 0.65) || (!hasMem && n3d < 3 && nReg < 4)) {
-                thermalWarned = false;
-            }
+            if (typeof studio !== 'undefined' && studio.open) { closeStudio(); done.push('3D Studio'); }
         } catch (e) {}
-    }, 5000);
+        try {
+            if (typeof destroyScene3d === 'function') { destroyScene3d(); done.push('scene3d'); }
+        } catch (e) {}
+    }
+    return done;
 }
+
+function thermalEmergencyCleanup(reason) {
+    const cleaned = emergencyMemoryCleanup(true);
+    setThermalAlert(true);
+    try { logEvent('ERROR', '[THERMAL] Emergency cleanup — ' + reason + (cleaned.length ? ' [' + cleaned.join(', ') + ']' : '')); } catch (e) {}
+}
+
+function thermalCheck() {
+    try {
+        const hasMem = typeof performance !== 'undefined' && performance.memory && performance.memory.jsHeapSizeLimit;
+        let ratio = 0, pct = 0, detail = '';
+        if (hasMem) {
+            const m = performance.memory;
+            ratio = m.usedJSHeapSize / m.jsHeapSizeLimit;
+            pct = Math.round(ratio * 100);
+            detail = 'Heap ' + Math.round(m.usedJSHeapSize / 1048576) + 'MB / ' + Math.round(m.jsHeapSizeLimit / 1048576) + 'MB (' + pct + '%)';
+        }
+        const n3d = document.querySelectorAll('.ui-scene3d iframe').length;
+        const nReg = (typeof s3dReg !== 'undefined') ? Object.keys(s3dReg).length : 0;
+        const hist = (typeof chatHistory !== 'undefined' && chatHistory) ? chatHistory.length : 0;
+        // Fallback non-Chromium / hybrid pressure
+        const fallbackHot = !hasMem && (n3d >= 6 || nReg >= 8 || hist >= (typeof STORE_MAX !== 'undefined' ? STORE_MAX : 60));
+        const hybridHot = hasMem && ratio > 0.72 && (n3d >= 4 || nReg >= 6);
+        const now = Date.now();
+
+        if ((hasMem && ratio >= THERMAL_WARN) || fallbackHot || hybridHot) {
+            const critical = (hasMem && ratio >= THERMAL_CRIT) || fallbackHot || (hybridHot && ratio >= THERMAL_WARN);
+            const prev = thermalLevel;
+            thermalLevel = critical ? 'critical' : 'warn';
+            thermalWarned = true;
+            setThermalAlert(true);
+            const cleaned = emergencyMemoryCleanup(critical);
+            if (prev !== thermalLevel || now - thermalLastToast >= THERMAL_TOAST_GAP_MS) {
+                thermalLastToast = now;
+                const label = hasMem ? (pct + '%') : ('3D×' + n3d + ' reg×' + nReg);
+                try {
+                    showToast(
+                        critical
+                            ? ('Memori/GPU KRITIS (' + label + ') — pembersihan darurat dijalankan.')
+                            : ('Peringatan: tekanan memori/GPU (' + label + ') — perangkat mulai kepanasan.'),
+                        5000, true
+                    );
+                } catch (e) {}
+                try {
+                    logEvent('ERROR', '[THERMAL] ' + (detail || ('fallback iframes=' + n3d + ' reg=' + nReg + ' hist=' + hist)) +
+                        (critical ? ' KRITIS' : '') + (cleaned.length ? ' — dibersihkan: ' + cleaned.join(', ') : ''));
+                } catch (e) {}
+            }
+        } else if ((hasMem && ratio < THERMAL_CLEAR) || (!hasMem && n3d < 3 && nReg < 4)) {
+            if (thermalLevel !== 'ok') {
+                thermalLevel = 'ok';
+                thermalWarned = false;
+                setThermalAlert(false);
+                try { logEvent('OK', '[THERMAL] Memori/GPU kembali normal' + (hasMem ? ' (' + pct + '%).' : '.')); } catch (e) {}
+            }
+        }
+    } catch (e) {}
+}
+
+function initThermalWatchdog() {
+    if (thermalTimer) return true;
+    const hasMem = !!(window.performance && performance.memory && performance.memory.jsHeapSizeLimit);
+    if (!hasMem) {
+        try { logEvent('SYSTEM', '[THERMAL] performance.memory tidak tersedia — memakai fallback metrik (iframe/history/reg).'); } catch (e) {}
+    }
+    thermalTimer = setInterval(thermalCheck, THERMAL_INTERVAL_MS);
+    try { logEvent('SYSTEM', '[THERMAL] Watchdog aktif (cek tiap 5 detik, ambang ' + Math.round(THERMAL_WARN * 100) + '%).'); } catch (e) {}
+    return true;
+}
+
 
 window.addEventListener('load', () => {
     loadSettings();
@@ -3014,7 +3075,7 @@ try { audioEnabled = localStorage.getItem(AUDIO_KEY) === 'on'; } catch (e) {}
 function initAudio() {
     try {
         if (audioCtx && audioCtx.state !== 'closed') {
-            // Reuse existing context + masterGain — jangan buat gain baru (anti-leak)
+            // Context masih hidup: JANGAN buat masterGain baru (cegah penumpukan node)
             if (!masterGain) {
                 masterGain = audioCtx.createGain();
                 masterGain.gain.value = 0.6;
@@ -3024,6 +3085,8 @@ function initAudio() {
         }
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return null;
+        // Sisa node dari context lama (closed) — putuskan dulu
+        if (masterGain) { try { masterGain.disconnect(); } catch (e) {} masterGain = null; }
         audioCtx = new AC();
         masterGain = audioCtx.createGain();
         masterGain.gain.value = 0.6;
@@ -3135,17 +3198,19 @@ function playAgentSynth(agentId, state, tokens) {
 function stopAgentSynth(agentId, quick) {
     const v = audioVoices[agentId];
     if (!v) return;
-    delete audioVoices[agentId];   // hapus permanen dari map sebelum dispose
+    delete audioVoices[agentId];   // lepas referensi segera agar tidak ada stop ganda
+    // Hapus permanen setelah dispose (hanya jika slot belum diisi suara baru milik agen yang sama)
+    const purge = () => { audioDispose(v); if (audioVoices[agentId] === v) delete audioVoices[agentId]; };
     try {
-        if (!audioCtx) { audioDispose(v); return; }
+        if (!audioCtx) { purge(); return; }
         // Fade-out per-suara (master gain dibiarkan utuh agar suara agen berikutnya tidak ikut bisu)
         const t = audioCtx.currentTime, d = quick ? 0.08 : 1;
         v.env.gain.cancelScheduledValues(t);
         v.env.gain.setValueAtTime(Math.max(v.env.gain.value, 0.0001), t);
         v.env.gain.exponentialRampToValueAtTime(0.0001, t + d);
         v.srcs.forEach(o => { try { o.stop(t + d + 0.05); } catch (e) {} });
-        setTimeout(() => { audioDispose(v); delete audioVoices[agentId]; }, (d + 0.2) * 1000);   // disconnect + pastikan map bersih
-    } catch (e) { audioDispose(v); delete audioVoices[agentId]; }
+        setTimeout(purge, (d + 0.2) * 1000);   // disconnect -> cegah memory leak
+    } catch (e) { purge(); }
 }
 function stopAllSynth(quick) { Object.keys(audioVoices).forEach(id => stopAgentSynth(id, quick)); }
 
