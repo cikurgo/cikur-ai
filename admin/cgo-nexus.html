@@ -502,12 +502,13 @@ body[data-swarm][data-busy] #swarm{display:flex}
 
 <script>
 /* ================================================================
-   SPC v4.0 — RESEARCH NEXUS  (v6.7.1-robust)
+   SPC v4.0 — RESEARCH NEXUS  (v6.7.2-robust)
    Multi-provider · Compile Only · Multi-lang · Theme · Researcher mode
    Zero regression from v3.1 · Hardened free-tier retry + CDN guard
    Hardened: CSS dedupe, thermal-guard in DOM, toast/lang consistency, SSE/exec guards
+   6.7.2: SYNTHESIS cooldown + transcript trim + empty-stream detect + synth fallback
    ================================================================ */
-const APP_VERSION = '6.7.1-robust';
+const APP_VERSION = '6.7.2-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -3139,6 +3140,7 @@ function runDiagnostics() {
     assert('FNV-1a deterministik', fnv1a('abc') === fnv1a('abc') && fnv1a('abc') === 88168267);
     assert('hasTerm dual boundary', hasTerm('context is', 'context') === true && hasTerm('contexts', 'context') === false && hasTerm('expertise', 'expert') === false);
     assert('Panel chatHistory structure', typeof chatHistory !== 'undefined' && (!chatHistory.length || ['user','assistant','panel'].includes(chatHistory[chatHistory.length-1].role)));
+    assert('Multi-Agent Fallback Ready', typeof runMultiAgentDiscussion === 'function' && typeof buildRequest === 'function');
     assert('Heat regex word-boundary', HEAT_IMPORTANT_RE[1].test('context is important') === true && HEAT_IMPORTANT_RE[1].test('contextual understanding only') === false);
     assert('Guarded fetch + stall guard', typeof guardedFetch === 'function' && typeof readStall === 'function');
     assert('Palet perintah', !!document.getElementById('palette'));
@@ -3283,7 +3285,7 @@ window.addEventListener('load', () => {
 });
     runLiveScan('');
     try { initThermalWatchdog(); } catch (e) {}
-    logEvent('SYSTEM', `Research Nexus v${APP_VERSION} ready (hardened: thermal DOM, SSE/exec guards, UI toast). Providers: ${Object.keys(PROVIDERS).join(', ')}. Cache: ${getCacheStats()}`);
+    logEvent('SYSTEM', `Research Nexus v${APP_VERSION} ready (SYNTHESIS cooldown+trim+fallback). Providers: ${Object.keys(PROVIDERS).join(', ')}. Cache: ${getCacheStats()}`);
 });
 
 /* ============================================================
@@ -3378,7 +3380,7 @@ function buildSynthSystemPrompt() {
     return (settings.lang === 'en' ? SYNTH_PROTOCOL_EN : SYNTH_PROTOCOL_ID) + '\n\n' + uiHint() + agent3d(true);
 }
 function formatTranscript(entries, maxChars) {
-    maxChars = maxChars || 7000;
+    maxChars = maxChars || 4000; // Dipangkas dari 7000 agar hemat token context window
     let log = entries.map(e => `**${e.name}:** ${e.text}`).join('\n\n');
     if (log.length > maxChars) log = '…(awal diskusi dipotong)…\n\n' + log.slice(-maxChars);
     return log;
@@ -3716,7 +3718,10 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
                 }
             }
         }
-        bubbleDiv.stream.push(fullText || '_(tidak ada respons)_');
+        if (!fullText.trim()) {
+            throw new Error('Model mengembalikan respons kosong (kemungkinan limit token atau filter safety).');
+        }
+        bubbleDiv.stream.push(fullText);
         await bubbleDiv.stream.finish();
         if (agent.id === 'lyric') setAIState('thinking');
         msgDiv.classList.remove('agent-thinking');
@@ -3785,7 +3790,39 @@ async function runMultiAgentDiscussion(compiledPrompt) {
         }
     }
     if (!agentDiscussionAborted && !currentAbortController.signal.aborted) {
-        await runAgentTurn(SYNTH_AGENT, compiledPrompt, rounds, rounds, true);
+        // Jeda 3 detik untuk menghindari Rate Limit API gratis
+        logEvent('SYSTEM', 'Jeda 3 detik sebelum SYNTHESIS...');
+        await sleep(3000);
+        
+        // Pemangkasan konteks: SYNTHESIS hanya butuh argumen terakhir (maks 5 pesan)
+        // agar tidak melebihi limit token model gratis
+        if (agentTranscript.length > 5) {
+            agentTranscript = agentTranscript.slice(-5);
+            logEvent('SYSTEM', '[MEMORY] Transkrip dipangkas untuk SYNTHESIS.');
+        }
+        
+        const synthOk = await runAgentTurn(SYNTH_AGENT, compiledPrompt, rounds, rounds, true);
+        
+        // FALLBACK: Jika SYNTHESIS gagal total, paksa AI utama yang menyimpulkan
+        if (!synthOk) {
+            logEvent('ERROR', 'SYNTHESIS gagal. Memicu Fallback Mode...');
+            const fallbackBubble = addMessageToUI('ai', '_(SYNTHESIS gagal, mencoba fallback...)_', true);
+            try {
+                const systemPrompt = getSystemPrompt() + cachedMemoryContext;
+                const req = buildRequest(compiledPrompt, systemPrompt);
+                const response = await guardedFetch(req);
+                const reader = response.body.getReader();
+                let fullText = '';
+                for await (const data of parseSSE(reader)) {
+                    const content = extractDelta(data, req.parse);
+                    if (content) { fullText += content; fallbackBubble.stream.push(fullText); }
+                }
+                fallbackBubble.stream.push(fullText || '_Gagal mendapatkan respons._');
+                await fallbackBubble.stream.finish();
+            } catch (e) {
+                fallbackBubble.stream.fail('<p class="err">Fallback juga gagal: ' + escapeHtml(e.message) + '</p>');
+            }
+        }
     }
     logEvent('SYSTEM', agentDiscussionAborted ? 'Multi-Agent panel stopped.' : 'Multi-Agent panel done.');
 }
