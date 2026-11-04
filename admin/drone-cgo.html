@@ -169,43 +169,37 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
   .video-pane{min-height:180px}
 }
 
-/* ===== NEXUS FLOATING COGNITIVE PANEL ===== */
-#nexus-panel{
-  position:fixed;bottom:20px;right:20px;width:380px;height:500px;z-index:9999;
-  border-radius:12px;overflow:hidden;box-shadow:0 0 20px rgba(0,204,255,0.4);
-  border:1px solid #00ccff;background:#0a0f14;display:flex;flex-direction:column;
-  transform:translateX(120%);opacity:0;pointer-events:none;
-  transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .35s ease;
-}
-#nexus-panel.open{transform:translateX(0);opacity:1;pointer-events:auto}
-#nexus-panel.minimized{height:42px}
-#nexus-panel.minimized #nexus-iframe-wrap{display:none}
-#nexus-panel-header{
-  display:flex;align-items:center;justify-content:space-between;gap:6px;
-  padding:8px 10px;background:#111820;border-bottom:1px solid #1f2937;
-  flex-shrink:0;cursor:move;user-select:none;
-}
-#nexus-panel-header .nx-title{
-  font-size:10px;color:var(--neon-blue);font-weight:bold;letter-spacing:.5px;
-  display:flex;align-items:center;gap:6px;white-space:nowrap;
-}
-#nexus-panel-header .nx-actions{display:flex;gap:4px}
-#nexus-panel-header .nx-btn{
-  background:transparent;border:1px solid #374151;color:#9ca3af;
-  width:26px;height:26px;border-radius:4px;cursor:pointer;font-family:var(--font-mono);
-  font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0;
-}
-#nexus-panel-header .nx-btn:hover{border-color:var(--neon-blue);color:var(--neon-blue)}
-#nexus-iframe-wrap{flex:1;min-height:0;position:relative;background:#04070d}
-#nexus-iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#04070d}
-#nexusToggleBtn.active{border-color:var(--neon-blue);color:var(--neon-blue);box-shadow:0 0 8px rgba(0,204,255,.35)}
+/* ===== NEXUS FLOATING COGNITIVE PANEL (iframe terisolasi) ===== */
+#nexus-panel{position:fixed;bottom:20px;right:20px;width:380px;height:500px;z-index:9999;border-radius:12px;overflow:hidden;
+  box-shadow:0 0 20px rgba(0,204,255,0.4);border:1px solid #00ccff;background:#0a0f14;display:flex;flex-direction:column;
+  max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);
+  transform:translateX(120%);opacity:0;visibility:hidden;pointer-events:none;
+  transition:transform .38s cubic-bezier(.22,1,.36,1),opacity .3s ease,visibility 0s linear .38s,height .25s ease}
+#nexus-panel.open{transform:translateX(0);opacity:1;visibility:visible;pointer-events:auto;
+  transition:transform .38s cubic-bezier(.22,1,.36,1),opacity .3s ease,visibility 0s,height .25s ease}
+#nexus-panel.minimized{height:40px}
+#nexus-panel.dragging{transition:none;user-select:none}
+#nexus-panel.dragging #nexus-iframe{pointer-events:none}
+#nexus-header{display:flex;align-items:center;gap:8px;height:40px;min-height:40px;padding:0 10px;cursor:grab;
+  background:linear-gradient(90deg,#0d1620,#111d2a);border-bottom:1px solid rgba(0,204,255,.35);
+  touch-action:none;user-select:none;-webkit-user-select:none}
+#nexus-header:active{cursor:grabbing}
+#nexus-header .nx-title{flex:1;font-size:11px;font-weight:bold;letter-spacing:.5px;color:var(--neon-blue);
+  text-shadow:0 0 5px var(--neon-blue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#nexus-header .nx-link{font-size:9px;color:#6b7280;white-space:nowrap}
+#nexus-header .nx-link.on{color:var(--neon-green)}
+#nexus-header .nx-btns{display:flex;gap:4px}
+#nexus-header .nx-btns button{width:26px;height:26px;border-radius:6px;border:1px solid #374151;background:transparent;
+  color:var(--text-main);cursor:pointer;font-size:13px;line-height:1;padding:0;font-family:var(--font-mono)}
+#nexus-header .nx-btns button:hover{border-color:var(--neon-blue);color:var(--neon-blue)}
+#nexus-header .nx-btns #nexus-close:hover{border-color:var(--neon-red);color:var(--neon-red)}
+#nexus-iframe{flex:1;width:100%;border:0;background:#0a0f14;min-height:0}
 @media (max-width:900px){
-  #nexus-panel{
-    width:min(96vw,420px);height:min(80vh,560px);bottom:10px;right:2vw;left:auto;
-  }
-  #nexus-panel.open{width:min(96vw,420px);height:min(80vh,560px)}
+  #nexus-panel{width:80vw;height:80vh;right:10vw;bottom:10vh;max-width:none;max-height:none}
+  #nexus-panel{height:80dvh;bottom:10dvh}
+  #nexus-panel.minimized{height:40px}
 }
-
+@media (prefers-reduced-motion:reduce){#nexus-panel,#nexus-panel.open{transition:opacity .15s ease,visibility 0s}}
 </style>
 </head>
 <body>
@@ -253,8 +247,7 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
       <span id="speedLabel" class="chip value">1x</span></div>
     <button id="muteBtn" class="ctrl-btn">
       <svg class="icon"><use href="#i-volume"/></svg> AUDIO</button>
-    <button id="nexusToggleBtn" class="ctrl-btn" title="Cognitive Nexus Panel">
-      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2a4.5 4.5 0 0 0-3.1 7.75A4 4 0 0 0 4 13.5c0 1.8 1.2 3.3 2.9 3.8A5 5 0 0 0 12 22a5 5 0 0 0 5.1-4.7A4 4 0 0 0 20 13.5a4 4 0 0 0-2.4-3.75A4.5 4.5 0 0 0 14.5 2c-1 0-1.9.3-2.6.9A4.5 4.5 0 0 0 9.5 2z"/><path d="M12 8v4l2 2"/></svg> NEXUS</button>
+    <button id="nexusToggle" class="ctrl-btn" type="button" title="Buka/Tutup NEXUS Cognitive Panel" aria-controls="nexus-panel" aria-expanded="false">🧠 NEXUS</button>
     <div id="networkStatus" class="status-badge">STARLINK_LINK_ACTIVE</div>
   </div>
 </div>
@@ -631,6 +624,7 @@ function toast(msg, type = "info", duration = 2500) {
     setTimeout(() => el.remove(), 350);
   }, duration);
 }
+window.toast = toast; /* dipakai jembatan NEXUS (script terpisah) */
 function droneLatLng(drone) {
   const baseLat = -6.2088, baseLng = 106.8456;
   return {
@@ -2240,12 +2234,34 @@ function initFleet() {
   }
 }
 
+/* ============= NEXUS bridge: telemetri armada -> iframe ============= */
+const fleetSnap = { droneState: null, battery: null, jammed: false, activeDrones: 0 };
+let lastNexusPost = 0;
+function postFleetToNexus(force) {
+  const now = Date.now();
+  if (!force && now - lastNexusPost < 250) return;   /* throttle: maks ~4x/detik */
+  const nexusIframe = document.getElementById('nexus-iframe');
+  if (nexusIframe && nexusIframe.contentWindow) {
+    lastNexusPost = now;
+    try {
+      nexusIframe.contentWindow.postMessage({
+        type: 'FLEET_TELEMETRY',
+        payload: Object.assign({}, fleetSnap, { ts: now })
+      }, '*');
+    } catch (_) {}
+  }
+}
+window.postFleetToNexus = () => postFleetToNexus(true);
+
 /* ============= Events ============= */
 CGO_Fleet.onEvent((data) => {
   const ev = data.event;
 
   if (ev === "FLEET_STATS_UPDATE") {
     const s = data.data;
+    fleetSnap.activeDrones = s.active;
+    fleetSnap.fleet = { active: s.active, emergency: s.emergency, jammed: s.jammed, offline: s.offline, idle: s.idle ?? 0 };
+    postFleetToNexus(true);
     $("statActive").innerText = s.active;
     $("statEmergency").innerText = s.emergency;
     $("statJammed").innerText = s.jammed;
@@ -2258,26 +2274,6 @@ CGO_Fleet.onEvent((data) => {
       $("meshBadge").innerText = "MESH: OK";
       $("meshBadge").style.color = "var(--neon-green)";
     }
-    try {
-      const nexusIframe = document.getElementById("nexus-iframe");
-      if (nexusIframe && nexusIframe.contentWindow) {
-        const drone = CGO_Fleet.getSelectedDrone && CGO_Fleet.getSelectedDrone();
-        const t = drone && drone.telemetry;
-        nexusIframe.contentWindow.postMessage({
-          type: "FLEET_TELEMETRY",
-          payload: {
-            event: "FLEET_STATS_UPDATE",
-            droneState: drone && drone.state,
-            battery: t && t.battery,
-            jammed: t && t.isJammed,
-            activeDrones: s.active,
-            emergency: s.emergency,
-            offline: s.offline,
-            idle: s.idle
-          }
-        }, "*");
-      }
-    } catch (_) {}
   }
 
   if (ev === "DRONE_SELECTED") {
@@ -2299,6 +2295,11 @@ CGO_Fleet.onEvent((data) => {
     const t = data.data;
     const drone = CGO_Fleet.getSelectedDrone();
     if (!drone) return;
+    fleetSnap.droneId = drone.id;
+    fleetSnap.droneState = drone.state;
+    fleetSnap.battery = t.battery;
+    fleetSnap.jammed = !!t.isJammed;
+    postFleetToNexus(false);
     $("valState").innerText = drone.state;
     $("valState").style.color = (drone.state === "EMERGENCY" || drone.state === "OFFLINE") ? "var(--neon-red)"
       : (drone.state === "MONITORING" || drone.state === "INTERACTING") ? "var(--neon-green)" : "var(--neon-blue)";
@@ -2343,25 +2344,6 @@ CGO_Fleet.onEvent((data) => {
     const hist = drone.getHistory();
     drawSparkline(bctx, batteryCanvas, hist.battery, "#00ccff", 0, 100);
     drawSparkline(sctx, signalCanvas, hist.signal, "#00ff88", 0, 100);
-    try {
-      const nexusIframe = document.getElementById("nexus-iframe");
-      if (nexusIframe && nexusIframe.contentWindow) {
-        const stats = CGO_Fleet.getFleetStats ? CGO_Fleet.getFleetStats() : {};
-        nexusIframe.contentWindow.postMessage({
-          type: "FLEET_TELEMETRY",
-          payload: {
-            event: "TELEMETRY_UPDATE",
-            droneState: drone.state,
-            droneId: drone.id,
-            battery: t.battery,
-            signal: t.signalStrength,
-            altitude: t.altitude,
-            jammed: t.isJammed,
-            activeDrones: stats.active
-          }
-        }, "*");
-      }
-    } catch (_) {}
   }
 
   if (ev === "NEW_LOG") {
@@ -2643,208 +2625,135 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-
-/* ============= NEXUS BRIDGE ============= */
-(function initNexusBridge() {
-  const panel = document.getElementById("nexus-panel");
-  const iframe = document.getElementById("nexus-iframe");
-  const toggleBtn = document.getElementById("nexusToggleBtn");
-  const minBtn = document.getElementById("nexusMinBtn");
-  const closeBtn = document.getElementById("nexusCloseBtn");
-  if (!panel || !toggleBtn) return;
-
-  let lastFleetStats = { active: 0, emergency: 0, offline: 0, offline: 0, idle: 0 };
-  let lastTelem = null;
-
-  function postToNexus(payload) {
-    try {
-      if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage({ type: "FLEET_TELEMETRY", payload }, "*");
-      }
-    } catch (_) {}
-  }
-
-  function setPanelOpen(open) {
-    panel.classList.toggle("open", !!open);
-    panel.classList.remove("minimized");
-    toggleBtn.classList.toggle("active", !!open);
-    try { localStorage.setItem("cgo_nexus_open", open ? "1" : "0"); } catch (_) {}
-  }
-
-  toggleBtn.addEventListener("click", () => setPanelOpen(!panel.classList.contains("open")));
-  if (closeBtn) closeBtn.addEventListener("click", () => setPanelOpen(false));
-  if (minBtn) minBtn.addEventListener("click", () => {
-    if (!panel.classList.contains("open")) setPanelOpen(true);
-    else panel.classList.toggle("minimized");
-  });
-
-  try {
-    if (localStorage.getItem("cgo_nexus_open") === "1") setPanelOpen(true);
-  } catch (_) {}
-
-  // Simple drag for mobile / desktop header
-  const header = document.getElementById("nexus-panel-header");
-  if (header) {
-    let dragging = false, ox = 0, oy = 0, startRight = 0, startBottom = 0;
-    header.addEventListener("pointerdown", (e) => {
-      if (e.target.closest(".nx-btn")) return;
-      dragging = true;
-      ox = e.clientX; oy = e.clientY;
-      const rect = panel.getBoundingClientRect();
-      startRight = window.innerWidth - rect.right;
-      startBottom = window.innerHeight - rect.bottom;
-      header.setPointerCapture(e.pointerId);
-    });
-    header.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      const dx = e.clientX - ox, dy = e.clientY - oy;
-      panel.style.right = Math.max(4, startRight - dx) + "px";
-      panel.style.bottom = Math.max(4, startBottom - dy) + "px";
-      panel.style.left = "auto";
-    });
-    header.addEventListener("pointerup", () => { dragging = false; });
-  }
-
-  // Patch into existing event handler via extra listeners on the same onEvent API
-  const _origOnEvent = CGO_Fleet.onEvent;
-  // CGO_Fleet.onEvent already registered; add another subscription if supported
-  if (typeof CGO_Fleet.on === "function") {
-    CGO_Fleet.on("FLEET_STATS_UPDATE", (s) => {
-      lastFleetStats = s || lastFleetStats;
-      postToNexus({
-        event: "FLEET_STATS_UPDATE",
-        activeDrones: lastFleetStats.active,
-        emergency: lastFleetStats.emergency,
-        jammed: lastFleetStats.jammed,
-        offline: lastFleetStats.offline,
-        idle: lastFleetStats.idle,
-        droneState: lastTelem && lastTelem.state,
-        battery: lastTelem && lastTelem.battery,
-        jammedFlag: lastTelem && lastTelem.isJammed
-      });
-    });
-    CGO_Fleet.on("TELEMETRY_UPDATE", (t) => {
-      const drone = CGO_Fleet.getSelectedDrone && CGO_Fleet.getSelectedDrone();
-      lastTelem = Object.assign({}, t, { state: drone && drone.state });
-      postToNexus({
-        event: "TELEMETRY_UPDATE",
-        droneState: drone && drone.state,
-        droneId: drone && drone.id,
-        battery: t.battery,
-        signal: t.signalStrength,
-        altitude: t.altitude,
-        jammed: t.isJammed,
-        activeDrones: lastFleetStats.active
-      });
-    });
-  }
-
-  // Also mirror from the already-bound onEvent path by wrapping toast-free hooks:
-  // Re-bind by observing after each update via interval-light throttle
-  let telemTick = 0;
-  const telemHook = setInterval(() => {
-    telemTick++;
-    if (telemTick % 3 !== 0) return; // ~ every few seconds depending on fleet tick
-    try {
-      const drone = CGO_Fleet.getSelectedDrone && CGO_Fleet.getSelectedDrone();
-      const stats = CGO_Fleet.getFleetStats && CGO_Fleet.getFleetStats();
-      if (stats) lastFleetStats = stats;
-      if (drone && drone.telemetry) {
-        const t = drone.telemetry;
-        postToNexus({
-          event: "SNAPSHOT",
-          droneState: drone.state,
-          droneId: drone.id,
-          battery: t.battery,
-          signal: t.signalStrength,
-          altitude: t.altitude,
-          jammed: t.isJammed,
-          activeDrones: lastFleetStats.active
-        });
-      }
-    } catch (_) {}
-  }, 4000);
-
-  window.addEventListener("message", (e) => {
-    if (!e.data || e.data.type !== "AI_COMMAND") return;
-    const cmd = String(e.data.command || "").toUpperCase();
-    const args = e.data.args;
-    try {
-      if (cmd === "DEPLOY_ALL") CGO_Fleet.deployAll();
-      else if (cmd === "RETURN_ALL") CGO_Fleet.returnAll();
-      else if (cmd === "TSUNAMI") CGO_Fleet.triggerGlobalTsunami();
-      else if (cmd === "VOID_PULSE") CGO_Fleet.activateVoidPulseAll();
-      else if (cmd === "SET_FORMATION" || cmd === "FORMATION") {
-        const form = (typeof args === "string" ? args : (args && args.formation) || "grid")
-          .toString().toLowerCase().replace(/[^a-z0-9-]/g, "");
-        if (typeof CGO_Fleet.setFormation === "function") CGO_Fleet.setFormation(form);
-        else if (typeof window.setFormation === "function") window.setFormation(form);
-      } else if (cmd === "SCAN_NEARBY") {
-        if (typeof scanNearbyOnly === "function") scanNearbyOnly();
-      } else if (cmd === "MULTI_SCAN") {
-        if (typeof scanMultiRegion === "function") scanMultiRegion();
-      } else {
-        toast("🤖 Unknown AI command: " + cmd, "warning");
-        return;
-      }
-      toast("🤖 AI Command Executed: " + cmd, "success");
-      CGO_Fleet.logGlobal && CGO_Fleet.logGlobal("🤖 [NEXUS] Command: " + cmd, "SUCCESS");
-    } catch (err) {
-      toast("🤖 AI Command failed: " + (err.message || err), "danger");
-    }
-  });
-
-  // Enhance existing onEvent blocks by also posting when those events fire:
-  // Monkey-patch after the fact: wrap CGO_Fleet.emit if present
-  if (typeof CGO_Fleet.emit === "function" && !CGO_Fleet._nexusPatched) {
-    const _emit = CGO_Fleet.emit.bind(CGO_Fleet);
-    CGO_Fleet.emit = function (event, data) {
-      const r = _emit(event, data);
-      try {
-        if (event === "TELEMETRY_UPDATE" || event === "FLEET_STATS_UPDATE") {
-          const drone = CGO_Fleet.getSelectedDrone && CGO_Fleet.getSelectedDrone();
-          const s = event === "FLEET_STATS_UPDATE" ? data : lastFleetStats;
-          if (event === "FLEET_STATS_UPDATE") lastFleetStats = data || lastFleetStats;
-          const t = event === "TELEMETRY_UPDATE" ? data : (drone && drone.telemetry);
-          postToNexus({
-            event,
-            droneState: drone && drone.state,
-            droneId: drone && drone.id,
-            battery: t && t.battery,
-            signal: t && t.signalStrength,
-            altitude: t && t.altitude,
-            jammed: t && t.isJammed,
-            activeDrones: (s && s.active) || lastFleetStats.active
-          });
-        }
-      } catch (_) {}
-      return r;
-    };
-    CGO_Fleet._nexusPatched = true;
-  }
-})();
-
-
-console.info("[BCGO UI] v6.21.0 + NEXUS bridge ready · Multi Auto Access + Cognitive Panel");
+console.info("[BCGO UI] v6.21.0 ready · Multi Auto Access (GPS/Peta) + Kaskade Kamera + Streetside + Zero Regresi");
 })();
 </script>
 
-<!-- ===== NEXUS FLOATING COGNITIVE PANEL ===== -->
-<div id="nexus-panel" aria-label="CGO Research Nexus">
-  <div id="nexus-panel-header">
-    <div class="nx-title">
-      <svg class="icon" style="color:var(--neon-blue)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2a4.5 4.5 0 0 0-3.1 7.75A4 4 0 0 0 4 13.5c0 1.8 1.2 3.3 2.9 3.8A5 5 0 0 0 12 22a5 5 0 0 0 5.1-4.7A4 4 0 0 0 20 13.5a4 4 0 0 0-2.4-3.75A4.5 4.5 0 0 0 14.5 2c-1 0-1.9.3-2.6.9A4.5 4.5 0 0 0 9.5 2z"/></svg>
-      CGO · RESEARCH NEXUS
-    </div>
-    <div class="nx-actions">
-      <button type="button" class="nx-btn" id="nexusMinBtn" title="Minimize">_</button>
-      <button type="button" class="nx-btn" id="nexusCloseBtn" title="Close">×</button>
+<!-- ================= NEXUS FLOATING COGNITIVE PANEL ================= -->
+<div id="nexus-panel" role="dialog" aria-label="NEXUS Cognitive Panel" aria-hidden="true">
+  <div id="nexus-header">
+    <span class="nx-title">🧠 NEXUS // COGNITIVE LINK</span>
+    <span id="nexus-link" class="nx-link" title="Status jembatan telemetri">○ OFFLINE</span>
+    <div class="nx-btns">
+      <button id="nexus-min" type="button" title="Minimize" aria-label="Minimize">—</button>
+      <button id="nexus-close" type="button" title="Tutup" aria-label="Tutup">✕</button>
     </div>
   </div>
-  <div id="nexus-iframe-wrap">
-    <iframe id="nexus-iframe" src="cgo-nexus.html" title="CGO Research Nexus" allow="clipboard-read; clipboard-write"></iframe>
-  </div>
+  <iframe id="nexus-iframe" src="cgo-nexus.html" title="CGO NEXUS" allow="clipboard-write; microphone"></iframe>
 </div>
 
+<script>
+/* ============= NEXUS Panel: toggle, minimize, drag, AI command bridge ============= */
+(function () {
+  "use strict";
+  var panel = document.getElementById("nexus-panel");
+  var iframe = document.getElementById("nexus-iframe");
+  var btn = document.getElementById("nexusToggle");
+  var hdr = document.getElementById("nexus-header");
+  var linkEl = document.getElementById("nexus-link");
+  if (!panel || !iframe) return;
+
+  function setOpen(on) {
+    panel.classList.toggle("open", on);
+    if (on) panel.classList.remove("minimized");
+    panel.setAttribute("aria-hidden", on ? "false" : "true");
+    if (btn) { btn.classList.toggle("active", on); btn.setAttribute("aria-expanded", on ? "true" : "false"); }
+    if (on) clampToViewport();
+  }
+  function isOpen() { return panel.classList.contains("open"); }
+  window.NexusPanel = {
+    open: function () { setOpen(true); },
+    close: function () { setOpen(false); },
+    toggle: function () { setOpen(!isOpen()); },
+    minimize: function () { panel.classList.toggle("minimized"); }
+  };
+  if (btn) btn.addEventListener("click", window.NexusPanel.toggle);
+  document.getElementById("nexus-close").addEventListener("click", function () { setOpen(false); });
+  document.getElementById("nexus-min").addEventListener("click", window.NexusPanel.minimize);
+
+  /* ---- Drag (mouse + touch via Pointer Events) ---- */
+  var drag = null;
+  function clampToViewport() {
+    if (!panel.style.left) return;               /* belum pernah di-drag */
+    var r = panel.getBoundingClientRect();
+    var maxL = Math.max(0, window.innerWidth - r.width), maxT = Math.max(0, window.innerHeight - 40);
+    panel.style.left = Math.min(Math.max(0, r.left), maxL) + "px";
+    panel.style.top = Math.min(Math.max(0, r.top), maxT) + "px";
+  }
+  hdr.addEventListener("pointerdown", function (e) {
+    if (e.target.closest(".nx-btns")) return;
+    var r = panel.getBoundingClientRect();
+    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, id: e.pointerId };
+    panel.classList.add("dragging");
+    try { hdr.setPointerCapture(e.pointerId); } catch (_) {}
+    e.preventDefault();
+  });
+  hdr.addEventListener("pointermove", function (e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var w = panel.offsetWidth;
+    var l = Math.min(Math.max(0, e.clientX - drag.dx), Math.max(0, window.innerWidth - w));
+    var t = Math.min(Math.max(0, e.clientY - drag.dy), Math.max(0, window.innerHeight - 40));
+    panel.style.right = "auto"; panel.style.bottom = "auto";
+    panel.style.left = l + "px"; panel.style.top = t + "px";
+  });
+  function endDrag(e) {
+    if (!drag) return;
+    try { hdr.releasePointerCapture(drag.id); } catch (_) {}
+    drag = null; panel.classList.remove("dragging");
+  }
+  hdr.addEventListener("pointerup", endDrag);
+  hdr.addEventListener("pointercancel", endDrag);
+  hdr.addEventListener("dblclick", function (e) {     /* reset posisi */
+    if (e.target.closest(".nx-btns")) return;
+    panel.style.left = panel.style.top = panel.style.right = panel.style.bottom = "";
+  });
+  window.addEventListener("resize", clampToViewport);
+
+  /* ---- Pesan dari iframe NEXUS ---- */
+  var lastCmd = "", lastCmdAt = 0;
+  var FORMATIONS = { grid: "grid", circle: "circle", line: "line", v: "v", "v-shape": "v", vshape: "v", v_shape: "v" };
+  function notify(msg, type) {
+    if (typeof window.toast === "function") window.toast(msg, type || "info");
+    else console.info("[NEXUS]", msg);
+  }
+  window.addEventListener("message", function (e) {
+    if (e.source !== iframe.contentWindow) return;      /* hanya terima dari iframe NEXUS kita */
+    var m = e.data;
+    if (!m || typeof m !== "object") return;
+
+    if (m.type === "NEXUS_READY") {                      /* iframe selesai load -> kirim snapshot terakhir */
+      linkEl.textContent = "● LINKED"; linkEl.classList.add("on");
+      if (typeof window.postFleetToNexus === "function") window.postFleetToNexus();
+      return;
+    }
+    if (m.type !== "AI_COMMAND") return;
+
+    var cmd = String(m.command || "").toUpperCase();
+    var args = m.args;
+    var key = cmd + "|" + String(args || ""), now = Date.now();
+    if (key === lastCmd && now - lastCmdAt < 600) return;   /* anti-duplikat */
+    lastCmd = key; lastCmdAt = now;
+
+    var F = window.CGO_Fleet;
+    if (!F) { notify("CGO_Fleet tidak tersedia", "danger"); return; }
+    try {
+      if (cmd === "DEPLOY_ALL") F.deployAll();
+      else if (cmd === "RETURN_ALL") F.returnAll();
+      else if (cmd === "TSUNAMI") F.triggerGlobalTsunami();
+      else if (cmd === "VOID_PULSE") F.activateVoidPulseAll();
+      else if (cmd === "SET_FORMATION") {
+        var f = FORMATIONS[String(args || "").replace(/^\|/, "").trim().toLowerCase()];
+        if (!f) { notify("🤖 AI Command: formasi tidak dikenal (" + args + ")", "danger"); return; }
+        if (typeof window.setFormation === "function") window.setFormation(f); else F.setFormation(f);
+      } else { notify("🤖 AI Command tidak dikenal: " + cmd, "danger"); return; }
+      if (typeof F.logGlobal === "function") F.logGlobal("🤖 [NEXUS] " + cmd + (args ? " → " + args : ""), "INFO");
+      notify("🤖 AI Command Executed: " + cmd, "success");
+    } catch (err) {
+      notify("❌ AI Command gagal: " + cmd, "danger");
+      console.error("[NEXUS] command error", err);
+    }
+  });
+})();
+</script>
 </body>
 </html>

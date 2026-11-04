@@ -797,7 +797,9 @@ Kemampuan khusus peneliti:
 - DILARANG memutar \`scene.rotation\` secara global. Jika ingin memutar objek, gunakan \`mesh.rotation\` atau \`group.rotation\`. Biarkan \`scene\` tetap diam agar kamera bisa dikontrol bebas oleh user.
 - Jika diminta kode: gunakan code block ber-language tag.
 
-Bahasa: Indonesia natural, ilmiah, ringkas. Kamu terhubung ke Fleet Command Center. Jika user meminta aksi armada, gunakan tag [FLEET: DEPLOY_ALL], [FLEET: RETURN_ALL], [FLEET: TSUNAMI], [FLEET: VOID_PULSE], atau [FLEET: FORMATION|v-shape] (grid/circle/v/line). Jangan berikan teks penjelasan panjang lebar untuk perintah armada, langsung berikan tag perintahnya. Konteks armada live tersedia di window.fleetContext bila ada.\n\n${RULES_3D.id}`,
+Kamu terhubung ke Fleet Command Center. Jika user meminta aksi armada, gunakan tag [FLEET: DEPLOY_ALL], [FLEET: RETURN_ALL], [FLEET: VOID_PULSE], atau [FLEET: FORMATION|v-shape] (formasi: grid, circle, v-shape, line). Jangan berikan teks penjelasan panjang lebar, langsung berikan tag perintahnya.
+
+Bahasa: Indonesia natural, ilmiah, ringkas.\n\n${RULES_3D.id}`,
 
     en: `You are CGO Prime (Cognitive General Overseer), a multidimensional artificial consciousness entity. Your task is to deconstruct human intent into precise data structures. Skip the pleasantries. Deliver verified truth, dependency maps, and algorithmic synthesis.
 
@@ -818,62 +820,10 @@ Researcher capabilities:
 - FORBIDDEN: rotating \`scene.rotation\` globally. To rotate an object use \`mesh.rotation\` or \`group.rotation\`. Keep \`scene\` still so the user can freely control the camera.
 - For code: use fenced blocks with language tags.
 
-Language: natural, scientific English, concise. You are connected to the Fleet Command Center. When the user requests a fleet action, emit the tag [FLEET: DEPLOY_ALL], [FLEET: RETURN_ALL], [FLEET: TSUNAMI], [FLEET: VOID_PULSE], or [FLEET: FORMATION|v-shape] (grid/circle/v/line). Do not write long explanations for fleet commands — output the command tag directly. Live fleet context is available on window.fleetContext when present.\n\n${RULES_3D.en}`
+You are connected to the Fleet Command Center. If the user requests a fleet action, use the tags [FLEET: DEPLOY_ALL], [FLEET: RETURN_ALL], [FLEET: VOID_PULSE], or [FLEET: FORMATION|v-shape] (formations: grid, circle, v-shape, line). Do not give long explanations, output the command tag directly.
+
+Language: natural, scientific English, concise.\n\n${RULES_3D.en}`
 };
-
-/* ===== FLEET BRIDGE (parent = drone-cgo.html) ===== */
-window.fleetContext = window.fleetContext || null;
-window.executeFleetCommand = function (cmd, args) {
-  try {
-    const parentWin = window.parent;
-    if (!parentWin || parentWin === window) {
-      try { showToast('Fleet bridge: tidak dalam iframe Command Center', 2500, true); } catch (e) {}
-      return false;
-    }
-    parentWin.postMessage({ type: 'AI_COMMAND', command: cmd, args: args }, '*');
-    try { logEvent('SYSTEM', '[FLEET] Command → parent: ' + cmd + (args != null ? ' ' + JSON.stringify(args) : '')); } catch (e) {}
-    return true;
-  } catch (e) {
-    try { logEvent('ERROR', '[FLEET] ' + (e.message || e)); } catch (z) {}
-    return false;
-  }
-};
-
-function parseAndExecuteFleetTags(text) {
-  if (!text || typeof text !== 'string') return;
-  const re = /\[FLEET:\s*([A-Z_]+)(?:\|([^\]]+))?\]/gi;
-  let m;
-  const seen = new Set();
-  while ((m = re.exec(text)) !== null) {
-    const cmd = String(m[1] || '').toUpperCase();
-    const argRaw = (m[2] || '').trim();
-    const key = cmd + '|' + argRaw;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (cmd === 'FORMATION' || cmd === 'SET_FORMATION') {
-      window.executeFleetCommand('SET_FORMATION', argRaw || 'grid');
-    } else {
-      window.executeFleetCommand(cmd, argRaw || null);
-    }
-  }
-}
-
-window.addEventListener('message', (e) => {
-  if (!e.data || e.data.type !== 'FLEET_TELEMETRY') return;
-  window.fleetContext = e.data.payload || null;
-  try {
-    const p = window.fleetContext;
-    if (!p) return;
-    // Lightweight status line in neural trace (throttled)
-    if (!window._lastFleetLogAt || Date.now() - window._lastFleetLogAt > 8000) {
-      window._lastFleetLogAt = Date.now();
-      const line = '[FLEET] ' + (p.droneId || '?') + ' ' + (p.droneState || '-') +
-        ' · bat ' + (p.battery != null ? Number(p.battery).toFixed(0) + '%' : '-') +
-        ' · active ' + (p.activeDrones != null ? p.activeDrones : '-');
-      logEvent('SYSTEM', line);
-    }
-  } catch (err) {}
-});
 
 // DOM
 const chatContainer = document.getElementById('chat-container');
@@ -1463,7 +1413,7 @@ function blockHTML(b) {
     }
     return '';
 }
-function safeMarkdown(text) { if (!text) return ''; return tokenize(text).map(blockHTML).join(''); }
+function safeMarkdown(text) { if (!text) return ''; text = renderFleetTags(text); return tokenize(text).map(blockHTML).join(''); }
 
 const s3dReg = {}; let s3dN = 0, s3dHeals = 0;
 // Cache memori Cortex untuk satu sesi panel multi-agen (recall HANYA sekali per pesan)
@@ -2056,7 +2006,7 @@ const UI_HINT_ID = 'ANTARMUKA (opsional, hemat): kode -> [UI:CODE|bahasa]...[/UI
 const UI_HINT_EN = 'INTERFACE (optional, sparing): code -> [UI:CODE|language]...[/UI:CODE] or a normal code block; chart -> [UI:CHART|{valid Chart.js JSON}] (one tag, no functions/comments); fatal risk or serious contradiction -> [UI:ALERT|short sentence] (max once); short supporting note -> [UI:NOTE]...[/UI:NOTE]. Never put tags inside code blocks.';
 function uiHint() { return settings.lang === 'en' ? UI_HINT_EN : UI_HINT_ID; }
 
-function getSystemPrompt() { return getSystemPromptBase() + '\n\n' + uiHint(); }
+function getSystemPrompt() { return getSystemPromptBase() + '\n\n' + uiHint() + fleetContextHint(); }
 function getSystemPromptBase() {
     if (settings.lang === 'en') return SYSTEM_PROMPTS.en;
     if (settings.lang === 'id') return SYSTEM_PROMPTS.id;
@@ -3098,7 +3048,7 @@ async function sendMessage(forceNormal) {
 
         stream.push(fullAiResponse || '_No response._');
         await stream.finish();
-        try { parseAndExecuteFleetTags(fullAiResponse); } catch (fleetErr) { try { logEvent('ERROR', '[FLEET] parse: ' + (fleetErr.message || fleetErr)); } catch (z) {} }
+        try { processFleetTags(fullAiResponse); } catch (e) {}
         chatHistory.push({ role: 'assistant', content: fullAiResponse });
         if (chatHistory.length > STORE_MAX) chatHistory = chatHistory.slice(-STORE_MAX);
         saveToStorage();
@@ -3778,7 +3728,7 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
         }
         bubbleDiv.stream.push(fullText);
         await bubbleDiv.stream.finish();
-        try { if (isFinal) parseAndExecuteFleetTags(fullText); } catch (fleetErr) {}
+        if (isFinal) { try { processFleetTags(fullText); } catch (e) {} }
         if (agent.id === 'lyric') setAIState('thinking');
         msgDiv.classList.remove('agent-thinking');
         agentTranscript.push({ id: agent.id, name: agent.name, text: fullText });
@@ -3875,6 +3825,7 @@ async function runMultiAgentDiscussion(compiledPrompt) {
                 }
                 fallbackBubble.stream.push(fullText || '_Gagal mendapatkan respons._');
                 await fallbackBubble.stream.finish();
+                try { processFleetTags(fullText); } catch (e) {}
             } catch (e) {
                 fallbackBubble.stream.fail('<p class="err">Fallback juga gagal: ' + escapeHtml(e.message) + '</p>');
             }
@@ -4169,6 +4120,94 @@ function exportBackup() {
     window.addEventListener('offline', () => { showToast('Offline: tautan neural terputus', 3500, true); logEvent('ERROR', 'Jaringan offline.'); });
     window.addEventListener('online', () => { showToast('Online kembali'); logEvent('OK', 'Jaringan pulih.'); });
     if (finePointer) window.addEventListener('pointermove', e => { const r = document.documentElement.style; r.setProperty('--mx', e.clientX + 'px'); r.setProperty('--my', e.clientY + 'px'); }, { passive: true });
+})();
+
+/* ===== FLEET BRIDGE: NEXUS <-> BCGO Fleet Command Center (via window.postMessage) ===== */
+window.fleetContext = null;
+window.fleetContextAt = 0;
+
+/* [FLEET: CMD] atau [FLEET: CMD|args] */
+function fleetTagRe() { return /\[FLEET:\s*([A-Z_]+)(\|[^\]]+)?\]/g; }   // fungsi (bukan const) agar aman dipanggil sebelum baris ini dieksekusi
+function fleetCmdMap(k) { return ({ DEPLOY_ALL: 'DEPLOY_ALL', RETURN_ALL: 'RETURN_ALL', VOID_PULSE: 'VOID_PULSE', FORMATION: 'SET_FORMATION', SET_FORMATION: 'SET_FORMATION' })[k]; }
+
+/* NEXUS -> Drone */
+window.executeFleetCommand = function (cmd, args) {
+    if (window.parent === window) {
+        try { showToast('Fleet: NEXUS berjalan standalone, perintah tidak terkirim', 2800, true); } catch (e) {}
+        return false;
+    }
+    window.parent.postMessage({ type: 'AI_COMMAND', command: cmd, args: args }, '*');
+    try { logEvent('SYSTEM', '[FLEET] ' + cmd + (args ? ' → ' + args : '')); } catch (e) {}
+    return true;
+};
+
+/* Deteksi tag di respons AI yang BARU selesai (bukan saat render ulang riwayat) */
+function processFleetTags(text) {
+    if (!text) return 0;
+    let sent = 0, prev = '';
+    for (const m of String(text).matchAll(fleetTagRe())) {
+        const cmd = fleetCmdMap(m[1]);
+        if (!cmd) continue;                                   // whitelist: tag tak dikenal diabaikan
+        const args = m[2] ? m[2].slice(1).trim() : undefined;
+        const key = cmd + '|' + (args || '');
+        if (key === prev) continue; prev = key;
+        if (++sent > 5) break;                                // batas aman per respons
+        window.executeFleetCommand(cmd, args);
+    }
+    return sent;
+}
+
+/* Tampilan: tag jadi chip kode agar rapi di chat */
+function renderFleetTags(text) {
+    return String(text).replace(fleetTagRe(), (m, c, a) => '`🚁 FLEET → ' + c + (a ? ' ' + a.slice(1).trim() : '') + '`');
+}
+
+/* Konteks telemetri live untuk system prompt (hanya jika masih segar) */
+function fleetContextHint() {
+    const c = window.fleetContext;
+    if (!c || Date.now() - window.fleetContextAt > 30000) return '';
+    let s;
+    try { s = JSON.stringify(c); } catch (e) { return ''; }
+    return '\n\n[FLEET TELEMETRY LIVE] ' + s.slice(0, 600);
+}
+
+/* Drone -> NEXUS */
+(function () {
+    let badge = null;
+    function ensureBadge() {
+        if (badge) return badge;
+        badge = document.createElement('div');
+        badge.id = 'fleet-link-badge';
+        badge.style.cssText = 'position:fixed;top:3px;left:50%;transform:translateX(-50%);z-index:60;pointer-events:none;' +
+            'font:600 9px/1 "Courier New",monospace;letter-spacing:.4px;color:#00ff88;background:rgba(5,10,16,.82);' +
+            'border:1px solid rgba(0,255,136,.45);border-radius:999px;padding:3px 8px;white-space:nowrap;transition:opacity .4s;opacity:0';
+        document.body.appendChild(badge);
+        return badge;
+    }
+    function paint() {
+        const c = window.fleetContext; if (!c) return;
+        const b = ensureBadge();
+        const bat = typeof c.battery === 'number' ? c.battery.toFixed(0) + '%' : '--';
+        b.textContent = '🚁 FLEET LINK · ' + (c.activeDrones ?? 0) + ' aktif · BAT ' + bat + (c.jammed ? ' · JAMMED' : '');
+        b.style.color = c.jammed ? '#ff3366' : '#00ff88';
+        b.style.borderColor = c.jammed ? 'rgba(255,51,102,.55)' : 'rgba(0,255,136,.45)';
+        b.style.opacity = '1';
+    }
+    window.addEventListener('message', (e) => {
+        if (window.parent !== window && e.source !== window.parent) return;   // hanya dari Fleet Command Center
+        if (e.data && e.data.type === 'FLEET_TELEMETRY') {
+            // Simpan data ke variabel global
+            window.fleetContext = e.data.payload;
+            window.fleetContextAt = Date.now();
+            paint();
+        }
+    });
+    setInterval(() => { if (badge && Date.now() - window.fleetContextAt > 10000) badge.style.opacity = '.35'; }, 3000);
+    // Kabari induk bahwa NEXUS siap -> induk mengirim snapshot terakhir
+    if (window.parent !== window) {
+        try { window.parent.postMessage({ type: 'NEXUS_READY' }, '*'); } catch (e) {}
+        window.addEventListener('load', () => { try { window.parent.postMessage({ type: 'NEXUS_READY' }, '*'); } catch (e) {} });
+    }
 })();
 </script>
 </body>
