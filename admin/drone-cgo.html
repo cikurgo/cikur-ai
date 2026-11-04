@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BCGO — FLEET COMMAND CENTER v6.21.0</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
 <style>
 :root {
   --bg-dark:#0a0f14;--panel-bg:#111820;--text-main:#d1d5db;
@@ -168,6 +168,44 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
   .video-grid[data-mode="both"]{grid-template-columns:1fr}
   .video-pane{min-height:180px}
 }
+
+/* ===== NEXUS FLOATING COGNITIVE PANEL ===== */
+#nexus-panel{
+  position:fixed;bottom:20px;right:20px;width:380px;height:500px;z-index:9999;
+  border-radius:12px;overflow:hidden;box-shadow:0 0 20px rgba(0,204,255,0.4);
+  border:1px solid #00ccff;background:#0a0f14;display:flex;flex-direction:column;
+  transform:translateX(120%);opacity:0;pointer-events:none;
+  transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .35s ease;
+}
+#nexus-panel.open{transform:translateX(0);opacity:1;pointer-events:auto}
+#nexus-panel.minimized{height:42px}
+#nexus-panel.minimized #nexus-iframe-wrap{display:none}
+#nexus-panel-header{
+  display:flex;align-items:center;justify-content:space-between;gap:6px;
+  padding:8px 10px;background:#111820;border-bottom:1px solid #1f2937;
+  flex-shrink:0;cursor:move;user-select:none;
+}
+#nexus-panel-header .nx-title{
+  font-size:10px;color:var(--neon-blue);font-weight:bold;letter-spacing:.5px;
+  display:flex;align-items:center;gap:6px;white-space:nowrap;
+}
+#nexus-panel-header .nx-actions{display:flex;gap:4px}
+#nexus-panel-header .nx-btn{
+  background:transparent;border:1px solid #374151;color:#9ca3af;
+  width:26px;height:26px;border-radius:4px;cursor:pointer;font-family:var(--font-mono);
+  font-size:12px;display:inline-flex;align-items:center;justify-content:center;padding:0;
+}
+#nexus-panel-header .nx-btn:hover{border-color:var(--neon-blue);color:var(--neon-blue)}
+#nexus-iframe-wrap{flex:1;min-height:0;position:relative;background:#04070d}
+#nexus-iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#04070d}
+#nexusToggleBtn.active{border-color:var(--neon-blue);color:var(--neon-blue);box-shadow:0 0 8px rgba(0,204,255,.35)}
+@media (max-width:900px){
+  #nexus-panel{
+    width:min(96vw,420px);height:min(80vh,560px);bottom:10px;right:2vw;left:auto;
+  }
+  #nexus-panel.open{width:min(96vw,420px);height:min(80vh,560px)}
+}
+
 </style>
 </head>
 <body>
@@ -215,6 +253,8 @@ hr{border:none;border-top:1px solid #1f2937;margin:6px 0}
       <span id="speedLabel" class="chip value">1x</span></div>
     <button id="muteBtn" class="ctrl-btn">
       <svg class="icon"><use href="#i-volume"/></svg> AUDIO</button>
+    <button id="nexusToggleBtn" class="ctrl-btn" title="Cognitive Nexus Panel">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2a4.5 4.5 0 0 0-3.1 7.75A4 4 0 0 0 4 13.5c0 1.8 1.2 3.3 2.9 3.8A5 5 0 0 0 12 22a5 5 0 0 0 5.1-4.7A4 4 0 0 0 20 13.5a4 4 0 0 0-2.4-3.75A4.5 4.5 0 0 0 14.5 2c-1 0-1.9.3-2.6.9A4.5 4.5 0 0 0 9.5 2z"/><path d="M12 8v4l2 2"/></svg> NEXUS</button>
     <div id="networkStatus" class="status-badge">STARLINK_LINK_ACTIVE</div>
   </div>
 </div>
@@ -463,8 +503,8 @@ if (typeof AbortSignal !== "undefined" && !AbortSignal.timeout) {
 }
 </script>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.7.4/dist/hls.min.js" integrity="sha384-p9vgU/7IYJWd3I4STrtqxqR/2cAQlhIX7D/HrTnIMEjjcUox165b7se7sxmm3zDg" crossorigin="anonymous"></script>
 <script src="drone-cgo.js"></script>
 
 <script>
@@ -930,7 +970,7 @@ function ensureFallbackBar() {
     if (currentEmbed) playEmbed(currentEmbed.direct, currentEmbed.cctv, currentEmbed.opts);
   };
   $("cctvFbCf").onclick = () => {
-    window.open("https://dash.cloudflare.com/?to=/:account/workers-and-pages/create", "_blank", "noopener,noreferrer");
+    toast("Buka dashboard Cloudflare Anda secara manual untuk membuat Worker.", "info", 3000);
   };
   $("cctvFbCopy").onclick = async () => {
     let code;
@@ -2066,6 +2106,7 @@ let gpsScanInProgress = false;
 $("gpsBtn").onclick = () => {
   if (gpsScanInProgress) { toast("GPS sedang memproses lokasi sebelumnya", "warning", 1800); return; }
   if (!navigator.geolocation) { toast("GPS tidak didukung", "danger"); return; }
+  if (!confirm("Aplikasi ini akan mengakses koordinat GPS Anda secara lokal. Lanjutkan?")) return;
   gpsScanInProgress = true;
   $("gpsBtn").disabled = true;
   $("gpsBtn").innerHTML = '<svg class="icon"><use href="#i-refresh"/></svg> MENCARI...';
@@ -2217,6 +2258,26 @@ CGO_Fleet.onEvent((data) => {
       $("meshBadge").innerText = "MESH: OK";
       $("meshBadge").style.color = "var(--neon-green)";
     }
+    try {
+      const nexusIframe = document.getElementById("nexus-iframe");
+      if (nexusIframe && nexusIframe.contentWindow) {
+        const drone = CGO_Fleet.getSelectedDrone && CGO_Fleet.getSelectedDrone();
+        const t = drone && drone.telemetry;
+        nexusIframe.contentWindow.postMessage({
+          type: "FLEET_TELEMETRY",
+          payload: {
+            event: "FLEET_STATS_UPDATE",
+            droneState: drone && drone.state,
+            battery: t && t.battery,
+            jammed: t && t.isJammed,
+            activeDrones: s.active,
+            emergency: s.emergency,
+            offline: s.offline,
+            idle: s.idle
+          }
+        }, "*");
+      }
+    } catch (_) {}
   }
 
   if (ev === "DRONE_SELECTED") {
@@ -2282,6 +2343,25 @@ CGO_Fleet.onEvent((data) => {
     const hist = drone.getHistory();
     drawSparkline(bctx, batteryCanvas, hist.battery, "#00ccff", 0, 100);
     drawSparkline(sctx, signalCanvas, hist.signal, "#00ff88", 0, 100);
+    try {
+      const nexusIframe = document.getElementById("nexus-iframe");
+      if (nexusIframe && nexusIframe.contentWindow) {
+        const stats = CGO_Fleet.getFleetStats ? CGO_Fleet.getFleetStats() : {};
+        nexusIframe.contentWindow.postMessage({
+          type: "FLEET_TELEMETRY",
+          payload: {
+            event: "TELEMETRY_UPDATE",
+            droneState: drone.state,
+            droneId: drone.id,
+            battery: t.battery,
+            signal: t.signalStrength,
+            altitude: t.altitude,
+            jammed: t.isJammed,
+            activeDrones: stats.active
+          }
+        }, "*");
+      }
+    } catch (_) {}
   }
 
   if (ev === "NEW_LOG") {
@@ -2534,14 +2614,9 @@ muteBtn.classList.add("active");
 renderCCTVList([]);
 selectDroneById("CGO-0001");
 $("proxyUrlInput").value = CGO_Fleet.CCTV.getProxyUrl() || "";
-/* Kalibrasi: auto-isi proxy Cikur bila kosong */
-if (!$("proxyUrlInput").value && /cikurgo\.github\.io/i.test(location.hostname)) {
-  $("proxyUrlInput").value = "https://cgo-proxy.cikurgo.workers.dev";
-  try { CGO_Fleet.CCTV.setProxyUrl($("proxyUrlInput").value); } catch (_) {}
-}
 refreshProxyIdle();
 if (CGO_Fleet.CCTV.getProxyUrl()) CGO_Fleet.CCTV.checkProxy(true);
-refreshIP();
+// refreshIP(); /* privacy: IP detection only on manual chip click */
 setTimeout(() => { if (accessRun === 0) scanNearbyOnly(); }, 2000);   /* jangan menimpa hasil klik GPS/peta yang lebih dulu */
 
 let resizeTimer;
@@ -2568,8 +2643,208 @@ const primeAudio = () => {
 document.addEventListener("click", primeAudio);
 document.addEventListener("keydown", primeAudio);
 
-console.info("[BCGO UI] v6.21.0 ready · Multi Auto Access (GPS/Peta) + Kaskade Kamera + Streetside + Zero Regresi");
+
+/* ============= NEXUS BRIDGE ============= */
+(function initNexusBridge() {
+  const panel = document.getElementById("nexus-panel");
+  const iframe = document.getElementById("nexus-iframe");
+  const toggleBtn = document.getElementById("nexusToggleBtn");
+  const minBtn = document.getElementById("nexusMinBtn");
+  const closeBtn = document.getElementById("nexusCloseBtn");
+  if (!panel || !toggleBtn) return;
+
+  let lastFleetStats = { active: 0, emergency: 0, offline: 0, offline: 0, idle: 0 };
+  let lastTelem = null;
+
+  function postToNexus(payload) {
+    try {
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: "FLEET_TELEMETRY", payload }, "*");
+      }
+    } catch (_) {}
+  }
+
+  function setPanelOpen(open) {
+    panel.classList.toggle("open", !!open);
+    panel.classList.remove("minimized");
+    toggleBtn.classList.toggle("active", !!open);
+    try { localStorage.setItem("cgo_nexus_open", open ? "1" : "0"); } catch (_) {}
+  }
+
+  toggleBtn.addEventListener("click", () => setPanelOpen(!panel.classList.contains("open")));
+  if (closeBtn) closeBtn.addEventListener("click", () => setPanelOpen(false));
+  if (minBtn) minBtn.addEventListener("click", () => {
+    if (!panel.classList.contains("open")) setPanelOpen(true);
+    else panel.classList.toggle("minimized");
+  });
+
+  try {
+    if (localStorage.getItem("cgo_nexus_open") === "1") setPanelOpen(true);
+  } catch (_) {}
+
+  // Simple drag for mobile / desktop header
+  const header = document.getElementById("nexus-panel-header");
+  if (header) {
+    let dragging = false, ox = 0, oy = 0, startRight = 0, startBottom = 0;
+    header.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".nx-btn")) return;
+      dragging = true;
+      ox = e.clientX; oy = e.clientY;
+      const rect = panel.getBoundingClientRect();
+      startRight = window.innerWidth - rect.right;
+      startBottom = window.innerHeight - rect.bottom;
+      header.setPointerCapture(e.pointerId);
+    });
+    header.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      const dx = e.clientX - ox, dy = e.clientY - oy;
+      panel.style.right = Math.max(4, startRight - dx) + "px";
+      panel.style.bottom = Math.max(4, startBottom - dy) + "px";
+      panel.style.left = "auto";
+    });
+    header.addEventListener("pointerup", () => { dragging = false; });
+  }
+
+  // Patch into existing event handler via extra listeners on the same onEvent API
+  const _origOnEvent = CGO_Fleet.onEvent;
+  // CGO_Fleet.onEvent already registered; add another subscription if supported
+  if (typeof CGO_Fleet.on === "function") {
+    CGO_Fleet.on("FLEET_STATS_UPDATE", (s) => {
+      lastFleetStats = s || lastFleetStats;
+      postToNexus({
+        event: "FLEET_STATS_UPDATE",
+        activeDrones: lastFleetStats.active,
+        emergency: lastFleetStats.emergency,
+        jammed: lastFleetStats.jammed,
+        offline: lastFleetStats.offline,
+        idle: lastFleetStats.idle,
+        droneState: lastTelem && lastTelem.state,
+        battery: lastTelem && lastTelem.battery,
+        jammedFlag: lastTelem && lastTelem.isJammed
+      });
+    });
+    CGO_Fleet.on("TELEMETRY_UPDATE", (t) => {
+      const drone = CGO_Fleet.getSelectedDrone && CGO_Fleet.getSelectedDrone();
+      lastTelem = Object.assign({}, t, { state: drone && drone.state });
+      postToNexus({
+        event: "TELEMETRY_UPDATE",
+        droneState: drone && drone.state,
+        droneId: drone && drone.id,
+        battery: t.battery,
+        signal: t.signalStrength,
+        altitude: t.altitude,
+        jammed: t.isJammed,
+        activeDrones: lastFleetStats.active
+      });
+    });
+  }
+
+  // Also mirror from the already-bound onEvent path by wrapping toast-free hooks:
+  // Re-bind by observing after each update via interval-light throttle
+  let telemTick = 0;
+  const telemHook = setInterval(() => {
+    telemTick++;
+    if (telemTick % 3 !== 0) return; // ~ every few seconds depending on fleet tick
+    try {
+      const drone = CGO_Fleet.getSelectedDrone && CGO_Fleet.getSelectedDrone();
+      const stats = CGO_Fleet.getFleetStats && CGO_Fleet.getFleetStats();
+      if (stats) lastFleetStats = stats;
+      if (drone && drone.telemetry) {
+        const t = drone.telemetry;
+        postToNexus({
+          event: "SNAPSHOT",
+          droneState: drone.state,
+          droneId: drone.id,
+          battery: t.battery,
+          signal: t.signalStrength,
+          altitude: t.altitude,
+          jammed: t.isJammed,
+          activeDrones: lastFleetStats.active
+        });
+      }
+    } catch (_) {}
+  }, 4000);
+
+  window.addEventListener("message", (e) => {
+    if (!e.data || e.data.type !== "AI_COMMAND") return;
+    const cmd = String(e.data.command || "").toUpperCase();
+    const args = e.data.args;
+    try {
+      if (cmd === "DEPLOY_ALL") CGO_Fleet.deployAll();
+      else if (cmd === "RETURN_ALL") CGO_Fleet.returnAll();
+      else if (cmd === "TSUNAMI") CGO_Fleet.triggerGlobalTsunami();
+      else if (cmd === "VOID_PULSE") CGO_Fleet.activateVoidPulseAll();
+      else if (cmd === "SET_FORMATION" || cmd === "FORMATION") {
+        const form = (typeof args === "string" ? args : (args && args.formation) || "grid")
+          .toString().toLowerCase().replace(/[^a-z0-9-]/g, "");
+        if (typeof CGO_Fleet.setFormation === "function") CGO_Fleet.setFormation(form);
+        else if (typeof window.setFormation === "function") window.setFormation(form);
+      } else if (cmd === "SCAN_NEARBY") {
+        if (typeof scanNearbyOnly === "function") scanNearbyOnly();
+      } else if (cmd === "MULTI_SCAN") {
+        if (typeof scanMultiRegion === "function") scanMultiRegion();
+      } else {
+        toast("🤖 Unknown AI command: " + cmd, "warning");
+        return;
+      }
+      toast("🤖 AI Command Executed: " + cmd, "success");
+      CGO_Fleet.logGlobal && CGO_Fleet.logGlobal("🤖 [NEXUS] Command: " + cmd, "SUCCESS");
+    } catch (err) {
+      toast("🤖 AI Command failed: " + (err.message || err), "danger");
+    }
+  });
+
+  // Enhance existing onEvent blocks by also posting when those events fire:
+  // Monkey-patch after the fact: wrap CGO_Fleet.emit if present
+  if (typeof CGO_Fleet.emit === "function" && !CGO_Fleet._nexusPatched) {
+    const _emit = CGO_Fleet.emit.bind(CGO_Fleet);
+    CGO_Fleet.emit = function (event, data) {
+      const r = _emit(event, data);
+      try {
+        if (event === "TELEMETRY_UPDATE" || event === "FLEET_STATS_UPDATE") {
+          const drone = CGO_Fleet.getSelectedDrone && CGO_Fleet.getSelectedDrone();
+          const s = event === "FLEET_STATS_UPDATE" ? data : lastFleetStats;
+          if (event === "FLEET_STATS_UPDATE") lastFleetStats = data || lastFleetStats;
+          const t = event === "TELEMETRY_UPDATE" ? data : (drone && drone.telemetry);
+          postToNexus({
+            event,
+            droneState: drone && drone.state,
+            droneId: drone && drone.id,
+            battery: t && t.battery,
+            signal: t && t.signalStrength,
+            altitude: t && t.altitude,
+            jammed: t && t.isJammed,
+            activeDrones: (s && s.active) || lastFleetStats.active
+          });
+        }
+      } catch (_) {}
+      return r;
+    };
+    CGO_Fleet._nexusPatched = true;
+  }
+})();
+
+
+console.info("[BCGO UI] v6.21.0 + NEXUS bridge ready · Multi Auto Access + Cognitive Panel");
 })();
 </script>
+
+<!-- ===== NEXUS FLOATING COGNITIVE PANEL ===== -->
+<div id="nexus-panel" aria-label="CGO Research Nexus">
+  <div id="nexus-panel-header">
+    <div class="nx-title">
+      <svg class="icon" style="color:var(--neon-blue)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.5 2a4.5 4.5 0 0 0-3.1 7.75A4 4 0 0 0 4 13.5c0 1.8 1.2 3.3 2.9 3.8A5 5 0 0 0 12 22a5 5 0 0 0 5.1-4.7A4 4 0 0 0 20 13.5a4 4 0 0 0-2.4-3.75A4.5 4.5 0 0 0 14.5 2c-1 0-1.9.3-2.6.9A4.5 4.5 0 0 0 9.5 2z"/></svg>
+      CGO · RESEARCH NEXUS
+    </div>
+    <div class="nx-actions">
+      <button type="button" class="nx-btn" id="nexusMinBtn" title="Minimize">_</button>
+      <button type="button" class="nx-btn" id="nexusCloseBtn" title="Close">×</button>
+    </div>
+  </div>
+  <div id="nexus-iframe-wrap">
+    <iframe id="nexus-iframe" src="cgo-nexus.html" title="CGO Research Nexus" allow="clipboard-read; clipboard-write"></iframe>
+  </div>
+</div>
+
 </body>
 </html>

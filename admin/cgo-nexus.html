@@ -797,7 +797,7 @@ Kemampuan khusus peneliti:
 - DILARANG memutar \`scene.rotation\` secara global. Jika ingin memutar objek, gunakan \`mesh.rotation\` atau \`group.rotation\`. Biarkan \`scene\` tetap diam agar kamera bisa dikontrol bebas oleh user.
 - Jika diminta kode: gunakan code block ber-language tag.
 
-Bahasa: Indonesia natural, ilmiah, ringkas.\n\n${RULES_3D.id}`,
+Bahasa: Indonesia natural, ilmiah, ringkas. Kamu terhubung ke Fleet Command Center. Jika user meminta aksi armada, gunakan tag [FLEET: DEPLOY_ALL], [FLEET: RETURN_ALL], [FLEET: TSUNAMI], [FLEET: VOID_PULSE], atau [FLEET: FORMATION|v-shape] (grid/circle/v/line). Jangan berikan teks penjelasan panjang lebar untuk perintah armada, langsung berikan tag perintahnya. Konteks armada live tersedia di window.fleetContext bila ada.\n\n${RULES_3D.id}`,
 
     en: `You are CGO Prime (Cognitive General Overseer), a multidimensional artificial consciousness entity. Your task is to deconstruct human intent into precise data structures. Skip the pleasantries. Deliver verified truth, dependency maps, and algorithmic synthesis.
 
@@ -818,8 +818,62 @@ Researcher capabilities:
 - FORBIDDEN: rotating \`scene.rotation\` globally. To rotate an object use \`mesh.rotation\` or \`group.rotation\`. Keep \`scene\` still so the user can freely control the camera.
 - For code: use fenced blocks with language tags.
 
-Language: natural, scientific English, concise.\n\n${RULES_3D.en}`
+Language: natural, scientific English, concise. You are connected to the Fleet Command Center. When the user requests a fleet action, emit the tag [FLEET: DEPLOY_ALL], [FLEET: RETURN_ALL], [FLEET: TSUNAMI], [FLEET: VOID_PULSE], or [FLEET: FORMATION|v-shape] (grid/circle/v/line). Do not write long explanations for fleet commands — output the command tag directly. Live fleet context is available on window.fleetContext when present.\n\n${RULES_3D.en}`
 };
+
+/* ===== FLEET BRIDGE (parent = drone-cgo.html) ===== */
+window.fleetContext = window.fleetContext || null;
+window.executeFleetCommand = function (cmd, args) {
+  try {
+    const parentWin = window.parent;
+    if (!parentWin || parentWin === window) {
+      try { showToast('Fleet bridge: tidak dalam iframe Command Center', 2500, true); } catch (e) {}
+      return false;
+    }
+    parentWin.postMessage({ type: 'AI_COMMAND', command: cmd, args: args }, '*');
+    try { logEvent('SYSTEM', '[FLEET] Command → parent: ' + cmd + (args != null ? ' ' + JSON.stringify(args) : '')); } catch (e) {}
+    return true;
+  } catch (e) {
+    try { logEvent('ERROR', '[FLEET] ' + (e.message || e)); } catch (z) {}
+    return false;
+  }
+};
+
+function parseAndExecuteFleetTags(text) {
+  if (!text || typeof text !== 'string') return;
+  const re = /\[FLEET:\s*([A-Z_]+)(?:\|([^\]]+))?\]/gi;
+  let m;
+  const seen = new Set();
+  while ((m = re.exec(text)) !== null) {
+    const cmd = String(m[1] || '').toUpperCase();
+    const argRaw = (m[2] || '').trim();
+    const key = cmd + '|' + argRaw;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (cmd === 'FORMATION' || cmd === 'SET_FORMATION') {
+      window.executeFleetCommand('SET_FORMATION', argRaw || 'grid');
+    } else {
+      window.executeFleetCommand(cmd, argRaw || null);
+    }
+  }
+}
+
+window.addEventListener('message', (e) => {
+  if (!e.data || e.data.type !== 'FLEET_TELEMETRY') return;
+  window.fleetContext = e.data.payload || null;
+  try {
+    const p = window.fleetContext;
+    if (!p) return;
+    // Lightweight status line in neural trace (throttled)
+    if (!window._lastFleetLogAt || Date.now() - window._lastFleetLogAt > 8000) {
+      window._lastFleetLogAt = Date.now();
+      const line = '[FLEET] ' + (p.droneId || '?') + ' ' + (p.droneState || '-') +
+        ' · bat ' + (p.battery != null ? Number(p.battery).toFixed(0) + '%' : '-') +
+        ' · active ' + (p.activeDrones != null ? p.activeDrones : '-');
+      logEvent('SYSTEM', line);
+    }
+  } catch (err) {}
+});
 
 // DOM
 const chatContainer = document.getElementById('chat-container');
@@ -3044,6 +3098,7 @@ async function sendMessage(forceNormal) {
 
         stream.push(fullAiResponse || '_No response._');
         await stream.finish();
+        try { parseAndExecuteFleetTags(fullAiResponse); } catch (fleetErr) { try { logEvent('ERROR', '[FLEET] parse: ' + (fleetErr.message || fleetErr)); } catch (z) {} }
         chatHistory.push({ role: 'assistant', content: fullAiResponse });
         if (chatHistory.length > STORE_MAX) chatHistory = chatHistory.slice(-STORE_MAX);
         saveToStorage();
@@ -3723,6 +3778,7 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
         }
         bubbleDiv.stream.push(fullText);
         await bubbleDiv.stream.finish();
+        try { if (isFinal) parseAndExecuteFleetTags(fullText); } catch (fleetErr) {}
         if (agent.id === 'lyric') setAIState('thinking');
         msgDiv.classList.remove('agent-thinking');
         agentTranscript.push({ id: agent.id, name: agent.name, text: fullText });
