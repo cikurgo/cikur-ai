@@ -134,6 +134,8 @@ body[data-input] #summon-hint,body[data-busy] #summon-hint{opacity:0;pointer-eve
 .input-wrapper{flex:1;position:relative;min-width:0}
 .input-wrapper::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:linear-gradient(90deg,transparent,rgba(var(--aura-a),.9),transparent);opacity:.35;transition:opacity .4s}
 .input-wrapper:focus-within::after{opacity:1}
+.token-badge{position:absolute;right:.4rem;bottom:.4rem;font:400 .66rem var(--mono);color:var(--dim);padding:.15rem .4rem;border-radius:4px;background:rgba(var(--aura-a),.08);pointer-events:none;opacity:0;transition:opacity .3s}
+.token-badge.show{opacity:1}.token-badge.warn{color:var(--warning)}.token-badge.danger{color:var(--danger)}
 textarea{width:100%;background:transparent;border:0;color:var(--ink);font:300 1.08rem/1.6 var(--serif);resize:none;outline:none;padding:.7rem .15rem;max-height:140px;min-height:46px;overflow-y:auto;caret-color:var(--accent)}
 textarea::placeholder{color:var(--dim)}
 .lnk{font:400 .74rem var(--mono);color:var(--dim);padding:.6rem .6rem;min-height:40px;display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;transition:color .2s}
@@ -167,7 +169,6 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
 .tele-section{padding:0 0 1.7rem}
 .tele-title{font:400 .72rem var(--mono);color:var(--dim);margin-bottom:.7rem;display:flex;gap:.5rem}.tele-title .hint{margin-left:auto;font-size:.62rem}
 .neural-badges{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
-.neural-badges { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
 .nbadge {
     background: rgba(13,21,38,0.9); border: 1.5px solid rgba(255,255,255,0.1);
     border-radius: 6px; padding: 6px 3px; text-align: center; transition: all 0.2s ease; opacity: 0.4; position: relative;
@@ -306,6 +307,7 @@ body[data-swarm][data-busy] #swarm{display:flex}
 </style>
 </head>
 <body data-theme="cyber" data-state="idle">
+<div id="thermal-guard" aria-hidden="true"></div>
 <div id="void">
     <div class="aura" id="aura-think"><i></i></div>
     <div class="aura" id="aura-alert"><i></i></div>
@@ -353,7 +355,7 @@ body[data-swarm][data-busy] #swarm{display:flex}
         <div id="swarm" aria-hidden="true"></div>
         <div id="activity"><span id="activity-text"></span><button class="lnk" id="stop-btn" type="button" aria-label="Terminate">TERMINATE</button></div>
         <div id="composer">
-            <div class="input-wrapper"><textarea id="chat-input" rows="1" placeholder="Inisialisasi Directives / Intent Vector..." aria-label="Prompt"></textarea></div>
+            <div class="input-wrapper"><textarea id="chat-input" rows="1" placeholder="Inisialisasi Directives / Intent Vector..." aria-label="Prompt"></textarea><span id="token-badge" class="token-badge" aria-live="off" title="Perkiraan token">~0 tok</span></div>
             <button class="lnk" id="send-btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg><span id="send-label">SYNTHESIZE</span></button>
         </div>
         <div id="tools">
@@ -437,7 +439,7 @@ body[data-swarm][data-busy] #swarm{display:flex}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.6-robust initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.7-robust initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -500,11 +502,12 @@ body[data-swarm][data-busy] #swarm{display:flex}
 
 <script>
 /* ================================================================
-   SPC v4.0 — RESEARCH NEXUS  (v6.6-robust)
+   SPC v4.0 — RESEARCH NEXUS  (v6.7.1-robust)
    Multi-provider · Compile Only · Multi-lang · Theme · Researcher mode
    Zero regression from v3.1 · Hardened free-tier retry + CDN guard
+   Hardened: CSS dedupe, thermal-guard in DOM, toast/lang consistency, SSE/exec guards
    ================================================================ */
-const APP_VERSION = '6.6-robust';
+const APP_VERSION = '6.7.1-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -912,6 +915,20 @@ if (hasChart) { Chart.defaults.color = '#cbd5e1'; Chart.defaults.borderColor = '
 })();
 
 /* ===================== SETTINGS ===================== */
+// Migrasi format lama: tiap agen = 1 entry {role:'agent'} -> digabung jadi 1 panel {role:'panel', entries:[...]}
+function migrateHistoryToPanels(hist) {
+    return hist.filter(m => m && typeof m === 'object').map(m => {
+        if (m.role === 'agent') {
+            return { role: 'panel-orphan', entries: [{ agentId: m.agentId, agentName: m.agentName, agentColor: m.agentColor, agentRole: m.agentRole, content: m.content, isSynth: !!m.isSynth }] };
+        }
+        return m;
+    }).reduce((acc, m) => {
+        const prev = acc[acc.length - 1];
+        if (m.role === 'panel-orphan' && prev && prev.role === 'panel') { prev.entries.push(...m.entries); return acc; }
+        if (m.role === 'panel-orphan') { acc.push({ role: 'panel', createdAt: Date.now(), entries: m.entries }); return acc; }
+        acc.push(m); return acc;
+    }, []);
+}
 function loadSettings() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
@@ -922,7 +939,11 @@ function loadSettings() {
                 if (!settings.keys) settings.keys = {};
                 if (!settings.models) settings.models = {};
             }
-            if (Array.isArray(data.history)) chatHistory = data.history.slice(-STORE_MAX);
+            if (Array.isArray(data.history)) {
+                chatHistory = data.history.slice(-STORE_MAX);
+                try { chatHistory = migrateHistoryToPanels(chatHistory); }
+                catch (mErr) { console.warn('[MIGRASI] history gagal dimigrasi:', mErr); chatHistory = []; try { setTimeout(() => { if (typeof logEvent === 'function') logEvent('WARN', '[MIGRASI] Format history lama gagal dimigrasi — history dikosongkan.'); }, 800); } catch (z) {} }
+            }
             if (data.lastArtifact) lastCompiledArtifact = data.lastArtifact;
         }
     } catch (e) { console.warn(e); }
@@ -987,6 +1008,10 @@ function applyTheme(t) {
 
 providerSelect.addEventListener('change', () => {
     settings.provider = providerSelect.value;
+    if (typeof localBrainActive !== 'undefined' && localBrainActive) {
+        deactivateLocalBrain();
+        showToast('Local Brain dimatikan karena ganti provider', 2800, true);
+    }
     apiKeyInput.value = settings.keys[settings.provider] || '';
     refreshModelList();
     customBaseWrap.style.display = settings.provider === 'custom' ? 'flex' : 'none';
@@ -1026,7 +1051,7 @@ themeBtn.addEventListener('click', () => {
     themeSelect.value = next;
     applyTheme(next);
     saveToStorage();
-    showToast(`Theme: ${next}`);
+    showToast(`Tema: ${next}`);
 });
 
 /* ===================== PARSER (v3.1 expanded, kept) ===================== */
@@ -1041,7 +1066,9 @@ const CATEGORY_KEYWORDS = {
 function hasTerm(text, term) {
     let i = text.indexOf(term);
     while (i !== -1) {
-        if (i === 0 || !/[\p{L}\p{N}]/u.test(text[i - 1])) return true;
+        const before = i === 0 || !/[\p{L}\p{N}]/u.test(text[i - 1]);
+        const after = i + term.length >= text.length || !/[\p{L}\p{N}]/u.test(text[i + term.length]);
+        if (before && after) return true;
         i = text.indexOf(term, i + 1);
     }
     return false;
@@ -1181,6 +1208,8 @@ function updateSpecScore(score) {
     else specValueEl.classList.add('high');
 }
 const HEAT_CELLS = 40;
+const HEAT_IMPORTANT = ['role','context','rules','objective','validation','harus','wajib','jangan','buat','pastikan','validasi','test','review','konteks','tujuan','aturan','kamu adalah','sebagai','analisis','expert','pakar','constraint','peneliti','scientist','map','decomp'];
+const HEAT_IMPORTANT_RE = HEAT_IMPORTANT.map(w => new RegExp('(?<![\\p{L}\\p{N}])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iu'));
 function renderWordHeat(text) {
     if (!heatBarEl.children.length) {
         for (let i = 0; i < HEAT_CELLS; i++) {
@@ -1190,10 +1219,9 @@ function renderWordHeat(text) {
     const cells = heatBarEl.children;
     const words = text.split(/\s+/).filter(Boolean);
     const chunkSize = Math.max(1, Math.ceil(words.length / HEAT_CELLS));
-    const important = ['role','context','rules','objective','validation','harus','wajib','jangan','buat','pastikan','validasi','test','review','konteks','tujuan','aturan','kamu adalah','sebagai','analisis','expert','pakar','constraint','peneliti','scientist','map','decomp'];
     for (let i = 0; i < HEAT_CELLS; i++) {
         const chunk = words.slice(i * chunkSize, (i+1)*chunkSize).join(' ').toLowerCase();
-        let hits = 0; important.forEach(w => { if (chunk.includes(w)) hits++; });
+        let hits = 0; HEAT_IMPORTANT_RE.forEach(re => { if (re.test(chunk)) hits++; });
         const cell = cells[i]; cell.className = 'heat-cell';
         if (!chunk) cell.classList.add('cold');
         else if (hits >= 3) cell.classList.add('max');
@@ -1228,6 +1256,14 @@ function runLiveScan(rawText) {
     renderIssues(liveIssues);
     heatWordsEl.textContent = liveMetrics.wordCount + ' words · ~' + Math.ceil(rawText.length / 4) + ' tok';
     heatFlaggedEl.textContent = liveMetrics.flagged + ' flagged';
+    const tb = document.getElementById('token-badge');
+    if (tb) {
+        const tok = Math.ceil((liveMetrics.wordCount || 0) * 1.3);
+        tb.textContent = '~' + tok + ' tok';
+        tb.classList.toggle('show', tok > 0);
+        tb.classList.toggle('warn', tok > 2000);
+        tb.classList.toggle('danger', tok > 6000);
+    }
     if (rawText.trim()) updateArtifactPreview(compilePrompt(liveSegments));
 }
 const debouncedScan = debounce(t => runLiveScan(t), DEBOUNCE_MS);
@@ -1350,7 +1386,7 @@ function tokenize(text) {
     return out;
 }
 /*TOK-END*/
-function sanitizeHtml(h) { return hasPurify ? DOMPurify.sanitize(h) : h; }
+function sanitizeHtml(h) { return hasPurify ? DOMPurify.sanitize(h) : escapeHtml(h); }
 function mdHtml(s, inline) { if (!hasMarked) return escapeHtml(s).replace(/\n/g, '<br>'); return sanitizeHtml(inline ? marked.parseInline(s) : marked.parse(s)); }
 function codeHtml(lang, code) { const l = (lang || '').replace(/[^a-z0-9+#-]/g, ''); return '<div class="ui-code" data-lang="' + l + '"><pre><code class="language-' + (l || 'plaintext') + '">' + escapeHtml(code) + '</code></pre></div>'; }
 function chartHtml(cfg) { return '<div class="ui-chart" data-cfg="' + escapeHtml(String(cfg).trim()) + '"></div>'; }
@@ -1499,7 +1535,7 @@ cv.addEventListener('wheel',function(e){e.preventDefault();dist=Math.max(.5,Math
 function loop(){requestAnimationFrame(loop);if(paused||off)return;try{var dt=Math.min(clock.getDelta(),.05),t=clock.elapsedTime;for(var i=0;i<frames.length;i++)frames[i](t,dt);scene.rotation.set(0,0,0);
 camera.position.set(target.x+dist*Math.cos(el)*Math.sin(az),target.y+dist*Math.sin(el),target.z+dist*Math.cos(el)*Math.cos(az));camera.lookAt(target);renderer.render(scene,camera)}catch(e){paused=true;send('error',String(e&&e.message||e));return}
 if(!ok){ok=true;send('ok','LIVE')}}
-var rec,chunks;
+var rec;
 addEventListener('message',function(e){var d=e.data;if(!d)return;
 // --- EGO-CORTEX RECEIVER (agent_state may arrive without cgo3d id) ---
 if(d.cmd==='agent_state'){
@@ -1510,8 +1546,28 @@ if(d.cmd==='node_clicked'){try{parent.postMessage({type:'node_clicked',agent:d.a
 if(d.cgo3d!==ID)return;
 if(d.cmd==='pause'){paused=!paused;if(!paused)clock.getDelta();send('state',paused?'PAUSED':'LIVE')}
 if(d.cmd==='vis')off=!d.v;if(d.cmd==='shot'){try{renderer.render(scene,camera);var sw=d.v||320,sc=document.createElement('canvas'),sx;sc.width=sw;sc.height=Math.max(1,Math.round(sw*cv.height/cv.width));sx=sc.getContext('2d');sx.fillStyle='#05070d';sx.fillRect(0,0,sc.width,sc.height);sx.drawImage(cv,0,0,sc.width,sc.height);send('shot',sc.toDataURL('image/jpeg',.85),d.tag||'')}catch(x){send('state','SHOT gagal')}}if(d.cmd==='snap'){try{renderer.render(scene,camera);var sa=document.createElement('a');sa.href=cv.toDataURL('image/png');sa.download='scene3d.png';sa.click()}catch(x){send('state','SNAP gagal')}}
-if(d.cmd==='rec'){try{if(rec&&rec.state==='recording'){rec.stop();return}chunks=[];rec=new MediaRecorder(cv.captureStream(30),{mimeType:'video/webm'});
-rec.ondataavailable=function(x){chunks.push(x.data)};rec.onstop=function(){var bl=new Blob(chunks,{type:'video/webm'}),a=document.createElement('a');a.href=URL.createObjectURL(bl);a.download='scene3d.webm';a.click();try{send('video',bl)}catch(z){}send('state','LIVE')};rec.start();send('state','● REC')}catch(x){send('state','REC tidak didukung')}}});
+if(d.cmd==='rec'){
+  try {
+    if(rec && rec.state==='recording'){ rec.stop(); return; }
+    var localChunks = [];
+    var localRec = new MediaRecorder(cv.captureStream(30), { mimeType: 'video/webm' });
+    rec = localRec;
+    localRec.ondataavailable = function(x){ if (x.data && x.data.size > 0) localChunks.push(x.data); };
+    localRec.onstop = function(){
+      var bl = new Blob(localChunks, { type: 'video/webm' }),
+          a = document.createElement('a');
+      a.href = URL.createObjectURL(bl);
+      a.download = 'scene3d.webm';
+      a.click();
+      try { send('video', bl); } catch(z) {}
+      send('state', 'LIVE');
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 5000);
+      if (rec === localRec) rec = null;
+    };
+    localRec.start();
+    send('state', '● REC');
+  } catch(x) { send('state', 'REC tidak didukung'); }
+}});
 loop()})();<\/script></body></html>`;
 }
 function whenIdle(fn, n = 120) { if (!isGenerating) return fn(); if (n > 0) setTimeout(() => whenIdle(fn, n - 1), 500); }
@@ -1822,20 +1878,33 @@ function buildChart(el) {
 function execCode(p, lang, code) {
     const old = p.querySelector('.exec-out'); if (old) old.remove();
     const out = document.createElement('div'); out.className = 'exec-out'; p.appendChild(out);
-    const frame = document.createElement('iframe'); frame.setAttribute('sandbox', 'allow-scripts'); frame.className = 'exec-frame';
-    if (lang === 'html') { frame.srcdoc = code; out.appendChild(frame); return; }
+    code = String(code || '');
+    if (code.length > 80000) { out.innerHTML = '<div class="e">Kode terlalu besar untuk dieksekusi (maks ~80KB).</div>'; return; }
+    const frame = document.createElement('iframe');
+    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.setAttribute('referrerpolicy', 'no-referrer');
+    frame.className = 'exec-frame';
+    if (lang === 'html') {
+        frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data: blob:; script-src \'unsafe-inline\'">' + code;
+        out.appendChild(frame); return;
+    }
     const id = 'x' + Math.random().toString(36).slice(2), safe = s => JSON.stringify(s).replace(/</g, '\\u003c');
     frame.style.display = 'none';
     const log = (k, t) => { const d = document.createElement('div'); if (k === 'error') d.className = 'e'; d.textContent = t; out.appendChild(d); };
+    let finished = false;
     const onMsg = ev => { const d = ev.data; if (ev.source !== frame.contentWindow || !d || d.__cgo !== id) return; if (d.k === 'done') { finish(); return; } log(d.k, d.v); };
     const tm = setTimeout(() => { log('error', 'timeout 6s'); finish(); }, 6000);
-    function finish() { window.removeEventListener('message', onMsg); clearTimeout(tm); frame.remove(); }
+    function finish() {
+        if (finished) return; finished = true;
+        window.removeEventListener('message', onMsg); clearTimeout(tm);
+        try { frame.remove(); } catch (e) {}
+    }
     window.addEventListener('message', onMsg);
-    const runner = 'const __id=' + safe(id) + ';const send=(k,v)=>parent.postMessage({__cgo:__id,k:k,v:v},"*");' +
+    const runner = 'const __id=' + safe(id) + ';const send=(k,v)=>{try{parent.postMessage({__cgo:__id,k:k,v:v},"*")}catch(e){}};' +
         'const fmt=a=>a.map(x=>{try{return typeof x==="string"?x:JSON.stringify(x)}catch(e){return String(x)}}).join(" ");' +
-        '["log","info","warn","error"].forEach(m=>{console[m]=(...a)=>send(m,fmt(a))});window.onerror=m=>{send("error",String(m))};' +
+        '["log","info","warn","error"].forEach(m=>{console[m]=(...a)=>send(m,fmt(a))});window.onerror=(m)=>{send("error",String(m));};' +
         'try{const r=(0,eval)(' + safe(code) + ');if(r!==undefined)send("result",fmt([r]))}catch(e){send("error",String(e))}send("done","")';
-    frame.srcdoc = '<!doctype html><meta charset="utf-8"><script>' + runner + '<\/script>';
+    frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\'"><script>' + runner + '<\/script>';
     out.appendChild(frame);
 }
 function buildCodeHead(p) {
@@ -1961,7 +2030,7 @@ chatInput.addEventListener('keydown', e => {
 });
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-        if (isGenerating) { skipTyping(); if (currentAbortController) { currentAbortController.abort(); showToast('Stopped (Esc)'); } }
+        if (isGenerating) { skipTyping(); if (currentAbortController) { currentAbortController.abort(); showToast('Dihentikan (Esc)'); } }
         else closeLayers();
     }
     if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
@@ -1986,6 +2055,7 @@ settingsBtn.addEventListener('click', () => {
 });
 clearBtn.addEventListener('click', () => {
     if (isGenerating) return;
+    if (chatHistory.length > 0 && !confirm('Hapus semua history percakapan? Tindakan ini tidak bisa dibatalkan.')) return;
     chatHistory = []; lastCompiledArtifact = '';
     saveToStorage();
     try { stopAllSynth(true); } catch (e) {}
@@ -1993,7 +2063,7 @@ clearBtn.addEventListener('click', () => {
     try { destroyScene3d(); } catch (e) {}
     try { if (typeof closeStudio === 'function') closeStudio(); } catch (e) {}
     renderBootMessage(true); updateArtifactPreview('');
-    showToast('History cleared'); logEvent('SYSTEM', 'History cleared.');
+    showToast('Riwayat dibersihkan'); logEvent('SYSTEM', 'History cleared.');
 });
 copyArtifactBtn.addEventListener('click', copyLastArtifact);
 exportMdBtn.addEventListener('click', exportHistoryMarkdown);
@@ -2026,7 +2096,13 @@ function exportHistoryMarkdown() {
     if (!chatHistory.length) { showToast('Empty history', 2000, true); return; }
     let md = `# SPC Research Nexus Export — ${new Date().toISOString()}\n\n`;
     chatHistory.forEach(m => {
-        const label = m.role === 'user' ? 'USER' : (m.role === 'agent' ? (m.agentName || 'AGENT') + (m.isSynth ? ' (SYNTHESIS)' : '') : 'CGO');
+        if (m.role === 'panel') {
+            (Array.isArray(m.entries) ? m.entries : []).forEach(en => {
+                md += `### ${(en.agentName || 'AGENT') + (en.isSynth ? ' (SYNTHESIS)' : '')}\n\n${en.content || ''}\n\n---\n\n`;
+            });
+            return;
+        }
+        const label = m.role === 'user' ? 'USER' : 'CGO';
         md += `### ${label}\n\n${m.content}\n\n---\n\n`;
     });
     const blob = new Blob([md], { type: 'text/markdown' });
@@ -2108,10 +2184,14 @@ function restoreHistoryUI() {
     chatContainer.innerHTML = '';
     if (!chatHistory.length) { renderBootMessage(true); return; }
     chatHistory.forEach(m => {
-        if (m.role === 'agent') {
-            const agentDef = m.isSynth ? SYNTH_AGENT : (AGENTS.find(a => a.id === m.agentId) || { id: m.agentId, name: m.agentName, color: m.agentColor, role_id: m.agentRole, role_en: m.agentRole });
-            const { bubbleDiv } = addAgentMessageToUI(agentDef, false);
-            bubbleDiv.innerHTML = safeMarkdown(m.content || ''); hydrate(bubbleDiv, true);
+        if (m.role === 'panel') {
+            if (!Array.isArray(m.entries)) return; // defensif: panel tanpa entries dilewati
+            m.entries.forEach(entry => {
+                if (!entry) return;
+                const agentDef = entry.isSynth ? SYNTH_AGENT : (AGENTS.find(a => a.id === entry.agentId) || { id: entry.agentId, name: entry.agentName, color: entry.agentColor, role_id: entry.agentRole || '', role_en: entry.agentRole || '' });
+                const { bubbleDiv } = addAgentMessageToUI(agentDef, false);
+                bubbleDiv.innerHTML = safeMarkdown(entry.content || ''); hydrate(bubbleDiv, true);
+            });
             return;
         }
         addMessageToUI(m.role === 'user' ? 'user' : 'ai', m.content);
@@ -2124,27 +2204,33 @@ async function* parseSSE(reader) {
     let buffer = '';
     const parseLine = line => {
         const t = line.trim();
+        if (!t || t.startsWith(':') || t.startsWith('event:') || t.startsWith('id:') || t.startsWith('retry:')) return undefined;
         if (!t.startsWith('data:')) return undefined;
         const p = t.slice(5).trim();
         if (!p || p === '[DONE]') return undefined;
         try { return JSON.parse(p); } catch { return undefined; }
     };
-    while (true) {
-        const { done, value } = await readStall(reader);
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split(/\r?\n/);
-        buffer = lines.pop() || '';
-        for (const l of lines) { const d = parseLine(l); if (d !== undefined) yield d; }
+    try {
+        while (true) {
+            const { done, value } = await readStall(reader);
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop() || '';
+            for (const l of lines) { const d = parseLine(l); if (d !== undefined) yield d; }
+        }
+        buffer += decoder.decode();
+        for (const l of buffer.split(/\r?\n/)) { const d = parseLine(l); if (d !== undefined) yield d; }
+    } catch (e) {
+        try { reader.cancel(); } catch (z) {}
+        throw e;
     }
-    buffer += decoder.decode();
-    for (const l of buffer.split(/\r?\n/)) { const d = parseLine(l); if (d !== undefined) yield d; }
 }
 
 /* ===================== COMPILE ONLY ===================== */
 function doCompileOnly() {
     const userText = chatInput.value.trim();
-    if (!userText) { showToast('Empty input', 2000, true); return; }
+    if (!userText) { showToast('Input kosong', 2000, true); return; }
     const segments = parsePrompt(userText);
     const { total } = scorePrompt(segments);
     const compiled = compilePrompt(segments);
@@ -2371,8 +2457,7 @@ function trimMiddle(text, maxTokens) {
 // Riwayat chat -> apiHistory (dipakai builder API dan builder lokal)
 function collectApiHistory() {
     const apiHistory = [];
-    chatHistory.slice(0, -1).filter(m => m.role !== 'agent').slice(-MAX_HISTORY).forEach(m => {
-        if (m.role === 'agent') return; // giliran panel Multi-Agent tidak masuk riwayat chat normal
+    chatHistory.slice(0, -1).filter(m => m.role === 'user' || m.role === 'assistant').slice(-MAX_HISTORY).forEach(m => {
         const role = m.role === 'assistant' ? 'assistant' : 'user';
         const content = m.compiled || m.content;
         if (!content) return;
@@ -2489,7 +2574,7 @@ function renderLocalBrainBtn() {
     btn.classList.toggle('loading', localBrainStatus === 'loading');
     btn.classList.toggle('error', localBrainStatus === 'error' && !localBrainActive);
     btn.setAttribute('aria-pressed', String(localBrainActive));
-    btn.title = localBrainStatus === 'loading' ? 'Local Brain: memuat model…' : (localBrainActive ? 'Local Brain: ON (Phi-3 mini · WebGPU)' : 'Local Brain (WebLLM · Phi-3 mini) — OFF');
+    btn.title = localBrainStatus === 'loading' ? 'Local Brain: memuat model (klik untuk batal)…' : (localBrainActive ? 'Local Brain: ON (Phi-3 mini · WebGPU)' : 'Local Brain (WebLLM · Phi-3 mini) — OFF');
     try { updateEngineBadge(); } catch (e) {}
 }
 async function clearWebLLMCaches() {
@@ -2540,12 +2625,14 @@ async function initLocalBrain() {
                 if (pct >= lastPct + 5 || pct === 100) { lastPct = pct; try { logEvent('SYSTEM', `[LOCAL BRAIN] ${pct}% — ${String((r && r.text) || '').slice(0, 90)}`); } catch (e) {} }
             }
         });
+        if (localBrainStatus === 'idle') { try { await mlcEngine.unload(); } catch (e) {} mlcEngine = null; try { setActivity(''); } catch (e) {} return false; }
         localBrainActive = true; localBrainStatus = 'ready';
         applyLocalBrainGuard(true); renderLocalBrainBtn();
         try { setActivity(''); } catch (e) {}
         logEvent('OK', '[LOCAL BRAIN] Siap. Inferensi berjalan lokal di GPU.');
         return true;
     } catch (e) {
+        if (localBrainStatus === 'idle') { mlcEngine = null; try { setActivity(''); } catch (z) {} return false; }   // dibatalkan user: bukan error
         mlcEngine = null; localBrainActive = false; localBrainStatus = 'error';
         applyLocalBrainGuard(false); renderLocalBrainBtn();
         try { setActivity(''); } catch (z) {}
@@ -2575,8 +2662,20 @@ function deactivateLocalBrain() {
     const sel = document.getElementById('agent-rounds-select');
     const unlock = document.getElementById('local-brain-unlock');
     if (btn) btn.addEventListener('click', async () => {
+        if (localBrainStatus === 'loading') {
+            // CANCEL
+            try { if (mlcEngine && mlcEngine.unload) await mlcEngine.unload(); } catch (e) {}
+            mlcEngine = null;
+            localBrainActive = false;
+            localBrainStatus = 'idle';
+            applyLocalBrainGuard(false);
+            renderLocalBrainBtn();
+            try { setActivity(''); } catch (e) {}
+            logEvent('SYSTEM', '[LOCAL BRAIN] Load dibatalkan oleh user.');
+            showToast('Local Brain load dibatalkan', 2200);
+            return;
+        }
         if (isGenerating) { showToast('Tunggu respons selesai dulu', 2200, true); return; }
-        if (localBrainStatus === 'loading') return;
         if (localBrainActive) deactivateLocalBrain(); else await initLocalBrain();
     });
     if (unlock && sel) unlock.addEventListener('click', () => { sel.disabled = false; });
@@ -2839,7 +2938,7 @@ async function sendMessage(forceNormal) {
     const userText = chatInput.value.trim();
     if (!userText || isGenerating) return;
     if (userText.length > MAX_INPUT_CHARS) {
-        showToast(`Too long (max ${MAX_INPUT_CHARS})`, 3000, true);
+        showToast(`Terlalu panjang (maks ${MAX_INPUT_CHARS})`, 3000, true);
         return;
     }
 
@@ -3037,7 +3136,10 @@ function runDiagnostics() {
     assert('Multi-Agent personas defined', AGENTS.length === 4 && !!SYNTH_AGENT);
     assert('Agent system prompt builds', buildAgentSystemPrompt(AGENTS[0]).includes(AGENTS[0].name));
     assert('Agent request builder works', !!buildAgentRequest('sys', 'hello').endpoint);
-    assert('FNV-1a kompatibel', fnv1a('abc') === 88168267);
+    assert('FNV-1a deterministik', fnv1a('abc') === fnv1a('abc') && fnv1a('abc') === 88168267);
+    assert('hasTerm dual boundary', hasTerm('context is', 'context') === true && hasTerm('contexts', 'context') === false && hasTerm('expertise', 'expert') === false);
+    assert('Panel chatHistory structure', typeof chatHistory !== 'undefined' && (!chatHistory.length || ['user','assistant','panel'].includes(chatHistory[chatHistory.length-1].role)));
+    assert('Heat regex word-boundary', HEAT_IMPORTANT_RE[1].test('context is important') === true && HEAT_IMPORTANT_RE[1].test('contextual understanding only') === false);
     assert('Guarded fetch + stall guard', typeof guardedFetch === 'function' && typeof readStall === 'function');
     assert('Palet perintah', !!document.getElementById('palette'));
     { const sz = sanitize3DCode("export default function f(){}\nexport const a = 1;\nconst THREE = window.THREE;\nconst scene = new THREE.Scene();\nlet sceneRoot = 2; const m = 3;"); assert('Sanitizer: export/THREE/scene dibuang', !/\bexport\b/.test(sz) && !/const THREE/.test(sz) && !/const scene\b/.test(sz) && /sceneRoot/.test(sz) && /const m = 3/.test(sz)); }
@@ -3181,7 +3283,7 @@ window.addEventListener('load', () => {
 });
     runLiveScan('');
     try { initThermalWatchdog(); } catch (e) {}
-    logEvent('SYSTEM', `Research Nexus v${APP_VERSION} ready. Providers: ${Object.keys(PROVIDERS).join(', ')}. Cache: ${getCacheStats()}`);
+    logEvent('SYSTEM', `Research Nexus v${APP_VERSION} ready (hardened: thermal DOM, SSE/exec guards, UI toast). Providers: ${Object.keys(PROVIDERS).join(', ')}. Cache: ${getCacheStats()}`);
 });
 
 /* ============================================================
@@ -3619,7 +3721,10 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
         if (agent.id === 'lyric') setAIState('thinking');
         msgDiv.classList.remove('agent-thinking');
         agentTranscript.push({ id: agent.id, name: agent.name, text: fullText });
-        chatHistory.push({ role: 'agent', agentId: agent.id, agentName: agent.name, agentColor: agent.color, agentRole: isFinal ? (settings.lang === 'en' ? SYNTH_AGENT.role_en : SYNTH_AGENT.role_id) : (settings.lang === 'en' ? agent.role_en : agent.role_id), content: fullText, isSynth: !!isFinal });
+        const lastPanel = chatHistory[chatHistory.length - 1];
+        if (lastPanel && lastPanel.role === 'panel') {
+            lastPanel.entries.push({ agentId: agent.id, agentName: agent.name, agentColor: agent.color, agentRole: isFinal ? (settings.lang === 'en' ? SYNTH_AGENT.role_en : SYNTH_AGENT.role_id) : (settings.lang === 'en' ? agent.role_en : agent.role_id), content: fullText, isSynth: !!isFinal, ts: Date.now() });
+        }
         logEvent('OK', `${agent.name}: ${fullText.length} chars.`);
         swarmSet(agent.id, 'done');
         postBrain('idle');
@@ -3630,7 +3735,13 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
         msgDiv.classList.remove('agent-thinking');
         if (error.name === 'AbortError') {
             bubbleDiv.stream.skip(fullText || ''); bubbleDiv.insertAdjacentHTML('beforeend', '<p class="err">[dihentikan oleh operator]</p>');
-            if (fullText) { agentTranscript.push({ id: agent.id, name: agent.name, text: fullText }); chatHistory.push({ role: 'agent', agentId: agent.id, agentName: agent.name, agentColor: agent.color, content: fullText, isSynth: !!isFinal }); }
+            if (fullText) {
+                agentTranscript.push({ id: agent.id, name: agent.name, text: fullText });
+                const abortPanel = chatHistory[chatHistory.length - 1];
+                if (abortPanel && abortPanel.role === 'panel') {
+                    abortPanel.entries.push({ agentId: agent.id, agentName: agent.name, agentColor: agent.color, agentRole: isFinal ? (settings.lang === 'en' ? SYNTH_AGENT.role_en : SYNTH_AGENT.role_id) : (settings.lang === 'en' ? agent.role_en : agent.role_id), content: fullText, isSynth: !!isFinal, ts: Date.now() });
+                }
+            }
             logEvent('SYSTEM', 'Agent discussion aborted.');
             return false;
         }
@@ -3683,7 +3794,7 @@ async function sendMultiAgentMessage() {
     const userText = chatInput.value.trim();
     if (!userText || isGenerating) return;
     if (userText.length > MAX_INPUT_CHARS) {
-        showToast(`Too long (max ${MAX_INPUT_CHARS})`, 3000, true);
+        showToast(`Terlalu panjang (maks ${MAX_INPUT_CHARS})`, 3000, true);
         return;
     }
 
@@ -3754,8 +3865,11 @@ async function sendMultiAgentMessage() {
     animateCompileSequence();
 
     currentAbortController = new AbortController();
+    const panelContainer = { role: 'panel', createdAt: Date.now(), entries: [] };
+    chatHistory.push(panelContainer);
     try {
         await runMultiAgentDiscussion(compiledPrompt);
+        if (!panelContainer.entries.length) { const pi = chatHistory.lastIndexOf(panelContainer); if (pi !== -1) chatHistory.splice(pi, 1); }
         if (chatHistory.length > STORE_MAX) chatHistory = chatHistory.slice(-STORE_MAX);
         saveToStorage();
         setStatus('ok');
@@ -3774,6 +3888,7 @@ async function sendMultiAgentMessage() {
     } catch (error) {
         setStatus('error');
         logEvent('ERROR', error.message || String(error));
+        try { if (!panelContainer.entries.length) { const pi = chatHistory.lastIndexOf(panelContainer); if (pi !== -1) chatHistory.splice(pi, 1); } } catch (z) {}
     } finally {
         isGenerating = false;
         chatInput.disabled = false;
@@ -3890,7 +4005,7 @@ function swarmSet(id, st) {
 }
 async function wipeCortex() {
     if (!confirm('Hapus seluruh memori Cortex? Tindakan ini tidak bisa dibatalkan.')) return;
-    try { await cortex.store.clear(); showToast('Memori Cortex dikosongkan'); logEvent('SYSTEM', '[CORTEX] Memori dikosongkan.'); }
+    try { await cortex.store.clear(); cachedMemoryContext = ''; cachedMemoryCount = 0; showToast('Memori Cortex dikosongkan'); logEvent('SYSTEM', '[CORTEX] Memori dikosongkan.'); }
     catch (e) { showToast('Gagal mengosongkan memori', 2500, true); }
 }
 function exportBackup() {
