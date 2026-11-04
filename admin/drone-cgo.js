@@ -6,7 +6,7 @@
  *   [CAL1] Probe cepat sebelum putar (proxy /probe atau fetch) → skip host mati.
  *   [CAL2] _hostFail: setelah timeout balitower, skip host sama 10 menit (antrean tidak macet).
  *   [CAL3] PUBLIC_STREAMS: hanya stream yang terbukti OK via proxy (Batam + sekupang).
- *   [CAL4] Default proxy cikurgo.workers.dev bila host GitHub Pages cikurgo.
+ *   [] Default proxy cikurgo.workers.dev bila host GitHub Pages cikurgo.
  *   [CAL5] Timeout HLS manifest dipersingkat; advanceAccess lebih cepat ke kandidat hidup.
  *   [CAL6] REAL_PUBLIC baliTower ditandai preferHls + softFail (jangan blok antrean).
  *
@@ -259,19 +259,8 @@ const IPScanner = {
     { url: "https://overpass.openstreetmap.ru/api/interpreter", country: "RU", host: "overpass.openstreetmap.ru" },
     { url: "https://overpass.openstreetmap.fr/api/interpreter", country: "FR", host: "overpass.openstreetmap.fr" }
   ],
-  CORS_PROXIES: [
-    "https://corsproxy.io/?url=",
-    "https://api.allorigins.win/raw?url=",
-    "https://api.codetabs.com/v1/proxy?quest="
-  ],
-  IP_ENDPOINTS: [
-    "https://api.ipify.org?format=json",
-    "https://api64.ipify.org?format=json",
-    "https://ipapi.co/json/",
-    "https://api.myip.com",
-    "https://ipinfo.io/json",
-    "https://ifconfig.co/json"
-  ],
+  CORS_PROXIES: [],
+  IP_ENDPOINTS: [],
   _currentMirror: 0,
   _publicIP: null,
   _geo: null,
@@ -624,48 +613,11 @@ const CCTVEngine = {
     { name: "Denpasar",        lat: -8.6500, lng: 115.2167, radius: 4000 }
   ],
 
-  PUBLIC_STREAMS: [
-    /* Terbukti OK lewat https://cgo-proxy.cikurgo.workers.dev/probe (2026-10-23) */
-    { name: "Batu Aji (Batam)",     lat: 1.1300, lng: 104.0300, hls: "https://matanya.batam.go.id/cctv/batuaji/stream.m3u8",   region: "Batam", accessType: "hls", realPublic: true, noProxy: true, verified: true },
-    { name: "Atap (Batam)",         lat: 1.1450, lng: 104.0200, hls: "https://matanya.batam.go.id/cctv/atap/stream.m3u8",      region: "Batam", accessType: "hls", realPublic: true, noProxy: true, verified: true },
-    { name: "Simpang Kuda (Batam)", lat: 1.1250, lng: 104.0450, hls: "https://matanya.batam.go.id/cctv/simpkuda2/stream.m3u8", region: "Batam", accessType: "hls", realPublic: true, noProxy: true, verified: true },
-    { name: "Danganom (Batam)",     lat: 1.1200, lng: 104.0400, hls: "https://matanya.batam.go.id/cctv/danganom2/stream.m3u8", region: "Batam", accessType: "hls", realPublic: true, noProxy: true, verified: true },
-    { name: "Sekupang (Batam)",     lat: 1.1160, lng: 103.9630, hls: "https://matanya.batam.go.id/cctv/sekupang/stream.m3u8", region: "Batam", accessType: "hls", realPublic: true, noProxy: true, verified: true }
-  ],
+  PUBLIC_STREAMS: [],
 
-  REAL_PUBLIC_CAMS: [
-    { name: "Bendungan Hilir 1", lat: -6.2146, lng: 106.8081, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_1/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Bendungan Hilir 2", lat: -6.2148, lng: 106.8085, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Bendungan Hilir 3", lat: -6.2150, lng: 106.8078, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_3/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Bendungan Hilir 4", lat: -6.2144, lng: 106.8090, embed: "https://cctv.balitower.co.id/Bendungan-Hilir-003-700014_4/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "GBK / Gelora 2", lat: -6.2186, lng: 106.8021, embed: "https://cctv.balitower.co.id/Gelora-017-700470_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "GBK / Gelora 3", lat: -6.2188, lng: 106.8025, embed: "https://cctv.balitower.co.id/Gelora-017-700470_3/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "GBK Asia Afrika", lat: -6.2240, lng: 106.8025, embed: "https://cctv.balitower.co.id/GBKC1002/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Manggarai Pintu Air 1", lat: -6.2100, lng: 106.8480, embed: "https://cctv.balitower.co.id/Manggarai-Pintu-Air_1/embed.html?proto=hls", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Manggarai Pintu Air 2", lat: -6.2105, lng: 106.8485, embed: "https://cctv.balitower.co.id/Manggarai-Pintu-Air_2/embed.html?proto=hls", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Tanjung Duren", lat: -6.1780, lng: 106.7900, embed: "https://cctv.balitower.co.id/Tanjung-Duren-Utara-005-702471_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Tomang", lat: -6.1720, lng: 106.7970, embed: "https://cctv.balitower.co.id/Tomang-004-702108_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Jati Pulo", lat: -6.1800, lng: 106.8000, embed: "https://cctv.balitower.co.id/Jati-Pulo-001-702017_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Cengkareng Barat", lat: -6.1450, lng: 106.7300, embed: "https://cctv.balitower.co.id/Cengkareng-Barat-013-702131_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Menteng / Bundaran HI", lat: -6.1944, lng: 106.8229, embed: "https://cctv.balitower.co.id/Menteng-001-700123_1/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Senayan 1", lat: -6.2270, lng: 106.8000, embed: "https://cctv.balitower.co.id/Senayan-004-705087_1/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Senayan 2", lat: -6.2275, lng: 106.8005, embed: "https://cctv.balitower.co.id/Senayan-004-705087_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "Kemanggisan", lat: -6.1900, lng: 106.7850, embed: "https://cctv.balitower.co.id/Kemanggisan-038-792405_2/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "GBK / Gelora 4", lat: -6.2185, lng: 106.8025, embed: "https://cctv.balitower.co.id/Gelora-017-700470_4/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-    { name: "GBK Asia Afrika 2", lat: -6.2230, lng: 106.8045, embed: "https://cctv.balitower.co.id/GBKC1003/embed.html", region: "Jakarta", softFail: true, hostKey: "cctv.balitower.co.id" },
-  ],
+  REAL_PUBLIC_CAMS: [],
 
-  REGION_PORTALS: [
-    { name: "Portal ATCS Tangerang Kab", lat: -6.1783, lng: 106.6319, url: "https://cctv-dishub.tangerangkab.go.id/cctv", region: "Banten", openInNewTab: true },
-    { name: "Portal CCTV Banten Prov", lat: -6.1200, lng: 106.1503, url: "https://cctv.bantenprov.go.id/home", region: "Banten", openInNewTab: true },
-    { name: "Portal CCTV Serang", lat: -6.1200, lng: 106.1503, url: "https://cctv.serangkota.go.id/", region: "Banten", openInNewTab: true },
-    { name: "Portal ATCS Bandung", lat: -6.9175, lng: 107.6191, url: "https://atcs-dishub.bandung.go.id/", region: "Bandung", openInNewTab: true },
-    { name: "Portal Pelindung Bandung", lat: -6.9175, lng: 107.6191, url: "https://pelindung.bandung.go.id/", region: "Bandung", openInNewTab: true },
-    { name: "Portal CCTV Jogja", lat: -7.7956, lng: 110.3695, url: "https://cctv.jogjakota.go.id/", region: "Yogyakarta", openInNewTab: true },
-    { name: "Portal CCTV Semarang", lat: -6.9932, lng: 110.4203, url: "https://pantausemar.semarangkota.go.id/", region: "Semarang", openInNewTab: true },
-    { name: "Portal CCTV Denpasar", lat: -8.6500, lng: 115.2167, url: "https://atcs.denpasarkota.go.id/", region: "Denpasar", openInNewTab: true },
-    { name: "Portal CCTV Jakarta Publik", lat: -6.1751, lng: 106.8272, url: "https://jakcctv.jakarta.go.id/publik", region: "Jakarta", openInNewTab: true }
-  ],
+  REGION_PORTALS: [],
 
   PROXY_URL: null,
   _proxyOk: null,
@@ -677,11 +629,7 @@ const CCTVEngine = {
   _streetsideLoaded: false,
   _streetsideLoading: null,
   _streetsideCount: 0,
-  FETCH_SMART_PROXIES: [
-    (u) => "https://corsproxy.io/?url=" + encodeURIComponent(u),
-    (u) => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-    (u) => "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(u)
-  ],
+  FETCH_SMART_PROXIES: [],
 
   _normProxy(u) {
     if (u == null) return null;
@@ -733,9 +681,6 @@ const CCTVEngine = {
     } catch (_) {}
     try {
       const loc = global.location;
-      if (loc && /cikurgo\.(github\.io|workers\.dev)/i.test(String(loc.hostname || ""))) {
-        return "https://cgo-proxy.cikurgo.workers.dev";
-      }
       if (loc && (loc.hostname === "localhost" || loc.hostname === "127.0.0.1" || loc.protocol === "file:")) {
         return "http://localhost:3001";
       }
