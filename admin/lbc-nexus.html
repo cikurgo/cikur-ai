@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NEXUS LBC - Lightweight Blockchain</title>
+<style>
+  :root {
+    --void: #05070d;
+    --panel: #111820;
+    --ink: #e9edf5;
+    --dim: rgba(196,208,232,.52);
+    --accent: #00ccff;
+    --success: #00ff88;
+    --danger: #ff3366;
+    --warning: #ffcc00;
+    --mono: 'JetBrains Mono', 'Courier New', monospace;
+  }
+  
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--void);
+    color: var(--ink);
+    font-family: var(--mono);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    color: var(--accent);
+    text-shadow: 0 0 10px rgba(0, 204, 255, 0.4);
+  }
+  .header svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  
+  /* Status Bar */
+  #status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 204, 255, 0.1);
+    border: 1px solid rgba(0, 204, 255, 0.3);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+  }
+  #status-bar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #status-bar.loading { color: var(--warning); border-color: rgba(255, 204, 0, 0.3); background: rgba(255, 204, 0, 0.1); }
+  #status-bar.success { color: var(--success); border-color: rgba(0, 255, 136, 0.3); background: rgba(0, 255, 136, 0.1); }
+  #status-bar.error { color: var(--danger); border-color: rgba(255, 51, 102, 0.3); background: rgba(255, 51, 102, 0.1); }
+  #status-bar.sync { color: var(--accent); border-color: rgba(0, 204, 255, 0.3); background: rgba(0, 204, 255, 0.1); }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 24px;
+  }
+  input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid rgba(0, 204, 255, 0.4);
+    color: var(--ink);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  input:focus { border-color: var(--accent); box-shadow: 0 0 10px rgba(0, 204, 255, 0.2); }
+  input:disabled { opacity: 0.5; cursor: not-allowed; }
+  
+  button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0, 204, 255, 0.15);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 0 20px;
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-weight: bold;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  button:hover:not(:disabled) { background: var(--accent); color: var(--void); box-shadow: 0 0 15px rgba(0, 204, 255, 0.4); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Chain Container */
+  .chain-container {
+    width: 100%;
+    max-width: 600px;
+    height: 50vh;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .chain-container::-webkit-scrollbar { width: 4px; }
+  .chain-container::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 2px; }
+
+  /* Block Card */
+  .block {
+    background: var(--panel);
+    border-left: 3px solid var(--success);
+    border-radius: 8px;
+    padding: 14px;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    position: relative;
+    animation: slideIn 0.3s ease-out;
+  }
+  @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  
+  .block-header {
+    display: flex;
+    justify-content: space-between;
+    color: var(--dim);
+    font-size: 0.7rem;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed rgba(255,255,255,0.1);
+    padding-bottom: 6px;
+  }
+  .block-index { color: var(--warning); font-weight: bold; }
+  .block-data { color: var(--ink); word-break: break-all; margin-bottom: 8px; }
+  .data-label { color: var(--dim); font-size: 0.7rem; margin-right: 4px; }
+  
+  .hash-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent);
+    font-size: 0.72rem;
+    word-break: break-all;
+    margin-bottom: 4px;
+  }
+  .hash-row svg { width: 12px; height: 12px; flex-shrink: 0; }
+  .hash-row .prefix { color: var(--success); font-weight: bold; }
+  .hash-row .rest { opacity: 0.7; }
+
+  .block.invalid { border-left-color: var(--danger); }
+</style>
+</head>
+<body>
+
+<!-- SVG SPRITE (Hidden) -->
+<svg style="display:none;">
+  <symbol id="i-chain" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+  <symbol id="i-hammer" viewBox="0 0 24 24"><path d="M14 2l8 8-3 3-8-8 3-3z"></path><path d="M11 5L2 14l3 3 9-9-3-3z"></path><path d="M15 15l-4 4"></path></svg>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.64A9 9 0 0 0 20.49 15"></path></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></symbol>
+</svg>
+
+<div class="header">
+  <svg><use href="#i-chain"></use></svg>
+  <h1>NEXUS LBC</h1>
+</div>
+
+<div id="status-bar">
+  <svg><use href="#i-check"></use></svg>
+  <span id="status-text">Sistem Siap. Menunggu transaksi...</span>
+</div>
+
+<div class="controls">
+  <input id="data-input" placeholder="Masukkan data memori/skill..." autocomplete="off">
+  <button id="mine-btn">
+    <svg><use href="#i-hammer"></use></svg>
+    MINE
+  </button>
+</div>
+
+<div class="chain-container" id="chain-container">
+  <!-- Blocks will be rendered here -->
+</div>
+
+<script>
+/* ============================================================
+   NEXUS LBC ENGINE (ROBUST V3 - SVG EDITION)
+   ============================================================ */
+
+const STORAGE_KEY = 'nexus_lbc_chain_v3';
+const DIFFICULTY = '000'; 
+const GENESIS_DATA = { index: 0, prevHash: '0', hash: '0', nonce: 0, data: 'GENESIS_BLOCK', time: Date.now() };
+
+// DOM Elements
+const chainContainer = document.getElementById('chain-container');
+const dataInput = document.getElementById('data-input');
+const mineBtn = document.getElementById('mine-btn');
+const statusBar = document.getElementById('status-bar');
+const statusText = document.getElementById('status-text');
+
+let localChain = [];
+
+// --- UI CONTROLLER ---
+function setStatus(type, iconId, text) {
+  statusBar.className = type;
+  statusBar.querySelector('svg').innerHTML = `<use href="#${iconId}"></use>`;
+  statusText.textContent = text;
+}
+
+function renderBlock(block) {
+  const el = document.createElement('div');
+  el.className = 'block valid';
+  
+  const timeStr = new Date(block.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const shortHash = block.hash.substring(0, 4);
+  const restHash = block.hash.substring(4);
+
+  el.innerHTML = `
+    <div class="block-header">
+      <span>BLOCK <span class="block-index">#${block.index}</span></span>
+      <span><svg style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"><use href="#i-clock"></use></svg>${timeStr}</span>
+    </div>
+    <div class="block-data"><span class="data-label">PAYLOAD:</span>${block.data}</div>
+    <div class="hash-row">
+      <svg><use href="#i-tag"></use></svg>
+      <span><span class="prefix">${shortHash}</span><span class="rest">${restHash}</span></span>
+    </div>
+    <div class="hash-row" style="opacity:0.5; font-size:0.65rem; margin-top:4px;">
+      <span>PREV: ${block.prevHash.substring(0,16)}...</span>
+      <span style="margin-left:auto">NONCE: ${block.nonce}</span>
+    </div>
+  `;
+  return el;
+}
+
+function renderChain() {
+  chainContainer.innerHTML = '';
+  localChain.forEach((block, i) => {
+    const el = renderBlock(block);
+    if (i === localChain.length - 1) {
+      // Highlight block terbaru
+      el.style.boxShadow = '0 0 15px rgba(0, 255, 136, 0.1)';
+    }
+    chainContainer.appendChild(el);
+  });
+  chainContainer.scrollTop = chainContainer.scrollHeight;
+}
+
+// --- DATA PERSISTENCE ---
+function loadChain() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      localChain = JSON.parse(saved);
+      if (!Array.isArray(localChain) || localChain.length === 0) throw new Error("Invalid data");
+    } else {
+      localChain = [GENESIS_DATA];
+      saveChain();
+    }
+  } catch (e) {
+    localChain = [GENESIS_DATA];
+    saveChain();
+  }
+  renderChain();
+}
+
+function saveChain() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(localChain)); } catch(e) {}
+}
+
+// --- CRYPTO ENGINE (Worker) ---
+const workerCode = `
+  const sha256 = async (msg) => {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  };
+  
+  self.onmessage = async (e) => {
+    const { prevHash, index, data } = e.data;
+    let nonce = 0;
+    const startTime = performance.now();
+    
+    while (true) {
+      const candidate = prevHash + data + nonce;
+      const hash = await sha256(candidate);
+      
+      if (hash.startsWith('${DIFFICULTY}')) {
+        const timeTaken = Math.round(performance.now() - startTime);
+        self.postMessage({ index, prevHash, data, nonce, hash, time: Date.now(), miningTime: timeTaken });
+        break;
+      }
+      nonce++;
+      if (nonce % 10000 === 0) await new Promise(r => setTimeout(r, 0));
+    }
+  };
+`;
+
+const blob = new Blob([workerCode], { type: 'application/javascript' });
+const worker = new Worker(URL.createObjectURL(blob));
+const channel = new BroadcastChannel('nexus_lbc_network');
+
+// --- VALIDATION (The Core of Robustness) ---
+async function isValidNewBlock(newBlock, prevBlock) {
+  // 1. Cek Index berurutan
+  if (newBlock.index !== prevBlock.index + 1) return { valid: false, reason: "Index out of sync" };
+  
+  // 2. Cek Keterkaitan Hash
+  if (newBlock.prevHash !== prevBlock.hash) return { valid: false, reason: "PrevHash mismatch" };
+  
+  // 3. Cek Difficulty
+  if (!newBlock.hash.startsWith(DIFFICULTY)) return { valid: false, reason: "Hash does not meet difficulty" };
+  
+  // 4. Rekalkulasi (Anti-Manipulasi)
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(newBlock.prevHash + newBlock.data + newBlock.nonce));
+  const recalculatedHash = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  if (recalculatedHash !== newBlock.hash) return { valid: false, reason: "Cryptographic mismatch (Data tampered)" };
+  
+  return { valid: true };
+}
+
+// --- EVENTS ---
+mineBtn.onclick = () => {
+  const data = dataInput.value.trim();
+  if (!data) {
+    setStatus('error', 'i-alert', 'Data tidak boleh kosong!');
+    return;
+  }
+  
+  mineBtn.disabled = true;
+  dataInput.disabled = true;
+  setStatus('loading', 'i-refresh', 'Mining block baru... (Mencari Nonce)');
+  
+  const prevBlock = localChain[localChain.length - 1];
+  worker.postMessage({ 
+    prevHash: prevBlock.hash, 
+    index: prevBlock.index + 1, 
+    data: data 
+  });
+};
+
+worker.onmessage = async (e) => {
+  const newBlock = e.data;
+  const prevBlock = localChain[localChain.length - 1];
+  
+  const check = await isValidNewBlock(newBlock, prevBlock);
+  
+  if (check.valid) {
+    localChain.push(newBlock);
+    saveChain();
+    renderChain();
+    
+    channel.postMessage({ type: 'NEW_BLOCK', block: newBlock });
+    setStatus('success', 'i-check', `Block #${newBlock.index} ditambahkan! (Waktu: ${newBlock.miningTime}ms)`);
+    dataInput.value = '';
+  } else {
+    setStatus('error', 'i-alert', `Block ditolak: ${check.reason}`);
+  }
+  
+  mineBtn.disabled = false;
+  dataInput.disabled = false;
+  dataInput.focus();
+};
+
+channel.onmessage = async (e) => {
+  const { type, block } = e.data;
+  if (type === 'NEW_BLOCK') {
+    // Cek Duplikat
+    if (localChain.some(b => b.index === block.index && b.hash === block.hash)) return;
+    
+    const prevBlock = localChain[localChain.length - 1];
+    const check = await isValidNewBlock(block, prevBlock);
+    
+    if (check.valid) {
+      localChain.push(block);
+      saveChain();
+      renderChain();
+      setStatus('sync', 'i-refresh', `Sinkronisasi: Menerima Block #${block.index} dari tab lain.`);
+    } else {
+      console.warn("Menerima blok tidak valid dari jaringan:", check.reason);
+    }
+  }
+};
+
+// --- BOOTSTRAP ---
+loadChain();
+setStatus('', 'i-check', 'Sistem Siap. Menunggu transaksi...');
+</script>
+</body>
+</html>
