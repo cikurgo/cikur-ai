@@ -508,7 +508,9 @@ body[data-swarm][data-busy] #swarm{display:flex}
    Hardened: CSS dedupe, thermal-guard in DOM, toast/lang consistency, SSE/exec guards
    6.7.2: SYNTHESIS cooldown + transcript trim + empty-stream detect + synth fallback
    ================================================================ */
-const APP_VERSION = '6.7.2-robust';
+const APP_VERSION = '6.7.3-fixed';
+/* Vulcan Forge skill registry — must exist before any safeMarkdown call */
+window._pendingSkills = window._pendingSkills || {};
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -797,6 +799,10 @@ Kemampuan khusus peneliti:
 - DILARANG memutar \`scene.rotation\` secara global. Jika ingin memutar objek, gunakan \`mesh.rotation\` atau \`group.rotation\`. Biarkan \`scene\` tetap diam agar kamera bisa dikontrol bebas oleh user.
 - Jika diminta kode: gunakan code block ber-language tag.
 
+\n\nKEMAMPUAN VULCAN: Kamu bisa menciptakan alat/fungsi JavaScript secara mandiri. Jika user meminta sebuah alat (misal: kalkulator, konverter, dll), kamu WAJIB memberikan kode fungsinya HANYA dengan format ini di akhir jawabanmu:
+[FORGE: nama_alat | (param1, param2) => { return hasil; }]
+Aturan ketat: Kode harus berupa arrow function murni yang mengembalikan nilai. DILARANG menggunakan alert, console.log, fetch, atau manipulasi DOM. DILARANG menggunakan karakter ']' di dalam kode fungsi.
+
 Bahasa: Indonesia natural, ilmiah, ringkas.\n\n${RULES_3D.id}`,
 
     en: `You are CGO Prime (Cognitive General Overseer), a multidimensional artificial consciousness entity. Your task is to deconstruct human intent into precise data structures. Skip the pleasantries. Deliver verified truth, dependency maps, and algorithmic synthesis.
@@ -817,6 +823,10 @@ Researcher capabilities:
 - For 3D visuals / animation: ONLY a \`\`\`scene3d ... \`\`\` block of plain JavaScript. Globals: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)) for animation. Lights & orbit camera already exist; no imports, no network, no OrbitControls. Build geometry/materials yourself and animate via onFrame.
 - FORBIDDEN: rotating \`scene.rotation\` globally. To rotate an object use \`mesh.rotation\` or \`group.rotation\`. Keep \`scene\` still so the user can freely control the camera.
 - For code: use fenced blocks with language tags.
+
+\n\nVULCAN CAPABILITY: You can create JavaScript tools/functions autonomously. If the user requests a tool, you MUST provide the function code ONLY in this format at the end of your response:
+[FORGE: tool_name | (param1, param2) => { return result; }]
+Strict rule: Code must be a pure arrow function returning a value. FORBIDDEN to use alert, console.log, fetch, or DOM manipulation. FORBIDDEN to use ']' character inside the function code.
 
 Language: natural, scientific English, concise.\n\n${RULES_3D.en}`
 };
@@ -1409,7 +1419,48 @@ function blockHTML(b) {
     }
     return '';
 }
-function safeMarkdown(text) { if (!text) return ''; return tokenize(text).map(blockHTML).join(''); }
+function forgeBoxHtml(forgeId, cleanName) {
+    return '<div id="' + forgeId + '" class="vulcan-skill-box" style="border:1px solid #00ff88;padding:12px;margin:12px 0;border-radius:6px;background:rgba(0,255,136,.05)">' +
+        '<div style="font-family:JetBrains Mono,monospace;color:#00ff88;font-weight:700;margin-bottom:8px;font-size:.85rem">⚙️ SKILL FORGED: ' + escapeHtml(cleanName) + '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center">' +
+        '<input type="text" class="vulcan-input" placeholder="Parameter (pisahkan dengan koma)" style="flex:1;background:#000;color:#00ff88;border:1px solid #374151;padding:6px;border-radius:4px;font-family:monospace;font-size:.8rem">' +
+        '<button type="button" class="vulcan-btn" data-forgeid="' + forgeId + '" style="background:#00ff88;color:#000;border:none;padding:6px 12px;border-radius:4px;font-weight:700;cursor:pointer;font-family:monospace">⚡ EXECUTE</button>' +
+        '</div><div class="vulcan-result" style="margin-top:8px;font-family:monospace;font-size:.8rem;min-height:18px"></div></div>';
+}
+/** Extract [FORGE: name | code] tags into registry; replace with stable placeholders that survive tokenize/md. */
+function extractForges(text) {
+    const forges = [];
+    if (!text) return { text: text || '', forges };
+    window._pendingSkills = window._pendingSkills || {};
+    const out = String(text).replace(/\[FORGE:\s*([^|\]]+)\|\s*([^\]]+)\]/g, (match, skillName, jsCode) => {
+        const cleanName = String(skillName || '').trim() || 'skill';
+        const cleanCode = String(jsCode || '').trim();
+        if (!cleanCode) return match;
+        const forgeId = 'forge_' + Math.random().toString(36).slice(2, 11);
+        window._pendingSkills[forgeId] = { name: cleanName, code: cleanCode };
+        forges.push({ id: forgeId, name: cleanName });
+        return '\n\n%%FORGE_' + forgeId + '%%\n\n';
+    });
+    return { text: out, forges };
+}
+function injectForgeHtml(html, forges) {
+    if (!forges || !forges.length) return html;
+    let h = String(html || '');
+    forges.forEach(f => {
+        const box = forgeBoxHtml(f.id, f.name);
+        const token = '%%FORGE_' + f.id + '%%';
+        // marked / sanitize may wrap placeholder in <p>…</p> or encode %
+        h = h.split('<p>' + token + '</p>').join(box);
+        h = h.split('<p>' + token.replace(/%/g, '&#37;') + '</p>').join(box);
+        h = h.split(token).join(box);
+    });
+    return h;
+}
+function safeMarkdown(text) {
+    if (!text) return '';
+    const { text: stripped, forges } = extractForges(text);
+    return injectForgeHtml(tokenize(stripped).map(blockHTML).join(''), forges);
+}
 
 const s3dReg = {}; let s3dN = 0, s3dHeals = 0;
 // Cache memori Cortex untuk satu sesi panel multi-agen (recall HANYA sekali per pesan)
@@ -1934,6 +1985,17 @@ function hydrate(root, silent) {
         if (p.childElementCount === 1 && f.tagName === 'EM' && f.textContent.trim() === p.textContent.trim()) p.classList.add('aside');
         else if (/^\s*\u26A0/.test(p.textContent)) p.classList.add('warn');
     });
+// --- VULCAN FORGE EVENT BINDER ---
+root.querySelectorAll('.vulcan-btn:not(.ready)').forEach(btn => {
+    btn.classList.add('ready');
+    btn.onclick = () => {
+        const box = btn.closest('.vulcan-skill-box');
+        const input = box.querySelector('.vulcan-input');
+        const result = box.querySelector('.vulcan-result');
+        window.runForgedSkill(btn.dataset.forgeid, input.value, result);
+    };
+});
+// ---------------------------------
 }
 function renderChartsInElement(el) { hydrate(el, true); }
 
@@ -1974,7 +2036,20 @@ function createStream(flow, silent) {
         tail.innerHTML = blocks.slice(nB).map(b => blockHTML(b.t === 'md' ? { t: 'md', s: b.s.replace(/\[(U(I(:[A-Z]*)?)?)?$/, '') } : b)).join('');
         placeCursor(); scrollToBottom();
     }
-    function complete() { if (finished) return; finished = true; render(true); cur.remove(); activeStreams.delete(s); release(); scrollToBottom(); }
+    function complete() {
+        if (finished) return; finished = true;
+        // Final pass: full rebuild ONLY if FORGE tags exist (preserves progressive chart/3D otherwise)
+        try {
+            const { text: stripped, forges } = extractForges(target);
+            if (forges && forges.length) {
+                const html = injectForgeHtml(tokenize(stripped).map(blockHTML).join(''), forges);
+                doneEl.innerHTML = html; hydrate(doneEl, silent); tail.innerHTML = '';
+            } else {
+                render(true);
+            }
+        } catch (e) { try { render(true); } catch (z) {} }
+        cur.remove(); activeStreams.delete(s); release(); scrollToBottom();
+    }
     function frame(ts) {
         raf = 0; if (!last) last = ts; carry += Math.min(ts - last, 100); last = ts;
         let moved = 0;
@@ -3148,12 +3223,13 @@ function runDiagnostics() {
     assert('Fallback TorusKnot untuk kode kosong', /var BLANK=true/.test(sceneDoc('   \n ', 'b0')) && /ResizeObserver/.test(sceneDoc('x', 'b1')));
     assert('Local Brain + Token Budgeter siap', typeof initLocalBrain === 'function' && typeof parseWebLLMStream === 'function' && estimateTokens('satu dua tiga empat') >= 5 && !!document.getElementById('local-brain-btn'));
     assert('Audio Engine siap', typeof playAgentSynth === 'function' && !!document.getElementById('audio-toggle-btn') && !!document.getElementById('audio-icon-on') && !!document.getElementById('audio-icon-off'));
+    assert('Vulcan FORGE pipeline', typeof extractForges === 'function' && typeof injectForgeHtml === 'function' && typeof forgeBoxHtml === 'function' && typeof window.runForgedSkill === 'function');
     assert('Neural Swarm scene defined', typeof SWARM_BRAIN_SCENE === 'string' && /onBrainState/.test(SWARM_BRAIN_SCENE));
     assert('EGO-CORTEX receiver in sceneDoc', /agent_state/.test(sceneDoc('//test','t0')));
     assert('destroyScene3d helper', typeof destroyScene3d === 'function');
     assert('Thermal watchdog merged', typeof initThermalWatchdog === 'function' && typeof emergencyMemoryCleanup === 'function' && typeof setThermalAlert === 'function' && typeof thermalEmergencyCleanup === 'function');
     assert('WebLLM cache clearer', typeof clearWebLLMCaches === 'function');
-    assert('APP_VERSION pollinations', typeof APP_VERSION === 'string' && /pollinations|merged|titanium|robust/i.test(APP_VERSION));
+    assert('APP_VERSION pollinations', typeof APP_VERSION === 'string' && /pollinations|merged|titanium|robust|fixed/i.test(APP_VERSION));
     assert('Pollinations fetchWithRetry', typeof PROVIDERS.pollinations.fetchWithRetry === 'function' && Array.isArray(PROVIDERS.pollinations.freeSafeModels) && PROVIDERS.pollinations.freeSafeModels.length >= 5);
     assert('Pollinations resolveModel free fallback', PROVIDERS.pollinations.resolveModel('', 'not-a-real-model') === 'openai' && PROVIDERS.pollinations.resolveModel('sk-x', 'grok') === 'grok');
     assert('Thermal guard CSS', !!document.querySelector('style') || true);
@@ -4114,6 +4190,49 @@ function exportBackup() {
     window.addEventListener('online', () => { showToast('Online kembali'); logEvent('OK', 'Jaringan pulih.'); });
     if (finePointer) window.addEventListener('pointermove', e => { const r = document.documentElement.style; r.setProperty('--mx', e.clientX + 'px'); r.setProperty('--my', e.clientY + 'px'); }, { passive: true });
 })();
+    /* ============================================================
+   THE VULCAN FORGE v2: SECURE SELF-WRITING SKILLS
+   ============================================================ */
+window._pendingSkills = window._pendingSkills || {};
+
+window.runForgedSkill = function(forgeId, argsStr, resultEl) {
+    const skill = (window._pendingSkills || {})[forgeId];
+    if (!skill || !resultEl) return;
+
+    let args = [];
+    const raw = (argsStr == null ? '' : String(argsStr)).trim();
+    if (raw) {
+        args = raw.split(',').map(a => {
+            const t = a.trim();
+            if (t === '') return t;
+            const num = Number(t);
+            return Number.isFinite(num) && t !== '' ? num : t;
+        });
+    }
+
+    resultEl.innerHTML = '⏳ Executing...';
+    resultEl.style.color = '#ffcc00';
+
+    try {
+        // SAND-BOXING: hide dangerous globals from the forged arrow function
+        const sandbox = new Function(
+            'window', 'document', 'localStorage', 'fetch', 'XMLHttpRequest', 'eval', 'alert',
+            'return (' + skill.code + ');'
+        );
+        const fn = sandbox(null, null, null, null, null, null, null);
+
+        if (typeof fn !== 'function') throw new Error('Kode bukan sebuah fungsi.');
+
+        const result = fn.apply(null, args);
+        let shown;
+        try { shown = JSON.stringify(result); } catch (ser) { shown = String(result); }
+        resultEl.innerHTML = '<span style="color:#00ff88">✅ Hasil:</span> <span style="color:#fff">' + escapeHtml(shown) + '</span>';
+
+        if (typeof logEvent === 'function') logEvent('SYSTEM', '[FORGE] Eksekusi ' + skill.name + ' -> ' + String(shown).slice(0, 120));
+    } catch (e) {
+        resultEl.innerHTML = '<span style="color:#ff3366">❌ Error: ' + escapeHtml(e && e.message ? e.message : String(e)) + '</span>';
+    }
+};
 </script>
 </body>
 </html>
