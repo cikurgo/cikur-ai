@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>EADI v2.1 - Robust Texture Steganography</title>
+<style>
+  body { margin: 0; background: #05070d; color: #eee; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+  #log { background: #111820; padding: 15px 20px; border-radius: 8px; border: 1px solid #00ff88; color: #00ff88; font-size: 16px; box-shadow: 0 0 20px rgba(0,255,136,0.3); text-align: center; }
+  .sub { font-size: 12px; color: #666; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<!-- Canvas WebGL disembunyikan -->
+<canvas id="glCanvas" style="display:none;"></canvas>
+<div id="log">Memproses EADI v2.1...</div>
+<div class="sub">Menyembunyikan data ke dalam texture GPU secara aman.</div>
+
+<script>
+  const canvas = document.getElementById('glCanvas');
+  const gl = canvas.getContext('webgl2'); // Gunakan WebGL2
+  const log = document.getElementById('log');
+
+  if (!gl) {
+    log.textContent = "ERROR: WebGL2 tidak didukung.";
+    log.style.color = "#ff3366";
+  } else {
+    // 1. Data & Header
+    const text = "TopSecretData2026";
+    const encoder = new TextEncoder();
+    const body = encoder.encode(text);
+    
+    // Header 4-byte (Uint32) untuk menyimpan panjang teks
+    const lenHeader = new Uint8Array(4);
+    new DataView(lenHeader.buffer).setUint32(0, body.length, true); // Little Endian
+    
+    // Gabungkan Header + Pesan
+    const payload = new Uint8Array(4 + body.length);
+    payload.set(lenHeader, 0);
+    payload.set(body, 4);
+
+    // 2. Hitung Dimensi Gambar (Persegi)
+    const totalPixels = payload.length;
+    const w = Math.ceil(Math.sqrt(totalPixels));
+    const h = w; // Buat kotak sempurna agar mapping mudah
+    canvas.width = w;
+    canvas.height = h;
+
+    // 3. Buat Array Piksel (RGBA)
+    // WAJIB: 1 byte data = 1 piksel (4 slot: R, G, B, A)
+    const image = new Uint8Array(w * h * 4);
+    
+    // Isi semua dengan warna hitam solid (R=0, G=0, B=0, A=255)
+    for (let i = 0; i < w * h; i++) {
+      image[i * 4 + 3] = 255; // Set Alpha = 255 (Opaque) agar tidak hilang
+    }
+    
+    // Suntikkan payload ke dalam Channel Merah (R)
+    for (let i = 0; i < totalPixels; i++) {
+      image[i * 4] = payload[i]; // Hanya R yang diubah
+    }
+
+    // 4. Setup WebGL (Shader)
+    const vsSource = `#version 300 es
+      in vec2 aPos;
+      out vec2 vUV;
+      void main() {
+        vUV = (aPos + 1.0) / 2.0;
+        gl_Position = vec4(aPos, 0.0, 1.0);
+      }
+    `;
+
+    const fsSource = `#version 300 es
+      precision mediump float;
+      in vec2 vUV;
+      uniform sampler2D uTex;
+      out vec4 fragColor;
+      void main() {
+        fragColor = texture(uTex, vUV);
+      }
+    `;
+
+    const compileShader = (type, src) => {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+      return s;
+    };
+
+    const program = gl.createProgram();
+    gl.attachShader(program, compileShader(gl.VERTEX_SHADER, vsSource));
+    gl.attachShader(program, compileShader(gl.FRAGMENT_SHADER, fsSource));
+    gl.linkProgram(program);
+    gl.useProgram(program);
+
+    // Buffer Segi Empat
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const aPos = gl.getAttribLocation(program, 'aPos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+    // 5. Buat Texture & Upload Data Piksel
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, image);
+    
+    // Set Filtering NEAREST agar warna tidak diinterpolasi (blur)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    // 6. Render
+    gl.viewport(0, 0, w, h);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    
+    const uTex = gl.getUniformLocation(program, 'uTex');
+    gl.uniform1i(uTex, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    // 7. Baca Kembali (Read Back)
+    const dest = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, dest);
+
+    // 8. Decode
+    // Baca 4 byte pertama dari Channel R (Merah) untuk mendapatkan panjang data
+    const decodedLenBytes = new Uint8Array(4);
+    for (let i = 0; i < 4; i++) {
+      decodedLenBytes[i] = dest[i * 4]; // Ambil dari index R (0, 4, 8, 12)
+    }
+    
+    // Konversi kembali ke Uint32
+    const decodedLen = new DataView(decodedLenBytes.buffer).getUint32(0, true);
+    
+    // Baca isi pesan
+    const decodedBody = new Uint8Array(decodedLen);
+    for (let i = 0; i < decodedLen; i++) {
+      decodedBody[i] = dest[(4 + i) * 4]; // Lanjut dari piksel ke-5
+    }
+    
+    const decodedText = new TextDecoder().decode(decodedBody);
+
+    // 9. Verifikasi
+    if (decodedText === text) {
+      log.innerHTML = `✅ Dekode sukses: <strong>"${decodedText}"</strong><br><span style="font-size:12px;opacity:0.7">(${decodedLen} byte, ${w}x${h} px)</span>`;
+      log.style.color = "#00ff88";
+    } else {
+      log.innerHTML = `❌ GAGAL!<br>Terdeteksi: "${decodedText}"`;
+      log.style.color = "#ff3366";
+    }
+  }
+</script>
+</body>
+</html>
