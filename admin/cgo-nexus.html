@@ -797,10 +797,6 @@ Kemampuan khusus peneliti:
 - DILARANG memutar \`scene.rotation\` secara global. Jika ingin memutar objek, gunakan \`mesh.rotation\` atau \`group.rotation\`. Biarkan \`scene\` tetap diam agar kamera bisa dikontrol bebas oleh user.
 - Jika diminta kode: gunakan code block ber-language tag.
 
-\n\nKEMAMPUAN VULCAN: Kamu bisa menciptakan alat/fungsi JavaScript secara mandiri. Jika user meminta sebuah alat (misal: kalkulator, konverter, dll), kamu WAJIB memberikan kode fungsinya HANYA dengan format ini di akhir jawabanmu:
-[FORGE: nama_alat | (param1, param2) => { return hasil; }]
-Aturan ketat: Kode harus berupa arrow function murni yang mengembalikan nilai. DILARANG menggunakan alert, console.log, fetch, atau manipulasi DOM. DILARANG menggunakan karakter ']' di dalam kode fungsi.
-
 Bahasa: Indonesia natural, ilmiah, ringkas.\n\n${RULES_3D.id}`,
 
     en: `You are CGO Prime (Cognitive General Overseer), a multidimensional artificial consciousness entity. Your task is to deconstruct human intent into precise data structures. Skip the pleasantries. Deliver verified truth, dependency maps, and algorithmic synthesis.
@@ -821,10 +817,6 @@ Researcher capabilities:
 - For 3D visuals / animation: ONLY a \`\`\`scene3d ... \`\`\` block of plain JavaScript. Globals: THREE (r128), scene, camera, renderer, onFrame(fn(t, dt)) for animation. Lights & orbit camera already exist; no imports, no network, no OrbitControls. Build geometry/materials yourself and animate via onFrame.
 - FORBIDDEN: rotating \`scene.rotation\` globally. To rotate an object use \`mesh.rotation\` or \`group.rotation\`. Keep \`scene\` still so the user can freely control the camera.
 - For code: use fenced blocks with language tags.
-
-\n\nVULCAN CAPABILITY: You can create JavaScript tools/functions autonomously. If the user requests a tool, you MUST provide the function code ONLY in this format at the end of your response:
-[FORGE: tool_name | (param1, param2) => { return result; }]
-Strict rule: Code must be a pure arrow function returning a value. FORBIDDEN to use alert, console.log, fetch, or DOM manipulation. FORBIDDEN to use ']' character inside the function code.
 
 Language: natural, scientific English, concise.\n\n${RULES_3D.en}`
 };
@@ -1417,38 +1409,7 @@ function blockHTML(b) {
     }
     return '';
 }
-function safeMarkdown(text) { 
-    if (!text) return ''; 
-
-    // --- VULCAN FORGE PARSER (v2) ---
-    const forgeRegex = /\[FORGE:\s*([^|]+)\|\s*([^\]]+)\]/g;
-    text = text.replace(forgeRegex, (match, skillName, jsCode) => {
-        const cleanName = skillName.trim();
-        const cleanCode = jsCode.trim();
-        const forgeId = 'forge_' + Math.random().toString(36).substr(2, 9);
-        
-        window._pendingSkills[forgeId] = { name: cleanName, code: cleanCode };
-
-        return `
-        <div id="${forgeId}" class="vulcan-skill-box" style="border: 1px solid #00ff88; padding: 12px; margin: 12px 0; border-radius: 6px; background: rgba(0,255,136,0.05);">
-            <div style="font-family: 'JetBrains Mono', monospace; color: #00ff88; font-weight: bold; margin-bottom: 8px; font-size: 0.85rem;">
-                ⚙️ SKILL FORGED: ${escapeHtml(cleanName)}
-            </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-                <input type="text" class="vulcan-input" placeholder="Parameter (pisahkan dengan koma)" 
-                       style="flex: 1; background: #000; color: #00ff88; border: 1px solid #374151; padding: 6px; border-radius: 4px; font-family: monospace; font-size: 0.8rem;">
-                <button type="button" class="vulcan-btn" data-forgeid="${forgeId}" 
-                        style="background: #00ff88; color: #000; border: none; padding: 6px 12px; border-radius: 4px; font-weight: bold; cursor: pointer; font-family: monospace;">
-                    ⚡ EXECUTE
-                </button>
-            </div>
-            <div class="vulcan-result" style="margin-top: 8px; font-family: monospace; font-size: 0.8rem; min-height: 18px;"></div>
-        </div>`;
-    });
-    // -----------------------------------
-
-    return tokenize(text).map(blockHTML).join(''); 
-}
+function safeMarkdown(text) { if (!text) return ''; return tokenize(text).map(blockHTML).join(''); }
 
 const s3dReg = {}; let s3dN = 0, s3dHeals = 0;
 // Cache memori Cortex untuk satu sesi panel multi-agen (recall HANYA sekali per pesan)
@@ -1973,17 +1934,6 @@ function hydrate(root, silent) {
         if (p.childElementCount === 1 && f.tagName === 'EM' && f.textContent.trim() === p.textContent.trim()) p.classList.add('aside');
         else if (/^\s*\u26A0/.test(p.textContent)) p.classList.add('warn');
     });
-// --- VULCAN FORGE EVENT BINDER ---
-root.querySelectorAll('.vulcan-btn:not(.ready)').forEach(btn => {
-    btn.classList.add('ready');
-    btn.onclick = () => {
-        const box = btn.closest('.vulcan-skill-box');
-        const input = box.querySelector('.vulcan-input');
-        const result = box.querySelector('.vulcan-result');
-        window.runForgedSkill(btn.dataset.forgeid, input.value, result);
-    };
-});
-// ---------------------------------
 }
 function renderChartsInElement(el) { hydrate(el, true); }
 
@@ -4164,44 +4114,6 @@ function exportBackup() {
     window.addEventListener('online', () => { showToast('Online kembali'); logEvent('OK', 'Jaringan pulih.'); });
     if (finePointer) window.addEventListener('pointermove', e => { const r = document.documentElement.style; r.setProperty('--mx', e.clientX + 'px'); r.setProperty('--my', e.clientY + 'px'); }, { passive: true });
 })();
-    /* ============================================================
-   THE VULCAN FORGE v2: SECURE SELF-WRITING SKILLS
-   ============================================================ */
-window._pendingSkills = {};
-
-window.runForgedSkill = function(forgeId, argsStr, resultEl) {
-    const skill = window._pendingSkills[forgeId];
-    if (!skill) return;
-
-    let args = [];
-    if (argsStr.trim()) {
-        args = argsStr.split(',').map(a => {
-            const num = Number(a.trim());
-            return isNaN(num) ? a.trim() : num;
-        });
-    }
-
-    resultEl.innerHTML = '⏳ Executing...';
-    resultEl.style.color = '#ffcc00';
-
-    try {
-        // SAND-BOXING EKSTREM: Menyembunyikan objek global berbahaya
-        const sandbox = new Function(
-            'window', 'document', 'localStorage', 'fetch', 'XMLHttpRequest', 'eval', 'alert', 
-            'return (' + skill.code + ');'
-        );
-        const fn = sandbox(null, null, null, null, null, null, null); 
-        
-        if (typeof fn !== 'function') throw new Error("Kode bukan sebuah fungsi.");
-        
-        const result = fn(...args);
-        resultEl.innerHTML = `<span style="color:#00ff88">✅ Hasil:</span> <span style="color:#fff">${escapeHtml(JSON.stringify(result))}</span>`;
-        
-        if (typeof logEvent === 'function') logEvent('SYSTEM', `[FORGE] Eksekusi ${skill.name} -> ${result}`);
-    } catch (e) {
-        resultEl.innerHTML = `<span style="color:#ff3366">❌ Error: ${escapeHtml(e.message)}</span>`;
-    }
-};
 </script>
 </body>
 </html>
