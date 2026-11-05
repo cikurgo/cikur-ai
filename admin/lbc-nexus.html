@@ -2,404 +2,319 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NEXUS LBC - Lightweight Blockchain</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#04060c">
+<title>NEXUS LBC · Lightweight Blockchain</title>
 <style>
-  :root {
-    --void: #05070d;
-    --panel: #111820;
-    --ink: #e9edf5;
-    --dim: rgba(196,208,232,.52);
-    --accent: #00ccff;
-    --success: #00ff88;
-    --danger: #ff3366;
-    --warning: #ffcc00;
-    --mono: 'JetBrains Mono', 'Courier New', monospace;
-  }
-  
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--void);
-    color: var(--ink);
-    font-family: var(--mono);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-    min-height: 100vh;
-  }
-
-  /* Header */
-  .header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 24px;
-    color: var(--accent);
-    text-shadow: 0 0 10px rgba(0, 204, 255, 0.4);
-  }
-  .header svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  
-  /* Status Bar */
-  #status-bar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(0, 204, 255, 0.1);
-    border: 1px solid rgba(0, 204, 255, 0.3);
-    padding: 10px 16px;
-    border-radius: 8px;
-    font-size: 0.85rem;
-    width: 100%;
-    max-width: 600px;
-    margin-bottom: 20px;
-    transition: all 0.3s ease;
-  }
-  #status-bar svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  #status-bar.loading { color: var(--warning); border-color: rgba(255, 204, 0, 0.3); background: rgba(255, 204, 0, 0.1); }
-  #status-bar.success { color: var(--success); border-color: rgba(0, 255, 136, 0.3); background: rgba(0, 255, 136, 0.1); }
-  #status-bar.error { color: var(--danger); border-color: rgba(255, 51, 102, 0.3); background: rgba(255, 51, 102, 0.1); }
-  #status-bar.sync { color: var(--accent); border-color: rgba(0, 204, 255, 0.3); background: rgba(0, 204, 255, 0.1); }
-
-  /* Controls */
-  .controls {
-    display: flex;
-    gap: 10px;
-    width: 100%;
-    max-width: 600px;
-    margin-bottom: 24px;
-  }
-  input {
-    flex: 1;
-    background: var(--panel);
-    border: 1px solid rgba(0, 204, 255, 0.4);
-    color: var(--ink);
-    padding: 12px 16px;
-    border-radius: 8px;
-    font-family: var(--mono);
-    font-size: 0.9rem;
-    outline: none;
-    transition: border-color 0.2s, box-shadow 0.2s;
-  }
-  input:focus { border-color: var(--accent); box-shadow: 0 0 10px rgba(0, 204, 255, 0.2); }
-  input:disabled { opacity: 0.5; cursor: not-allowed; }
-  
-  button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(0, 204, 255, 0.15);
-    border: 1px solid var(--accent);
-    color: var(--accent);
-    padding: 0 20px;
-    border-radius: 8px;
-    font-family: var(--mono);
-    font-weight: bold;
-    font-size: 0.9rem;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-  button:hover:not(:disabled) { background: var(--accent); color: var(--void); box-shadow: 0 0 15px rgba(0, 204, 255, 0.4); }
-  button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-  /* Chain Container */
-  .chain-container {
-    width: 100%;
-    max-width: 600px;
-    height: 50vh;
-    overflow-y: auto;
-    background: rgba(0,0,0,0.4);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .chain-container::-webkit-scrollbar { width: 4px; }
-  .chain-container::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 2px; }
-
-  /* Block Card */
-  .block {
-    background: var(--panel);
-    border-left: 3px solid var(--success);
-    border-radius: 8px;
-    padding: 14px;
-    font-size: 0.8rem;
-    line-height: 1.5;
-    position: relative;
-    animation: slideIn 0.3s ease-out;
-  }
-  @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  
-  .block-header {
-    display: flex;
-    justify-content: space-between;
-    color: var(--dim);
-    font-size: 0.7rem;
-    margin-bottom: 8px;
-    border-bottom: 1px dashed rgba(255,255,255,0.1);
-    padding-bottom: 6px;
-  }
-  .block-index { color: var(--warning); font-weight: bold; }
-  .block-data { color: var(--ink); word-break: break-all; margin-bottom: 8px; }
-  .data-label { color: var(--dim); font-size: 0.7rem; margin-right: 4px; }
-  
-  .hash-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--accent);
-    font-size: 0.72rem;
-    word-break: break-all;
-    margin-bottom: 4px;
-  }
-  .hash-row svg { width: 12px; height: 12px; flex-shrink: 0; }
-  .hash-row .prefix { color: var(--success); font-weight: bold; }
-  .hash-row .rest { opacity: 0.7; }
-
-  .block.invalid { border-left-color: var(--danger); }
+:root{--void:#04060c;--panel:rgba(14,22,36,.72);--line:rgba(120,180,255,.16);--ink:#e8f0ff;--dim:#7d8fb0;--cy:#22e4ff;--vi:#8b5cff;--mint:#3dffb0;--red:#ff4d6d;--amb:#ffc83d;
+--ui:"Segoe UI",system-ui,-apple-system,sans-serif;--mono:ui-monospace,"JetBrains Mono","SF Mono",Consolas,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--void);color:var(--ink);font:14px/1.5 var(--ui);min-height:100vh;overflow-x:hidden;
+background-image:radial-gradient(60% 40% at 15% -5%,rgba(139,92,255,.22),transparent),radial-gradient(50% 40% at 95% 10%,rgba(34,228,255,.16),transparent),
+linear-gradient(rgba(120,180,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,180,255,.05) 1px,transparent 1px);background-size:auto,auto,40px 40px,40px 40px;background-attachment:fixed}
+.i{width:1.15em;height:1.15em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;vertical-align:-.2em}
+.wrap{max-width:1120px;margin:0 auto;padding:20px 16px 60px}
+header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.logo{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,var(--cy),var(--vi));color:#031018;box-shadow:0 0 28px rgba(34,228,255,.4)}
+.logo .i{width:26px;height:26px;stroke-width:2.2}
+h1{font:700 1.5rem/1.1 var(--mono);letter-spacing:.02em}
+h1 small{display:block;font:400 .78rem var(--ui);color:var(--dim);margin-top:4px;letter-spacing:0}
+.peer{margin-left:auto;display:flex;align-items:center;gap:8px;padding:8px 14px;border:1px solid var(--line);border-radius:99px;background:var(--panel);font:.8rem var(--mono);color:var(--mint)}
+.peer b{width:8px;height:8px;border-radius:50%;background:var(--mint);box-shadow:0 0 10px var(--mint);animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+#status{display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel);margin-bottom:16px;font-size:.88rem;transition:.25s}
+#status.loading{color:var(--amb);border-color:rgba(255,200,61,.4)}#status.success{color:var(--mint);border-color:rgba(61,255,176,.4)}
+#status.error{color:var(--red);border-color:rgba(255,77,109,.5)}#status.sync{color:var(--cy);border-color:rgba(34,228,255,.4)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.stat{padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);backdrop-filter:blur(10px)}
+.stat span{display:flex;align-items:center;gap:6px;color:var(--dim);font-size:.75rem}
+.stat b{display:block;font:600 1.25rem var(--mono);margin-top:2px;color:var(--ink)}
+.stat b.ok{color:var(--mint)}.stat b.bad{color:var(--red)}
+.grid{display:grid;grid-template-columns:360px 1fr;gap:16px;align-items:start}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.card{border:1px solid var(--line);border-radius:18px;background:var(--panel);backdrop-filter:blur(12px);padding:18px}
+.side{position:sticky;top:16px;display:flex;flex-direction:column;gap:14px}
+@media(max-width:860px){.side{position:static}}
+.reactor{position:relative;width:200px;height:200px;margin:0 auto}
+.reactor svg{width:100%;height:100%;transform:rotate(-90deg)}
+.reactor circle{fill:none;stroke-width:5}
+.trk{stroke:rgba(120,180,255,.12)}.arc{stroke:url(#g);stroke-linecap:round;transition:stroke-dashoffset .3s;filter:drop-shadow(0 0 5px var(--cy))}
+.orb{stroke:var(--vi);stroke-width:1.5!important;stroke-dasharray:3 9;opacity:.6;transform-origin:60px 60px}
+.mining .orb{animation:spin 6s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.core{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.core b{font:700 1.4rem var(--mono)}.core span{font-size:.72rem;color:var(--dim)}
+label.l{display:block;font-size:.78rem;color:var(--dim);margin:2px 0 6px}
+input.t,textarea.t{width:100%;background:rgba(4,8,16,.7);border:1px solid var(--line);color:var(--ink);padding:12px 14px;border-radius:12px;font:.9rem var(--mono);outline:none;resize:vertical;transition:.2s}
+input.t:focus,textarea.t:focus{border-color:var(--cy);box-shadow:0 0 0 3px rgba(34,228,255,.14)}
+.cnt{display:flex;justify-content:space-between;font-size:.72rem;color:var(--dim);margin-top:4px}
+.seg{display:flex;gap:6px}.seg button{flex:1;justify-content:center}.seg button.on{background:rgba(34,228,255,.18);border-color:var(--cy);color:var(--cy)}
+button{display:inline-flex;align-items:center;gap:7px;background:rgba(120,180,255,.08);border:1px solid var(--line);color:var(--ink);padding:9px 13px;border-radius:11px;font:600 .82rem var(--ui);cursor:pointer;transition:.18s}
+button:hover:not(:disabled){border-color:var(--cy);color:var(--cy);transform:translateY(-1px)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:focus-visible,summary:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+.go{width:100%;justify-content:center;padding:14px;font-size:.95rem;color:#03121a;border:0;background:linear-gradient(90deg,var(--cy),var(--vi));box-shadow:0 0 24px rgba(34,228,255,.3)}
+.go:hover:not(:disabled){color:#03121a;box-shadow:0 0 36px rgba(139,92,255,.5)}
+.go.stop{background:linear-gradient(90deg,var(--red),#ff8a4d);color:#fff}.go.stop:hover{color:#fff}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tools button{justify-content:center}
+.tools .warn:hover:not(:disabled){border-color:var(--red);color:var(--red)}
+.listhead{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.srch{position:relative;flex:1}.srch .i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--dim)}.srch input{padding-left:36px}
+#chain{display:flex;flex-direction:column;max-height:calc(100vh - 250px);min-height:340px;overflow:auto;padding-right:4px}
+#chain::-webkit-scrollbar{width:5px}#chain::-webkit-scrollbar-thumb{background:var(--cy);border-radius:3px}
+.blk{display:flex;gap:12px}
+.rail{display:flex;flex-direction:column;align-items:center;width:18px;flex-shrink:0}
+.rail i{width:12px;height:12px;border-radius:4px;transform:rotate(45deg);background:var(--mint);box-shadow:0 0 12px var(--mint);margin-top:16px}
+.rail::after{content:"";flex:1;width:2px;background:linear-gradient(var(--mint),rgba(120,180,255,.15));margin-top:4px}
+.blk:last-child .rail::after{display:none}
+.blk.bad .rail i{background:var(--red);box-shadow:0 0 12px var(--red)}.blk.bad .rail::after{background:var(--red)}
+.body{flex:1;min-width:0;margin-bottom:12px;padding:13px 15px;border:1px solid var(--line);border-radius:14px;background:rgba(8,14,26,.8)}
+.blk.bad .body{border-color:rgba(255,77,109,.6);background:rgba(60,10,24,.45)}
+.blk.new .body{animation:land .9s ease-out}@keyframes land{from{box-shadow:0 0 0 2px var(--cy),0 0 30px var(--cy)}}
+.bh{display:flex;justify-content:space-between;gap:8px;color:var(--dim);font-size:.75rem;margin-bottom:6px}
+.bh b{color:var(--amb);font:700 .95rem var(--mono)}
+.pl{word-break:break-word;margin-bottom:8px}
+code.h{display:block;font:.74rem/1.5 var(--mono);color:var(--dim);word-break:break-all}code.h em{font-style:normal;color:var(--mint);font-weight:700;text-shadow:0 0 8px rgba(61,255,176,.6)}
+.bf{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:9px;font-size:.72rem;color:var(--dim)}
+.chip{padding:2px 8px;border:1px solid var(--line);border-radius:99px;font-family:var(--mono)}
+.bf button{padding:3px 9px;font-size:.72rem;margin-left:auto}.bf button+button{margin-left:0}
+.more{display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);font:.72rem/1.6 var(--mono);color:var(--dim);word-break:break-all}
+.more a{color:var(--cy);cursor:pointer;text-decoration:underline dotted}.blk.open .more{display:block}
+.empty{padding:40px 10px;text-align:center;color:var(--dim)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translate(-50%,30px);opacity:0;padding:10px 18px;border-radius:99px;background:#0c1626;border:1px solid var(--cy);font-size:.82rem;transition:.3s;pointer-events:none;z-index:9}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
-
-<!-- SVG SPRITE (Hidden) -->
-<svg style="display:none;">
-  <symbol id="i-chain" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-  <symbol id="i-hammer" viewBox="0 0 24 24"><path d="M14 2l8 8-3 3-8-8 3-3z"></path><path d="M11 5L2 14l3 3 9-9-3-3z"></path><path d="M15 15l-4 4"></path></svg>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.64A9 9 0 0 0 20.49 15"></path></symbol>
-  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></symbol>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22e4ff"/><stop offset="1" stop-color="#8b5cff"/></linearGradient></defs>
+<symbol id="i-chain" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="i-hammer" viewBox="0 0 24 24"><path d="M14 2l8 8-3 3-8-8z"/><path d="M11 5L2 14l3 3 9-9z"/><path d="M15 15l-4 4"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14 9 11"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.65 4.64A9 9 0 0 0 20.5 15"/></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4h6v2"/></symbol>
+<symbol id="i-bug" viewBox="0 0 24 24"><rect x="8" y="6" width="8" height="14" rx="4"/><path d="M8 10H4M8 15H4M16 10h4M16 15h4M9 3l2 3M15 3l-2 3"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
+<symbol id="i-down2" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></symbol>
 </svg>
 
-<div class="header">
-  <svg><use href="#i-chain"></use></svg>
-  <h1>NEXUS LBC</h1>
-</div>
+<div class="wrap">
+<header class="top">
+  <div class="logo"><svg class="i"><use href="#i-chain"/></svg></div>
+  <h1>NEXUS LBC<small>Lightweight blockchain · mining, validasi, dan sinkron antar-tab</small></h1>
+  <div class="peer" title="Tab lain yang terhubung"><b></b><svg class="i"><use href="#i-users"/></svg><span id="peers">1 node</span></div>
+</header>
 
-<div id="status-bar">
-  <svg><use href="#i-check"></use></svg>
-  <span id="status-text">Sistem Siap. Menunggu transaksi...</span>
-</div>
+<div id="status"><svg class="i"><use href="#i-check"/></svg><span id="status-text">Sistem siap. Menunggu data.</span></div>
 
-<div class="controls">
-  <input id="data-input" placeholder="Masukkan data memori/skill..." autocomplete="off">
-  <button id="mine-btn">
-    <svg><use href="#i-hammer"></use></svg>
-    MINE
-  </button>
-</div>
+<section class="stats">
+  <div class="stat"><span><svg class="i"><use href="#i-layers"/></svg>Tinggi rantai</span><b id="s-h">0</b></div>
+  <div class="stat"><span><svg class="i"><use href="#i-cpu"/></svg>Hashrate</span><b id="s-hr">0 H/s</b></div>
+  <div class="stat"><span><svg class="i"><use href="#i-clock"/></svg>Rata-rata blok</span><b id="s-t">–</b></div>
+  <div class="stat"><span><svg class="i"><use href="#i-tag"/></svg>Kesulitan</span><b id="s-d">3</b></div>
+  <div class="stat"><span><svg class="i"><use href="#i-shield"/></svg>Integritas</span><b id="s-v" class="ok">Memeriksa…</b></div>
+</section>
 
-<div class="chain-container" id="chain-container">
-  <!-- Blocks will be rendered here -->
+<div class="grid">
+  <aside class="side">
+    <div class="card" id="miner">
+      <div class="reactor"><svg viewBox="0 0 120 120"><circle class="trk" cx="60" cy="60" r="52"/><circle class="orb" cx="60" cy="60" r="44"/><circle class="arc" id="arc" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg>
+        <div class="core"><b id="nonce">0</b><span id="nonce-l">nonce · siaga</span></div></div>
+      <label class="l" for="data" style="margin-top:14px">Data blok (memori / skill)</label>
+      <textarea id="data" class="t" rows="3" maxlength="280" placeholder="Tulis data yang ingin disegel ke rantai…"></textarea>
+      <div class="cnt"><span>Ctrl + Enter untuk mining</span><span id="cnt">0/280</span></div>
+      <label class="l" style="margin-top:10px">Tingkat kesulitan (jumlah nol di awal hash)</label>
+      <div class="seg" id="seg"><button data-d="2">2</button><button data-d="3" class="on">3</button><button data-d="4">4</button></div>
+      <button class="go" id="mine" style="margin-top:14px"><svg class="i"><use href="#i-hammer"/></svg><span>Mine blok baru</span></button>
+    </div>
+    <div class="card"><div class="tools">
+      <button id="verify"><svg class="i"><use href="#i-shield"/></svg>Verifikasi</button>
+      <button id="tamper" class="warn"><svg class="i"><use href="#i-bug"/></svg>Uji manipulasi</button>
+      <button id="export"><svg class="i"><use href="#i-down"/></svg>Ekspor</button>
+      <button id="import"><svg class="i"><use href="#i-up"/></svg>Impor</button>
+      <button id="reset" class="warn" style="grid-column:1/-1"><svg class="i"><use href="#i-trash"/></svg>Reset rantai</button>
+    </div><input type="file" id="file" accept="application/json" hidden></div>
+  </aside>
+  <main class="card">
+    <div class="listhead"><div class="srch"><svg class="i"><use href="#i-search"/></svg><input id="q" class="t" placeholder="Cari data, hash, atau nomor blok…" autocomplete="off"></div>
+      <button id="jump" title="Ke blok terbaru"><svg class="i"><use href="#i-down2"/></svg>Terbaru</button></div>
+    <div id="chain" aria-live="polite"></div>
+  </main>
 </div>
+</div>
+<div id="toast" role="status"></div>
 
 <script>
-/* ============================================================
-   NEXUS LBC ENGINE (ROBUST V3 - SVG EDITION)
-   ============================================================ */
+/* NEXUS LBC v4 — hash mencakup index|prevHash|time|diff|data|nonce; blok v3 lama tetap valid (legacy). */
+const KEY='nexus_lbc_chain_v4',OLD='nexus_lbc_chain_v3',MAXLEN=280,$=s=>document.querySelector(s);
+const GEN={index:0,prevHash:'0',hash:'0',nonce:0,data:'GENESIS_BLOCK',time:0,diff:0,v:4};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const hex=buf=>[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+const sha=async m=>hex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(m)));
+const pre=b=>b.v===4?[b.index,b.prevHash,b.time,b.diff,b.data,b.nonce].join('|'):b.prevHash+b.data+b.nonce;
+const dif=b=>b.v===4?b.diff:3;
+const fmt=n=>n>=1e3?(n/1e3).toFixed(1)+'k':String(Math.round(n));
 
-const STORAGE_KEY = 'nexus_lbc_chain_v3';
-const DIFFICULTY = '000'; 
-const GENESIS_DATA = { index: 0, prevHash: '0', hash: '0', nonce: 0, data: 'GENESIS_BLOCK', time: Date.now() };
+let chain=[],difficulty=3,mining=false,pending=null,worker=null,hr=0,tampered=false,badSet=new Set(),newIdx=-1,tm;
+const ID=Math.random().toString(36).slice(2),peers=new Map();
+const ch=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('nexus_lbc_network'):null;
 
-// DOM Elements
-const chainContainer = document.getElementById('chain-container');
-const dataInput = document.getElementById('data-input');
-const mineBtn = document.getElementById('mine-btn');
-const statusBar = document.getElementById('status-bar');
-const statusText = document.getElementById('status-text');
-
-let localChain = [];
-
-// --- UI CONTROLLER ---
-function setStatus(type, iconId, text) {
-  statusBar.className = type;
-  statusBar.querySelector('svg').innerHTML = `<use href="#${iconId}"></use>`;
-  statusText.textContent = text;
+/* ---------- UI ---------- */
+function setStatus(type,icon,text){const s=$('#status');s.className=type;s.querySelector('svg').innerHTML=`<use href="#${icon}"/>`;$('#status-text').textContent=text}
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('show');clearTimeout(tm);tm=setTimeout(()=>e.classList.remove('show'),1800)}
+function blockHTML(b){
+  const z=b.hash.match(/^0*/)[0].length,time=b.index===0?'Genesis':new Date(b.time||0).toLocaleString('id-ID',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  return `<article class="blk${badSet.has(b.index)?' bad':''}${b.index===newIdx?' new':''}" id="b${b.index}" data-i="${b.index}"><div class="rail"><i></i></div><div class="body">
+  <div class="bh"><span>Blok <b>#${b.index}</b></span><span><svg class="i"><use href="#i-clock"/></svg> ${esc(time)}</span></div>
+  <p class="pl">${esc(b.data)}</p>
+  <code class="h"><svg class="i"><use href="#i-tag"/></svg> <em>${esc(b.hash.slice(0,z))}</em>${esc(b.hash.slice(z))}</code>
+  <div class="bf"><span class="chip">diff ${dif(b)||0}</span><span class="chip">nonce ${b.nonce}</span>${b.mt?`<span class="chip">${b.mt} ms</span>`:''}${badSet.has(b.index)?'<span class="chip" style="color:var(--red)">tidak valid</span>':''}
+  <button data-act="copy" title="Salin hash"><svg class="i"><use href="#i-copy"/></svg>Salin</button><button data-act="more">Detail</button></div>
+  <div class="more">hash: ${esc(b.hash)}<br>prev: ${b.index?`<a data-go="${b.index-1}">${esc(b.prevHash)}</a>`:'–'}<br>versi: ${b.v===4?'v4':'legacy v3'}</div></div></article>`}
+function render(){
+  const q=$('#q').value.trim().toLowerCase(),list=chain.filter(b=>!q||String(b.index)===q||b.data.toLowerCase().includes(q)||b.hash.includes(q));
+  $('#chain').innerHTML=list.length?list.map(blockHTML).join(''):'<div class="empty">Tidak ada blok yang cocok. Coba kata kunci lain.</div>';
+  stats();
+}
+function stats(){
+  $('#s-h').textContent=chain.length-1;$('#s-d').textContent=difficulty;$('#s-hr').textContent=fmt(hr)+' H/s';
+  const mt=chain.filter(b=>b.mt).slice(-10).map(b=>b.mt);$('#s-t').textContent=mt.length?(mt.reduce((a,b)=>a+b)/mt.length/1000).toFixed(2)+' s':'–';
+  const v=$('#s-v');v.className=badSet.size?'bad':'ok';v.textContent=badSet.size?`Rusak di #${Math.min(...badSet)}`:'Valid';
+  const peersN=[...peers.values()].filter(t=>Date.now()-t<8000).length+1;$('#peers').textContent=peersN+' node';
+}
+function reactor(n,label){
+  $('#nonce').textContent=n.toLocaleString('id-ID');$('#nonce-l').textContent=label;
+  const exp=Math.pow(16,difficulty),p=mining?Math.min(.97,n/exp):0;$('#arc').style.strokeDashoffset=326.7*(1-p);
+  $('#miner').classList.toggle('mining',mining);
+}
+function setMineBtn(){
+  const b=$('#mine');b.className='go'+(mining?' stop':'');b.disabled=tampered;
+  b.innerHTML=mining?'<svg class="i"><use href="#i-stop"/></svg><span>Batalkan mining</span>':'<svg class="i"><use href="#i-hammer"/></svg><span>Mine blok baru</span>';
+  $('#data').disabled=mining;document.querySelectorAll('#seg button').forEach(x=>x.disabled=mining);
 }
 
-function renderBlock(block) {
-  const el = document.createElement('div');
-  el.className = 'block valid';
-  
-  const timeStr = new Date(block.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const shortHash = block.hash.substring(0, 4);
-  const restHash = block.hash.substring(4);
-
-  el.innerHTML = `
-    <div class="block-header">
-      <span>BLOCK <span class="block-index">#${block.index}</span></span>
-      <span><svg style="width:12px;height:12px;vertical-align:-2px;margin-right:4px"><use href="#i-clock"></use></svg>${timeStr}</span>
-    </div>
-    <div class="block-data"><span class="data-label">PAYLOAD:</span>${block.data}</div>
-    <div class="hash-row">
-      <svg><use href="#i-tag"></use></svg>
-      <span><span class="prefix">${shortHash}</span><span class="rest">${restHash}</span></span>
-    </div>
-    <div class="hash-row" style="opacity:0.5; font-size:0.65rem; margin-top:4px;">
-      <span>PREV: ${block.prevHash.substring(0,16)}...</span>
-      <span style="margin-left:auto">NONCE: ${block.nonce}</span>
-    </div>
-  `;
-  return el;
+/* ---------- Penyimpanan & validasi ---------- */
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(chain))}catch(e){}};
+async function validate(c){
+  const bad=new Set();
+  if(!Array.isArray(c)||!c.length||c[0].index!==0||c[0].hash!=='0')return{ok:false,bad:new Set([0])};
+  for(let i=1;i<c.length;i++){
+    const b=c[i],p=c[i-1];let ok=b&&typeof b.data==='string'&&typeof b.hash==='string'&&b.index===p.index+1&&b.prevHash===p.hash&&!bad.has(i-1);
+    if(ok){const d=dif(b);ok=Number.isInteger(d)&&d>=1&&d<=6&&b.hash.startsWith('0'.repeat(d))&&await sha(pre(b))===b.hash}
+    if(!ok)bad.add(i)}
+  return{ok:!bad.size,bad}}
+async function recheck(){const r=await validate(chain);badSet=r.bad;render();return r}
+async function load(){
+  let c=null;
+  try{c=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+  if(!c){try{const o=JSON.parse(localStorage.getItem(OLD));if(Array.isArray(o)&&o.length)c=o}catch(e){}}
+  if(c&&(await validate(c)).ok)chain=c;else{chain=[{...GEN}]}
+  save();await recheck();
 }
 
-function renderChain() {
-  chainContainer.innerHTML = '';
-  localChain.forEach((block, i) => {
-    const el = renderBlock(block);
-    if (i === localChain.length - 1) {
-      // Highlight block terbaru
-      el.style.boxShadow = '0 0 15px rgba(0, 255, 136, 0.1)';
-    }
-    chainContainer.appendChild(el);
-  });
-  chainContainer.scrollTop = chainContainer.scrollHeight;
+/* ---------- Mining (Web Worker, bisa dibatalkan) ---------- */
+const WCODE=`onmessage=async e=>{const{index,prevHash,time,diff,data}=e.data,t=performance.now(),z='0'.repeat(diff),enc=new TextEncoder();let n=0,last=t;for(;;){const h=[...new Uint8Array(await crypto.subtle.digest('SHA-256',enc.encode([index,prevHash,time,diff,data,n].join('|'))))].map(b=>b.toString(16).padStart(2,'0')).join('');if(h.startsWith(z)){postMessage({done:1,block:{index,prevHash,time,diff,data,nonce:n,hash:h,v:4,mt:Math.round(performance.now()-t)}});return}n++;if(n%2000===0){const now=performance.now();postMessage({p:1,n,hr:2000/((now-last)/1000)});last=now;await new Promise(r=>setTimeout(r))}}}`;
+function spawn(){
+  if(worker)worker.terminate();
+  worker=new Worker(URL.createObjectURL(new Blob([WCODE],{type:'application/javascript'})));
+  worker.onmessage=onWork;
+  worker.onerror=()=>{mining=false;setMineBtn();reactor(0,'nonce · siaga');setStatus('error','i-alert','Worker mining gagal. Muat ulang halaman.')};
 }
-
-// --- DATA PERSISTENCE ---
-function loadChain() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      localChain = JSON.parse(saved);
-      if (!Array.isArray(localChain) || localChain.length === 0) throw new Error("Invalid data");
-    } else {
-      localChain = [GENESIS_DATA];
-      saveChain();
-    }
-  } catch (e) {
-    localChain = [GENESIS_DATA];
-    saveChain();
-  }
-  renderChain();
+function startMine(){
+  const tip=chain[chain.length-1];spawn();
+  worker.postMessage({index:tip.index+1,prevHash:tip.hash,time:Date.now(),diff:difficulty,data:pending});
 }
-
-function saveChain() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(localChain)); } catch(e) {}
+function mineClick(){
+  if(mining){mining=false;worker.terminate();worker=null;setMineBtn();reactor(0,'nonce · siaga');setStatus('','i-check','Mining dibatalkan.');return}
+  const d=$('#data').value.trim();
+  if(!d)return setStatus('error','i-alert','Data tidak boleh kosong.');
+  if(tampered)return setStatus('error','i-alert','Pulihkan rantai dari mode uji manipulasi dulu.');
+  pending=d;mining=true;setMineBtn();setStatus('loading','i-refresh',`Mining dengan kesulitan ${difficulty}… mencari nonce.`);startMine();
 }
+async function onWork(e){
+  const m=e.data;
+  if(m.p){hr=m.hr;reactor(m.n,'nonce · '+fmt(m.hr)+' H/s');stats();return}
+  const b=m.block,tip=chain[chain.length-1],r=await check(b,tip);
+  mining=false;worker.terminate();worker=null;
+  if(r){setStatus('error','i-alert','Blok ditolak: '+r);setMineBtn();return}
+  addBlock(b);ch&&ch.postMessage({type:'NEW_BLOCK',block:b,from:ID});
+  setStatus('success','i-check',`Blok #${b.index} tersegel dalam ${b.mt} ms (nonce ${b.nonce}).`);
+  $('#data').value='';$('#cnt').textContent='0/'+MAXLEN;setMineBtn();reactor(b.nonce,'blok tersegel');
+}
+async function check(b,tip){
+  if(b.index!==tip.index+1)return'index tidak berurutan';
+  if(b.prevHash!==tip.hash)return'prevHash tidak cocok (rantai sudah berubah)';
+  if(!(b.diff>=1&&b.diff<=6)||!b.hash.startsWith('0'.repeat(b.diff)))return'hash tidak memenuhi kesulitan';
+  if(await sha(pre(b))!==b.hash)return'hash tidak cocok (data dimanipulasi)';return null}
+function addBlock(b){chain.push(b);newIdx=b.index;save();render();const e=$('#chain');e.scrollTop=e.scrollHeight;setTimeout(()=>newIdx=-1,1000)}
 
-// --- CRYPTO ENGINE (Worker) ---
-const workerCode = `
-  const sha256 = async (msg) => {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+/* ---------- Jaringan antar-tab ---------- */
+function net(){
+  if(!ch)return;
+  const ping=()=>ch.postMessage({type:'PING',from:ID});ping();setInterval(()=>{ping();stats()},3000);
+  ch.postMessage({type:'REQ',from:ID});
+  ch.onmessage=async e=>{
+    const{type,from}=e.data||{};if(from===ID)return;
+    if(type==='PING'||type==='REQ')peers.set(from,Date.now());
+    if(type==='REQ')ch.postMessage({type:'CHAIN',chain,from:ID});
+    if(type==='CHAIN'&&!tampered&&e.data.chain.length>chain.length&&(await validate(e.data.chain)).ok){
+      chain=e.data.chain;save();await recheck();setStatus('sync','i-refresh',`Sinkron: rantai lebih panjang diterima (${chain.length-1} blok).`);if(mining)startMine()}
+    if(type==='NEW_BLOCK'&&!tampered){
+      const b=e.data.block,tip=chain[chain.length-1];
+      if(chain.some(x=>x.hash===b.hash))return;
+      if(b.index>tip.index+1)return ch.postMessage({type:'REQ',from:ID});
+      if(!(await check(b,tip))){addBlock(b);setStatus('sync','i-refresh',`Blok #${b.index} diterima dari tab lain.`);if(mining)startMine()}}
   };
-  
-  self.onmessage = async (e) => {
-    const { prevHash, index, data } = e.data;
-    let nonce = 0;
-    const startTime = performance.now();
-    
-    while (true) {
-      const candidate = prevHash + data + nonce;
-      const hash = await sha256(candidate);
-      
-      if (hash.startsWith('${DIFFICULTY}')) {
-        const timeTaken = Math.round(performance.now() - startTime);
-        self.postMessage({ index, prevHash, data, nonce, hash, time: Date.now(), miningTime: timeTaken });
-        break;
-      }
-      nonce++;
-      if (nonce % 10000 === 0) await new Promise(r => setTimeout(r, 0));
-    }
-  };
-`;
-
-const blob = new Blob([workerCode], { type: 'application/javascript' });
-const worker = new Worker(URL.createObjectURL(blob));
-const channel = new BroadcastChannel('nexus_lbc_network');
-
-// --- VALIDATION (The Core of Robustness) ---
-async function isValidNewBlock(newBlock, prevBlock) {
-  // 1. Cek Index berurutan
-  if (newBlock.index !== prevBlock.index + 1) return { valid: false, reason: "Index out of sync" };
-  
-  // 2. Cek Keterkaitan Hash
-  if (newBlock.prevHash !== prevBlock.hash) return { valid: false, reason: "PrevHash mismatch" };
-  
-  // 3. Cek Difficulty
-  if (!newBlock.hash.startsWith(DIFFICULTY)) return { valid: false, reason: "Hash does not meet difficulty" };
-  
-  // 4. Rekalkulasi (Anti-Manipulasi)
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(newBlock.prevHash + newBlock.data + newBlock.nonce));
-  const recalculatedHash = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-  
-  if (recalculatedHash !== newBlock.hash) return { valid: false, reason: "Cryptographic mismatch (Data tampered)" };
-  
-  return { valid: true };
 }
 
-// --- EVENTS ---
-mineBtn.onclick = () => {
-  const data = dataInput.value.trim();
-  if (!data) {
-    setStatus('error', 'i-alert', 'Data tidak boleh kosong!');
-    return;
-  }
-  
-  mineBtn.disabled = true;
-  dataInput.disabled = true;
-  setStatus('loading', 'i-refresh', 'Mining block baru... (Mencari Nonce)');
-  
-  const prevBlock = localChain[localChain.length - 1];
-  worker.postMessage({ 
-    prevHash: prevBlock.hash, 
-    index: prevBlock.index + 1, 
-    data: data 
-  });
-};
+/* ---------- Alat ---------- */
+async function verifyClick(){setStatus('loading','i-refresh','Memverifikasi seluruh rantai…');const r=await recheck();
+  r.ok?setStatus('success','i-shield',`Semua ${chain.length} blok valid. Rantai utuh.`):setStatus('error','i-alert',`Rantai rusak mulai blok #${Math.min(...r.bad)}.`)}
+async function tamperClick(){
+  if(mining)return toast('Hentikan mining dulu');
+  if(!tampered){if(chain.length<2)return toast('Mine minimal satu blok dulu');
+    const i=Math.max(1,chain.length>>1);chain=chain.map(b=>({...b}));chain[i].data='DATA DIUBAH PENYUSUP';tampered=true;
+    $('#tamper').innerHTML='<svg class="i"><use href="#i-refresh"/></svg>Pulihkan rantai';await verifyClick();setMineBtn()}
+  else{tampered=false;$('#tamper').innerHTML='<svg class="i"><use href="#i-bug"/></svg>Uji manipulasi';await load();setMineBtn();setStatus('success','i-check','Rantai dipulihkan dari penyimpanan.')}
+}
+function exportClick(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(chain,null,2)],{type:'application/json'}));a.download=`lbc-chain-${chain.length-1}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500);toast('Rantai diekspor')}
+async function importFile(f){
+  if(!f)return;let c;try{c=JSON.parse(await f.text())}catch(e){return setStatus('error','i-alert','File bukan JSON yang valid.')}
+  const r=await validate(c);if(!r.ok)return setStatus('error','i-alert','Impor ditolak: rantai tidak valid.');
+  if(!confirm(`Ganti rantai saat ini dengan ${c.length-1} blok dari file?`))return;
+  chain=c;save();await recheck();ch&&ch.postMessage({type:'CHAIN',chain,from:ID});setStatus('success','i-check','Rantai berhasil diimpor.')}
+async function resetClick(){
+  if(mining||tampered)return toast('Hentikan mining/uji dulu');
+  if(!confirm('Hapus semua blok dan mulai dari genesis?'))return;
+  chain=[{...GEN}];save();hr=0;await recheck();setStatus('','i-check','Rantai direset ke genesis.');reactor(0,'nonce · siaga')}
 
-worker.onmessage = async (e) => {
-  const newBlock = e.data;
-  const prevBlock = localChain[localChain.length - 1];
-  
-  const check = await isValidNewBlock(newBlock, prevBlock);
-  
-  if (check.valid) {
-    localChain.push(newBlock);
-    saveChain();
-    renderChain();
-    
-    channel.postMessage({ type: 'NEW_BLOCK', block: newBlock });
-    setStatus('success', 'i-check', `Block #${newBlock.index} ditambahkan! (Waktu: ${newBlock.miningTime}ms)`);
-    dataInput.value = '';
-  } else {
-    setStatus('error', 'i-alert', `Block ditolak: ${check.reason}`);
-  }
-  
-  mineBtn.disabled = false;
-  dataInput.disabled = false;
-  dataInput.focus();
-};
+/* ---------- Event ---------- */
+$('#mine').onclick=mineClick;$('#verify').onclick=verifyClick;$('#tamper').onclick=tamperClick;$('#export').onclick=exportClick;
+$('#import').onclick=()=>$('#file').click();$('#file').onchange=e=>{importFile(e.target.files[0]);e.target.value=''};$('#reset').onclick=resetClick;
+$('#jump').onclick=()=>{const e=$('#chain');e.scrollTop=e.scrollHeight};
+$('#q').oninput=render;
+$('#data').oninput=e=>$('#cnt').textContent=e.target.value.length+'/'+MAXLEN;
+$('#data').onkeydown=e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();mineClick()}};
+$('#seg').onclick=e=>{const d=e.target.closest('button');if(!d||mining)return;difficulty=+d.dataset.d;document.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('on',x===d));stats()};
+$('#chain').onclick=e=>{
+  const go=e.target.closest('[data-go]');if(go){const t=$('#b'+go.dataset.go);t&&t.scrollIntoView({block:'center',behavior:'smooth'});return}
+  const btn=e.target.closest('button[data-act]');if(!btn)return;const el=btn.closest('.blk'),b=chain[+el.dataset.i];
+  if(btn.dataset.act==='more')el.classList.toggle('open');
+  else(navigator.clipboard?navigator.clipboard.writeText(b.hash):Promise.reject()).then(()=>toast('Hash disalin'),()=>toast('Gagal menyalin'))};
 
-channel.onmessage = async (e) => {
-  const { type, block } = e.data;
-  if (type === 'NEW_BLOCK') {
-    // Cek Duplikat
-    if (localChain.some(b => b.index === block.index && b.hash === block.hash)) return;
-    
-    const prevBlock = localChain[localChain.length - 1];
-    const check = await isValidNewBlock(block, prevBlock);
-    
-    if (check.valid) {
-      localChain.push(block);
-      saveChain();
-      renderChain();
-      setStatus('sync', 'i-refresh', `Sinkronisasi: Menerima Block #${block.index} dari tab lain.`);
-    } else {
-      console.warn("Menerima blok tidak valid dari jaringan:", check.reason);
-    }
-  }
-};
-
-// --- BOOTSTRAP ---
-loadChain();
-setStatus('', 'i-check', 'Sistem Siap. Menunggu transaksi...');
+load().then(()=>{net();setMineBtn();const e=$('#chain');e.scrollTop=e.scrollHeight;setStatus('','i-check','Sistem siap. Menunggu data.')});
 </script>
 </body>
 </html>
