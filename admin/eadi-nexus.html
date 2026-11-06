@@ -2,199 +2,366 @@
 <html lang="id">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EADI – Visual Cyberpunk Steganography</title>
-<style>
-  body { margin: 0; background: #05070d; color: #0ff; font-family: monospace; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-  #controls { padding: 15px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; z-index: 10; }
-  input { padding: 10px; border-radius: 4px; border: 1px solid #0ff; background: #111; color: #0ff; outline: none; font-family: inherit; width: 200px; }
-  button { padding: 10px 15px; border-radius: 4px; border: 1px solid #0ff; background: #111; color: #0ff; cursor: pointer; font-weight: bold; font-family: inherit; transition: 0.2s; }
-  button:hover { background: #0ff; color: #000; box-shadow: 0 0 15px #0ff; }
-  #canvases { display: flex; width: 100%; flex: 1; gap: 15px; padding: 15px; box-sizing: border-box; }
-  .panel { flex: 1; display: flex; flex-direction: column; align-items: center; border: 1px solid #333; background: #000; border-radius: 8px; overflow: hidden; box-shadow: 0 0 20px rgba(0, 255, 255, 0.1); }
-  canvas { width: 100%; height: 100%; object-fit: contain; }
-  #viewCore { min-height: 250px; }
-  #viewXray { image-rendering: pixelated; }
-  #log { margin-top: 10px; color: #0f0; font-size: 14px; text-align: center; min-height: 20px; text-shadow: 0 0 5px #0f0; font-weight: bold; padding: 0 10px; }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>EADI Vault – Ruang Rahasia Data</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/build/three.min.js"></script>
+<style>
+/* ===== TOKEN: samakan dengan LBC saat digabung ===== */
+:root{
+  --void:#03060c; --panel:rgba(9,16,29,.78); --line:rgba(25,230,255,.2); --line2:rgba(139,92,255,.3);
+  --cy:#19e6ff; --vi:#8b5cff; --ok:#3dffb0; --bad:#ff3d7f; --tx:#d3ecf7; --mut:#6f8aa0;
+  --disp:'Rajdhani','Segoe UI',system-ui,sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  --acc:var(--cy);
+}
+body[data-state=sealed]{--acc:var(--vi)} body[data-state=open]{--acc:var(--ok)} body[data-state=error]{--acc:var(--bad)}
+*{box-sizing:border-box} html,body{height:100%}
+body{margin:0;color:var(--tx);font:14px/1.45 var(--mono);background:
+  radial-gradient(900px 500px at 50% 35%,rgba(139,92,255,.14),transparent 70%),
+  linear-gradient(rgba(25,230,255,.045) 1px,transparent 1px) 0 0/44px 44px,
+  linear-gradient(90deg,rgba(25,230,255,.045) 1px,transparent 1px) 0 0/44px 44px,var(--void);
+  display:flex;flex-direction:column;height:100dvh;overflow:hidden;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+svg.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
+header{display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line);background:rgba(3,6,12,.7);backdrop-filter:blur(8px)}
+.brand{display:flex;align-items:center;gap:10px;font:700 24px var(--disp);letter-spacing:.14em;color:var(--cy)}
+.brand svg{width:28px;height:28px;stroke:var(--cy);filter:drop-shadow(0 0 6px var(--cy))}
+.brand small{font:500 12px var(--mono);letter-spacing:0;color:var(--mut)}
+#chip{margin-left:auto;display:flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--acc);border-radius:99px;color:var(--acc);font-size:12px;transition:.3s}
+#chip::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 10px var(--acc)}
+main{flex:1;min-height:0;display:grid;gap:12px;padding:12px;grid-template-columns:310px minmax(0,1fr) 340px}
+.panel{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:6px;backdrop-filter:blur(10px);display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.panel::before,.panel::after{content:"";position:absolute;width:14px;height:14px;border:2px solid var(--acc);pointer-events:none;transition:.3s}
+.panel::before{top:-1px;left:-1px;border-right:0;border-bottom:0}.panel::after{right:-1px;bottom:-1px;border-left:0;border-top:0}
+.ph{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--line);font:600 15px var(--disp);letter-spacing:.08em;color:var(--cy)}
+.ph .sp{margin-left:auto}
+.pb{padding:12px;overflow:auto;flex:1;min-height:0}
+.col{display:flex;flex-direction:column;gap:12px;min-height:0}
+label{display:block;margin:0 0 5px;color:var(--mut);font-size:12px}
+textarea,input[type=password]{width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;background:rgba(0,0,0,.45);color:var(--cy);font:inherit;outline:none;resize:none;transition:.2s}
+textarea:focus,input:focus{border-color:var(--cy);box-shadow:0 0 14px rgba(25,230,255,.25)}
+.f{margin-bottom:12px}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button,.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:rgba(25,230,255,.06);color:var(--cy);font:600 13px var(--mono);cursor:pointer;transition:.2s}
+button:hover,.btn:hover{background:rgba(25,230,255,.18);border-color:var(--cy);box-shadow:0 0 14px rgba(25,230,255,.3)}
+button:focus-visible,.btn:focus-visible,summary:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+button.pri{background:var(--cy);color:#001418;border-color:var(--cy)}button.pri:hover{background:#6af0ff}
+button.alt{border-color:var(--line2);color:#c9b8ff;background:rgba(139,92,255,.1)}
+button.sm{padding:5px 9px;font-size:12px}button:disabled{opacity:.4;pointer-events:none}
+.btns.t{margin-top:8px;grid-template-columns:1fr 1fr 1fr}.btns.t button{padding:9px 4px;font-size:11px;flex-direction:column;gap:4px}
+.stats{margin-top:14px;display:grid;gap:8px;font-size:12px}
+.stats div{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed rgba(111,138,160,.25);padding-bottom:5px}
+.stats b{color:var(--cy);font-weight:600}
+.bar{height:6px;border-radius:3px;background:rgba(111,138,160,.2);overflow:hidden;margin-top:-2px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cy),var(--vi));transition:width .5s}
+#chamber{position:relative;min-height:260px}
+#chamber .cv{position:absolute;inset:0}
+#viewCore{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#viewCore:active{cursor:grabbing}
+.hud{position:absolute;left:14px;bottom:12px;right:14px;display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--mut);pointer-events:none}
+.hud b{color:var(--acc)}
+.hudt{position:absolute;top:12px;left:14px;font:600 13px var(--disp);letter-spacing:.2em;color:var(--acc);pointer-events:none}
+.xw{position:relative;aspect-ratio:1;background:#000;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+#viewXray{width:100%;height:100%;object-fit:contain;image-rendering:pixelated;display:block}
+.xw.on::after{content:"";position:absolute;left:0;right:0;height:2px;background:var(--cy);box-shadow:0 0 14px 3px var(--cy);animation:scan 3.2s linear infinite;opacity:.8}
+@keyframes scan{from{top:0}to{top:100%}}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:16px;color:var(--mut);font-size:12px}
+.xw.on .empty{display:none}
+#hex{display:grid;grid-template-columns:repeat(16,1fr);gap:2px;font-size:10px;text-align:center}
+#hex span{padding:2px 0;border-radius:2px;color:var(--mut)}#hex .h{color:var(--vi);background:rgba(139,92,255,.15)}#hex .d{color:var(--cy)}
+#out{min-height:56px;padding:10px;border:1px solid var(--line);border-radius:4px;background:rgba(0,0,0,.45);color:var(--ok);word-break:break-word;white-space:pre-wrap;text-shadow:0 0 6px rgba(61,255,176,.45)}
+#out.err{color:var(--bad);text-shadow:none}
+.side{display:flex;flex-direction:column;gap:12px;min-height:0;overflow:auto}
+.side .panel{flex:none}
+#term{height:128px;margin:0 12px 12px;border:1px solid var(--line);border-radius:6px;background:rgba(0,0,0,.55);padding:8px 12px;overflow:auto;font-size:12px}
+#log div{display:flex;gap:10px}#log time{color:var(--mut)}#log .ok{color:var(--ok)}#log .er{color:var(--bad)}#log .in{color:var(--cy)}
+#fi{display:none}
+@media (max-width:1050px){
+  body{height:auto;min-height:100dvh;overflow:auto}
+  main{display:flex;flex-direction:column;flex:none}
+  #chamber{height:48vh;flex:none}.side{overflow:visible}
+  #term{flex:none}
+}
+@media (prefers-reduced-motion:reduce){.xw.on::after{animation:none}*{transition:none!important}}
+</style>
 </head>
-<body>
-<div id="controls">
-  <input id="msg" type="text" placeholder="Pesan rahasia..." value="TopSecretData2026">
-  <button id="enc">🔒 ENCODE</button>
-  <button id="dec">🔓 DECODE</button>
-</div>
+<body data-state="idle">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-unlock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="3.5"/><path d="M10.5 12.5 19 4M16 7l2.5 2.5"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19h14"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 16V5M7.5 9.5 12 5l4.5 4.5M5 19h14"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3 20 7.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 19 6v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-term" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></symbol>
+  <symbol id="i-chip" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1"/><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4"/></symbol>
+</svg>
 
-<div id="canvases">
-  <div class="panel">
-    <canvas id="viewCore"></canvas>
+<header>
+  <div class="brand"><svg class="i"><use href="#i-cube"/></svg>EADI <small>Vault · steganografi piksel</small></div>
+  <div id="chip">Brankas kosong</div>
+</header>
+
+<main>
+  <section class="panel">
+    <div class="ph"><svg class="i"><use href="#i-key"/></svg>Konsol Brankas</div>
+    <div class="pb">
+      <div class="f"><label for="msg">Pesan rahasia</label>
+        <textarea id="msg" rows="4" maxlength="20000" placeholder="Tulis pesan yang akan disembunyikan…">TopSecretData2026</textarea></div>
+      <div class="f"><label for="key">Kunci brankas (opsional)</label>
+        <input id="key" type="password" autocomplete="off" placeholder="Kosong = tanpa kunci"></div>
+      <div class="btns">
+        <button id="enc" class="pri"><svg class="i"><use href="#i-lock"/></svg>Kunci</button>
+        <button id="dec" class="alt"><svg class="i"><use href="#i-unlock"/></svg>Buka</button>
+      </div>
+      <div class="btns t">
+        <button id="dl" disabled><svg class="i"><use href="#i-down"/></svg>Simpan PNG</button>
+        <button id="imp"><svg class="i"><use href="#i-up"/></svg>Impor PNG</button>
+        <button id="rst"><svg class="i"><use href="#i-trash"/></svg>Kosongkan</button>
+      </div>
+      <input id="fi" type="file" accept="image/png">
+      <div class="stats">
+        <div><span>Muatan</span><b id="sBytes">0 byte</b></div>
+        <div><span>Grid piksel</span><b id="sGrid">–</b></div>
+        <div><span>Isi grid</span><b id="sFill">0%</b></div>
+        <div class="bar"><i id="bFill"></i></div>
+        <div><span>Checksum</span><b id="sCrc">–</b></div>
+        <div><span>Penyamaran kunci</span><b id="sKey">nonaktif</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="chamber" class="panel">
+    <div class="cv"><canvas id="viewCore"></canvas></div>
+    <div class="hudt">RUANG BRANKAS</div>
+    <div class="hud"><span>Seret untuk memutar</span><span>Status: <b id="hudS">siaga</b></span></div>
+  </section>
+
+  <div class="side">
+    <section class="panel">
+      <div class="ph"><svg class="i"><use href="#i-scan"/></svg>Pindai X-Ray<button id="xm" class="sm sp">Kanal RGB</button></div>
+      <div class="pb"><div id="xw" class="xw"><canvas id="viewXray"></canvas><div class="empty">Belum ada data.<br>Kunci pesan untuk melihat petanya.</div></div></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><svg class="i"><use href="#i-chip"/></svg>Dump Hex (kanal R)</div>
+      <div class="pb"><div id="hex"></div></div>
+    </section>
+    <section class="panel">
+      <div class="ph"><svg class="i"><use href="#i-shield"/></svg>Hasil Ekstraksi<button id="cp" class="sm sp" disabled><svg class="i"><use href="#i-copy"/></svg>Salin</button></div>
+      <div class="pb"><div id="out">Menunggu perintah buka…</div></div>
+    </section>
   </div>
-  <div class="panel">
-    <canvas id="viewXray"></canvas>
-  </div>
-</div>
-<div id="log">Sistem siap...</div>
+</main>
+
+<div id="term"><div id="log"></div></div>
 
 <script>
-const msgInp = document.getElementById('msg');
-const log = document.getElementById('log');
-let renderer, scene, camera, cubeGroup;
-let savedDataBuffer = null;
-let texW = 0, texH = 0;
+const $ = s => document.querySelector(s);
+const msgInp = $('#msg'), keyInp = $('#key'), log = $('#log'), out = $('#out');
+const HDR = 9; // 4 byte panjang + 1 byte flag + 4 byte CRC32
+const TE = new TextEncoder(), TD = new TextDecoder();
+let renderer, scene, camera, cubeGroup, core, wire, pts;
+let savedDataBuffer = null, texW = 0, texH = 0, meta = null, lastText = '', xm = 'rgb', typer = null;
 
-// ==========================================
-// 1. SETUP THREE.JS (TAMPILAN 3D)
-// ==========================================
-function initThree() {
-  const canvas = document.getElementById('viewCore');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
-  renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
-  scene = new THREE.Scene();
-  
-  // Kamera dijauhkan agar kubus terlihat utuh
-  camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
-  camera.position.set(0, 0, 4); 
-  
-  cubeGroup = new THREE.Group();
-  
-  // 1. Kubus luar (Wireframe Neon)
-  const wireframeGeom = new THREE.BoxGeometry(2, 2, 2);
-  const wireframeMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.3 });
-  const wireframeCube = new THREE.Mesh(wireframeGeom, wireframeMat);
-  cubeGroup.add(wireframeCube);
-
-  // 2. Kubus dalam (Tempat Data)
-  const dataGeom = new THREE.BoxGeometry(1.95, 1.95, 1.95); // Sedikit lebih kecil
-  const dataMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
-  const dataCube = new THREE.Mesh(dataGeom, dataMat);
-  cubeGroup.add(dataCube);
-  
-  // Simpan referensi untuk diganti materialnya
-  cubeGroup.userData.dataCube = dataCube;
-  
-  scene.add(cubeGroup);
-  animate();
+/* ---------- Util ---------- */
+function say(msg, cls = 'in') {
+  const d = document.createElement('div');
+  d.innerHTML = `<time>${new Date().toLocaleTimeString('id-ID')}</time><span class="${cls}"></span>`;
+  d.lastChild.textContent = msg;
+  log.prepend(d);
+  while (log.children.length > 60) log.lastChild.remove();
 }
+const COLORS = { idle: 0x19e6ff, sealed: 0x8b5cff, open: 0x3dffb0, error: 0xff3d7f };
+const LABELS = { idle: 'Brankas kosong', sealed: 'Segel terkunci', open: 'Segel terbuka', error: 'Peringatan' };
+function setState(st, hud) {
+  document.body.dataset.state = st;
+  $('#chip').textContent = LABELS[st];
+  $('#hudS').textContent = hud || LABELS[st].toLowerCase();
+  if (wire) wire.material.color.setHex(COLORS[st]);
+  if (pts) pts.material.color.setHex(COLORS[st]);
+}
+const crcT = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(b) { let c = ~0; for (let i = 0; i < b.length; i++) c = crcT[(c ^ b[i]) & 255] ^ (c >>> 8); return (~c) >>> 0; }
+function xor(b, key) { // aliran XOR dari kunci (penyamaran ringan, bukan enkripsi standar)
+  let h = 2166136261; for (const ch of TE.encode(key)) { h ^= ch; h = Math.imul(h, 16777619); }
+  let s = h >>> 0; const o = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) { s = (s + 0x6D2B79F5) >>> 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t ^= t + Math.imul(t ^ (t >>> 7), 61 | t); o[i] = b[i] ^ (((t ^ (t >>> 14)) >>> 0) & 255); }
+  return o;
+}
+function rand(buf) { for (let i = 0; i < buf.length; i += 65536) crypto.getRandomValues(buf.subarray(i, Math.min(i + 65536, buf.length))); }
+const hex8 = n => n.toString(16).padStart(8, '0');
 
+/* ---------- 1. Ruang 3D ---------- */
+let rx = 0.45, ry = 0.6, drag = false, lx = 0, ly = 0, pulse = 0;
+function initThree() {
+  const canvas = $('#viewCore');
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+  camera.position.set(0, 0, 5);
+  cubeGroup = new THREE.Group();
+  core = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.9, 1.9), new THREE.MeshBasicMaterial({ color: 0x16202e }));
+  wire = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2.2, 2.2, 2.2)), new THREE.LineBasicMaterial({ color: 0x19e6ff }));
+  const frame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2.7, 2.7, 2.7)), new THREE.LineBasicMaterial({ color: 0x8b5cff, transparent: true, opacity: 0.35 }));
+  cubeGroup.add(core, wire, frame);
+  scene.add(cubeGroup);
+  const n = 380, pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const r = 2.8 + Math.random() * 2.4, a = Math.random() * 6.283, b = Math.acos(2 * Math.random() - 1);
+    pos[i * 3] = r * Math.sin(b) * Math.cos(a); pos[i * 3 + 1] = r * Math.sin(b) * Math.sin(a); pos[i * 3 + 2] = r * Math.cos(b);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  pts = new THREE.Points(g, new THREE.PointsMaterial({ color: 0x19e6ff, size: 0.03, transparent: true, opacity: 0.7 }));
+  scene.add(pts);
+  canvas.addEventListener('pointerdown', e => { drag = true; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', e => { if (!drag) return; ry += (e.clientX - lx) * 0.01; rx += (e.clientY - ly) * 0.01; lx = e.clientX; ly = e.clientY; });
+  ['pointerup', 'pointercancel'].forEach(t => canvas.addEventListener(t, () => drag = false));
+  new ResizeObserver(fit).observe($('#chamber'));
+  fit(); animate();
+}
+function fit() {
+  const el = $('#chamber'), w = el.clientWidth, h = el.clientHeight;
+  if (!renderer || !w || !h) return;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
 function animate() {
   requestAnimationFrame(animate);
-  if (cubeGroup) {
-    cubeGroup.rotation.x += 0.005;
-    cubeGroup.rotation.y += 0.01;
-  }
-  if (renderer && scene && camera) {
-    renderer.render(scene, camera);
-  }
+  if (!drag) ry += 0.008;
+  cubeGroup.rotation.set(rx, ry, 0);
+  pts.rotation.y -= 0.0007;
+  pulse *= 0.92; cubeGroup.scale.setScalar(1 + pulse * 0.14);
+  renderer.render(scene, camera);
 }
 
-// ==========================================
-// 2. PROSES ENCODE (Sembunyikan Data)
-// ==========================================
+/* ---------- 2. Render data ke 3D, X-Ray, Hex ---------- */
+function drawX() {
+  if (!savedDataBuffer) return;
+  const c = $('#viewXray'), x = c.getContext('2d');
+  c.width = texW; c.height = texH;
+  const im = x.createImageData(texW, texH), b = savedDataBuffer;
+  if (xm === 'rgb') im.data.set(b);
+  else for (let i = 0; i < texW * texH; i++) { const v = b[i * 4]; im.data[i * 4 + 1] = v * 0.9; im.data[i * 4 + 2] = v; im.data[i * 4 + 3] = 255; }
+  x.putImageData(im, 0, 0);
+}
+function drawHex() {
+  const h = $('#hex'); h.textContent = '';
+  const b = savedDataBuffer, end = meta ? HDR + meta.len : 0, n = Math.min(160, texW * texH);
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('span');
+    s.textContent = b[i * 4].toString(16).padStart(2, '0');
+    s.className = i < HDR ? 'h' : i < end ? 'd' : '';
+    h.append(s);
+  }
+}
+function render() {
+  const tex = new THREE.DataTexture(savedDataBuffer, texW, texH, THREE.RGBAFormat, THREE.UnsignedByteType);
+  tex.magFilter = tex.minFilter = THREE.NearestFilter; tex.needsUpdate = true;
+  if (core.material.map) core.material.map.dispose();
+  core.material.color.setHex(0xffffff); core.material.map = tex; core.material.needsUpdate = true;
+  drawX(); drawHex(); $('#xw').classList.add('on'); $('#dl').disabled = false;
+  const used = HDR + meta.len, cap = texW * texH, pct = Math.round(used / cap * 100);
+  $('#sBytes').textContent = `${meta.len} byte`; $('#sGrid').textContent = `${texW}×${texH}`;
+  $('#sFill').textContent = pct + '%'; $('#bFill').style.width = pct + '%';
+  $('#sCrc').textContent = hex8(meta.crc); $('#sKey').textContent = meta.locked ? 'aktif' : 'nonaktif';
+  pulse = 1;
+}
+
+/* ---------- 3. Encode ---------- */
 function encodeData() {
-  const text = msgInp.value.trim();
-  if (!text) { 
-    log.textContent = '❌ Masukkan teks terlebih dahulu!'; 
-    log.style.color = '#ff3366'; return; 
-  }
-
-  const txtBytes = new TextEncoder().encode(text);
-  const totalBytes = txtBytes.length + 4; 
-  
-  // Hitung grid (dibuat agak lebar agar terlihat)
-  texW = Math.ceil(Math.sqrt(totalBytes));
-  texH = Math.ceil(totalBytes / texW);
-
+  const text = msgInp.value.trim(), key = keyInp.value;
+  if (!text) { fail('Masukkan teks terlebih dahulu.'); return; }
+  const plain = TE.encode(text), crc = crc32(plain);
+  const body = key ? xor(plain, key) : plain;
+  const head = new Uint8Array(HDR), dv = new DataView(head.buffer);
+  dv.setUint32(0, body.length, true); head[4] = key ? 1 : 0; dv.setUint32(5, crc, true);
+  const total = HDR + body.length;
+  texW = Math.max(8, Math.ceil(Math.sqrt(total))); texH = Math.max(8, Math.ceil(total / texW));
   const buf = new Uint8Array(texW * texH * 4);
-  
-  // Header (4 byte pertama)
-  const lenBuf = new Uint8Array(4);
-  new DataView(lenBuf.buffer).setUint32(0, txtBytes.length, true);
-  
-  // Simpan data di Channel RED (R)
-  for(let i=0; i<4; i++) buf[i * 4] = lenBuf[i];
-  for(let i=0; i<txtBytes.length; i++) buf[(4 + i) * 4] = txtBytes[i];
-
-  // Set Alpha (Opacity) = 255 (Full)
-  for(let i=0; i<buf.length; i+=4) buf[i+3] = 255;
-
-  savedDataBuffer = buf; 
-
-  // --- A. Terapkan ke Kubus 3D ---
-  const texture = new THREE.DataTexture(buf, texW, texH, THREE.RGBAFormat, THREE.UnsignedByteType);
-  texture.needsUpdate = true;
-  texture.magFilter = THREE.NearestFilter; 
-  texture.minFilter = THREE.NearestFilter;
-  
-  const dataCube = cubeGroup.userData.dataCube;
-  dataCube.material.map = texture;
-  dataCube.material.needsUpdate = true;
-
-  // --- B. Gambar X-Ray (Diperbesar) ---
-  const xrayCanvas = document.getElementById('viewXray');
-  const ctx = xrayCanvas.getContext('2d');
-  
-  // Resolusi asli canvas disamakan dengan ukuran grid (misal 5x5)
-  xrayCanvas.width = texW;
-  xrayCanvas.height = texH;
-  
-  // Gambar data
-  const imgData = ctx.createImageData(texW, texH);
-  imgData.data.set(buf);
-  ctx.putImageData(imgData, 0, 0);
-
-  log.textContent = `✅ Data disembunyikan! (${totalBytes} byte, Grid ${texW}x${texH})`;
-  log.style.color = "#0f0";
+  rand(buf); // kanal G, B dan sisa R diisi derau penyamar
+  for (let i = 0; i < total; i++) buf[i * 4] = i < HDR ? head[i] : body[i - HDR];
+  for (let i = 3; i < buf.length; i += 4) buf[i] = 255;
+  savedDataBuffer = buf; meta = { len: body.length, crc, locked: !!key };
+  render(); setState('sealed', 'tersegel');
+  showOut('Data tersimpan di dalam kubus. Tekan Buka untuk mengekstrak.', false);
+  say(`Terkunci: ${total} byte, grid ${texW}×${texH}${key ? ', dengan kunci' : ''}`, 'ok');
 }
 
-// ==========================================
-// 3. PROSES DECODE (Ekstrak Data)
-// ==========================================
+/* ---------- 4. Decode ---------- */
+function parse(b, key) {
+  const n = b.length / 4; if (n < HDR) return { e: 'Gambar terlalu kecil untuk data EADI.' };
+  const g = i => b[i * 4];
+  const len = (g(0) | g(1) << 8 | g(2) << 16 | g(3) << 24) >>> 0, fl = g(4), crc = (g(5) | g(6) << 8 | g(7) << 16 | g(8) << 24) >>> 0;
+  if (len > n - HDR) return { e: 'Header tidak valid. Ini bukan gambar EADI.' };
+  let p = new Uint8Array(len); for (let i = 0; i < len; i++) p[i] = g(HDR + i);
+  if (fl & 1) { if (!key) return { e: 'Data dikunci. Isi kunci brankas lalu coba lagi.' }; p = xor(p, key); }
+  if (crc32(p) !== crc) return { e: fl & 1 ? 'Kunci salah atau data rusak.' : 'Checksum tidak cocok, data rusak.' };
+  return { t: TD.decode(p), len, crc, locked: !!(fl & 1) };
+}
 function decodeData() {
-  if (!savedDataBuffer) {
-    log.textContent = '❌ Belum ada data yang di-encode!';
-    log.style.color = '#ff3366';
-    return;
-  }
-
-  try {
-    // Baca Header (4 byte pertama)
-    const lenBuf = new Uint8Array(4);
-    for (let i = 0; i < 4; i++) lenBuf[i] = savedDataBuffer[i * 4];
-    const msgLength = new DataView(lenBuf.buffer).getUint32(0, true);
-
-    // Baca pesan
-    const bodyBytes = new Uint8Array(msgLength);
-    for (let i = 0; i < msgLength; i++) bodyBytes[i] = savedDataBuffer[(4 + i) * 4];
-
-    const decodedText = new TextDecoder().decode(bodyBytes);
-    log.textContent = `🔓 EKSTRAK SUKSES: "${decodedText}"`;
-    log.style.color = "#0ff";
-    
-  } catch (e) {
-    log.textContent = `❌ GAGAL: ${e.message}`;
-    log.style.color = '#ff3366';
-  }
+  if (!savedDataBuffer) { fail('Belum ada data. Kunci pesan atau impor PNG dulu.'); return; }
+  const r = parse(savedDataBuffer, keyInp.value);
+  if (r.e) { fail(r.e); return; }
+  lastText = r.t; $('#cp').disabled = false;
+  setState('open', 'terbuka'); pulse = 1; showOut(r.t, true);
+  say(`Ekstrak sukses: ${r.len} byte, checksum ${hex8(r.crc)} cocok`, 'ok');
 }
+function showOut(t, type) {
+  clearInterval(typer); out.className = ''; out.textContent = '';
+  if (!type) { out.textContent = t; return; }
+  let i = 0; const step = Math.max(1, Math.ceil(t.length / 90));
+  typer = setInterval(() => { i += step; out.textContent = t.slice(0, i); if (i >= t.length) clearInterval(typer); }, 22);
+}
+function fail(m) { clearInterval(typer); out.className = 'err'; out.textContent = m; setState('error', 'gagal'); say(m, 'er'); }
 
-// ==========================================
-// 4. EVENT LISTENERS & RESIZE
-// ==========================================
-document.getElementById('enc').addEventListener('click', encodeData);
-document.getElementById('dec').addEventListener('click', decodeData);
-
-window.onload = () => {
-  initThree();
-  // Tangani resize agar canvas tidak gepeng
-  window.addEventListener('resize', () => {
-    const canvas = document.getElementById('viewCore');
-    if (renderer && camera) {
-      renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
-      camera.aspect = canvas.clientWidth / canvas.clientHeight;
-      camera.updateProjectionMatrix();
-    }
-  });
+/* ---------- 5. PNG, salin, reset ---------- */
+function bufCanvas() {
+  const c = document.createElement('canvas'); c.width = texW; c.height = texH;
+  const im = new ImageData(new Uint8ClampedArray(savedDataBuffer), texW, texH);
+  c.getContext('2d').putImageData(im, 0, 0); return c;
+}
+$('#dl').onclick = () => {
+  if (!savedDataBuffer) return;
+  bufCanvas().toBlob(b => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'eadi-vault.png'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); say('PNG brankas disimpan (jangan dikompres ulang).', 'ok'); }, 'image/png');
 };
+$('#imp').onclick = () => $('#fi').click();
+$('#fi').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const bmp = await createImageBitmap(f, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+    const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(bmp, 0, 0);
+    const d = x.getImageData(0, 0, c.width, c.height).data;
+    if (d.length / 4 > 4e6) { fail('Gambar terlalu besar. Maksimal 4 juta piksel.'); return; }
+    savedDataBuffer = new Uint8Array(d); texW = c.width; texH = c.height;
+    const r = parse(savedDataBuffer, keyInp.value);
+    meta = { len: r.len || 0, crc: r.crc || 0, locked: !!r.locked };
+    if (r.e && !r.len) meta = { len: 0, crc: 0, locked: false };
+    render(); setState('sealed', 'diimpor'); say(`PNG diimpor: ${texW}×${texH}`, 'in');
+    if (r.e) fail(r.e); else decodeData();
+  } catch (err) { fail('PNG tidak bisa dibaca: ' + err.message); }
+};
+$('#cp').onclick = async () => { try { await navigator.clipboard.writeText(lastText); say('Hasil disalin ke clipboard.', 'ok'); } catch { say('Clipboard tidak diizinkan browser.', 'er'); } };
+$('#xm').onclick = () => { xm = xm === 'rgb' ? 'r' : 'rgb'; $('#xm').textContent = xm === 'rgb' ? 'Kanal RGB' : 'Kanal R'; drawX(); };
+$('#rst').onclick = () => {
+  savedDataBuffer = null; meta = null; lastText = ''; clearInterval(typer);
+  if (core.material.map) { core.material.map.dispose(); core.material.map = null; }
+  core.material.color.setHex(0x16202e); core.material.needsUpdate = true;
+  $('#hex').textContent = ''; $('#xw').classList.remove('on'); $('#dl').disabled = true; $('#cp').disabled = true;
+  ['#sBytes', '#sGrid', '#sFill', '#sCrc'].forEach((s, i) => $(s).textContent = ['0 byte', '–', '0%', '–'][i]);
+  $('#bFill').style.width = '0'; $('#sKey').textContent = 'nonaktif';
+  out.className = ''; out.textContent = 'Menunggu perintah buka…'; setState('idle'); say('Brankas dikosongkan.');
+};
+
+/* ---------- 6. Event & mulai ---------- */
+$('#enc').addEventListener('click', encodeData);
+$('#dec').addEventListener('click', decodeData);
+msgInp.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) encodeData(); });
+window.addEventListener('load', () => { initThree(); say('Sistem siap. Ctrl+Enter untuk mengunci pesan.'); });
 </script>
 </body>
 </html>
