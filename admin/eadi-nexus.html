@@ -3,180 +3,171 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EADI – Cyberpunk Steganography</title>
+<title>EADI – Visual Cyberpunk Steganography</title>
 <style>
   body { margin: 0; background: #05070d; color: #0ff; font-family: monospace; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-  #app { display: flex; flex-direction: column; align-items: center; height: 100%; width: 100%; padding: 10px; box-sizing: border-box; }
-  #controls { margin: 10px 0; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; z-index: 10; }
+  #controls { padding: 15px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; z-index: 10; }
   input { padding: 10px; border-radius: 4px; border: 1px solid #0ff; background: #111; color: #0ff; outline: none; font-family: inherit; width: 200px; }
-  button { padding: 10px 15px; border-radius: 4px; border: 1px solid #0ff; background: #111; color: #0ff; cursor: pointer; transition: 0.2s; font-weight: bold; font-family: inherit; }
-  button:hover { background: #0ff; color: #05070d; box-shadow: 0 0 15px #0ff; }
-  #canvases { display: flex; width: 100%; flex: 1; gap: 10px; padding: 10px; box-sizing: border-box; flex-wrap: wrap; justify-content: center; }
-  canvas { background: #000; border: 1px solid #333; border-radius: 8px; box-shadow: 0 0 20px rgba(0, 255, 255, 0.1); }
-  #viewCore { flex: 1; max-width: 400px; height: 100%; min-height: 300px; }
-  #viewXray { flex: 1; max-width: 400px; height: 100%; min-height: 300px; image-rendering: pixelated; }
-  #log { margin-top: 10px; color: #0f0; font-size: 14px; text-align: center; min-height: 20px; text-shadow: 0 0 5px #0f0; font-weight: bold; }
+  button { padding: 10px 15px; border-radius: 4px; border: 1px solid #0ff; background: #111; color: #0ff; cursor: pointer; font-weight: bold; font-family: inherit; transition: 0.2s; }
+  button:hover { background: #0ff; color: #000; box-shadow: 0 0 15px #0ff; }
+  #canvases { display: flex; width: 100%; flex: 1; gap: 15px; padding: 15px; box-sizing: border-box; }
+  .panel { flex: 1; display: flex; flex-direction: column; align-items: center; border: 1px solid #333; background: #000; border-radius: 8px; overflow: hidden; box-shadow: 0 0 20px rgba(0, 255, 255, 0.1); }
+  canvas { width: 100%; height: 100%; object-fit: contain; }
+  #viewCore { min-height: 250px; }
+  #viewXray { image-rendering: pixelated; }
+  #log { margin-top: 10px; color: #0f0; font-size: 14px; text-align: center; min-height: 20px; text-shadow: 0 0 5px #0f0; font-weight: bold; padding: 0 10px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/build/three.min.js"></script>
 </head>
 <body>
-<div id="app">
-  <div id="controls">
-    <input id="msg" type="text" placeholder="Masukkan pesan rahasia..." value="TopSecretData2026">
-    <button id="enc">🔒 SEMBUNYIKAN (ENCODE)</button>
-    <button id="dec">🔓 EKSTRAK (DECODE)</button>
-  </div>
-  
-  <div id="canvases">
-    <!-- Kanvas Kubus 3D -->
+<div id="controls">
+  <input id="msg" type="text" placeholder="Pesan rahasia..." value="TopSecretData2026">
+  <button id="enc">🔒 ENCODE</button>
+  <button id="dec">🔓 DECODE</button>
+</div>
+
+<div id="canvases">
+  <div class="panel">
     <canvas id="viewCore"></canvas>
-    <!-- Kanvas X-Ray Piksel -->
+  </div>
+  <div class="panel">
     <canvas id="viewXray"></canvas>
   </div>
-  
-  <div id="log">Sistem siap. Menunggu data...</div>
 </div>
+<div id="log">Sistem siap...</div>
 
 <script>
 const msgInp = document.getElementById('msg');
 const log = document.getElementById('log');
-const encBtn = document.getElementById('enc');
-const decBtn = document.getElementById('dec');
-
-let renderer, scene, camera, cube;
-let savedPixelData = null; // Menyimpan data untuk di-decode
+let renderer, scene, camera, cubeGroup;
+let savedDataBuffer = null;
 let texW = 0, texH = 0;
 
-// ---------- 1. Inisialisasi Three.js (Kubus 3D) ----------
+// ==========================================
+// 1. SETUP THREE.JS (TAMPILAN 3D)
+// ==========================================
 function initThree() {
   const canvas = document.getElementById('viewCore');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
   scene = new THREE.Scene();
   
-  // Posisi kamera dijauhkan agar kubus terlihat utuh
+  // Kamera dijauhkan agar kubus terlihat utuh
   camera = new THREE.PerspectiveCamera(45, canvas.clientWidth / canvas.clientHeight, 0.1, 100);
-  camera.position.set(0, 0, 5); 
+  camera.position.set(0, 0, 4); 
   
-  // Cahaya dasar (meskipun materialnya Basic, ini untuk jaga-jaga)
-  scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+  cubeGroup = new THREE.Group();
   
-  const geom = new THREE.BoxGeometry(2, 2, 2);
-  cube = new THREE.Mesh(geom, new THREE.MeshBasicMaterial({ color: 0x222222 }));
-  scene.add(cube);
+  // 1. Kubus luar (Wireframe Neon)
+  const wireframeGeom = new THREE.BoxGeometry(2, 2, 2);
+  const wireframeMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.3 });
+  const wireframeCube = new THREE.Mesh(wireframeGeom, wireframeMat);
+  cubeGroup.add(wireframeCube);
+
+  // 2. Kubus dalam (Tempat Data)
+  const dataGeom = new THREE.BoxGeometry(1.95, 1.95, 1.95); // Sedikit lebih kecil
+  const dataMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+  const dataCube = new THREE.Mesh(dataGeom, dataMat);
+  cubeGroup.add(dataCube);
   
+  // Simpan referensi untuk diganti materialnya
+  cubeGroup.userData.dataCube = dataCube;
+  
+  scene.add(cubeGroup);
   animate();
 }
 
 function animate() {
   requestAnimationFrame(animate);
-  if (cube) {
-    cube.rotation.x += 0.01;
-    cube.rotation.y += 0.015;
+  if (cubeGroup) {
+    cubeGroup.rotation.x += 0.005;
+    cubeGroup.rotation.y += 0.01;
   }
-  renderer.render(scene, camera);
+  if (renderer && scene && camera) {
+    renderer.render(scene, camera);
+  }
 }
 
-// ---------- 2. Proses Encode (Sembunyikan Data) ----------
+// ==========================================
+// 2. PROSES ENCODE (Sembunyikan Data)
+// ==========================================
 function encodeData() {
   const text = msgInp.value.trim();
   if (!text) { 
     log.textContent = '❌ Masukkan teks terlebih dahulu!'; 
-    log.style.color = '#ff3366';
-    return; 
+    log.style.color = '#ff3366'; return; 
   }
 
-  // 1. Konversi Teks ke Bytes
   const txtBytes = new TextEncoder().encode(text);
-  const totalBytes = txtBytes.length + 4; // +4 untuk header panjang
+  const totalBytes = txtBytes.length + 4; 
   
-  // 2. Hitung Ukuran Grid (Persegi)
-  const cells = Math.ceil(Math.sqrt(totalBytes));
-  texW = cells;
-  texH = Math.ceil(totalBytes / cells);
+  // Hitung grid (dibuat agak lebar agar terlihat)
+  texW = Math.ceil(Math.sqrt(totalBytes));
+  texH = Math.ceil(totalBytes / texW);
 
-  // 3. Buat Buffer RGBA
-  // WAJIB: 1 byte data = 1 piksel (hanya pakai channel Merah / R)
   const buf = new Uint8Array(texW * texH * 4);
   
-  // Header Panjang (4 byte pertama)
+  // Header (4 byte pertama)
   const lenBuf = new Uint8Array(4);
   new DataView(lenBuf.buffer).setUint32(0, txtBytes.length, true);
-  for(let i=0; i<4; i++) {
-    buf[i * 4] = lenBuf[i]; // Simpan di R channel
-  }
+  
+  // Simpan data di Channel RED (R)
+  for(let i=0; i<4; i++) buf[i * 4] = lenBuf[i];
+  for(let i=0; i<txtBytes.length; i++) buf[(4 + i) * 4] = txtBytes[i];
 
-  // Isi Pesan (mulai dari byte ke-4)
-  for(let i=0; i<txtBytes.length; i++) {
-    buf[(4 + i) * 4] = txtBytes[i]; // Simpan di R channel
-  }
+  // Set Alpha (Opacity) = 255 (Full)
+  for(let i=0; i<buf.length; i+=4) buf[i+3] = 255;
 
-  // Set Alpha = 255 (Opaque) untuk semua piksel agar tidak transparan
-  for(let i=0; i<buf.length; i+=4) {
-    buf[i+3] = 255;
-  }
+  savedDataBuffer = buf; 
 
-  savedPixelData = buf; // Simpan untuk decode
-
-  // 4. Terapkan ke Kubus 3D (DataTexture)
+  // --- A. Terapkan ke Kubus 3D ---
   const texture = new THREE.DataTexture(buf, texW, texH, THREE.RGBAFormat, THREE.UnsignedByteType);
   texture.needsUpdate = true;
-  texture.magFilter = THREE.NearestFilter; // Wajib: Agar piksel tidak blur
+  texture.magFilter = THREE.NearestFilter; 
   texture.minFilter = THREE.NearestFilter;
   
-  cube.material.map = texture;
-  cube.material.needsUpdate = true;
+  const dataCube = cubeGroup.userData.dataCube;
+  dataCube.material.map = texture;
+  dataCube.material.needsUpdate = true;
 
-  // 5. Gambar ke X-Ray Canvas (Visualisasi 2D)
-  const xray = document.getElementById('viewXray');
-  xray.width = texW;
-  xray.height = texH;
-  const ctx = xray.getContext('2d');
+  // --- B. Gambar X-Ray (Diperbesar) ---
+  const xrayCanvas = document.getElementById('viewXray');
+  const ctx = xrayCanvas.getContext('2d');
   
-  // Buat ImageData dari buffer
+  // Resolusi asli canvas disamakan dengan ukuran grid (misal 5x5)
+  xrayCanvas.width = texW;
+  xrayCanvas.height = texH;
+  
+  // Gambar data
   const imgData = ctx.createImageData(texW, texH);
-  for (let i = 0; i < buf.length; i++) {
-    imgData.data[i] = buf[i];
-  }
-  
-  // Karena canvas ukurannya kecil (misal 5x5), gambar akan stretched oleh CSS
+  imgData.data.set(buf);
   ctx.putImageData(imgData, 0, 0);
-  
-  // Set CSS agar terlihat kotak-kotak (pixelated)
-  xray.style.width = '100%';
-  xray.style.height = '100%';
-  xray.style.objectFit = 'contain';
-  xray.style.imageRendering = 'pixelated';
 
   log.textContent = `✅ Data disembunyikan! (${totalBytes} byte, Grid ${texW}x${texH})`;
   log.style.color = "#0f0";
 }
 
-// ---------- 3. Proses Decode (Ekstrak Data) ----------
+// ==========================================
+// 3. PROSES DECODE (Ekstrak Data)
+// ==========================================
 function decodeData() {
-  if (!savedPixelData) {
+  if (!savedDataBuffer) {
     log.textContent = '❌ Belum ada data yang di-encode!';
     log.style.color = '#ff3366';
     return;
   }
 
   try {
-    // 1. Baca 4 byte pertama (Header Panjang) dari R Channel
+    // Baca Header (4 byte pertama)
     const lenBuf = new Uint8Array(4);
-    for (let i = 0; i < 4; i++) {
-      lenBuf[i] = savedPixelData[i * 4];
-    }
+    for (let i = 0; i < 4; i++) lenBuf[i] = savedDataBuffer[i * 4];
     const msgLength = new DataView(lenBuf.buffer).getUint32(0, true);
 
-    // 2. Baca isi pesan
+    // Baca pesan
     const bodyBytes = new Uint8Array(msgLength);
-    for (let i = 0; i < msgLength; i++) {
-      bodyBytes[i] = savedPixelData[(4 + i) * 4];
-    }
+    for (let i = 0; i < msgLength; i++) bodyBytes[i] = savedDataBuffer[(4 + i) * 4];
 
-    // 3. Kembalikan ke Teks
     const decodedText = new TextDecoder().decode(bodyBytes);
-    
     log.textContent = `🔓 EKSTRAK SUKSES: "${decodedText}"`;
     log.style.color = "#0ff";
     
@@ -186,17 +177,19 @@ function decodeData() {
   }
 }
 
-// ---------- 4. Event Listeners ----------
-encBtn.addEventListener('click', encodeData);
-decBtn.addEventListener('click', decodeData);
+// ==========================================
+// 4. EVENT LISTENERS & RESIZE
+// ==========================================
+document.getElementById('enc').addEventListener('click', encodeData);
+document.getElementById('dec').addEventListener('click', decodeData);
 
-// Jalankan saat halaman dimuat & tangani resize
 window.onload = () => {
   initThree();
+  // Tangani resize agar canvas tidak gepeng
   window.addEventListener('resize', () => {
     const canvas = document.getElementById('viewCore');
     if (renderer && camera) {
-      renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+      renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
       camera.aspect = canvas.clientWidth / canvas.clientHeight;
       camera.updateProjectionMatrix();
     }
