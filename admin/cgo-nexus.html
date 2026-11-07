@@ -1787,7 +1787,50 @@ function sanitize3DCode(src) {
     }
     out.push(ch); i++;
   }
-  return out.join('');
+  let cleaned = out.join('');
+
+  // --- Camera must not sit at world origin (causes "spider-web" / inside-geometry view) ---
+  // Rewrite camera.position.set(0,0,0) / camera.position.set(0, 0, 0) → safe default
+  cleaned = cleaned.replace(
+    /camera\.position\.set\s*\(\s*0(?:\.0+)?\s*,\s*0(?:\.0+)?\s*,\s*0(?:\.0+)?\s*\)/g,
+    'camera.position.set(0, 2, 6)'
+  );
+  // Also catch camera.position = new THREE.Vector3(0,0,0) and similar
+  cleaned = cleaned.replace(
+    /camera\.position\s*=\s*(?:new\s+THREE\.Vector3\s*)?\(\s*0(?:\.0+)?\s*,\s*0(?:\.0+)?\s*,\s*0(?:\.0+)?\s*\)/g,
+    'camera.position.set(0, 2, 6)'
+  );
+  cleaned = cleaned.replace(
+    /camera\.position\.(?:x|y|z)\s*=\s*0(?:\.0+)?\b/g,
+    function (m) {
+      // leave single-axis zero alone if other axes may be non-zero; only force full origin via set()
+      return m;
+    }
+  );
+
+  // --- PointsMaterial size cap (prevent giant particles e.g. size: 200 → "spider web") ---
+  // Clamp size: N when N > 0.5 inside PointsMaterial option objects
+  cleaned = cleaned.replace(
+    /(new\s+THREE\.PointsMaterial\s*\(\s*\{[^}]*)\bsize\s*:\s*([0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)/g,
+    function (full, prefix, numStr) {
+      const n = parseFloat(numStr);
+      if (!Number.isFinite(n) || n <= 0.5) return full;
+      return prefix + 'size: 0.5 /* clamped from ' + numStr + ' */';
+    }
+  );
+  // Also handle size as second positional-ish pattern if written size:200 without space
+  cleaned = cleaned.replace(
+    /\bsize\s*:\s*([0-9]{2,}(?:\.[0-9]+)?)/g,
+    function (full, numStr) {
+      // Only clamp very large sizes (>= 2) outside already-handled PointsMaterial blocks is aggressive;
+      // limit to values that would blow the viewport
+      const n = parseFloat(numStr);
+      if (!Number.isFinite(n) || n < 2) return full;
+      return 'size: 0.5 /* clamped from ' + numStr + ' */';
+    }
+  );
+
+  return cleaned;
 }
 function sceneDoc(code, id) {
 const safe = sanitize3DCode(code == null ? '' : String(code)).replace(/<\/script/gi, '<\\/script');
@@ -1804,6 +1847,7 @@ if(window.ResizeObserver){var _rq=0;try{new ResizeObserver(function(){if(_rq)ret
 try{(function(THREE,scene,camera,renderer,onFrame){
 ${safe}
 }).call(window,THREE,scene,camera,renderer,onFrame)}catch(e){send('error',String(e&&e.message||e));return}
+try{var _cp=camera.position;if(_cp&&Math.abs(_cp.x)<1e-6&&Math.abs(_cp.y)<1e-6&&Math.abs(_cp.z)<1e-6){camera.position.set(0,2,6);}}catch(_cz){}
 var _vis=0;scene.traverse(function(o){if(o!==scene&&!o.isLight)_vis++});
 if(BLANK)send('warn','Kode scene3d dari AI kosong (blank) — menampilkan fallback TorusKnot. Klik RECALIBRATE untuk meminta ulang.');
 if(_vis===0||BLANK){var _fk=new THREE.Mesh(new THREE.TorusKnotGeometry(1.2,.38,128,16),new THREE.MeshNormalMaterial({wireframe:true}));scene.add(_fk);onFrame(function(t,dt){_fk.rotation.x+=dt*.5;_fk.rotation.y+=dt*.8})}
@@ -1893,6 +1937,10 @@ function buildScene3d(el, opt) {
             if (live && !healed && s3dHeals < 2 && (wl.includes('blank') || wl.includes('kosong') || wl.includes('empty'))) {
                 healed = true; s3dHeals++; st.textContent += ' · auto-recalibrate';
                 whenIdle(() => healScene3d(lastErr, code));
+            } else if (s3dHeals >= 2) {
+                st.textContent = 'Gagal merender 3D. Silakan Clear History dan coba lagi.';
+                try { showToast('Scene 3D: batas auto-heal tercapai. Clear History lalu coba lagi.', 4500, true); } catch (e) {}
+                logEvent('ERROR', 'Scene3D blank auto-heal exhausted. Stopped.');
             }
         }
         else if (d.type === 'error') {
@@ -1905,6 +1953,12 @@ function buildScene3d(el, opt) {
                 healed = true; s3dHeals++;
                 st.textContent += isTimeoutOrBlank ? ' · auto-recalibrate (timeout/blank)' : ' · auto-recalibrate';
                 whenIdle(() => healScene3d(lastErr, code));
+            } else if (s3dHeals >= 2 || healed) {
+                // Max auto-heal exhausted — stop loop, show clear recovery hint
+                st.textContent = 'Gagal merender 3D. Silakan Clear History dan coba lagi.';
+                heal.style.display = '';
+                try { showToast('Scene 3D: batas auto-heal tercapai. Clear History lalu coba lagi.', 4500, true); } catch (e) {}
+                logEvent('ERROR', 'Scene3D auto-heal exhausted (s3dHeals=' + s3dHeals + '). Stopped.');
             }
         }
     } };
@@ -4737,20 +4791,20 @@ window.runForgedSkill = function (forgeId, argsStr, resultEl) {
         // Prefer JSON array parse so quoted strings with commas (e.g. "0,0") stay intact
         try {
             const parsed = JSON.parse('[' + rawArgs + ']');
-            if (Array.isArray(parsed)) {
-                args = parsed.map(v => {
-                    if (typeof v === 'number' && Number.isFinite(v)) return v;
-                    if (typeof v === 'string') {
-                        const n = Number(v);
-                        return (v.trim() !== '' && Number.isFinite(n) && String(n) === v.trim()) ? n : v;
-                    }
-                    return v;
-                });
-            } else {
-                throw new Error('not-array');
-            }
+            if (!Array.isArray(parsed)) throw new Error('not-array');
+            args = parsed.map(v => {
+                if (typeof v === 'number' && Number.isFinite(v)) return v;
+                if (typeof v === 'string') {
+                    const t = v.trim();
+                    if (t === '') return v;
+                    const n = Number(t);
+                    // Only coerce pure numeric strings (avoid "0,0" / "1e2x" edge cases)
+                    return (Number.isFinite(n) && String(n) === t) ? n : v;
+                }
+                return v;
+            });
         } catch (e) {
-            // Fallback: legacy comma-split (unquoted simple args)
+            // Fallback: legacy comma-split (unquoted simple args only)
             args = rawArgs.split(',').map(a => {
                 const t = a.trim();
                 if (t === '') return t;
