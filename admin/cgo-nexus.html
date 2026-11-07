@@ -555,7 +555,7 @@ body[data-theme="light"] #void::after{opacity:.3}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.9.1-titanium-perfect initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.9.2-titanium-3d-robust initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -643,7 +643,7 @@ body[data-theme="light"] #void::after{opacity:.3}
      - Soft-capture of postMessage / forge sandbox errors without crashing host
      - History save: atomic try + fallback truncate already present; explicit quota handling
    ================================================================ */
-const APP_VERSION = '6.9.1-titanium-perfect';
+const APP_VERSION = '6.9.2-titanium-3d-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -651,7 +651,7 @@ const STORE_MAX = 60;
 const MAX_CACHE = 30;
 const DEBOUNCE_MS = 260;
 const MAX_INPUT_CHARS = 14000;
-const MAX_LIVE_SCENE3D = 4;   // concurrent WebGL iframes — di atas ini LRU dihancurkan
+const MAX_LIVE_SCENE3D = 6;   // concurrent WebGL iframes — di atas ini LRU dihancurkan (visible preserved)
 
 /* ===================== ICON SYSTEM (SVG inline — tanpa emoji / glyph) ===================== */
 const ICON_PATHS = {
@@ -1620,10 +1620,16 @@ function codeHtml(lang, code) { const l = (lang || '').replace(/[^a-z0-9+#-]/g, 
 function chartHtml(cfg) { return '<div class="ui-chart" data-cfg="' + escapeHtml(String(cfg).trim()) + '"></div>'; }
 /* v6.2 SMART 3D PARSER: blok js/javascript berisi THREE / onFrame dipaksa render sebagai scene3d */
 function isForce3d(b) {
-    if (b.lang !== 'javascript' && b.lang !== 'js') return false;
+    const lang = String(b.lang || '').toLowerCase().trim();
+    // Terima scene3d typo/variants + js biasa yang jelas kode Three.js
+    if (lang && lang !== 'javascript' && lang !== 'js' && lang !== 'three' && lang !== 'threejs' && lang !== '3d' && lang !== 'scene' && !/^scene\s*3d$/.test(lang)) return false;
+    if (lang === 'scene3d' || /^scene\s*3d$/.test(lang)) return true;
     const c = String(b.code || '');
-    if (!/THREE|onFrame/.test(c)) return false;
-    return !/(^|\n)\s*(import\s[^\n]*\sfrom\s|import\s*['"{*]|export\s)|\brequire\s*\(/.test(c);
+    if (!/\bTHREE\b|\bonFrame\s*\(/.test(c)) return false;
+    // Tolak modul ES / require — itu bukan scene sandbox
+    if (/(^|\n)\s*(import\s[^\n]*\sfrom\s|import\s*['"{*]|export\s)|\brequire\s*\(/.test(c)) return false;
+    // Harus ada indikasi geometri / mesh agar tidak false-positive pada teks biasa
+    return /\b(Mesh|BoxGeometry|SphereGeometry|Torus|Group|Points|Line|Scene|PerspectiveCamera|WebGLRenderer)\b/.test(c) || /scene\.add\s*\(/.test(c);
 }
 function blockHTML(b) {
     switch (b.t) {
@@ -1668,9 +1674,26 @@ function pruneOldestScenes(keepLimit) {
     const ids = Object.keys(s3dReg);
     if (ids.length <= limit) return 0;
     let removed = 0;
-    // Hapus dari yang paling awal terdaftar sampai sisa = limit
-    for (let i = 0; i < ids.length && Object.keys(s3dReg).length > limit; i++) {
-        const id = ids[i];
+    // Prioritas hapus: (1) iframe sudah lepas dari DOM, (2) di luar viewport, (3) tertua.
+    // Scene yang masih terlihat di layar TIDAK dihapus kecuali total jauh di atas limit.
+    const ranked = ids.map(id => {
+        const h = s3dReg[id], fr = h && h.fr;
+        let score = 0; // higher = safer to prune
+        if (!fr || !fr.isConnected) score = 100;
+        else {
+            try {
+                const r = fr.getBoundingClientRect();
+                const vh = window.innerHeight || 800, vw = window.innerWidth || 1200;
+                const vis = r.bottom > 0 && r.top < vh && r.right > 0 && r.left < vw && r.width > 0 && r.height > 0;
+                score = vis ? 0 : 40;
+            } catch (e) { score = 50; }
+        }
+        return { id, score, ts: (h && h.ts) || 0 };
+    }).sort((a, b) => (b.score - a.score) || (a.ts - b.ts));
+    for (let i = 0; i < ranked.length && Object.keys(s3dReg).length > limit; i++) {
+        const id = ranked[i].id;
+        // Jangan buang scene visible kecuali benar-benar kelebihan parah
+        if (ranked[i].score === 0 && Object.keys(s3dReg).length <= limit + 2) continue;
         try {
             const h = s3dReg[id], fr = h && h.fr;
             if (fr) {
@@ -1808,25 +1831,19 @@ function sanitize3DCode(src) {
     }
   );
 
-  // --- PointsMaterial size cap (prevent giant particles e.g. size: 200 → "spider web") ---
-  // Clamp size: N when N > 0.5 inside PointsMaterial option objects
+  // --- PointsMaterial size cap ONLY (prevent giant particles e.g. size: 200 → "spider web") ---
+  // JANGAN clamp global size: — itu merusak BoxGeometry / parameter non-particle.
   cleaned = cleaned.replace(
-    /(new\s+THREE\.PointsMaterial\s*\(\s*\{[^}]*)\bsize\s*:\s*([0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)/g,
-    function (full, prefix, numStr) {
-      const n = parseFloat(numStr);
-      if (!Number.isFinite(n) || n <= 0.5) return full;
-      return prefix + 'size: 0.5 /* clamped from ' + numStr + ' */';
-    }
-  );
-  // Also handle size as second positional-ish pattern if written size:200 without space
-  cleaned = cleaned.replace(
-    /\bsize\s*:\s*([0-9]{2,}(?:\.[0-9]+)?)/g,
-    function (full, numStr) {
-      // Only clamp very large sizes (>= 2) outside already-handled PointsMaterial blocks is aggressive;
-      // limit to values that would blow the viewport
-      const n = parseFloat(numStr);
-      if (!Number.isFinite(n) || n < 2) return full;
-      return 'size: 0.5 /* clamped from ' + numStr + ' */';
+    /new\s+THREE\.PointsMaterial\s*\(\s*\{([\s\S]*?)\}\s*\)/g,
+    function (full, body) {
+      return 'new THREE.PointsMaterial({' + body.replace(
+        /\bsize\s*:\s*([0-9]*\.?[0-9]+(?:[eE][+-]?[0-9]+)?)/g,
+        function (m, numStr) {
+          const n = parseFloat(numStr);
+          if (!Number.isFinite(n) || n <= 5) return m;
+          return 'size: 5 /* clamped from ' + numStr + ' */';
+        }
+      ) + '})';
     }
   );
 
@@ -1835,7 +1852,28 @@ function sanitize3DCode(src) {
 function sceneDoc(code, id) {
 const safe = sanitize3DCode(code == null ? '' : String(code)).replace(/<\/script/gi, '<\\/script');
 const blank = !safe.trim();
-return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m,x){parent.postMessage({cgo3d:ID,type:t,msg:m,x:x},'*')}var BLANK=${blank ? 'true' : 'false'};window.onerror=function(m,s,l){if(/ResizeObserver/i.test(String(m)))return true;send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script><script>(function(){
+return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:; connect-src 'none'"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m,x){parent.postMessage({cgo3d:ID,type:t,msg:m,x:x},'*')}var BLANK=${blank ? 'true' : 'false'};window.onerror=function(m,s,l){if(/ResizeObserver/i.test(String(m)))return true;send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script>
+(function(){
+  var CDNS=[
+    'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
+    'https://unpkg.com/three@0.128.0/build/three.min.js'
+  ];
+  var i=0,done=false;
+  function fail(){if(done)return;done=true;send('error','Three.js gagal dimuat (cek koneksi/CDN)')}
+  function tryNext(){
+    if(done)return;
+    if(typeof THREE!=='undefined'){done=true;boot();return}
+    if(i>=CDNS.length){fail();return}
+    var s=document.createElement('script');
+    s.src=CDNS[i++];
+    s.onload=function(){if(typeof THREE!=='undefined'){done=true;boot()}else tryNext()};
+    s.onerror=function(){tryNext()};
+    document.head.appendChild(s);
+  }
+  setTimeout(function(){if(!done&&typeof THREE==='undefined')fail()},12000);
+  tryNext();
+  function boot(){
 if(typeof THREE==='undefined'){send('error','Three.js gagal dimuat (cek koneksi)');return}
 var renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});document.body.appendChild(renderer.domElement);
 var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,1,.1,1000),frames=[],paused=false,off=false,clock=new THREE.Clock(),ok=false,target=new THREE.Vector3(),az=0,el=.3,dist=6;
@@ -1848,10 +1886,35 @@ try{(function(THREE,scene,camera,renderer,onFrame){
 ${safe}
 }).call(window,THREE,scene,camera,renderer,onFrame)}catch(e){send('error',String(e&&e.message||e));return}
 try{var _cp=camera.position;if(_cp&&Math.abs(_cp.x)<1e-6&&Math.abs(_cp.y)<1e-6&&Math.abs(_cp.z)<1e-6){camera.position.set(0,2,6);}}catch(_cz){}
-var _vis=0;scene.traverse(function(o){if(o!==scene&&!o.isLight)_vis++});
+var _vis=0;scene.traverse(function(o){if(o!==scene&&!o.isLight&&(o.isMesh||o.isPoints||o.isLine||o.isLineSegments||o.isSprite))_vis++});
 if(BLANK)send('warn','Kode scene3d dari AI kosong (blank) — menampilkan fallback TorusKnot. Klik RECALIBRATE untuk meminta ulang.');
-if(_vis===0||BLANK){var _fk=new THREE.Mesh(new THREE.TorusKnotGeometry(1.2,.38,128,16),new THREE.MeshNormalMaterial({wireframe:true}));scene.add(_fk);onFrame(function(t,dt){_fk.rotation.x+=dt*.5;_fk.rotation.y+=dt*.8})}
-var v=camera.position.clone().sub(target);dist=v.length()||6;az=Math.atan2(v.x,v.z);el=Math.asin(Math.max(-1,Math.min(1,v.y/dist)));
+if(_vis===0||BLANK){var _fk=new THREE.Mesh(new THREE.TorusKnotGeometry(1.2,.38,128,16),new THREE.MeshNormalMaterial({wireframe:true}));scene.add(_fk);onFrame(function(t,dt){_fk.rotation.x+=dt*.5;_fk.rotation.y+=dt*.8});_vis=1}
+// Auto-frame: hitung bounding box objek agar framing selalu presisi (bukan "spider-web"/terlalu dekat/jauh)
+try{
+  var _box=new THREE.Box3();
+  scene.traverse(function(o){
+    if(!o||o===scene||o.isLight||o.isCamera)return;
+    if(o.isMesh||o.isPoints||o.isLine||o.isLineSegments||o.isSprite){
+      try{o.updateWorldMatrix(true,false);_box.expandByObject(o)}catch(_be){}
+    }
+  });
+  if(!_box.isEmpty()){
+    var _ctr=new THREE.Vector3();_box.getCenter(_ctr);
+    var _size=new THREE.Vector3();_box.getSize(_size);
+    var _maxDim=Math.max(_size.x,_size.y,_size.z,0.01);
+    var _fov=(camera.fov||55)*Math.PI/180;
+    var _fitDist=(_maxDim*0.5)/Math.tan(_fov*0.5)*1.55;
+    _fitDist=Math.max(1.2,Math.min(180,_fitDist));
+    target.copy(_ctr);
+    dist=_fitDist;
+    // jaga elevasi lembut agar objek tidak head-on
+    el=Math.max(0.18,Math.min(0.55,el||0.3));
+    camera.position.set(target.x+dist*Math.cos(el)*Math.sin(az),target.y+dist*Math.sin(el),target.z+dist*Math.cos(el)*Math.cos(az));
+    camera.lookAt(target);
+  } else {
+    var v=camera.position.clone().sub(target);dist=v.length()||6;az=Math.atan2(v.x,v.z);el=Math.asin(Math.max(-1,Math.min(1,v.y/(dist||1))));
+  }
+}catch(_af){var v=camera.position.clone().sub(target);dist=v.length()||6;az=Math.atan2(v.x,v.z);el=Math.asin(Math.max(-1,Math.min(1,v.y/(dist||1))));}
 var drag=null,cv=renderer.domElement;cv.addEventListener('webglcontextlost',function(e){e.preventDefault();send('error','WebGL context hilang (GPU sibuk)')});
 cv.addEventListener('pointerdown',function(e){drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId)});
 cv.addEventListener('pointerup',function(){drag=null});
@@ -1894,7 +1957,8 @@ if(d.cmd==='rec'){
     send('state', 'REC');
   } catch(x) { send('state', 'REC tidak didukung'); }
 }});
-loop()})();<\/script></body></html>`;
+loop()}
+})();<\/script></body></html>`;
 }
 function whenIdle(fn, n = 120) { if (!isGenerating) return fn(); if (n > 0) setTimeout(() => whenIdle(fn, n - 1), 500); }
 function healScene3d(msg, code) {
@@ -1922,8 +1986,24 @@ function buildScene3d(el, opt) {
     mk('EXPORT HTML', () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([doc], { type: 'text/html' })); a.download = 'scene3d.html'; a.click(); }, 'download');
     const heal = mk('RECALIBRATE', () => healScene3d(lastErr, code), 'refresh'); heal.style.display = 'none';
     bar.appendChild(st); el.append(fr, bar);
+    // Watchdog: jika iframe tidak mengirim ok/error dalam 15s (CDN macet / script hang)
+    let bootTimer = setTimeout(() => {
+        if (st.textContent === 'RENDERING...') {
+            st.className = 's3d-st s3d-err';
+            st.textContent = 'ERR: timeout render (CDN/WebGL)';
+            heal.style.display = '';
+            lastErr = 'timeout render 15s';
+            logEvent('ERROR', 'Scene3D host timeout 15s id=' + id);
+            if (live && !healed && s3dHeals < 2) {
+                healed = true; s3dHeals++;
+                st.textContent += ' · auto-recalibrate';
+                whenIdle(() => healScene3d(lastErr, code));
+            }
+        }
+    }, 15000);
     if (window.IntersectionObserver) new IntersectionObserver(es => { vis = es[0].isIntersecting; post('vis', vis); }, { threshold: 0.05 }).observe(el);
-    s3dReg[id] = { fr, fn: d => {
+    s3dReg[id] = { fr, ts: Date.now(), fn: d => {
+        try { if (d && (d.type === 'ok' || d.type === 'error' || d.type === 'warn')) clearTimeout(bootTimer); } catch (e) {}
         if (d.type === 'ok') { s3dHeals = 0; if (!warned) { st.className = 's3d-st'; st.textContent = 'LIVE'; } post('vis', vis); const sc = studioAdd(skey, code, fresh && !o.inStudio); if (sc && !sc.thumb) setTimeout(() => post('shot', 320, 'thumb'), 1400); }
         else if (d.type === 'shot') studioShot(skey, d.x, d.msg);
         else if (d.type === 'video') studioVideo(skey, d.msg);
@@ -2277,9 +2357,16 @@ function hydrate(root, silent) {
         buildCodeHead(p);
     });
     root.querySelectorAll('.ui-chart:not(.ready)').forEach(buildChart);
-    root.querySelectorAll('.ui-scene3d:not(.ready)').forEach(el => {
-        if (silent && lazy3dObserver) { if (!el.classList.contains('lazy')) { el.classList.add('lazy'); lazy3dObserver.observe(el); } }
-        else buildScene3d(el);
+    const pending3d = Array.from(root.querySelectorAll('.ui-scene3d:not(.ready)'));
+    pending3d.forEach((el, idx) => {
+        // Lazy hanya untuk scene lama di riwayat; scene terbaru (akhir stream) selalu build langsung
+        // agar hasil dewan/agen muncul segera dan akurat.
+        const isLatest = idx >= pending3d.length - 2;
+        if (silent && lazy3dObserver && !isLatest) {
+            if (!el.classList.contains('lazy')) { el.classList.add('lazy'); lazy3dObserver.observe(el); }
+        } else {
+            buildScene3d(el, silent ? { noHeal: true } : undefined);
+        }
     });
     root.querySelectorAll('.ui-alert:not(.ready)').forEach(el => { el.classList.add('ready'); if (!silent) { flashAlert(7000); shakeScreen(); } });
     root.querySelectorAll('p').forEach(p => {
