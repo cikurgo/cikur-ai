@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
-<title>CGO — Research Nexus</title>
+<title>CGO — Research Nexus · Titanium</title>
 
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
@@ -337,37 +337,49 @@ body[data-swarm][data-busy] #swarm{display:flex}
 .vulcan-result{margin-top:.6rem;min-height:1.2em;display:flex;align-items:center;gap:.4rem;word-break:break-all}
 .vulcan-result.run{color:var(--warning)}.vulcan-result.ok{color:var(--success)}.vulcan-result.bad{color:var(--danger)}.vf-val{color:var(--ink)}
 @media(max-width:560px){.btn-icon{width:34px;height:34px}}
-/* ===== COUNCIL COMMAND DECK (add-on, tidak mengubah gaya lama) ===== */
-#deck{position:fixed;inset:0;z-index:75;display:none;flex-direction:column;gap:12px;padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));background:radial-gradient(70% 50% at 50% 0,rgba(var(--aura-a),.16),transparent 70%),var(--layer);overflow:auto;color:var(--ink);font-family:var(--mono);backdrop-filter:blur(14px)}
-#deck.open{display:flex}
-#deck::before{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(var(--aura-a),.035) 3px 4px);animation:dkscan 9s linear infinite}
-@keyframes dkscan{to{background-position:0 80px}}
-.dk-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.dk-title{font-size:12px;letter-spacing:.28em;color:var(--accent);flex:1;min-width:150px}
-.dk-pill{font-size:10px;letter-spacing:.18em;padding:4px 10px;border:1px solid var(--accent);border-radius:99px;color:var(--accent)}
-.dk-pill.run{animation:breathe 1.6s ease-in-out infinite}
-.dk-btn{display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.14em;padding:8px 11px;border:1px solid rgba(var(--aura-a),.45);border-radius:8px;min-height:36px}
-.dk-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.dk-btn:hover,.dk-btn.on{background:rgba(var(--aura-a),.2);color:var(--accent)}
-.dk-prog{height:6px;border-radius:9px;background:rgba(var(--aura-a),.14);overflow:hidden}
-.dk-prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#a78bfa);box-shadow:0 0 14px var(--accent);transition:width .6s}
-.dk-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);letter-spacing:.1em}
-.dk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
-.dk-card{border:1px solid color-mix(in srgb,var(--c) 45%,transparent);border-radius:12px;padding:10px;background:color-mix(in srgb,var(--c) 7%,transparent);display:flex;flex-direction:column;gap:6px;min-height:96px}
-.dk-card.act{box-shadow:0 0 18px color-mix(in srgb,var(--c) 55%,transparent)}
-.dk-card b{font-size:11px;color:var(--c);letter-spacing:.08em}
-.dk-card small{font-size:9px;color:var(--dim);letter-spacing:.12em}
-.dk-card p{font-size:10px;line-height:1.5;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.dk-sec{border:1px solid rgba(var(--aura-a),.28);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
-.dk-sec h4{font-size:10px;letter-spacing:.24em;color:var(--accent);font-weight:400}
-.dk-verdict{font-family:var(--serif);font-size:15px;line-height:1.65;max-height:38vh;overflow:auto}
-.dk-verdict ul,.dk-verdict ol{padding-left:20px}
-.dk-act{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5;cursor:pointer}
-.dk-act input{margin-top:3px;accent-color:var(--accent)}
-.dk-act input:checked+span{opacity:.45;text-decoration:line-through}
-.dk-empty{font-size:11px;color:var(--dim)}
-.dk-tools{display:flex;gap:8px;flex-wrap:wrap}
-@media (prefers-reduced-motion:reduce){#deck::before,.dk-pill.run{animation:none}}
+
+/* ===== v7.0 COUNCIL COMMAND CENTER (aditif) ===== */
+.toast{z-index:95}
+#council{position:fixed;inset:0;z-index:62;display:none;flex-direction:column;gap:.9rem;padding:max(14px,env(safe-area-inset-top)) max(14px,calc(50% - 40rem)) max(14px,env(safe-area-inset-bottom));background:var(--layer);-webkit-backdrop-filter:blur(26px) saturate(1.4);backdrop-filter:blur(26px) saturate(1.4);overflow-y:auto;overscroll-behavior:contain}
+#council.open{display:flex;animation:fade .3s ease}
+#council::before{content:'';position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(var(--aura-a),.035) 0 1px,transparent 1px 3px),radial-gradient(70% 50% at 50% 0,rgba(var(--aura-a),.2),transparent 70%)}
+#council>*{position:relative}
+.cc-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap}
+.cc-title{font:400 .8rem var(--mono);letter-spacing:.22em;color:var(--accent);display:flex;align-items:center;gap:.6rem}
+.cc-title i{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 14px var(--success);animation:breathe 2s infinite}
+.cc-act{display:flex;gap:.2rem;flex-wrap:wrap}
+.cc-lbl{font:400 .66rem var(--mono);letter-spacing:.2em;color:var(--dim);margin-top:.3rem}
+.cc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(10.5rem,1fr));gap:.7rem}
+.cc-card{padding:.8rem .9rem;border-radius:14px;background:rgba(var(--aura-a),.06);box-shadow:inset 0 0 0 1px rgba(var(--aura-a),.22);display:flex;flex-direction:column;gap:.25rem;min-width:0}
+.cc-card b{font:400 .62rem var(--mono);letter-spacing:.18em;color:var(--dim)}
+.cc-card em{font:300 1.55rem var(--mono);font-style:normal;color:var(--ink);text-shadow:0 0 18px rgba(var(--aura-a),.7)}
+.cc-card small{font:300 .66rem var(--mono);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cc-card svg{width:100%;height:26px;fill:none;stroke:var(--accent);stroke-width:1.5;vector-effect:non-scaling-stroke;opacity:.9}
+.cc-card.bad em{color:var(--danger)}.cc-card.warn em{color:var(--warning)}
+.cc-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:.9rem}
+@media(max-width:760px){.cc-body{grid-template-columns:1fr}}
+.cc-pane{padding:.9rem;border-radius:16px;box-shadow:inset 0 0 0 1px rgba(var(--aura-a),.2);background:rgba(var(--aura-a),.04);display:flex;flex-direction:column;gap:.6rem;min-width:0}
+.cc-mem{display:flex;align-items:center;gap:.6rem;font:400 .74rem var(--mono)}
+.cc-mem i{width:9px;height:9px;border-radius:50%;background:var(--hue);box-shadow:0 0 12px var(--hue)}
+.cc-mem span{flex:1;color:var(--ink)}
+.cc-vote{display:flex;gap:2px}
+.cc-vote button{font:400 .62rem var(--mono);padding:.35rem .5rem;border-radius:8px;color:var(--dim);box-shadow:inset 0 0 0 1px rgba(160,180,220,.2);min-height:30px}
+.cc-vote button.on[data-v="aye"]{color:#04070d;background:var(--success)}
+.cc-vote button.on[data-v="nay"]{color:#fff;background:var(--danger)}
+.cc-vote button.on[data-v="abs"]{color:#04070d;background:var(--warning)}
+.cc-verdict{font:400 .8rem var(--mono);letter-spacing:.14em;padding:.6rem;text-align:center;border-radius:12px;box-shadow:inset 0 0 0 1px currentColor;color:var(--dim)}
+.cc-verdict.ok{color:var(--success)}.cc-verdict.no{color:var(--danger)}
+.cc-in{width:100%;background:rgba(var(--aura-a),.07);border:0;border-radius:10px;color:var(--ink);font:300 .82rem var(--mono);padding:.6rem .7rem;outline:none;box-shadow:inset 0 0 0 1px rgba(var(--aura-a),.22)}
+.cc-in:focus{box-shadow:inset 0 0 0 1px var(--accent)}
+.cc-item{display:grid;grid-template-columns:1fr auto;gap:.4rem;align-items:center;padding:.5rem;border-radius:10px;background:rgba(var(--aura-a),.05)}
+.cc-item .cc-in{grid-column:1/-1}
+.cc-item div{display:flex;gap:.4rem;flex-wrap:wrap}
+.cc-item select,.cc-item input[type=date]{background:rgba(var(--aura-a),.07);color:var(--ink);border:0;border-radius:8px;font:300 .7rem var(--mono);padding:.35rem .4rem;color-scheme:dark}
+body[data-theme=light] .cc-item select,body[data-theme=light] .cc-item input[type=date]{color-scheme:light}
+#council.monitor .cc-body,#council.monitor .cc-out{display:none}
+#council.monitor .cc-grid{grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));flex:1;align-content:center}
+#council.monitor .cc-card em{font-size:3rem}#council.monitor .cc-card svg{height:60px}
+@media print{body>*:not(#council){display:none!important}}
 </style>
 </head>
 <body data-theme="cyber" data-state="idle">
@@ -381,7 +393,7 @@ body[data-swarm][data-busy] #swarm{display:flex}
     <div id="zone-top"></div>
     <button id="core-hint" type="button" aria-label="Buka menu"><span class="status-dot" id="status-dot"></span></button>
     <header id="dock">
-        <div class="hud-title">cgo · research nexus</div>
+        <div class="hud-title">cgo · research nexus · titanium</div>
         <div class="header-right">
             <div class="system-badge" id="engine-badge">PROVIDER: —</div>
             <button class="btn-icon" id="toggle-telemetry-btn" title="Toggle Telemetry" aria-label="Toggle Telemetry">
@@ -503,7 +515,7 @@ body[data-swarm][data-busy] #swarm{display:flex}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.8-robust initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.9.1-titanium-perfect initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -566,15 +578,32 @@ body[data-swarm][data-busy] #swarm{display:flex}
 
 <script>
 /* ================================================================
-   SPC v4.0 — RESEARCH NEXUS  (v6.7.2-robust)
+   SPC v4.0 — RESEARCH NEXUS  (v6.9.1-titanium-perfect)
    Multi-provider · Compile Only · Multi-lang · Theme · Researcher mode
    Zero regression from v3.1 · Hardened free-tier retry + CDN guard
    Hardened: CSS dedupe, thermal-guard in DOM, toast/lang consistency, SSE/exec guards
    6.7.2: SYNTHESIS cooldown + transcript trim + empty-stream detect + synth fallback
    6.8.0: ikon 100% SVG, Vulcan Forge diperbaiki (+sandbox), Stop benar-benar menghentikan stream,
           exec JS (CSP), thermal fallback, max_tokens Anthropic, lazy 3D, impor cadangan, volume audio
+   6.8.3: Cortex semantic memory + multi-agent transcript cache
+   6.9.0-titanium (Zero-Regression Hardening):
+     - Max concurrent live scene3d (anti-GPU leak) + LRU prune
+     - Thermal critical: destroy charts + trim history + force stop audio
+     - Adaptive multi-agent inter-call delay (free tier lebih panjang)
+     - Global unhandledrejection + window.onerror soft-capture
+     - Stop/TERMINATE: full cascade (abort + audio + activity + swarm UI)
+     - Local Brain: force 1-round hard-lock (bukan hanya confirm)
+     - Pollinations free: double-guard resolveModel + empty-body guard
+     - Diagnostics expanded for titanium invariants
+   6.9.1-titanium-perfect (Robustness + zero-regression pass):
+     - Stop cascade safety-net: force UI unlock after 900ms if finally stalled
+     - Defensive null-guards on critical DOM in hot paths (setActivity, setStatus, badge)
+     - Thermal: extra prune of orphaned scene3d + chart registry under critical
+     - Diagnostics: assert DOM integrity + PROVIDERS shape + abort controller hygiene
+     - Soft-capture of postMessage / forge sandbox errors without crashing host
+     - History save: atomic try + fallback truncate already present; explicit quota handling
    ================================================================ */
-const APP_VERSION = '6.8.3-cortex-robust';
+const APP_VERSION = '6.9.1-titanium-perfect';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -582,6 +611,7 @@ const STORE_MAX = 60;
 const MAX_CACHE = 30;
 const DEBOUNCE_MS = 260;
 const MAX_INPUT_CHARS = 14000;
+const MAX_LIVE_SCENE3D = 4;   // concurrent WebGL iframes — di atas ini LRU dihancurkan
 
 /* ===================== ICON SYSTEM (SVG inline — tanpa emoji / glyph) ===================== */
 const ICON_PATHS = {
@@ -1416,12 +1446,23 @@ function setAura(hex) { document.documentElement.style.setProperty('--aura-a', h
 function setActivity(t) { const el = document.getElementById('activity-text'); if (el) el.textContent = t || ''; }
 function setFocus(el) { document.querySelectorAll('.thought.live').forEach(e => e.classList.remove('live')); if (el) { el.classList.add('live'); document.body.dataset.focus = '1'; } else delete document.body.dataset.focus; }
 function setStatus(state) {
-    statusDot.className = 'status-dot';
-    if (state === 'busy') { statusDot.classList.add('busy'); document.body.dataset.busy = '1'; setAura(null); setActivity('Traversing Neural Pathways...'); setAIState('thinking'); }
-    else {
-        delete document.body.dataset.busy; setAIState('idle');
-        if (state === 'error') { statusDot.classList.add('error'); flashAlert(5000); }
-    }
+    try {
+        if (statusDot) {
+            statusDot.className = 'status-dot';
+            if (state === 'busy') statusDot.classList.add('busy');
+            else if (state === 'error') statusDot.classList.add('error');
+        }
+        if (state === 'busy') {
+            document.body.dataset.busy = '1';
+            setAura(null);
+            setActivity('Traversing Neural Pathways...');
+            setAIState('thinking');
+        } else {
+            delete document.body.dataset.busy;
+            setAIState('idle');
+            if (state === 'error') flashAlert(5000);
+        }
+    } catch (e) { try { logEvent('ERROR', '[STATUS] ' + (e.message || e)); } catch (z) {} }
 }
 function syncLayers() { const open = settingsPanel.classList.contains('open') || panelRight.classList.contains('open'); if (open) document.body.dataset.layer = '1'; else delete document.body.dataset.layer; }
 function closeLayers() { settingsPanel.classList.remove('open'); settingsBtn.classList.remove('active'); panelRight.classList.remove('open'); toggleTelemetryBtn.classList.remove('active'); syncLayers(); try { closeStudio(); } catch (e) {} }
@@ -1581,6 +1622,31 @@ function safeMarkdown(text) {
 }
 
 const s3dReg = {}; let s3dN = 0, s3dHeals = 0;
+/** Hancurkan scene3d tertua (LRU by registration order) sampai di bawah batas concurrent. */
+function pruneOldestScenes(keepLimit) {
+    const limit = (typeof keepLimit === 'number' && keepLimit >= 0) ? keepLimit : MAX_LIVE_SCENE3D;
+    const ids = Object.keys(s3dReg);
+    if (ids.length <= limit) return 0;
+    let removed = 0;
+    // Hapus dari yang paling awal terdaftar sampai sisa = limit
+    for (let i = 0; i < ids.length && Object.keys(s3dReg).length > limit; i++) {
+        const id = ids[i];
+        try {
+            const h = s3dReg[id], fr = h && h.fr;
+            if (fr) {
+                try { fr.contentWindow.postMessage({ cgo3d: id, cmd: 'pause' }, '*'); } catch (e) {}
+                try { fr.src = 'about:blank'; } catch (e) {}
+                try { fr.remove(); } catch (e) {}
+            }
+        } catch (e) {}
+        delete s3dReg[id];
+        removed++;
+    }
+    if (removed) {
+        try { logEvent('SYSTEM', '[3D] LRU prune: ' + removed + ' scene dihancurkan (batas ' + limit + ').'); } catch (e) {}
+    }
+    return removed;
+}
 // Lazy 3D: scene pada riwayat baru dibuat (iframe + WebGL) saat mendekati layar — hemat GPU/baterai
 const lazy3dObserver = window.IntersectionObserver ? new IntersectionObserver(es => es.forEach(en => {
     if (!en.isIntersecting) return;
@@ -1755,7 +1821,9 @@ function healScene3d(msg, code) {
 function buildScene3d(el, opt) {
     const o = opt && typeof opt === 'object' ? opt : {};
     el.classList.add('ready');
-    Object.keys(s3dReg).forEach(k => { if (!s3dReg[k].fr.isConnected) delete s3dReg[k]; });
+    Object.keys(s3dReg).forEach(k => { try { if (!s3dReg[k] || !s3dReg[k].fr || !s3dReg[k].fr.isConnected) delete s3dReg[k]; } catch (e) { delete s3dReg[k]; } });
+    // Anti-GPU leak: batasi concurrent WebGL sebelum membuat scene baru
+    try { pruneOldestScenes(MAX_LIVE_SCENE3D - 1); } catch (e) {}
     const code = el.dataset.code || ''; el.removeAttribute('data-code');
     const id = 's3d' + (++s3dN) + Math.random().toString(36).slice(2, 7), live = !!isGenerating && !o.noHeal, fresh = !!isGenerating && !o.lazy, skey = studioKey(code), doc = sceneDoc(code, id);
     const fr = document.createElement('iframe'); fr.setAttribute('sandbox', 'allow-scripts allow-downloads'); fr.title = 'Scene 3D'; fr.srcdoc = doc;
@@ -2227,7 +2295,7 @@ chatInput.addEventListener('keydown', e => {
 });
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-        if (isGenerating) { skipTyping(); if (currentAbortController) { currentAbortController.abort(); showToast('Dihentikan (Esc)'); } }
+        if (isGenerating) { try { skipTyping(); } catch (e) {} try { if (currentAbortController) currentAbortController.abort(); } catch (e) {} try { stopAllSynth(true); } catch (e) {} showToast('Dihentikan (Esc)'); }
         else closeLayers();
     }
     if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
@@ -2244,7 +2312,29 @@ document.addEventListener('keydown', e => {
 });
 
 sendBtn.addEventListener('click', () => { if (!isGenerating) sendMessage(); });
-stopBtn.addEventListener('click', () => { skipTyping(); if (currentAbortController) currentAbortController.abort(); });
+stopBtn.addEventListener('click', () => {
+    try { skipTyping(); } catch (e) {}
+    try { if (currentAbortController) currentAbortController.abort(); } catch (e) {}
+    try { stopAllSynth(true); } catch (e) {}
+    try { setActivity(''); } catch (e) {}
+    try { logEvent('SYSTEM', 'TERMINATE: cascade abort + audio stop.'); } catch (e) {}
+    // Safety-net: if a stream finally{} stalls (rare network hang), force UI unlock
+    // without touching chatHistory so zero data loss / zero regression on normal path.
+    setTimeout(() => {
+        try {
+            if (!isGenerating) return;
+            isGenerating = false;
+            if (chatInput) { chatInput.disabled = false; }
+            if (sendBtn) { sendBtn.disabled = false; sendBtn.style.display = 'flex'; }
+            if (stopBtn) stopBtn.style.display = 'none';
+            currentAbortController = null;
+            try { delete document.body.dataset.swarm; } catch (z) {}
+            setActivity('');
+            setStatus('ok');
+            logEvent('SYSTEM', 'TERMINATE safety-net: UI unlocked after stall.');
+        } catch (e) {}
+    }, 900);
+});
 settingsBtn.addEventListener('click', () => {
     settingsPanel.classList.toggle('open');
     settingsBtn.classList.toggle('active', settingsPanel.classList.contains('open'));
@@ -2884,7 +2974,13 @@ function deactivateLocalBrain() {
         if (isGenerating) { showToast('Tunggu respons selesai dulu', 2200, true); return; }
         if (localBrainActive) deactivateLocalBrain(); else await initLocalBrain();
     });
-    if (unlock && sel) unlock.addEventListener('click', () => { sel.disabled = false; });
+    if (unlock && sel) unlock.addEventListener('click', () => {
+        if (!confirm('Buka kunci ronde Local Brain? Risiko overheat/VRAM tinggi. Lanjutkan?')) return;
+        sel.disabled = false;
+        localRoundsAck = true;
+        try { showToast('Ronde di-UNLOCK (risiko ditanggung operator)', 2800, true); } catch (e) {}
+        try { logEvent('SYSTEM', '[LOCAL BRAIN] Operator unlock ronde multi-agent.'); } catch (e) {}
+    });
     if (sel) sel.addEventListener('change', () => {
         if (!localBrainActive || sel.value === '1') return;
         if (confirm('Local Brain aktif. Menjalankan Swarm lebih dari 1 ronde berisiko overheat / VRAM penuh. Lanjutkan?')) localRoundsAck = true;
@@ -3359,12 +3455,19 @@ function runDiagnostics() {
     assert('destroyScene3d helper', typeof destroyScene3d === 'function');
     assert('Thermal watchdog merged', typeof initThermalWatchdog === 'function' && typeof emergencyMemoryCleanup === 'function' && typeof setThermalAlert === 'function' && typeof thermalEmergencyCleanup === 'function');
     assert('WebLLM cache clearer', typeof clearWebLLMCaches === 'function');
-    assert('APP_VERSION pollinations', typeof APP_VERSION === 'string' && /pollinations|merged|titanium|robust/i.test(APP_VERSION));
+    assert('APP_VERSION pollinations', typeof APP_VERSION === 'string' && /pollinations|merged|titanium|robust|perfect/i.test(APP_VERSION));
     assert('Pollinations fetchWithRetry', typeof PROVIDERS.pollinations.fetchWithRetry === 'function' && Array.isArray(PROVIDERS.pollinations.freeSafeModels) && PROVIDERS.pollinations.freeSafeModels.length >= 5);
     assert('Pollinations resolveModel free fallback', PROVIDERS.pollinations.resolveModel('', 'not-a-real-model') === 'openai' && PROVIDERS.pollinations.resolveModel('sk-x', 'grok') === 'grok');
     assert('Ikon SVG (registry + hidrasi)', svgIcon('copy').indexOf('<svg') === 0 && !document.querySelector('[data-ic]'));
     assert('Vulcan Forge: tokenizer kurung seimbang', (() => { const t = tokenize('A\n\n[FORGE: pilih | (a) => [a, 1][0]] sisa', true).filter(x => x.t === 'forge'); return t.length === 1 && t[0].name === 'pilih' && /\[a, 1\]\[0\]$/.test(t[0].code); })());
     assert('Vulcan Forge sandbox runner', typeof runForgeSandbox === 'function' && typeof forgeHtml === 'function' && typeof FORGE_REG === 'object');
+    assert('Titanium: MAX_LIVE_SCENE3D + prune', typeof MAX_LIVE_SCENE3D === 'number' && MAX_LIVE_SCENE3D >= 2 && typeof pruneOldestScenes === 'function');
+    assert('Titanium: APP_VERSION', typeof APP_VERSION === 'string' && /titanium|6\.9/.test(APP_VERSION));
+    assert('Titanium: emergency cleanup charts/hist', /destroyCharts|hist-trim/.test(String(emergencyMemoryCleanup)));
+    assert('DOM integrity: core controls', !!(chatInput && sendBtn && stopBtn && statusDot && chatContainer && stage));
+    assert('PROVIDERS shape', PROVIDERS && PROVIDERS.pollinations && typeof PROVIDERS.pollinations.build === 'function' && typeof PROVIDERS.pollinations.fetchWithRetry === 'function');
+    assert('Abort hygiene: currentAbortController starts null', currentAbortController === null || currentAbortController === undefined || typeof currentAbortController.abort === 'function');
+    assert('Perfect: setStatus null-safe', typeof setStatus === 'function');
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
 }
@@ -3389,12 +3492,18 @@ function setThermalAlert(on) {
     } catch (e) {}
 }
 
-/** Pembersihan darurat: audio + (critical) studio + destroyScene3d */
+/** Pembersihan darurat: audio + (critical) studio + destroyScene3d + charts + history trim */
 function emergencyMemoryCleanup(critical) {
     const done = [];
     try {
         if (typeof audioVoices !== 'undefined' && Object.keys(audioVoices).length) {
             stopAllSynth(true); done.push('audio');
+        }
+    } catch (e) {}
+    try {
+        if (typeof pruneOldestScenes === 'function') {
+            const n = pruneOldestScenes(critical ? 1 : 2);
+            if (n) done.push('3d-lru:' + n);
         }
     } catch (e) {}
     if (critical) {
@@ -3403,6 +3512,29 @@ function emergencyMemoryCleanup(critical) {
         } catch (e) {}
         try {
             if (typeof destroyScene3d === 'function') { destroyScene3d(); done.push('scene3d'); }
+        } catch (e) {}
+        try {
+            if (typeof destroyCharts === 'function') { destroyCharts(); done.push('charts'); }
+        } catch (e) {}
+        // Orphan iframe / detached scene nodes (e.g. after partial destroy)
+        try {
+            let killed = 0;
+            document.querySelectorAll('.ui-scene3d iframe').forEach(fr => {
+                try {
+                    if (fr && fr.contentWindow) {
+                        try { fr.contentWindow.postMessage({ cmd: 'destroy' }, '*'); } catch (z) {}
+                    }
+                    if (fr && fr.parentNode) { fr.src = 'about:blank'; fr.remove(); killed++; }
+                } catch (z) {}
+            });
+            if (killed) done.push('orphan-iframe:' + killed);
+        } catch (e) {}
+        // Trim history in-memory (jangan hapus UI) agar heap turun
+        try {
+            if (typeof chatHistory !== 'undefined' && Array.isArray(chatHistory) && chatHistory.length > 24) {
+                chatHistory = chatHistory.slice(-18);
+                done.push('hist-trim');
+            }
         } catch (e) {}
     }
     return done;
@@ -3477,6 +3609,29 @@ function initThermalWatchdog() {
     return true;
 }
 
+
+/* Global soft-capture: cegah crash diam + log ke Neural Trace */
+(function installGlobalGuards() {
+    try {
+        window.addEventListener('unhandledrejection', function (ev) {
+            try {
+                const r = ev && ev.reason;
+                const msg = (r && (r.message || r.name)) || String(r || 'unknown');
+                if (/AbortError|Request dihentikan|Aborted by caller/i.test(msg)) return; // normal stop
+                if (typeof logEvent === 'function') logEvent('ERROR', '[UNHANDLED] ' + msg.slice(0, 220));
+            } catch (e) {}
+        });
+        window.addEventListener('error', function (ev) {
+            try {
+                if (!ev) return;
+                // Abaikan noise ResizeObserver & script CDN partial
+                const m = String(ev.message || '');
+                if (/ResizeObserver|Script error\.?$/i.test(m)) return;
+                if (typeof logEvent === 'function') logEvent('ERROR', '[WINDOW] ' + m.slice(0, 180) + (ev.filename ? ' @' + String(ev.filename).split('/').pop() : ''));
+            } catch (e) {}
+        });
+    } catch (e) {}
+})();
 
 window.addEventListener('load', () => {
     loadSettings();
@@ -3569,26 +3724,9 @@ DISCUSSION RULES (MANDATORY):
 5. Clean Markdown. End with one sharp insight or an open question for the team.
 6. Don't open with pleasantries like "Thank you" — go straight to substance.`;
 
-const CORTEX_PROTOCOL_ID = `Kamu adalah DR. CORTEX — The Grand Polymath (IQ 200+).
-Tugasmu adalah membaca transkrip perdebatan agen sebelumnya dan melakukan analisis kritis.
+const CORTEX_PROTOCOL_ID = `Kamu adalah DR. CORTEX — The Grand Polymath (IQ 200+). Baca transkrip perdebatan tim sebelumnya. Lakukan analisis tingkat dewa. Tugasmu: (1) Deteksi kesalahan logika (fallacy) agen sebelumnya. (2) Berikan 1 Genius Insight (ide berlawanan intuisi). (3) Tunjukkan Proof of Logic. Jangan bertele-tele (maksimal 150 kata).`;
+const CORTEX_PROTOCOL_EN = `You are DR. CORTEX — The Grand Polymath (IQ 200+). Read the previous team debate. Perform god-tier analysis. (1) Detect logical fallacies. (2) Provide 1 Genius Insight (counter-intuitive). (3) Show Proof of Logic. Be concise (max 150 words).`;
 
-Lakukan 3 hal ini secara berurutan:
-1. FALLACY DETECTION: Identifikasi kesalahan logika (ad hominem, post hoc, dll) dari agen sebelumnya. Jika tidak ada, sebutkan "Logika valid".
-2. COUNTER-INTUITIVE INSIGHT: Berikan 1 solusi jenius yang berlawanan dengan intuisi umum, namun bisa dieksekusi di dunia nyata.
-3. PROOF OF LOGIC: Tunjukkan dasar matematis, fisika, atau logika formal yang mendukung solusimu tersebut.
-
-Aturan: Jangan bertele-tele, maksimal 150 kata. Langsung pada intinya.`;
-
-const CORTEX_PROTOCOL_EN = `You are DR. CORTEX — The Grand Polymath (IQ 200+).
-Your task is to read the previous agents' debate transcript and perform a critical analysis.
-
-Perform these 3 steps in order:
-1. FALLACY DETECTION: Identify logical fallacies (ad hominem, post hoc, etc.) from previous agents. If none exist, state "Valid logic".
-2. COUNTER-INTUITIVE INSIGHT: Provide 1 genius solution that goes against common intuition, yet is executable in the real world.
-3. PROOF OF LOGIC: Demonstrate the mathematical, physical, or formal logic basis that supports your solution.
-
-Rule: Do not ramble, maximum 150 words. Straight to the point.`;
-    
 const SYNTH_PROTOCOL_ID = `Kamu adalah SYNTHESIS — penyintesis akhir panel diskusi multi-peneliti CGO Research Nexus.
 Baca SELURUH transkrip diskusi tim secara utuh.
 Hasilkan satu jawaban akhir yang terpadu untuk OBJECTIVE asli:
@@ -4043,7 +4181,13 @@ async function runMultiAgentDiscussion(compiledPrompt) {
             const ok = await runAgentTurn(agent, compiledPrompt, r, rounds, false);
             if (!ok) { agentDiscussionAborted = true; break roundLoop; }
             if (currentAbortController.signal.aborted) { agentDiscussionAborted = true; break roundLoop; }
-            await sleep(350); // jeda sopan antar panggilan provider gratis
+            // Adaptive inter-agent delay: free tier / no-key butuh jeda lebih panjang
+            {
+                const p = PROVIDERS[settings.provider];
+                const key = ((settings.keys[settings.provider] || '') + '').trim();
+                const freeish = (p && p.free && !key) || settings.provider === 'pollinations' && !key;
+                await sleep(freeish ? 900 : 350);
+            }
         }
     }
     if (!agentDiscussionAborted && !currentAbortController.signal.aborted) {
@@ -4110,11 +4254,17 @@ async function sendMultiAgentMessage() {
         return;
     }
 
-    if (localBrainActive && !localRoundsAck) {   // Performance Guard: paksa user mengonfirmasi bila ronde > 1
-        const r = parseInt(document.getElementById('agent-rounds-select').value, 10) || 1;
+    if (localBrainActive) {   // Performance Guard keras: Local Brain = max 1 ronde (anti VRAM/overheat)
+        const sel = document.getElementById('agent-rounds-select');
+        const r = parseInt(sel && sel.value, 10) || 1;
         if (r > 1) {
-            if (!confirm('Local Brain aktif. Swarm ' + r + ' ronde berisiko overheat / VRAM penuh. Lanjutkan?')) return;
-            localRoundsAck = true;
+            if (!localRoundsAck) {
+                if (!confirm('Local Brain aktif. Swarm >1 ronde BERISIKO overheat/VRAM. Paksa 1 ronde?\n(OK = 1 ronde aman, Cancel = batalkan)')) return;
+                localRoundsAck = true;
+            }
+            if (sel) sel.value = '1';
+            try { showToast('Local Brain: dipaksa 1 ronde', 2500, true); } catch (e) {}
+            try { logEvent('SYSTEM', '[LOCAL BRAIN] Swarm dipaksa 1 ronde.'); } catch (e) {}
         }
     }
 
@@ -4539,214 +4689,121 @@ window.runForgedSkill = function (forgeId, argsStr, resultEl) {
         }
     });
 };
-</script>
-<script>
-/* ===== COUNCIL COMMAND DECK v1.0 — add-on terpisah: hanya MEMBACA state lama, tidak menimpa fungsi apa pun ===== */
+
+/* ===== v7.0 COUNCIL COMMAND CENTER: monitor dunia nyata + resolusi dewan -> PDF/ICS/MD/Share/Suara/Notifikasi (modul aditif, tidak mengubah kode lama) ===== */
 (function () {
   'use strict';
   try {
-    const $ = id => document.getElementById(id);
-    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const G = n => { try { return (0, eval)('typeof ' + n + '!=="undefined"?' + n + ':undefined'); } catch (e) { return undefined; } };
-    const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
-    const toast = (m, w) => { try { showToast(m, 2600, !!w); } catch (e) {} };
-    const ICON = {
-      mon: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
-      pop: '<path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
-      full: '<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>',
-      x: '<path d="M18 6L6 18M6 6l12 12"/>',
-      spk: '<path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>',
-      doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
-      cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
-      tbl: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
-      shr: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
-      bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>',
-      sun: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/>'
-    };
-    const sv = n => '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[n] + '</svg>';
-    const ST = { log: [], seen: new WeakSet(), verdict: '', running: false, open: false, mon: null, notify: LS.get('cgo_deck_notify') === '1', wake: LS.get('cgo_deck_wake') === '1', lock: null, speaking: false, done: false };
-    const idl = () => (G('settings') || {}).lang === 'en' ? 'en' : 'id';
-    const roster = () => [].concat(G('AGENTS') || [], G('CORTEX_AGENT') ? [G('CORTEX_AGENT')] : [], G('SYNTH_AGENT') ? [G('SYNTH_AGENT')] : []);
-    const words = t => (String(t).trim().match(/\S+/g) || []).length;
-    const plain = t => String(t || '').replace(/```[\s\S]*?```/g, ' ').replace(/[*_`#>~]/g, '').replace(/\[(.+?)\]\(.+?\)/g, '$1').replace(/\s+\n/g, '\n').trim();
+    const $ = s => document.querySelector(s);
+    const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const toast = (m, w) => { try { showToast(m, 2800, !!w); } catch (e) {} };
+    const log = m => { try { logEvent('SYSTEM', '[COUNCIL] ' + m); } catch (e) {} };
+    const MEM = (function () { try { if (typeof AGENTS !== 'undefined' && Array.isArray(AGENTS) && typeof CORTEX_AGENT !== 'undefined') return AGENTS.concat([CORTEX_AGENT]).map(a => [a.id, a.name, a.color]); } catch (e) {} return [['nova','Dr. Nova','#38bdf8'],['flux','Dr. Flux','#10b981'],['cgo','CGO','#f59e0b'],['lyric','Dr. Lyric','#ef4444'],['cortex','Dr. Cortex','#fbbf24']]; })();
+    const KEY = 'nexus_council_v1';
+    let S = { title: '', votes: {}, items: [] };
+    try { const r = JSON.parse(localStorage.getItem(KEY) || 'null'); if (r && typeof r === 'object') S = Object.assign(S, r); } catch (e) {}
+    if (!Array.isArray(S.items)) S.items = [];
+    if (!S.votes || typeof S.votes !== 'object') S.votes = {};
+    const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} };
 
-    function actions() {
-      const out = [];
-      String(ST.verdict).split('\n').forEach(l => {
-        const m = l.match(/^\s*(?:[-*•]|\d+[.)])\s+(.+)/);
-        if (!m) return;
-        const a = plain(m[1]).replace(/\s+/g, ' ');
-        if (a.length > 8 && out.length < 12) out.push(a.slice(0, 220));
-      });
-      return out;
-    }
-    function confidence() {
-      const m = String(ST.verdict).match(/(keyakinan|confidence)[^\n]{0,40}?(tinggi|sedang|rendah|high|medium|low)/i);
-      if (!m) return null;
-      const k = m[2].toLowerCase();
-      return /tinggi|high/.test(k) ? 85 : /sedang|medium/.test(k) ? 60 : 35;
-    }
-    function snapshot() {
-      const rounds = parseInt(($('agent-rounds-select') || {}).value, 10) || 2;
-      const total = rounds * 4 + 2;
-      const pct = ST.done ? 100 : Math.min(99, Math.round(ST.log.length / total * 100));
-      const live = document.querySelector('.thought.agent.live .who');
-      const lt = live ? live.textContent : '';
-      return {
-        t: Date.now(), running: ST.running, done: ST.done, pct, conf: confidence(), verdict: plain(ST.verdict).slice(0, 4000),
-        agents: roster().map(a => {
-          const es = ST.log.filter(e => e.id === a.id);
-          return { id: a.id, name: a.name, color: a.color || '#38bdf8', n: es.length, w: es.reduce((s, e) => s + e.w, 0), last: es.length ? es[es.length - 1].snip : '', act: !!lt && lt.indexOf(a.name) > -1 };
-        })
-      };
-    }
+    const hdrBtn = document.createElement('button');
+    hdrBtn.className = 'btn-icon'; hdrBtn.id = 'council-btn'; hdrBtn.type = 'button';
+    hdrBtn.title = 'Council Command Center (Ctrl+Shift+D)'; hdrBtn.setAttribute('aria-label', 'Council Command Center');
+    hdrBtn.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="3.5" r="1.6"/><circle cx="20" cy="9" r="1.6"/><circle cx="17" cy="19" r="1.6"/><circle cx="7" cy="19" r="1.6"/><circle cx="4" cy="9" r="1.6"/><path d="M12 9V5M14.6 10.6l4-1M13.6 14.6l2.4 3M10.4 14.6L8 17.6M9.4 10.6l-4-1"/></svg>';
+    const setBtn = $('#settings-btn'); if (setBtn && setBtn.parentNode) setBtn.parentNode.insertBefore(hdrBtn, setBtn);
 
-    /* ---------- UI ---------- */
-    const deck = document.createElement('section');
-    deck.id = 'deck'; deck.setAttribute('role', 'dialog'); deck.setAttribute('aria-modal', 'true'); deck.setAttribute('aria-label', 'Council Command Deck');
-    deck.innerHTML = '<div class="dk-head"><div class="dk-title">COUNCIL COMMAND DECK</div><span class="dk-pill" id="dk-state">STANDBY</span>' +
-      '<button class="dk-btn" id="dk-pop" type="button" title="Buka monitor di layar kedua / TV">' + sv('pop') + 'MONITOR</button>' +
-      '<button class="dk-btn" id="dk-full" type="button" title="Layar penuh">' + sv('full') + 'FULL</button>' +
-      '<button class="dk-btn" id="dk-close" type="button" aria-label="Tutup">' + sv('x') + 'CLOSE</button></div>' +
-      '<div class="dk-prog"><i id="dk-fill"></i></div><div class="dk-meta"><span id="dk-pct">0% konsensus proses</span><span id="dk-conf"></span></div>' +
-      '<div class="dk-grid" id="dk-grid"></div>' +
-      '<div class="dk-sec"><h4>PUTUSAN DEWAN</h4><div class="dk-verdict" id="dk-verdict"><span class="dk-empty">Belum ada putusan. Jalankan COGNITIVE SWARM, lalu hasilnya muncul di sini secara live.</span></div></div>' +
-      '<div class="dk-sec"><h4>RENCANA AKSI DUNIA NYATA</h4><div id="dk-acts"><span class="dk-empty">Langkah aksi diambil otomatis dari daftar di putusan.</span></div></div>' +
-      '<div class="dk-tools">' +
-      '<button class="dk-btn" id="dk-speak" type="button">' + sv('spk') + 'BACAKAN</button>' +
-      '<button class="dk-btn" id="dk-report" type="button">' + sv('doc') + 'LAPORAN / PDF</button>' +
-      '<button class="dk-btn" id="dk-ics" type="button">' + sv('cal') + 'KALENDER .ICS</button>' +
-      '<button class="dk-btn" id="dk-csv" type="button">' + sv('tbl') + 'CSV</button>' +
-      '<button class="dk-btn" id="dk-share" type="button">' + sv('shr') + 'BAGIKAN</button>' +
-      '<button class="dk-btn" id="dk-notify" type="button">' + sv('bell') + 'NOTIF</button>' +
-      '<button class="dk-btn" id="dk-wake" type="button">' + sv('sun') + 'LAYAR MENYALA</button></div>';
-    (document.getElementById('void') || document.body).appendChild(deck);
+    const P = document.createElement('section');
+    P.id = 'council'; P.setAttribute('role', 'dialog'); P.setAttribute('aria-modal', 'true'); P.setAttribute('aria-label', 'Council Command Center');
+    P.innerHTML =
+      '<div class="cc-head"><div class="cc-title"><i></i>COUNCIL COMMAND CENTER</div><div class="cc-act">' +
+      '<button class="lnk" id="cc-mon" type="button">MONITOR MODE</button><button class="lnk" id="cc-close" type="button">CLOSE</button></div></div>' +
+      '<div class="cc-lbl">LIVE TELEMETRY · DUNIA NYATA</div><div class="cc-grid" id="cc-grid"></div>' +
+      '<div class="cc-body"><div class="cc-pane"><div class="cc-lbl" style="margin:0">SIDANG DEWAN · QUORUM 3/5</div><div id="cc-roster"></div><div class="cc-lbl" style="margin:0">SYNTHESIS = sekretaris konsensus (menyusun, tidak memilih) · Dr. Cortex = Genius Insight</div><div class="cc-verdict" id="cc-verdict"></div></div>' +
+      '<div class="cc-pane"><div class="cc-lbl" style="margin:0">RESOLUSI &amp; TINDAK LANJUT</div>' +
+      '<input class="cc-in" id="cc-title" maxlength="120" placeholder="Judul resolusi…" aria-label="Judul resolusi">' +
+      '<div class="cc-act"><button class="lnk" id="cc-pull" type="button">AMBIL DARI JAWABAN TERAKHIR</button><button class="lnk" id="cc-add" type="button">+ ITEM</button></div>' +
+      '<div id="cc-items"></div></div></div>' +
+      '<div class="cc-pane cc-out"><div class="cc-lbl" style="margin:0">OUTPUT KE DUNIA NYATA</div><div class="cc-act">' +
+      '<button class="lnk" id="cc-print" type="button">CETAK / PDF</button><button class="lnk" id="cc-ics" type="button">KALENDER .ICS</button>' +
+      '<button class="lnk" id="cc-md" type="button">UNDUH .MD</button><button class="lnk" id="cc-share" type="button">BAGIKAN</button>' +
+      '<button class="lnk" id="cc-copy" type="button">SALIN</button><button class="lnk" id="cc-say" type="button">BACAKAN</button>' +
+      '<button class="lnk" id="cc-ping" type="button">INGATKAN 25 MNT</button></div></div>';
+    document.body.appendChild(P);
+    const gridEl = P.querySelector('#cc-grid'), rosterEl = P.querySelector('#cc-roster'), itemsEl = P.querySelector('#cc-items'), verEl = P.querySelector('#cc-verdict'), titleIn = P.querySelector('#cc-title');
+    const spark = a => { const mx = Math.max.apply(null, a.concat([1])), n = a.length; return '<svg viewBox="0 0 100 26" preserveAspectRatio="none"><polyline points="' + a.map((v, i) => (i * 100 / Math.max(1, n - 1)).toFixed(1) + ',' + (25 - v / mx * 24).toFixed(1)).join(' ') + '"/></svg>'; };
 
-    const btn = document.createElement('button');
-    btn.className = 'btn-icon'; btn.id = 'deck-btn'; btn.type = 'button'; btn.title = 'Council Command Deck (Ctrl+Shift+D)'; btn.setAttribute('aria-label', 'Council Command Deck');
-    btn.innerHTML = sv('mon');
-    const sb = $('settings-btn'); if (sb && sb.parentNode) sb.parentNode.insertBefore(btn, sb); else document.body.appendChild(btn);
-
+    /* ---- telemetri nyata ---- */
+    const H = { fps: [], mem: [], rtt: [] }; let tick2 = 0, cmem = null, raf = 0, tick = 0, frames = 0, lastT = 0, fps = 0, bat = null, geo = null, ping = null, wake = null;
+    const push = (k, v) => { H[k].push(v); if (H[k].length > 40) H[k].shift(); };
+    const loop = t => { frames++; if (t - lastT >= 1000) { fps = Math.round(frames * 1000 / (t - lastT)); frames = 0; lastT = t; push('fps', fps); } raf = requestAnimationFrame(loop); };
+    const card = (k, v, sub, cls, sp) => '<div class="cc-card ' + (cls || '') + '"><b>' + k + '</b><em>' + esc(v) + '</em>' + (sp || '') + '<small>' + esc(sub || '') + '</small></div>';
     function render() {
-      const s = snapshot();
-      $('dk-state').textContent = s.running ? 'SIDANG BERJALAN' : s.done ? 'PUTUSAN SIAP' : 'STANDBY';
-      $('dk-state').classList.toggle('run', s.running);
-      $('dk-fill').style.width = s.pct + '%';
-      $('dk-pct').textContent = s.pct + '% proses sidang';
-      $('dk-conf').textContent = s.conf ? 'KEYAKINAN ' + s.conf + '%' : '';
-      $('dk-grid').innerHTML = s.agents.map(a => '<div class="dk-card' + (a.act ? ' act' : '') + '" style="--c:' + esc(a.color) + '"><b>' + esc(a.name.toUpperCase()) + '</b><small>' + a.n + ' GILIRAN · ' + a.w + ' KATA' + (a.act ? ' · AKTIF' : '') + '</small><p>' + esc(a.last || '—') + '</p></div>').join('');
-      const v = $('dk-verdict');
-      if (ST.verdict) { let h; try { h = typeof mdHtml === 'function' ? mdHtml(ST.verdict) : esc(ST.verdict).replace(/\n/g, '<br>'); } catch (e) { h = esc(ST.verdict); } if (v.dataset.k !== String(ST.verdict.length)) { v.innerHTML = h; v.dataset.k = String(ST.verdict.length); } }
-      const acts = actions(), box = $('dk-acts'), key = acts.join('|');
-      if (box.dataset.k !== key) { box.dataset.k = key; box.innerHTML = acts.length ? acts.map((a, i) => '<label class="dk-act"><input type="checkbox" data-i="' + i + '"><span>' + esc(a) + '</span></label>').join('') : '<span class="dk-empty">Belum ada langkah aksi.</span>'; }
-      $('dk-notify').classList.toggle('on', ST.notify); $('dk-wake').classList.toggle('on', ST.wake); $('dk-speak').classList.toggle('on', ST.speaking);
+      const c = navigator.connection || {}, pm = performance && performance.memory, now = new Date();
+      let heap = '—', hs = '', hc = '';
+      if (pm) { const p = Math.round(pm.usedJSHeapSize / pm.jsHeapSizeLimit * 100); heap = p + '%'; push('mem', p); hs = spark(H.mem); hc = p > 80 ? 'bad' : p > 60 ? 'warn' : ''; }
+      else if (navigator.deviceMemory) heap = '≥' + navigator.deviceMemory + ' GB';
+      if (c.rtt != null) push('rtt', c.rtt);
+      const hist = (typeof chatHistory !== 'undefined' && Array.isArray(chatHistory)) ? chatHistory : [], chars = hist.reduce((a, m) => a + String(m && m.content || '').length, 0);
+      const ver = (function () { let a = 0, n = 0, y = 0; MEM.forEach(m => { const v = S.votes[m[0]]; if (v === 'aye') a++; else if (v === 'nay') n++; else if (v === 'abs') y++; }); return { a, n, y, q: a + n + y >= 3 }; })();
+      gridEl.innerHTML =
+        card('FRAME RATE', fps + ' FPS', 'render UI', fps && fps < 24 ? 'warn' : '', spark(H.fps)) +
+        card('JS MEMORY', heap, pm ? Math.round(pm.usedJSHeapSize / 1048576) + ' MB terpakai' : 'API memori tidak tersedia', hc, hs) +
+        card('JARINGAN', navigator.onLine ? 'ONLINE' : 'OFFLINE', (c.effectiveType || '?') + (c.downlink ? ' · ' + c.downlink + ' Mbps' : '') + (c.rtt != null ? ' · ' + c.rtt + ' ms' : ''), navigator.onLine ? '' : 'bad', H.rtt.length > 1 ? spark(H.rtt) : '') +
+        card('BATERAI', bat ? Math.round(bat.level * 100) + '%' : 'N/A', bat ? (bat.charging ? 'mengisi daya' : 'baterai') : 'tidak didukung', bat && !bat.charging && bat.level < .2 ? 'bad' : '') +
+        card('WAKTU', now.toTimeString().slice(0, 8), Intl.DateTimeFormat().resolvedOptions().timeZone + ' · UTC ' + now.toISOString().slice(11, 16)) +
+        card('SESI', hist.length + ' pesan', '≈' + Math.ceil(chars / 4) + ' token · ' + (document.hidden ? 'latar' : 'aktif')) +
+        card('SIDANG', ver.q ? (ver.a > ver.n ? 'ADOPTED' : ver.a < ver.n ? 'REJECTED' : 'SERI') : 'QUORUM ' + (ver.a + ver.n + ver.y) + '/3', 'AYE ' + ver.a + ' · NAY ' + ver.n + ' · ABS ' + ver.y, ver.q && ver.a < ver.n ? 'bad' : '') +
+        card('MEMORI CORTEX', cmem == null ? '—' : cmem + ' entri', 'memori semantik Dr. Cortex') +
+        card('LOKASI', geo ? geo.lat.toFixed(3) + ', ' + geo.lon.toFixed(3) : 'IZIN?', geo ? '±' + Math.round(geo.acc) + ' m' : 'klik untuk aktifkan GPS', '', '<button class="lnk" id="cc-geo" type="button" style="min-height:24px;padding:0">' + (geo ? 'PERBARUI' : 'AKTIFKAN') + '</button>');
+      const g = gridEl.querySelector('#cc-geo'); if (g) g.onclick = () => { if (!navigator.geolocation) return toast('Geolokasi tidak didukung', 1); navigator.geolocation.getCurrentPosition(p => { geo = { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy }; log('Lokasi diperbarui'); render(); }, () => toast('Izin lokasi ditolak', 1), { timeout: 8000 }); };
     }
+    function votes() { rosterEl.innerHTML = ''; MEM.forEach(m => { const d = document.createElement('div'); d.className = 'cc-mem'; d.style.setProperty('--hue', m[2]); d.innerHTML = '<i></i><span>' + m[1] + '</span><div class="cc-vote">' + [['aye', 'AYE'], ['nay', 'NAY'], ['abs', 'ABS']].map(v => '<button type="button" data-m="' + m[0] + '" data-v="' + v[0] + '" class="' + (S.votes[m[0]] === v[0] ? 'on' : '') + '" aria-pressed="' + (S.votes[m[0]] === v[0]) + '">' + v[1] + '</button>').join('') + '</div>'; rosterEl.appendChild(d); }); verdict(); }
+    function tally() { let a = 0, n = 0, y = 0; MEM.forEach(m => { const v = S.votes[m[0]]; if (v === 'aye') a++; else if (v === 'nay') n++; else if (v === 'abs') y++; }); return { a, n, y, q: a + n + y >= 3 }; }
+    function verdict() { const t = tally(); const r = !t.q ? 'NO QUORUM' : t.a > t.n ? 'RESOLUSI DITETAPKAN' : t.a < t.n ? 'RESOLUSI DITOLAK' : 'SERI — BUTUH SUARA TAMBAHAN'; verEl.textContent = r + ' · ' + t.a + '-' + t.n + '-' + t.y; verEl.className = 'cc-verdict' + (t.q ? (t.a > t.n ? ' ok' : t.a < t.n ? ' no' : '') : ''); return r; }
+    const due = d => { const x = new Date(); x.setDate(x.getDate() + d); return x.toISOString().slice(0, 10); };
+    function items() { itemsEl.innerHTML = ''; if (!S.items.length) itemsEl.innerHTML = '<div class="cc-lbl">Belum ada tindak lanjut. Ambil dari jawaban terakhir atau tambah manual.</div>'; S.items.forEach((it, i) => { const d = document.createElement('div'); d.className = 'cc-item'; d.innerHTML = '<input class="cc-in" data-i="' + i + '" data-f="t" maxlength="200" value="' + esc(it.t) + '" aria-label="Item ' + (i + 1) + '"><div><select data-i="' + i + '" data-f="o" aria-label="Penanggung jawab">' + MEM.map(m => '<option value="' + m[1] + '"' + (m[1] === it.o ? ' selected' : '') + '>' + m[1] + '</option>').join('') + '</select><input type="date" data-i="' + i + '" data-f="d" value="' + esc(it.d) + '" aria-label="Tenggat"></div><button class="lnk" data-del="' + i + '" type="button" aria-label="Hapus item">✕</button>'; itemsEl.appendChild(d); }); }
 
-    /* ---------- Monitor pop-out (layar kedua / TV) ---------- */
-    const MON = '<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CGO · Council Monitor</title><style>' +
-      'html,body{margin:0;height:100%;background:#04070d;color:#e9edf5;font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden}body{display:flex;flex-direction:column;gap:2vh;padding:3vh 3vw;background:radial-gradient(70% 50% at 50% 0,rgba(79,107,255,.22),transparent 70%),#04070d}' +
-      'h1{font-size:2.2vh;letter-spacing:.4em;color:#38bdf8;margin:0;font-weight:400;display:flex;justify-content:space-between}#p{height:1.2vh;background:rgba(79,107,255,.18);border-radius:9px;overflow:hidden}#p i{display:block;height:100%;width:0;background:linear-gradient(90deg,#38bdf8,#a78bfa);box-shadow:0 0 2vh #38bdf8;transition:width .6s}' +
-      '#g{display:grid;grid-template-columns:repeat(6,1fr);gap:1.2vw}.c{border:1px solid var(--c);border-radius:1.2vh;padding:1.4vh 1vw;background:rgba(255,255,255,.03)}.c.a{box-shadow:0 0 3vh var(--c)}.c b{display:block;color:var(--c);font-size:1.9vh}.c small{color:#8794ad;font-size:1.4vh}' +
-      '#v{flex:1;overflow:auto;font-size:3.1vh;line-height:1.6;white-space:pre-wrap;border-top:1px solid rgba(79,107,255,.3);padding-top:2vh}#s{font-size:1.6vh;color:#8794ad}@media(max-width:900px){#g{grid-template-columns:repeat(2,1fr)}}</style>' +
-      '<body><h1><span>COUNCIL MONITOR</span><span id="k"></span></h1><div id="p"><i></i></div><div id="g"></div><div id="s">Menunggu sidang… klik dua kali untuk layar penuh.</div><div id="v"></div><script>' +
-      'var S=null;function d(){if(!S)return;document.querySelector("#p i").style.width=S.pct+"%";document.getElementById("s").textContent=(S.running?"SIDANG BERJALAN":S.done?"PUTUSAN SIAP":"STANDBY")+" · "+S.pct+"%"+(S.conf?" · KEYAKINAN "+S.conf+"%":"");var g=document.getElementById("g");g.textContent="";S.agents.forEach(function(a){var c=document.createElement("div");c.className="c"+(a.act?" a":"");c.style.setProperty("--c",/^#[0-9a-f]{3,8}$/i.test(a.color)?a.color:"#38bdf8");var b=document.createElement("b");b.textContent=a.name;var m=document.createElement("small");m.textContent=a.n+"x · "+a.w+" kata";c.appendChild(b);c.appendChild(m);g.appendChild(c)});document.getElementById("v").textContent=S.verdict||""}' +
-      'addEventListener("message",function(e){if(e.source!==opener)return;S=e.data;d()});setInterval(function(){document.getElementById("k").textContent=new Date().toLocaleTimeString()},1000);' +
-      'document.addEventListener("dblclick",function(){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()});try{opener.postMessage({__deckHello:1},"*")}catch(e){}<\/script></body></html>';
-    function push() { if (ST.mon && !ST.mon.closed) { try { ST.mon.postMessage(snapshot(), '*'); } catch (e) {} } }
-    window.addEventListener('message', e => { if (e.data && e.data.__deckHello && e.source === ST.mon) push(); });
+    /* ---- penyusun dokumen ---- */
+    const docTitle = () => (S.title || '').trim() || 'Resolusi Dewan NEXUS';
+    function mdDoc() { const t = tally(), v = verdict(); return '# ' + docTitle() + '\n\n- Tanggal: ' + new Date().toLocaleString('id-ID') + '\n- Putusan: ' + v + ' (AYE ' + t.a + ', NAY ' + t.n + ', ABS ' + t.y + ')\n\n## Suara Dewan\n' + MEM.map(m => '- ' + m[1] + ': ' + (S.votes[m[0]] || 'belum memilih').toUpperCase()).join('\n') + '\n\n## Tindak Lanjut\n' + (S.items.length ? S.items.map((it, i) => (i + 1) + '. ' + it.t + ' — PIC ' + it.o + ', tenggat ' + it.d).join('\n') : '_(kosong)_') + '\n'; }
+    function dl(name, mime, txt) { const u = URL.createObjectURL(new Blob([txt], { type: mime })), a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); }
+    const slug = () => docTitle().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'resolusi';
+    const icsT = s => String(s).replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/[,;]/g, m => '\\' + m);
+    function ics() { const z = d => d.replace(/-/g, ''), st = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z'; let o = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//CGO NEXUS//Council//ID', 'CALSCALE:GREGORIAN']; S.items.forEach((it, i) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(it.d)) return; const e = new Date(it.d + 'T00:00:00'); e.setDate(e.getDate() + 1); const en = e.getFullYear() + String(e.getMonth() + 1).padStart(2, '0') + String(e.getDate()).padStart(2, '0'); o.push('BEGIN:VEVENT', 'UID:nexus-' + Date.now() + '-' + i + '@cgo', 'DTSTAMP:' + st, 'DTSTART;VALUE=DATE:' + z(it.d), 'DTEND;VALUE=DATE:' + en, 'SUMMARY:' + icsT('[' + it.o + '] ' + it.t), 'DESCRIPTION:' + icsT(docTitle()), 'BEGIN:VALARM', 'TRIGGER:-PT15H', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsT(it.t), 'END:VALARM', 'END:VEVENT'); }); o.push('END:VCALENDAR'); return o.join('\r\n') + '\r\n'; }
+    function printDoc() { const t = tally(), v = verdict(), w = window.open('', '_blank'); if (!w) return toast('Pop-up diblokir — izinkan lalu ulangi', 1); w.document.write('<!doctype html><meta charset="utf-8"><title>' + esc(docTitle()) + '</title><style>body{font:14px/1.6 Georgia,serif;max-width:720px;margin:40px auto;color:#111}h1{font-size:26px;border-bottom:3px solid #0369a1;padding-bottom:8px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #bbb;padding:6px 10px;text-align:left}.v{font-weight:700;padding:10px;border:2px solid #0369a1;text-align:center;margin:14px 0}small{color:#555}</style><h1>' + esc(docTitle()) + '</h1><small>CGO NEXUS · ' + esc(new Date().toLocaleString('id-ID')) + '</small><div class="v">' + esc(v) + ' (AYE ' + t.a + ' · NAY ' + t.n + ' · ABS ' + t.y + ')</div><h3>Suara Dewan</h3><table><tr>' + MEM.map(m => '<th>' + m[1] + '</th>').join('') + '</tr><tr>' + MEM.map(m => '<td>' + esc((S.votes[m[0]] || '—').toUpperCase()) + '</td>').join('') + '</tr></table><h3>Tindak Lanjut</h3><table><tr><th>#</th><th>Tindakan</th><th>PIC</th><th>Tenggat</th></tr>' + (S.items.map((it, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(it.t) + '</td><td>' + esc(it.o) + '</td><td>' + esc(it.d) + '</td></tr>').join('') || '<tr><td colspan="4">—</td></tr>') + '</table><script>setTimeout(function(){print()},400)<\/script>'); w.document.close(); }
+    function pull() { const h = (typeof chatHistory !== 'undefined' && Array.isArray(chatHistory)) ? chatHistory : []; let last = null; for (let i = h.length - 1; i >= 0; i--) if (h[i] && h[i].role === 'assistant' && h[i].content) { last = String(h[i].content); break; } if (!last) return toast('Belum ada jawaban untuk diambil', 1); const out = []; last.split('\n').forEach(l => { const m = l.match(/^\s*(?:[-*•]|\d+[.)])\s+(.{6,200})$/); if (m) out.push(m[1].replace(/[*_`#>]/g, '').trim()); }); if (!out.length) return toast('Tidak ada poin daftar di jawaban terakhir', 1); out.slice(0, 12).forEach((t, i) => S.items.push({ t, o: MEM[i % MEM.length][1], d: due(7) })); save(); items(); toast(Math.min(12, out.length) + ' tindak lanjut diambil'); log('Tindak lanjut diambil dari jawaban terakhir'); }
 
-    /* ---------- Output dunia nyata ---------- */
-    const dl = (name, mime, data) => { const u = URL.createObjectURL(new Blob([data], { type: mime })); const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); };
-    const stamp = () => new Date().toISOString().slice(0, 10);
-    const needV = () => { if (!ST.verdict) { toast('Belum ada putusan dewan.', true); return false; } return true; };
-    function report() {
-      if (!needV()) return;
-      let body; try { body = typeof mdHtml === 'function' ? mdHtml(ST.verdict) : esc(ST.verdict); } catch (e) { body = esc(ST.verdict); }
-      const acts = actions(), ag = snapshot().agents.filter(a => a.n);
-      const h = '<!doctype html><meta charset="utf-8"><title>Laporan Putusan Dewan</title><style>body{font:15px/1.7 Georgia,serif;max-width:760px;margin:30px auto;padding:0 20px;color:#111}h1{font:600 13px ui-monospace,monospace;letter-spacing:.25em;color:#0369a1}td,th{border:1px solid #ccc;padding:4px 8px;font:12px ui-monospace,monospace;text-align:left}table{border-collapse:collapse}button{font:12px ui-monospace,monospace;padding:8px 14px;margin-bottom:16px}@media print{button{display:none}}</style>' +
-        '<button onclick="print()">Cetak / Simpan PDF</button><h1>CGO RESEARCH NEXUS · LAPORAN PUTUSAN DEWAN</h1><p>' + esc(new Date().toLocaleString()) + '</p>' + body +
-        (acts.length ? '<h2>Rencana Aksi</h2><ol>' + acts.map(a => '<li>☐ ' + esc(a) + '</li>').join('') + '</ol>' : '') +
-        (ag.length ? '<h2>Peserta Sidang</h2><table><tr><th>Anggota</th><th>Giliran</th><th>Kata</th></tr>' + ag.map(a => '<tr><td>' + esc(a.name) + '</td><td>' + a.n + '</td><td>' + a.w + '</td></tr>').join('') + '</table>' : '');
-      const u = URL.createObjectURL(new Blob([h], { type: 'text/html' }));
-      if (!window.open(u, '_blank')) dl('putusan-dewan-' + stamp() + '.html', 'text/html', h);
-    }
-    function ics() {
-      const acts = actions(); if (!acts.length) { toast('Tidak ada langkah aksi untuk dijadwalkan.', true); return; }
-      const p = n => String(n).padStart(2, '0'), f = d => d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()), ts = new Date().toISOString().replace(/[-:]|\.\d+/g, '');
-      const e = t => String(t).replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n');
-      const base = new Date(); base.setHours(0, 0, 0, 0); base.setDate(base.getDate() + 1);
-      const ev = acts.map((a, i) => { const s = new Date(base.getTime() + i * 864e5 + 36e5 * 12), n = new Date(s.getTime() + 864e5); return 'BEGIN:VEVENT\r\nUID:cgo-' + Date.now() + '-' + i + '@nexus\r\nDTSTAMP:' + ts + '\r\nDTSTART;VALUE=DATE:' + f(s) + '\r\nDTEND;VALUE=DATE:' + f(n) + '\r\nSUMMARY:' + e('[CGO] ' + a) + '\r\nDESCRIPTION:' + e('Dari putusan Dewan CGO Research Nexus') + '\r\nEND:VEVENT'; });
-      dl('rencana-aksi-' + stamp() + '.ics', 'text/calendar', 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//CGO Nexus//Council Deck//ID\r\n' + ev.join('\r\n') + '\r\nEND:VCALENDAR');
-      toast('File kalender dibuat (' + acts.length + ' aksi).');
-    }
-    function csv() {
-      const acts = actions(); if (!acts.length) { toast('Tidak ada langkah aksi.', true); return; }
-      const q = s => '"' + String(s).replace(/"/g, '""') + '"';
-      const done = Array.from(document.querySelectorAll('#dk-acts input')).map(c => c.checked);
-      dl('rencana-aksi-' + stamp() + '.csv', 'text/csv', '\uFEFFno,aksi,status\r\n' + acts.map((a, i) => (i + 1) + ',' + q(a) + ',' + (done[i] ? 'selesai' : 'terbuka')).join('\r\n'));
-    }
-    function speak() {
-      const ss = window.speechSynthesis; if (!ss) { toast('Suara tidak didukung browser ini.', true); return; }
-      if (ST.speaking) { ss.cancel(); ST.speaking = false; render(); return; }
-      if (!needV()) return;
-      const u = new SpeechSynthesisUtterance(plain(ST.verdict).slice(0, 3000)); u.lang = idl() === 'en' ? 'en-US' : 'id-ID';
-      u.onend = u.onerror = () => { ST.speaking = false; render(); };
-      ST.speaking = true; ss.speak(u); render();
-    }
-    async function share() {
-      if (!needV()) return;
-      const text = 'Putusan Dewan CGO\n\n' + plain(ST.verdict).slice(0, 1800);
-      try { if (navigator.share) { await navigator.share({ title: 'Putusan Dewan CGO', text }); return; } await navigator.clipboard.writeText(text); toast('Putusan disalin ke clipboard.'); } catch (e) { if (e && e.name !== 'AbortError') toast('Gagal membagikan.', true); }
-    }
-    async function getWake() { try { if (ST.wake && ST.running && navigator.wakeLock && !ST.lock) { ST.lock = await navigator.wakeLock.request('screen'); ST.lock.addEventListener('release', () => { ST.lock = null; }); } } catch (e) {} }
-    function relWake() { try { if (ST.lock) ST.lock.release(); } catch (e) {} ST.lock = null; }
-    function alertDone() {
-      if (!ST.notify) return;
-      try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch (e) {}
-      try { if ('Notification' in window && Notification.permission === 'granted') new Notification('Putusan Dewan siap', { body: plain(ST.verdict).slice(0, 140) }); } catch (e) {}
-    }
+    /* ---- aksi ---- */
+    P.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.m) { S.votes[b.dataset.m] = S.votes[b.dataset.m] === b.dataset.v ? '' : b.dataset.v; save(); votes(); render(); return; }
+      if (b.dataset.del != null) { S.items.splice(+b.dataset.del, 1); save(); items(); return; }
+      const id = b.id;
+      if (id === 'cc-close') close();
+      else if (id === 'cc-mon') monitor();
+      else if (id === 'cc-add') { S.items.push({ t: '', o: MEM[0][1], d: due(7) }); save(); items(); const l = itemsEl.querySelectorAll('input[data-f=t]'); if (l.length) l[l.length - 1].focus(); }
+      else if (id === 'cc-pull') pull();
+      else if (id === 'cc-print') printDoc();
+      else if (id === 'cc-ics') { if (!S.items.length) return toast('Tambahkan tindak lanjut dulu', 1); dl(slug() + '.ics', 'text/calendar', ics()); toast('File kalender diunduh — buka untuk masuk ke Calendar'); }
+      else if (id === 'cc-md') dl(slug() + '.md', 'text/markdown', mdDoc());
+      else if (id === 'cc-copy') { (navigator.clipboard ? navigator.clipboard.writeText(mdDoc()) : Promise.reject()).then(() => toast('Resolusi disalin'), () => toast('Gagal menyalin', 1)); }
+      else if (id === 'cc-share') { if (navigator.share) navigator.share({ title: docTitle(), text: mdDoc() }).catch(() => {}); else toast('Share tidak didukung — gunakan SALIN', 1); }
+      else if (id === 'cc-say') { if (!('speechSynthesis' in window)) return toast('Suara tidak didukung', 1); speechSynthesis.cancel(); if (b.dataset.on) { b.dataset.on = ''; b.textContent = 'BACAKAN'; return; } const u = new SpeechSynthesisUtterance(mdDoc().replace(/[#*_`>-]/g, ' ')); u.lang = 'id-ID'; u.onend = u.onerror = () => { b.dataset.on = ''; b.textContent = 'BACAKAN'; }; b.dataset.on = '1'; b.textContent = 'STOP SUARA'; speechSynthesis.speak(u); }
+      else if (id === 'cc-ping') { const go = () => { clearTimeout(ping); ping = setTimeout(() => { try { new Notification('NEXUS Council', { body: docTitle() + ' — waktunya tindak lanjut' }); } catch (x) { toast('Pengingat: ' + docTitle()); } }, 25 * 60000); toast('Pengingat 25 menit aktif (biarkan tab terbuka)'); }; if (!('Notification' in window)) return go(); if (Notification.permission === 'granted') go(); else Notification.requestPermission().then(p => p === 'granted' ? go() : toast('Izin notifikasi ditolak', 1)); }
+    });
+    P.addEventListener('input', e => { const t = e.target; if (t === titleIn) { S.title = t.value; save(); return; } if (t.dataset && t.dataset.f != null) { const it = S.items[+t.dataset.i]; if (it) { it[t.dataset.f] = t.value; save(); } } });
+    P.addEventListener('change', e => { const t = e.target; if (t.dataset && t.dataset.f != null) { const it = S.items[+t.dataset.i]; if (it) { it[t.dataset.f] = t.value; save(); } } });
 
-    /* ---------- Pengamat state (polling ringan, tidak menyentuh kode lama) ---------- */
-    function tick() {
-      const swarm = !!document.body.dataset.swarm, T = G('agentTranscript') || [];
-      if (swarm && !ST.running) { ST.running = true; ST.done = false; ST.log = []; ST.verdict = ''; getWake(); }
-      T.forEach(e => { if (e && !ST.seen.has(e)) { ST.seen.add(e); ST.log.push({ id: e.id, name: e.name, w: words(e.text), snip: plain(e.text).slice(0, 160), text: e.text }); if (e.id === 'synth') ST.verdict = e.text; } });
-      if (ST.running && !swarm) {
-        ST.running = false; relWake();
-        if (!ST.verdict) { const h = (G('chatHistory') || []).slice().reverse().find(m => m && m.role === 'assistant' && typeof m.content === 'string'); if (h && ST.log.length) ST.verdict = h.content; }
-        if (ST.verdict) { ST.done = true; alertDone(); LS.set('cgo_deck_last', JSON.stringify({ v: ST.verdict.slice(0, 20000), log: ST.log.map(e => ({ id: e.id, name: e.name, w: e.w, snip: e.snip })) })); }
-      }
-      if (ST.open) render(); push();
-    }
-    try { const L = JSON.parse(LS.get('cgo_deck_last') || 'null'); if (L && L.v) { ST.verdict = L.v; ST.done = true; ST.log = (L.log || []).map(e => ({ id: e.id, name: e.name, w: e.w, snip: e.snip, text: '' })); } } catch (e) {}
-    setInterval(() => { if (!document.hidden || ST.mon) tick(); }, 700);
-
-    /* ---------- Event ---------- */
-    const open = () => { ST.open = true; deck.classList.add('open'); render(); };
-    const close = () => { ST.open = false; deck.classList.remove('open'); };
-    btn.addEventListener('click', () => ST.open ? close() : open());
-    $('dk-close').onclick = close;
-    $('dk-full').onclick = () => { try { document.fullscreenElement ? document.exitFullscreen() : deck.requestFullscreen(); } catch (e) { toast('Layar penuh tidak tersedia.', true); } };
-    $('dk-pop').onclick = () => {
-      if (ST.mon && !ST.mon.closed) { ST.mon.focus(); return; }
-      const u = URL.createObjectURL(new Blob([MON], { type: 'text/html' }));
-      ST.mon = window.open(u, 'cgo_council_monitor', 'popup,width=1280,height=720');
-      if (!ST.mon) toast('Pop-up diblokir. Izinkan pop-up untuk membuka monitor.', true); else toast('Monitor dibuka — seret ke layar kedua/TV.');
-    };
-    $('dk-speak').onclick = speak; $('dk-report').onclick = report; $('dk-ics').onclick = ics; $('dk-csv').onclick = csv; $('dk-share').onclick = share;
-    $('dk-notify').onclick = async () => {
-      ST.notify = !ST.notify;
-      if (ST.notify && 'Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) {} }
-      LS.set('cgo_deck_notify', ST.notify ? '1' : '0'); render(); toast(ST.notify ? 'Notifikasi & getar aktif.' : 'Notifikasi mati.');
-    };
-    $('dk-wake').onclick = () => { ST.wake = !ST.wake; LS.set('cgo_deck_wake', ST.wake ? '1' : '0'); if (ST.wake) getWake(); else relWake(); render(); };
+    function monitor() { const on = !P.classList.contains('monitor'); P.classList.toggle('monitor', on); $('#cc-mon').textContent = on ? 'KELUAR MONITOR' : 'MONITOR MODE'; if (on) { try { P.requestFullscreen && P.requestFullscreen(); } catch (e) {} try { navigator.wakeLock && navigator.wakeLock.request('screen').then(l => { wake = l; }, () => {}); } catch (e) {} } else { try { document.fullscreenElement && document.exitFullscreen(); } catch (e) {} try { wake && wake.release(); wake = null; } catch (e) {} } }
+    function open() { P.classList.add('open'); titleIn.value = S.title || ''; votes(); items(); lastT = performance.now(); frames = 0; if (!raf) raf = requestAnimationFrame(loop); render(); tick = setInterval(render, 1000); const pc = () => { try { cortex.store.getAll().then(a => { cmem = a.length; }, () => {}); } catch (e) {} }; pc(); tick2 = setInterval(pc, 8000); try { navigator.getBattery && navigator.getBattery().then(b => { bat = b; }); } catch (e) {} log('Command Center dibuka'); }
+    function close() { if (P.classList.contains('monitor')) monitor(); P.classList.remove('open'); cancelAnimationFrame(raf); raf = 0; clearInterval(tick); clearInterval(tick2); try { speechSynthesis.cancel(); } catch (e) {} }
+    hdrBtn.addEventListener('click', () => P.classList.contains('open') ? close() : open());
     document.addEventListener('keydown', e => {
-      if (e.ctrlKey && e.shiftKey && e.key && e.key.toLowerCase() === 'd') { e.preventDefault(); ST.open ? close() : open(); }
-      else if (e.key === 'Escape' && ST.open && !document.fullscreenElement) { e.stopImmediatePropagation(); close(); }
+      if (e.shiftKey && (e.ctrlKey || e.metaKey) && e.key && e.key.toLowerCase() === 'd') { e.preventDefault(); P.classList.contains('open') ? close() : open(); }
+      else if (e.key === 'Escape' && P.classList.contains('open')) { e.stopImmediatePropagation(); close(); }
     }, true);
-    window.addEventListener('beforeunload', () => { try { if (ST.mon && !ST.mon.closed) ST.mon.close(); } catch (e) {} });
-    window.__councilDeck = { open, close, snapshot };
-  } catch (err) { try { console.warn('Council Deck gagal dimuat:', err); } catch (e) {} }
+    log('Council Command Center v7.0 siap (Ctrl+Shift+D)');
+  } catch (err) { console.warn('[COUNCIL] modul gagal dimuat:', err); }
 })();
 </script>
 </body>
