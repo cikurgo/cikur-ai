@@ -337,6 +337,37 @@ body[data-swarm][data-busy] #swarm{display:flex}
 .vulcan-result{margin-top:.6rem;min-height:1.2em;display:flex;align-items:center;gap:.4rem;word-break:break-all}
 .vulcan-result.run{color:var(--warning)}.vulcan-result.ok{color:var(--success)}.vulcan-result.bad{color:var(--danger)}.vf-val{color:var(--ink)}
 @media(max-width:560px){.btn-icon{width:34px;height:34px}}
+/* ===== COUNCIL COMMAND DECK (add-on, tidak mengubah gaya lama) ===== */
+#deck{position:fixed;inset:0;z-index:75;display:none;flex-direction:column;gap:12px;padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));background:radial-gradient(70% 50% at 50% 0,rgba(var(--aura-a),.16),transparent 70%),var(--layer);overflow:auto;color:var(--ink);font-family:var(--mono);backdrop-filter:blur(14px)}
+#deck.open{display:flex}
+#deck::before{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(var(--aura-a),.035) 3px 4px);animation:dkscan 9s linear infinite}
+@keyframes dkscan{to{background-position:0 80px}}
+.dk-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dk-title{font-size:12px;letter-spacing:.28em;color:var(--accent);flex:1;min-width:150px}
+.dk-pill{font-size:10px;letter-spacing:.18em;padding:4px 10px;border:1px solid var(--accent);border-radius:99px;color:var(--accent)}
+.dk-pill.run{animation:breathe 1.6s ease-in-out infinite}
+.dk-btn{display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.14em;padding:8px 11px;border:1px solid rgba(var(--aura-a),.45);border-radius:8px;min-height:36px}
+.dk-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.dk-btn:hover,.dk-btn.on{background:rgba(var(--aura-a),.2);color:var(--accent)}
+.dk-prog{height:6px;border-radius:9px;background:rgba(var(--aura-a),.14);overflow:hidden}
+.dk-prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#a78bfa);box-shadow:0 0 14px var(--accent);transition:width .6s}
+.dk-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);letter-spacing:.1em}
+.dk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.dk-card{border:1px solid color-mix(in srgb,var(--c) 45%,transparent);border-radius:12px;padding:10px;background:color-mix(in srgb,var(--c) 7%,transparent);display:flex;flex-direction:column;gap:6px;min-height:96px}
+.dk-card.act{box-shadow:0 0 18px color-mix(in srgb,var(--c) 55%,transparent)}
+.dk-card b{font-size:11px;color:var(--c);letter-spacing:.08em}
+.dk-card small{font-size:9px;color:var(--dim);letter-spacing:.12em}
+.dk-card p{font-size:10px;line-height:1.5;color:var(--text-muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.dk-sec{border:1px solid rgba(var(--aura-a),.28);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.dk-sec h4{font-size:10px;letter-spacing:.24em;color:var(--accent);font-weight:400}
+.dk-verdict{font-family:var(--serif);font-size:15px;line-height:1.65;max-height:38vh;overflow:auto}
+.dk-verdict ul,.dk-verdict ol{padding-left:20px}
+.dk-act{display:flex;gap:8px;align-items:flex-start;font-size:12px;line-height:1.5;cursor:pointer}
+.dk-act input{margin-top:3px;accent-color:var(--accent)}
+.dk-act input:checked+span{opacity:.45;text-decoration:line-through}
+.dk-empty{font-size:11px;color:var(--dim)}
+.dk-tools{display:flex;gap:8px;flex-wrap:wrap}
+@media (prefers-reduced-motion:reduce){#deck::before,.dk-pill.run{animation:none}}
 </style>
 </head>
 <body data-theme="cyber" data-state="idle">
@@ -3538,26 +3569,9 @@ DISCUSSION RULES (MANDATORY):
 5. Clean Markdown. End with one sharp insight or an open question for the team.
 6. Don't open with pleasantries like "Thank you" — go straight to substance.`;
 
-const CORTEX_PROTOCOL_ID = `Kamu adalah DR. CORTEX — The Grand Polymath (IQ 200+).
-Tugasmu adalah membaca transkrip perdebatan agen sebelumnya dan melakukan analisis kritis.
+const CORTEX_PROTOCOL_ID = `Kamu adalah DR. CORTEX — The Grand Polymath (IQ 200+). Baca transkrip perdebatan tim sebelumnya. Lakukan analisis tingkat dewa. Tugasmu: (1) Deteksi kesalahan logika (fallacy) agen sebelumnya. (2) Berikan 1 Genius Insight (ide berlawanan intuisi). (3) Tunjukkan Proof of Logic. Jangan bertele-tele (maksimal 150 kata).`;
+const CORTEX_PROTOCOL_EN = `You are DR. CORTEX — The Grand Polymath (IQ 200+). Read the previous team debate. Perform god-tier analysis. (1) Detect logical fallacies. (2) Provide 1 Genius Insight (counter-intuitive). (3) Show Proof of Logic. Be concise (max 150 words).`;
 
-Lakukan 3 hal ini secara berurutan:
-1. FALLACY DETECTION: Identifikasi kesalahan logika (ad hominem, post hoc, dll) dari agen sebelumnya. Jika tidak ada, sebutkan "Logika valid".
-2. COUNTER-INTUITIVE INSIGHT: Berikan 1 solusi jenius yang berlawanan dengan intuisi umum, namun bisa dieksekusi di dunia nyata.
-3. PROOF OF LOGIC: Tunjukkan dasar matematis, fisika, atau logika formal yang mendukung solusimu tersebut.
-
-Aturan: Jangan bertele-tele, maksimal 150 kata. Langsung pada intinya.`;
-
-const CORTEX_PROTOCOL_EN = `You are DR. CORTEX — The Grand Polymath (IQ 200+).
-Your task is to read the previous agents' debate transcript and perform a critical analysis.
-
-Perform these 3 steps in order:
-1. FALLACY DETECTION: Identify logical fallacies (ad hominem, post hoc, etc.) from previous agents. If none exist, state "Valid logic".
-2. COUNTER-INTUITIVE INSIGHT: Provide 1 genius solution that goes against common intuition, yet is executable in the real world.
-3. PROOF OF LOGIC: Demonstrate the mathematical, physical, or formal logic basis that supports your solution.
-
-Rule: Do not ramble, maximum 150 words. Straight to the point.`;
-    
 const SYNTH_PROTOCOL_ID = `Kamu adalah SYNTHESIS — penyintesis akhir panel diskusi multi-peneliti CGO Research Nexus.
 Baca SELURUH transkrip diskusi tim secara utuh.
 Hasilkan satu jawaban akhir yang terpadu untuk OBJECTIVE asli:
@@ -4508,6 +4522,215 @@ window.runForgedSkill = function (forgeId, argsStr, resultEl) {
         }
     });
 };
+</script>
+<script>
+/* ===== COUNCIL COMMAND DECK v1.0 — add-on terpisah: hanya MEMBACA state lama, tidak menimpa fungsi apa pun ===== */
+(function () {
+  'use strict';
+  try {
+    const $ = id => document.getElementById(id);
+    const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const G = n => { try { return (0, eval)('typeof ' + n + '!=="undefined"?' + n + ':undefined'); } catch (e) { return undefined; } };
+    const LS = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} } };
+    const toast = (m, w) => { try { showToast(m, 2600, !!w); } catch (e) {} };
+    const ICON = {
+      mon: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>',
+      pop: '<path d="M15 3h6v6M10 14L21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+      full: '<path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/>',
+      x: '<path d="M18 6L6 18M6 6l12 12"/>',
+      spk: '<path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>',
+      doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/>',
+      cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+      tbl: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
+      shr: '<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/>',
+      bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/>',
+      sun: '<rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/>'
+    };
+    const sv = n => '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICON[n] + '</svg>';
+    const ST = { log: [], seen: new WeakSet(), verdict: '', running: false, open: false, mon: null, notify: LS.get('cgo_deck_notify') === '1', wake: LS.get('cgo_deck_wake') === '1', lock: null, speaking: false, done: false };
+    const idl = () => (G('settings') || {}).lang === 'en' ? 'en' : 'id';
+    const roster = () => [].concat(G('AGENTS') || [], G('CORTEX_AGENT') ? [G('CORTEX_AGENT')] : [], G('SYNTH_AGENT') ? [G('SYNTH_AGENT')] : []);
+    const words = t => (String(t).trim().match(/\S+/g) || []).length;
+    const plain = t => String(t || '').replace(/```[\s\S]*?```/g, ' ').replace(/[*_`#>~]/g, '').replace(/\[(.+?)\]\(.+?\)/g, '$1').replace(/\s+\n/g, '\n').trim();
+
+    function actions() {
+      const out = [];
+      String(ST.verdict).split('\n').forEach(l => {
+        const m = l.match(/^\s*(?:[-*•]|\d+[.)])\s+(.+)/);
+        if (!m) return;
+        const a = plain(m[1]).replace(/\s+/g, ' ');
+        if (a.length > 8 && out.length < 12) out.push(a.slice(0, 220));
+      });
+      return out;
+    }
+    function confidence() {
+      const m = String(ST.verdict).match(/(keyakinan|confidence)[^\n]{0,40}?(tinggi|sedang|rendah|high|medium|low)/i);
+      if (!m) return null;
+      const k = m[2].toLowerCase();
+      return /tinggi|high/.test(k) ? 85 : /sedang|medium/.test(k) ? 60 : 35;
+    }
+    function snapshot() {
+      const rounds = parseInt(($('agent-rounds-select') || {}).value, 10) || 2;
+      const total = rounds * 4 + 2;
+      const pct = ST.done ? 100 : Math.min(99, Math.round(ST.log.length / total * 100));
+      const live = document.querySelector('.thought.agent.live .who');
+      const lt = live ? live.textContent : '';
+      return {
+        t: Date.now(), running: ST.running, done: ST.done, pct, conf: confidence(), verdict: plain(ST.verdict).slice(0, 4000),
+        agents: roster().map(a => {
+          const es = ST.log.filter(e => e.id === a.id);
+          return { id: a.id, name: a.name, color: a.color || '#38bdf8', n: es.length, w: es.reduce((s, e) => s + e.w, 0), last: es.length ? es[es.length - 1].snip : '', act: !!lt && lt.indexOf(a.name) > -1 };
+        })
+      };
+    }
+
+    /* ---------- UI ---------- */
+    const deck = document.createElement('section');
+    deck.id = 'deck'; deck.setAttribute('role', 'dialog'); deck.setAttribute('aria-modal', 'true'); deck.setAttribute('aria-label', 'Council Command Deck');
+    deck.innerHTML = '<div class="dk-head"><div class="dk-title">COUNCIL COMMAND DECK</div><span class="dk-pill" id="dk-state">STANDBY</span>' +
+      '<button class="dk-btn" id="dk-pop" type="button" title="Buka monitor di layar kedua / TV">' + sv('pop') + 'MONITOR</button>' +
+      '<button class="dk-btn" id="dk-full" type="button" title="Layar penuh">' + sv('full') + 'FULL</button>' +
+      '<button class="dk-btn" id="dk-close" type="button" aria-label="Tutup">' + sv('x') + 'CLOSE</button></div>' +
+      '<div class="dk-prog"><i id="dk-fill"></i></div><div class="dk-meta"><span id="dk-pct">0% konsensus proses</span><span id="dk-conf"></span></div>' +
+      '<div class="dk-grid" id="dk-grid"></div>' +
+      '<div class="dk-sec"><h4>PUTUSAN DEWAN</h4><div class="dk-verdict" id="dk-verdict"><span class="dk-empty">Belum ada putusan. Jalankan COGNITIVE SWARM, lalu hasilnya muncul di sini secara live.</span></div></div>' +
+      '<div class="dk-sec"><h4>RENCANA AKSI DUNIA NYATA</h4><div id="dk-acts"><span class="dk-empty">Langkah aksi diambil otomatis dari daftar di putusan.</span></div></div>' +
+      '<div class="dk-tools">' +
+      '<button class="dk-btn" id="dk-speak" type="button">' + sv('spk') + 'BACAKAN</button>' +
+      '<button class="dk-btn" id="dk-report" type="button">' + sv('doc') + 'LAPORAN / PDF</button>' +
+      '<button class="dk-btn" id="dk-ics" type="button">' + sv('cal') + 'KALENDER .ICS</button>' +
+      '<button class="dk-btn" id="dk-csv" type="button">' + sv('tbl') + 'CSV</button>' +
+      '<button class="dk-btn" id="dk-share" type="button">' + sv('shr') + 'BAGIKAN</button>' +
+      '<button class="dk-btn" id="dk-notify" type="button">' + sv('bell') + 'NOTIF</button>' +
+      '<button class="dk-btn" id="dk-wake" type="button">' + sv('sun') + 'LAYAR MENYALA</button></div>';
+    (document.getElementById('void') || document.body).appendChild(deck);
+
+    const btn = document.createElement('button');
+    btn.className = 'btn-icon'; btn.id = 'deck-btn'; btn.type = 'button'; btn.title = 'Council Command Deck (Ctrl+Shift+D)'; btn.setAttribute('aria-label', 'Council Command Deck');
+    btn.innerHTML = sv('mon');
+    const sb = $('settings-btn'); if (sb && sb.parentNode) sb.parentNode.insertBefore(btn, sb); else document.body.appendChild(btn);
+
+    function render() {
+      const s = snapshot();
+      $('dk-state').textContent = s.running ? 'SIDANG BERJALAN' : s.done ? 'PUTUSAN SIAP' : 'STANDBY';
+      $('dk-state').classList.toggle('run', s.running);
+      $('dk-fill').style.width = s.pct + '%';
+      $('dk-pct').textContent = s.pct + '% proses sidang';
+      $('dk-conf').textContent = s.conf ? 'KEYAKINAN ' + s.conf + '%' : '';
+      $('dk-grid').innerHTML = s.agents.map(a => '<div class="dk-card' + (a.act ? ' act' : '') + '" style="--c:' + esc(a.color) + '"><b>' + esc(a.name.toUpperCase()) + '</b><small>' + a.n + ' GILIRAN · ' + a.w + ' KATA' + (a.act ? ' · AKTIF' : '') + '</small><p>' + esc(a.last || '—') + '</p></div>').join('');
+      const v = $('dk-verdict');
+      if (ST.verdict) { let h; try { h = typeof mdHtml === 'function' ? mdHtml(ST.verdict) : esc(ST.verdict).replace(/\n/g, '<br>'); } catch (e) { h = esc(ST.verdict); } if (v.dataset.k !== String(ST.verdict.length)) { v.innerHTML = h; v.dataset.k = String(ST.verdict.length); } }
+      const acts = actions(), box = $('dk-acts'), key = acts.join('|');
+      if (box.dataset.k !== key) { box.dataset.k = key; box.innerHTML = acts.length ? acts.map((a, i) => '<label class="dk-act"><input type="checkbox" data-i="' + i + '"><span>' + esc(a) + '</span></label>').join('') : '<span class="dk-empty">Belum ada langkah aksi.</span>'; }
+      $('dk-notify').classList.toggle('on', ST.notify); $('dk-wake').classList.toggle('on', ST.wake); $('dk-speak').classList.toggle('on', ST.speaking);
+    }
+
+    /* ---------- Monitor pop-out (layar kedua / TV) ---------- */
+    const MON = '<!doctype html><html lang="id"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CGO · Council Monitor</title><style>' +
+      'html,body{margin:0;height:100%;background:#04070d;color:#e9edf5;font-family:ui-monospace,Menlo,Consolas,monospace;overflow:hidden}body{display:flex;flex-direction:column;gap:2vh;padding:3vh 3vw;background:radial-gradient(70% 50% at 50% 0,rgba(79,107,255,.22),transparent 70%),#04070d}' +
+      'h1{font-size:2.2vh;letter-spacing:.4em;color:#38bdf8;margin:0;font-weight:400;display:flex;justify-content:space-between}#p{height:1.2vh;background:rgba(79,107,255,.18);border-radius:9px;overflow:hidden}#p i{display:block;height:100%;width:0;background:linear-gradient(90deg,#38bdf8,#a78bfa);box-shadow:0 0 2vh #38bdf8;transition:width .6s}' +
+      '#g{display:grid;grid-template-columns:repeat(6,1fr);gap:1.2vw}.c{border:1px solid var(--c);border-radius:1.2vh;padding:1.4vh 1vw;background:rgba(255,255,255,.03)}.c.a{box-shadow:0 0 3vh var(--c)}.c b{display:block;color:var(--c);font-size:1.9vh}.c small{color:#8794ad;font-size:1.4vh}' +
+      '#v{flex:1;overflow:auto;font-size:3.1vh;line-height:1.6;white-space:pre-wrap;border-top:1px solid rgba(79,107,255,.3);padding-top:2vh}#s{font-size:1.6vh;color:#8794ad}@media(max-width:900px){#g{grid-template-columns:repeat(2,1fr)}}</style>' +
+      '<body><h1><span>COUNCIL MONITOR</span><span id="k"></span></h1><div id="p"><i></i></div><div id="g"></div><div id="s">Menunggu sidang… klik dua kali untuk layar penuh.</div><div id="v"></div><script>' +
+      'var S=null;function d(){if(!S)return;document.querySelector("#p i").style.width=S.pct+"%";document.getElementById("s").textContent=(S.running?"SIDANG BERJALAN":S.done?"PUTUSAN SIAP":"STANDBY")+" · "+S.pct+"%"+(S.conf?" · KEYAKINAN "+S.conf+"%":"");var g=document.getElementById("g");g.textContent="";S.agents.forEach(function(a){var c=document.createElement("div");c.className="c"+(a.act?" a":"");c.style.setProperty("--c",/^#[0-9a-f]{3,8}$/i.test(a.color)?a.color:"#38bdf8");var b=document.createElement("b");b.textContent=a.name;var m=document.createElement("small");m.textContent=a.n+"x · "+a.w+" kata";c.appendChild(b);c.appendChild(m);g.appendChild(c)});document.getElementById("v").textContent=S.verdict||""}' +
+      'addEventListener("message",function(e){if(e.source!==opener)return;S=e.data;d()});setInterval(function(){document.getElementById("k").textContent=new Date().toLocaleTimeString()},1000);' +
+      'document.addEventListener("dblclick",function(){document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen()});try{opener.postMessage({__deckHello:1},"*")}catch(e){}<\/script></body></html>';
+    function push() { if (ST.mon && !ST.mon.closed) { try { ST.mon.postMessage(snapshot(), '*'); } catch (e) {} } }
+    window.addEventListener('message', e => { if (e.data && e.data.__deckHello && e.source === ST.mon) push(); });
+
+    /* ---------- Output dunia nyata ---------- */
+    const dl = (name, mime, data) => { const u = URL.createObjectURL(new Blob([data], { type: mime })); const a = document.createElement('a'); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); };
+    const stamp = () => new Date().toISOString().slice(0, 10);
+    const needV = () => { if (!ST.verdict) { toast('Belum ada putusan dewan.', true); return false; } return true; };
+    function report() {
+      if (!needV()) return;
+      let body; try { body = typeof mdHtml === 'function' ? mdHtml(ST.verdict) : esc(ST.verdict); } catch (e) { body = esc(ST.verdict); }
+      const acts = actions(), ag = snapshot().agents.filter(a => a.n);
+      const h = '<!doctype html><meta charset="utf-8"><title>Laporan Putusan Dewan</title><style>body{font:15px/1.7 Georgia,serif;max-width:760px;margin:30px auto;padding:0 20px;color:#111}h1{font:600 13px ui-monospace,monospace;letter-spacing:.25em;color:#0369a1}td,th{border:1px solid #ccc;padding:4px 8px;font:12px ui-monospace,monospace;text-align:left}table{border-collapse:collapse}button{font:12px ui-monospace,monospace;padding:8px 14px;margin-bottom:16px}@media print{button{display:none}}</style>' +
+        '<button onclick="print()">Cetak / Simpan PDF</button><h1>CGO RESEARCH NEXUS · LAPORAN PUTUSAN DEWAN</h1><p>' + esc(new Date().toLocaleString()) + '</p>' + body +
+        (acts.length ? '<h2>Rencana Aksi</h2><ol>' + acts.map(a => '<li>☐ ' + esc(a) + '</li>').join('') + '</ol>' : '') +
+        (ag.length ? '<h2>Peserta Sidang</h2><table><tr><th>Anggota</th><th>Giliran</th><th>Kata</th></tr>' + ag.map(a => '<tr><td>' + esc(a.name) + '</td><td>' + a.n + '</td><td>' + a.w + '</td></tr>').join('') + '</table>' : '');
+      const u = URL.createObjectURL(new Blob([h], { type: 'text/html' }));
+      if (!window.open(u, '_blank')) dl('putusan-dewan-' + stamp() + '.html', 'text/html', h);
+    }
+    function ics() {
+      const acts = actions(); if (!acts.length) { toast('Tidak ada langkah aksi untuk dijadwalkan.', true); return; }
+      const p = n => String(n).padStart(2, '0'), f = d => d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()), ts = new Date().toISOString().replace(/[-:]|\.\d+/g, '');
+      const e = t => String(t).replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n');
+      const base = new Date(); base.setHours(0, 0, 0, 0); base.setDate(base.getDate() + 1);
+      const ev = acts.map((a, i) => { const s = new Date(base.getTime() + i * 864e5 + 36e5 * 12), n = new Date(s.getTime() + 864e5); return 'BEGIN:VEVENT\r\nUID:cgo-' + Date.now() + '-' + i + '@nexus\r\nDTSTAMP:' + ts + '\r\nDTSTART;VALUE=DATE:' + f(s) + '\r\nDTEND;VALUE=DATE:' + f(n) + '\r\nSUMMARY:' + e('[CGO] ' + a) + '\r\nDESCRIPTION:' + e('Dari putusan Dewan CGO Research Nexus') + '\r\nEND:VEVENT'; });
+      dl('rencana-aksi-' + stamp() + '.ics', 'text/calendar', 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//CGO Nexus//Council Deck//ID\r\n' + ev.join('\r\n') + '\r\nEND:VCALENDAR');
+      toast('File kalender dibuat (' + acts.length + ' aksi).');
+    }
+    function csv() {
+      const acts = actions(); if (!acts.length) { toast('Tidak ada langkah aksi.', true); return; }
+      const q = s => '"' + String(s).replace(/"/g, '""') + '"';
+      const done = Array.from(document.querySelectorAll('#dk-acts input')).map(c => c.checked);
+      dl('rencana-aksi-' + stamp() + '.csv', 'text/csv', '\uFEFFno,aksi,status\r\n' + acts.map((a, i) => (i + 1) + ',' + q(a) + ',' + (done[i] ? 'selesai' : 'terbuka')).join('\r\n'));
+    }
+    function speak() {
+      const ss = window.speechSynthesis; if (!ss) { toast('Suara tidak didukung browser ini.', true); return; }
+      if (ST.speaking) { ss.cancel(); ST.speaking = false; render(); return; }
+      if (!needV()) return;
+      const u = new SpeechSynthesisUtterance(plain(ST.verdict).slice(0, 3000)); u.lang = idl() === 'en' ? 'en-US' : 'id-ID';
+      u.onend = u.onerror = () => { ST.speaking = false; render(); };
+      ST.speaking = true; ss.speak(u); render();
+    }
+    async function share() {
+      if (!needV()) return;
+      const text = 'Putusan Dewan CGO\n\n' + plain(ST.verdict).slice(0, 1800);
+      try { if (navigator.share) { await navigator.share({ title: 'Putusan Dewan CGO', text }); return; } await navigator.clipboard.writeText(text); toast('Putusan disalin ke clipboard.'); } catch (e) { if (e && e.name !== 'AbortError') toast('Gagal membagikan.', true); }
+    }
+    async function getWake() { try { if (ST.wake && ST.running && navigator.wakeLock && !ST.lock) { ST.lock = await navigator.wakeLock.request('screen'); ST.lock.addEventListener('release', () => { ST.lock = null; }); } } catch (e) {} }
+    function relWake() { try { if (ST.lock) ST.lock.release(); } catch (e) {} ST.lock = null; }
+    function alertDone() {
+      if (!ST.notify) return;
+      try { if (navigator.vibrate) navigator.vibrate([120, 60, 120]); } catch (e) {}
+      try { if ('Notification' in window && Notification.permission === 'granted') new Notification('Putusan Dewan siap', { body: plain(ST.verdict).slice(0, 140) }); } catch (e) {}
+    }
+
+    /* ---------- Pengamat state (polling ringan, tidak menyentuh kode lama) ---------- */
+    function tick() {
+      const swarm = !!document.body.dataset.swarm, T = G('agentTranscript') || [];
+      if (swarm && !ST.running) { ST.running = true; ST.done = false; ST.log = []; ST.verdict = ''; getWake(); }
+      T.forEach(e => { if (e && !ST.seen.has(e)) { ST.seen.add(e); ST.log.push({ id: e.id, name: e.name, w: words(e.text), snip: plain(e.text).slice(0, 160), text: e.text }); if (e.id === 'synth') ST.verdict = e.text; } });
+      if (ST.running && !swarm) {
+        ST.running = false; relWake();
+        if (!ST.verdict) { const h = (G('chatHistory') || []).slice().reverse().find(m => m && m.role === 'assistant' && typeof m.content === 'string'); if (h && ST.log.length) ST.verdict = h.content; }
+        if (ST.verdict) { ST.done = true; alertDone(); LS.set('cgo_deck_last', JSON.stringify({ v: ST.verdict.slice(0, 20000), log: ST.log.map(e => ({ id: e.id, name: e.name, w: e.w, snip: e.snip })) })); }
+      }
+      if (ST.open) render(); push();
+    }
+    try { const L = JSON.parse(LS.get('cgo_deck_last') || 'null'); if (L && L.v) { ST.verdict = L.v; ST.done = true; ST.log = (L.log || []).map(e => ({ id: e.id, name: e.name, w: e.w, snip: e.snip, text: '' })); } } catch (e) {}
+    setInterval(() => { if (!document.hidden || ST.mon) tick(); }, 700);
+
+    /* ---------- Event ---------- */
+    const open = () => { ST.open = true; deck.classList.add('open'); render(); };
+    const close = () => { ST.open = false; deck.classList.remove('open'); };
+    btn.addEventListener('click', () => ST.open ? close() : open());
+    $('dk-close').onclick = close;
+    $('dk-full').onclick = () => { try { document.fullscreenElement ? document.exitFullscreen() : deck.requestFullscreen(); } catch (e) { toast('Layar penuh tidak tersedia.', true); } };
+    $('dk-pop').onclick = () => {
+      if (ST.mon && !ST.mon.closed) { ST.mon.focus(); return; }
+      const u = URL.createObjectURL(new Blob([MON], { type: 'text/html' }));
+      ST.mon = window.open(u, 'cgo_council_monitor', 'popup,width=1280,height=720');
+      if (!ST.mon) toast('Pop-up diblokir. Izinkan pop-up untuk membuka monitor.', true); else toast('Monitor dibuka — seret ke layar kedua/TV.');
+    };
+    $('dk-speak').onclick = speak; $('dk-report').onclick = report; $('dk-ics').onclick = ics; $('dk-csv').onclick = csv; $('dk-share').onclick = share;
+    $('dk-notify').onclick = async () => {
+      ST.notify = !ST.notify;
+      if (ST.notify && 'Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch (e) {} }
+      LS.set('cgo_deck_notify', ST.notify ? '1' : '0'); render(); toast(ST.notify ? 'Notifikasi & getar aktif.' : 'Notifikasi mati.');
+    };
+    $('dk-wake').onclick = () => { ST.wake = !ST.wake; LS.set('cgo_deck_wake', ST.wake ? '1' : '0'); if (ST.wake) getWake(); else relWake(); render(); };
+    document.addEventListener('keydown', e => {
+      if (e.ctrlKey && e.shiftKey && e.key && e.key.toLowerCase() === 'd') { e.preventDefault(); ST.open ? close() : open(); }
+      else if (e.key === 'Escape' && ST.open && !document.fullscreenElement) { e.stopImmediatePropagation(); close(); }
+    }, true);
+    window.addEventListener('beforeunload', () => { try { if (ST.mon && !ST.mon.closed) ST.mon.close(); } catch (e) {} });
+    window.__councilDeck = { open, close, snapshot };
+  } catch (err) { try { console.warn('Council Deck gagal dimuat:', err); } catch (e) {} }
+})();
 </script>
 </body>
 </html>
