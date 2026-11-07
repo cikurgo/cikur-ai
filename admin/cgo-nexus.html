@@ -2919,7 +2919,13 @@ function parseWebLLMStream(completion, signal, onDone) {
                 if (text) controller.enqueue(enc.encode('data: ' + JSON.stringify({ choices: [{ delta: { content: text } }] }) + '\n\n'));
             } catch (e) {
                 finish();
-                if (!(e && e.name === 'AbortError')) localBrainFailed(e, 'stream');
+                if (!(e && e.name === 'AbortError')) {
+                    try { localBrainFailed(e, 'stream'); } catch (z) {}
+                    // Pastikan stream benar-benar berhenti saat GPU disposed
+                    if (typeof isLocalBrainGpuDisposedError === 'function' && isLocalBrainGpuDisposedError(e)) {
+                        try { if (e && typeof e === 'object') e.localBrainGpuDead = true; } catch (z) {}
+                    }
+                }
                 controller.error(e);
             }
         },
@@ -2929,6 +2935,11 @@ function parseWebLLMStream(completion, signal, onDone) {
 async function localBrainFetch(req, ms) {
     const outer = currentAbortController;
     if (outer && outer.signal.aborted) { const e = new Error('Aborted'); e.name = 'AbortError'; throw e; }
+    if (!mlcEngine) {
+        const e = new Error('Local Brain engine tidak tersedia (sudah di-unload / disposed).');
+        e.localBrainGpuDead = true;
+        throw e;
+    }
     const onAbort = () => { try { mlcEngine && mlcEngine.interruptGenerate(); } catch (e) {} };
     if (outer) outer.signal.addEventListener('abort', onAbort, { once: true });
     const cleanup = () => { if (outer) outer.signal.removeEventListener('abort', onAbort); };
@@ -2940,19 +2951,75 @@ async function localBrainFetch(req, ms) {
         ]);
         clearTimeout(to);
         return new Response(parseWebLLMStream(completion, outer && outer.signal, cleanup), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
-    } catch (e) { clearTimeout(to); cleanup(); throw e; }
+    } catch (e) {
+        clearTimeout(to); cleanup();
+        // WebGPU disposed / context lost — reset engine, stop stream, surface to caller
+        if (e && e.name !== 'AbortError' && isLocalBrainGpuDisposedError(e)) {
+            try { localBrainFailed(e, 'fetch'); } catch (z) {}
+            try { if (e && typeof e === 'object') e.localBrainGpuDead = true; } catch (z) {}
+        }
+        throw e;
+    }
 }
 
 // Fallback: matikan Local Brain, kembali ke ONLINE API
+function isLocalBrainGpuDisposedError(err) {
+    const msg = String((err && err.message) || err || '');
+    // WebGPU / WebLLM: "Object has already been disposed", context lost, GPU device lost, etc.
+    return /disposed|context\s*lost|device\s*lost|\bGPU\b|WebGPU|adapter lost|out of memory|\boom\b|vram|allocat/i.test(msg);
+}
+async function forceUnloadLocalBrain(reason) {
+    try {
+        if (mlcEngine) {
+            try { if (typeof mlcEngine.interruptGenerate === 'function') mlcEngine.interruptGenerate(); } catch (e) {}
+            try { if (typeof mlcEngine.unload === 'function') await mlcEngine.unload(); } catch (e) {}
+        }
+    } catch (e) {}
+    mlcEngine = null;
+    localBrainActive = false;
+    localBrainStatus = 'error';
+    try { applyLocalBrainGuard(false); } catch (e) {}
+    try { renderLocalBrainBtn(); } catch (e) {}
+    try { updateEngineBadge(); } catch (e) {}
+    try { logEvent('ERROR', '[LOCAL BRAIN] Engine dibuang: ' + String(reason || '').slice(0, 160)); } catch (e) {}
+}
 function localBrainFailed(err, where) {
     const msg = (err && err.message) || String(err);
-    try { if (mlcEngine && /memory|vram|device|lost|oom|allocat/i.test(msg)) { try { mlcEngine.unload(); } catch (e) {} mlcEngine = null; } } catch (e) {}
+    const isGpu = isLocalBrainGpuDisposedError(err);
+
+    if (isGpu) {
+        // Object disposed / GPU context lost — hard reset, jangan biarkan engine zombie
+        try {
+            // sync unload path; async forceUnload may race — null engine immediately
+            try { if (mlcEngine && typeof mlcEngine.interruptGenerate === 'function') mlcEngine.interruptGenerate(); } catch (e) {}
+            try { if (mlcEngine && typeof mlcEngine.unload === 'function') { const p = mlcEngine.unload(); if (p && p.catch) p.catch(function () {}); } } catch (e) {}
+        } catch (e) {}
+        mlcEngine = null;
+        localBrainActive = false;
+        localBrainStatus = 'error';
+        try { applyLocalBrainGuard(false); } catch (e) {}
+        try { renderLocalBrainBtn(); } catch (e) {}
+        try { updateEngineBadge(); } catch (e) {}
+        try {
+            showToast('Koneksi GPU terputus karena perubahan jaringan. Silakan muat ulang Local Brain.', 5000, true);
+        } catch (e) {}
+        try { logEvent('ERROR', '[LOCAL BRAIN] ' + where + ': GPU/disposed — ' + msg.slice(0, 160)); } catch (e) {}
+        try { if (err && typeof err === 'object') err.localBrainGpuDead = true; } catch (e) {}
+        return;
+    }
+
+    try {
+        if (mlcEngine && /memory|vram|device|lost|oom|allocat/i.test(msg)) {
+            try { mlcEngine.unload(); } catch (e) {}
+            mlcEngine = null;
+        }
+    } catch (e) {}
     localBrainActive = false; localBrainStatus = 'error';
     applyLocalBrainGuard(false); renderLocalBrainBtn();
     if (/Cache\.add|Failed to fetch|QuotaExceeded|ERR_CACHE/i.test(msg)) {
         try { clearWebLLMCaches().then(n => { if (n) logEvent('SYSTEM', '[LOCAL BRAIN] Cache korup dibersihkan: ' + n); }); } catch (e) {}
     }
-    try { logEvent('ERROR', `[LOCAL BRAIN] ${where}: ${msg} — fallback ke ONLINE API`); } catch (e) {}
+    try { logEvent('ERROR', '[LOCAL BRAIN] ' + where + ': ' + msg + ' — fallback ke ONLINE API'); } catch (e) {}
     try { showToast('Local Brain gagal — beralih ke ONLINE API', 4000, true); } catch (e) {}
     try { updateEngineBadge(); } catch (e) {}
 }
@@ -2973,11 +3040,24 @@ function applyLocalBrainGuard(active) {
 function renderLocalBrainBtn() {
     const btn = document.getElementById('local-brain-btn');
     if (!btn) return;
-    btn.classList.toggle('active', localBrainActive);
-    btn.classList.toggle('loading', localBrainStatus === 'loading');
-    btn.classList.toggle('error', localBrainStatus === 'error' && !localBrainActive);
-    btn.setAttribute('aria-pressed', String(localBrainActive));
-    btn.title = localBrainStatus === 'loading' ? 'Local Brain: memuat model (klik untuk batal)…' : (localBrainActive ? 'Local Brain: ON (Phi-3 mini · WebGPU)' : 'Local Brain (WebLLM · Phi-3 mini) — OFF');
+    // Error state must NOT stay in loading — user can click again to re-enable
+    const isLoading = localBrainStatus === 'loading';
+    const isError = localBrainStatus === 'error' && !localBrainActive;
+    btn.classList.toggle('active', !!localBrainActive);
+    btn.classList.toggle('loading', isLoading);
+    btn.classList.toggle('error', isError);
+    // Explicitly clear loading when error/idle so spinner does not stick
+    if (!isLoading) btn.classList.remove('loading');
+    btn.setAttribute('aria-pressed', String(!!localBrainActive));
+    if (isLoading) {
+        btn.title = 'Local Brain: memuat model (klik untuk batal)…';
+    } else if (isError) {
+        btn.title = 'Local Brain: ERROR (GPU/disposed) — klik untuk muat ulang';
+    } else if (localBrainActive) {
+        btn.title = 'Local Brain: ON (Phi-3 mini · WebGPU)';
+    } else {
+        btn.title = 'Local Brain (WebLLM · Phi-3 mini) — OFF';
+    }
     try { updateEngineBadge(); } catch (e) {}
 }
 async function clearWebLLMCaches() {
@@ -3113,8 +3193,19 @@ async function guardedFetch(req, ms = 60000, _retry = 0) {
                 // User klik STOP → jangan fallback, langsung lempar
                 if (e && e.name === 'AbortError') throw e;
 
+                const isGpuDead = (e && e.localBrainGpuDead) || (typeof isLocalBrainGpuDisposedError === 'function' && isLocalBrainGpuDisposedError(e));
                 if (typeof localBrainFailed === 'function') localBrainFailed(e, 'request');
                 else try { logEvent('SYSTEM', '[LOCAL BRAIN] Gagal: ' + ((e && e.message) || e)); } catch (z) {}
+
+                // GPU disposed / context lost: hentikan streaming, jangan fallback online jika offline
+                if (isGpuDead) {
+                    const offline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+                    if (offline) {
+                        throw new Error('Local Brain GPU terputus dan perangkat offline. Muat ulang Local Brain saat online.');
+                    }
+                    // Online: boleh fallback, tapi engine sudah di-null di localBrainFailed
+                    try { logEvent('SYSTEM', '[LOCAL BRAIN] GPU dead — mencoba fallback ONLINE API.'); } catch (z) {}
+                }
             }
         }
 
