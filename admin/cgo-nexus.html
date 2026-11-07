@@ -555,7 +555,7 @@ body[data-theme="light"] #void::after{opacity:.3}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.9.2-titanium-3d-robust initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v6.9.3-titanium-3d-autowire initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -643,7 +643,7 @@ body[data-theme="light"] #void::after{opacity:.3}
      - Soft-capture of postMessage / forge sandbox errors without crashing host
      - History save: atomic try + fallback truncate already present; explicit quota handling
    ================================================================ */
-const APP_VERSION = '6.9.2-titanium-3d-robust';
+const APP_VERSION = '6.9.3-titanium-3d-autowire';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -1618,23 +1618,140 @@ function sanitizeHtml(h) { return hasPurify ? DOMPurify.sanitize(h) : escapeHtml
 function mdHtml(s, inline) { if (!hasMarked) return escapeHtml(s).replace(/\n/g, '<br>'); return sanitizeHtml(inline ? marked.parseInline(s) : marked.parse(s)); }
 function codeHtml(lang, code) { const l = (lang || '').replace(/[^a-z0-9+#-]/g, ''); return '<div class="ui-code" data-lang="' + l + '"><pre><code class="language-' + (l || 'plaintext') + '">' + escapeHtml(code) + '</code></pre></div>'; }
 function chartHtml(cfg) { return '<div class="ui-chart" data-cfg="' + escapeHtml(String(cfg).trim()) + '"></div>'; }
-/* v6.2 SMART 3D PARSER: blok js/javascript berisi THREE / onFrame dipaksa render sebagai scene3d */
+/* v6.2+ SMART 3D PARSER: scene3d | js | html-full-page THREE → auto render sebagai scene3d */
+function looksLikeThreeCode(c) {
+    c = String(c || '');
+    if (!c) return false;
+    // HTML yang memuat three.min.js / THREE / WebGLRenderer
+    if (/three(?:\.min)?\.js|WebGLRenderer|THREE\.|from\s+['"]three['"]/i.test(c) &&
+        /\b(Mesh|BoxGeometry|SphereGeometry|Torus|Group|Points|PerspectiveCamera|Scene)\b/.test(c)) return true;
+    if (/\bTHREE\b|\bonFrame\s*\(/.test(c) &&
+        /\b(Mesh|BoxGeometry|SphereGeometry|Torus|Group|Points|Line|Scene|PerspectiveCamera|WebGLRenderer)\b/.test(c)) return true;
+    if (/scene\.add\s*\(/.test(c) && /\b(Mesh|Geometry|Group)\b/.test(c)) return true;
+    return false;
+}
 function isForce3d(b) {
     const lang = String(b.lang || '').toLowerCase().trim();
-    // Terima scene3d typo/variants + js biasa yang jelas kode Three.js
-    if (lang && lang !== 'javascript' && lang !== 'js' && lang !== 'three' && lang !== 'threejs' && lang !== '3d' && lang !== 'scene' && !/^scene\s*3d$/.test(lang)) return false;
-    if (lang === 'scene3d' || /^scene\s*3d$/.test(lang)) return true;
     const c = String(b.code || '');
-    if (!/\bTHREE\b|\bonFrame\s*\(/.test(c)) return false;
-    // Tolak modul ES / require — itu bukan scene sandbox
-    if (/(^|\n)\s*(import\s[^\n]*\sfrom\s|import\s*['"{*]|export\s)|\brequire\s*\(/.test(c)) return false;
-    // Harus ada indikasi geometri / mesh agar tidak false-positive pada teks biasa
-    return /\b(Mesh|BoxGeometry|SphereGeometry|Torus|Group|Points|Line|Scene|PerspectiveCamera|WebGLRenderer)\b/.test(c) || /scene\.add\s*\(/.test(c);
+    // Fence resmi
+    if (lang === 'scene3d' || /^scene\s*3d$/.test(lang)) return true;
+    // JS / three variants
+    if (!lang || lang === 'javascript' || lang === 'js' || lang === 'three' || lang === 'threejs' || lang === '3d' || lang === 'scene') {
+        if (looksLikeThreeCode(c)) {
+            // Tolak pure ES module yang butuh bundler
+            if (/(^|\n)\s*import\s[^\n]*\sfrom\s['"]three['"]/.test(c)) return true; // tetap coba normalisasi
+            return true;
+        }
+        return false;
+    }
+    // HTML dokumen penuh / snippet yang berisi Three.js → auto-upgrade ke scene3d
+    if (lang === 'html' || lang === 'htm' || lang === 'xml') {
+        return looksLikeThreeCode(c);
+    }
+    return false;
+}
+/** Ekstrak & normalisasi kode apa pun (scene3d murni, JS standalone, atau HTML penuh) ke bentuk sandbox. */
+function extractScene3dSource(raw) {
+    let src = String(raw == null ? '' : raw).trim();
+    if (!src) return '';
+    // 1) Jika HTML: ambil isi semua <script> inline (abaikan src=CDN)
+    if (/<html[\s>]|<script[\s>]|<!DOCTYPE/i.test(src)) {
+        const parts = [];
+        const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+        let m;
+        while ((m = re.exec(src))) {
+            const attrs = m[1] || '';
+            if (/\bsrc\s*=/i.test(attrs)) continue;
+            const body = (m[2] || '').trim();
+            if (body) parts.push(body);
+        }
+        if (parts.length) src = parts.join('\n\n');
+        else {
+            src = src.replace(/<style[\s\S]*?<\/style>/gi, '')
+                     .replace(/<script\b[^>]*\bsrc\s*=[\s\S]*?<\/script>/gi, '')
+                     .replace(/<\/?[^>]+>/g, '\n');
+        }
+    }
+    // 2) Buang import/export three
+    src = src.replace(/^\s*import\s+[^;]+;?\s*$/gm, '');
+    src = src.replace(/^\s*export\s+[^;]+;?\s*$/gm, '');
+
+    // 3) new Scene / PerspectiveCamera / WebGLRenderer → alias ke global sandbox
+    //    Dengan atau tanpa const/let/var, dengan atau tanpa THREE.
+    src = src.replace(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+(?:THREE\.)?Scene\s*\(\s*\)\s*;?/g,
+        function (_, name) { return 'var ' + name + ' = scene;'; });
+    src = src.replace(/(?:^|[^.\w])([A-Za-z_$][\w$]*)\s*=\s*new\s+(?:THREE\.)?Scene\s*\(\s*\)\s*;?/g,
+        function (full, name) {
+            if (/^(?:const|let|var)$/.test(name)) return full;
+            return full.replace(/=.*/, '= scene; /* was new Scene */');
+        });
+    src = src.replace(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+(?:THREE\.)?PerspectiveCamera\s*\([\s\S]*?\)\s*;?/g,
+        function (_, name) { return 'var ' + name + ' = camera;'; });
+    src = src.replace(/(?:^|[^.\w])([A-Za-z_$][\w$]*)\s*=\s*new\s+(?:THREE\.)?PerspectiveCamera\s*\([\s\S]*?\)\s*;?/g,
+        function (full, name) {
+            if (/^(?:const|let|var)$/.test(name)) return full;
+            return full.replace(/=[\s\S]*/, '= camera; /* was new PerspectiveCamera */');
+        });
+    src = src.replace(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+(?:THREE\.)?WebGLRenderer\s*\([\s\S]*?\)\s*;?/g,
+        function (_, name) { return 'var ' + name + ' = renderer;'; });
+    src = src.replace(/(?:^|[^.\w])([A-Za-z_$][\w$]*)\s*=\s*new\s+(?:THREE\.)?WebGLRenderer\s*\([\s\S]*?\)\s*;?/g,
+        function (full, name) {
+            if (/^(?:const|let|var)$/.test(name)) return full;
+            return full.replace(/=[\s\S]*/, '= renderer; /* was new WebGLRenderer */');
+        });
+
+    // 4) DOM injection renderer
+    src = src.replace(/document\.body\.appendChild\s*\(\s*[A-Za-z_$][\w$]*\.domElement\s*\)\s*;?/g, '/* domElement skip */');
+    src = src.replace(/document\.getElementById\s*\(\s*['"][^'"]+['"]\s*\)\s*\.appendChild\s*\(\s*[A-Za-z_$][\w$]*\.domElement\s*\)\s*;?/g, '/* domElement skip */');
+    src = src.replace(/[A-Za-z_$][\w$]*\.setSize\s*\([^)]*\)\s*;?/g, '/* setSize skip */');
+    src = src.replace(/[A-Za-z_$][\w$]*\.setPixelRatio\s*\([^)]*\)\s*;?/g, '/* setPixelRatio skip */');
+
+    // 5) Convert requestAnimationFrame loops → onFrame
+    //    a) function name(){ ... requestAnimationFrame(name) ... }
+    src = src.replace(/function\s+([A-Za-z_$][\w$]*)\s*\(\s*(?:t|time|ts)?\s*\)\s*\{([\s\S]*?)\}/g,
+        function (full, name, body) {
+            if (!new RegExp('requestAnimationFrame\\s*\\(\\s*' + name + '\\s*\\)').test(body) &&
+                !/requestAnimationFrame\s*\(\s*(?:function|\()/.test(body)) {
+                return full; // bukan loop animasi
+            }
+            let b = body;
+            b = b.replace(new RegExp('requestAnimationFrame\\s*\\(\\s*' + name + '\\s*\\)\\s*;?', 'g'), '');
+            b = b.replace(/requestAnimationFrame\s*\(\s*function\s*\([^)]*\)\s*\{[\s\S]*?\}\s*\)\s*;?/g, '');
+            b = b.replace(/[A-Za-z_$][\w$]*\.render\s*\(\s*[A-Za-z_$][\w$]*\s*,\s*[A-Za-z_$][\w$]*\s*\)\s*;?/g, '');
+            return 'onFrame(function(t, dt){\n' + b + '\n});';
+        });
+    //    b) const name = () => { ... requestAnimationFrame(name) }
+    src = src.replace(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:function\s*\([^)]*\)|\([^)]*\)\s*=>)\s*\{([\s\S]*?)\}\s*;?/g,
+        function (full, name, body) {
+            if (!new RegExp('requestAnimationFrame\\s*\\(\\s*' + name + '\\s*\\)').test(body)) return full;
+            let b = body;
+            b = b.replace(new RegExp('requestAnimationFrame\\s*\\(\\s*' + name + '\\s*\\)\\s*;?', 'g'), '');
+            b = b.replace(/[A-Za-z_$][\w$]*\.render\s*\(\s*[A-Za-z_$][\w$]*\s*,\s*[A-Za-z_$][\w$]*\s*\)\s*;?/g, '');
+            return 'onFrame(function(t, dt){\n' + b + '\n});';
+        });
+    //    c) sisa render() calls di luar onFrame
+    src = src.replace(/[A-Za-z_$][\w$]*\.render\s*\(\s*[A-Za-z_$][\w$]*\s*,\s*[A-Za-z_$][\w$]*\s*\)\s*;?/g, '/* render skip */');
+
+    // 6) resize listener (host sudah handle)
+    src = src.replace(/window\.addEventListener\s*\(\s*['"]resize['"]\s*,[\s\S]*?(?:\)\s*;|,\s*(?:true|false)\s*\)\s*;)/g, '/* resize skip */');
+
+    // 7) Panggilan animate()/loop() di top-level setelah onFrame sudah dibuat → skip
+    src = src.replace(/^\s*(?:animate|loop|render|draw)\s*\(\s*\)\s*;?\s*$/gm, '/* boot-loop skip */');
+
+    return src.trim();
 }
 function blockHTML(b) {
     switch (b.t) {
         case 'md': return mdHtml(b.s);
-        case 'code': return b.lang === 'chart' ? (b.done ? chartHtml(b.code) : '<div class="ui-pending"></div>') : (b.lang === 'scene3d' || isForce3d(b)) ? (b.done ? scene3dHtml(b.code) : '<div class="ui-pending"></div>') : codeHtml(b.lang, b.code);
+        case 'code': {
+            if (b.lang === 'chart') return b.done ? chartHtml(b.code) : '<div class="ui-pending"></div>';
+            if (b.lang === 'scene3d' || isForce3d(b)) {
+                if (!b.done) return '<div class="ui-pending"></div>';
+                const normalized = extractScene3dSource(b.code);
+                return scene3dHtml(normalized || b.code);
+            }
+            return codeHtml(b.lang, b.code);
+        }
         case 'chart': return chartHtml(b.cfg);
         case 'alert': return '<div class="ui-alert" role="alert">' + mdHtml(b.s, true) + '</div>';
         case 'note': return '<div class="ui-note">' + mdHtml(b.s, true) + '</div>';
@@ -1718,13 +1835,15 @@ const lazy3dObserver = window.IntersectionObserver ? new IntersectionObserver(es
 }), { rootMargin: '300px 0px' }) : null;
 // Cache memori Cortex untuk satu sesi panel multi-agen (recall HANYA sekali per pesan)
 let cachedMemoryContext = '', cachedMemoryCount = 0;
-function scene3dHtml(code) { return '<div class="ui-scene3d" data-code="' + escapeHtml(String(code).trim()) + '"></div>'; }
+function scene3dHtml(code) { const c = extractScene3dSource(code); return '<div class="ui-scene3d" data-code="' + escapeHtml(String(c || code).trim()) + '"></div>'; }
 /**
  * THE OMNI-BRIDGE SANITIZER (Lexer Level)
  * Membersihkan deklarasi global yang bertabrakan tanpa merusak string/komentar.
  */
 function sanitize3DCode(src) {
   src = String(src == null ? '' : src);
+  // Pastikan HTML/JS standalone sudah dinormalisasi sebelum lexer
+  try { if (typeof extractScene3dSource === 'function') { const n = extractScene3dSource(src); if (n && n.trim()) src = n; } } catch (_e) {}
   const forbidden = new Set(['scene', 'camera', 'renderer', 'import', 'export', 'THREE']);
   const declWords = [...forbidden].filter(w => w !== 'import' && w !== 'export');
   const declRe = new RegExp('^(?:const|let|var)\\s+(?:' + declWords.join('|') + ')\\b');
