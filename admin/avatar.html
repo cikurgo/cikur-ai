@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Holographic Neural Avatar</title>
+<style>
+  body{margin:0;overflow:hidden;background:#050505;color:#eee;font-family:monospace;}
+  canvas{display:block;}
+  #ui{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:10;}
+  button{cursor:pointer;transition:.2s;text-transform:uppercase;letter-spacing:1px;font-weight:bold;border-radius:4px;}
+  button:hover{box-shadow:0 0 10px #0ff;}
+  button{padding:10px 20px;background:rgba(0,255,255,0.1);border:1px solid #0ff;color:#0ff;}
+  #micBtn{border-color:#f0f;color:#f0f;background:rgba(255,0,255,0.1);}
+  #micBtn:hover{background:rgba(255,0,255,0.3);box-shadow:0 0 10px #f0f;}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="ui">
+  <button id="idleBtn">Idle</button>
+  <button id="thinkBtn">Thinking</button>
+  <button id="avatarBtn">Avatar</button>
+  <button id="micBtn">Mic OFF</button>
+</div>
+
+<!-- VERTEX SHADER -->
+<script type="x-shader/x-vertex" id="vertexShader">
+  uniform float u_time;
+  uniform float u_progress;
+  uniform int u_targetState;
+  uniform int u_prevState;
+  uniform vec3 u_colors[3];
+  uniform float u_audioAmp;
+  attribute vec3 aPos0;
+  attribute vec3 aPos1;
+  attribute vec3 aPos2;
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    vec3 startPos = (u_prevState==0 ? aPos0 : u_prevState==1 ? aPos1 : aPos2);
+    vec3 endPos   = (u_targetState==0 ? aPos0 : u_targetState==1 ? aPos1 : aPos2);
+    vec3 pos = mix(startPos, endPos, u_progress);
+    pos *= 1.0 + (u_audioAmp * 0.2);
+    pos.x += sin(u_time * 2.0 + pos.y) * 0.05;
+    pos.y += cos(u_time * 1.5 + pos.x) * 0.05;
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    gl_PointSize = (2.0 + u_audioAmp * 3.0) * (100.0 / -mvPosition.z);
+    vColor = u_colors[u_targetState];
+    vAlpha = 0.8 - (length(pos) * 0.1);
+  }
+</script>
+
+<!-- FRAGMENT SHADER (Membuat partikel jadi bulat dan bercahaya) -->
+<script type="x-shader/x-fragment" id="fragmentShader">
+  varying vec3 vColor;
+  varying float vAlpha;
+  void main() {
+    vec2 cxy = 2.0 * gl_PointCoord - 1.0;
+    float r = dot(cxy, cxy);
+    if (r > 1.0) discard;
+    float alpha = (1.0 - r) * vAlpha;
+    gl_FragColor = vec4(vColor, alpha);
+  }
+</script>
+
+<!-- LOGIKA JAVASCRIPT -->
+<script>
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.z = 8;
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true, alpha: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+
+let targetState = 0, prevState = 0, progress = 1.0;
+let audioAmp = 0.0;
+let isMicActive = false;
+
+const colors = [
+    new THREE.Vector3(0.0, 1.0, 1.0), // Idle: Cyan
+    new THREE.Vector3(0.5, 0.0, 1.0), // Thinking: Purple
+    new THREE.Vector3(1.0, 0.5, 0.0)  // Avatar: Orange
+];
+
+const PARTICLE_COUNT = 5000;
+const geometry = new THREE.BufferGeometry();
+const pos0 = new Float32Array(PARTICLE_COUNT * 3);
+const pos1 = new Float32Array(PARTICLE_COUNT * 3);
+const pos2 = new Float32Array(PARTICLE_COUNT * 3);
+
+for (let i = 0; i < PARTICLE_COUNT; i++) {
+    // STATE 0 (Idle): Random Sphere
+    const r0 = Math.random() * 4;
+    const theta0 = Math.random() * Math.PI * 2;
+    const phi0 = Math.acos(2 * Math.random() - 1);
+    pos0[i*3] = r0 * Math.sin(phi0) * Math.cos(theta0);
+    pos0[i*3+1] = r0 * Math.sin(phi0) * Math.sin(theta0);
+    pos0[i*3+2] = r0 * Math.cos(phi0);
+
+    // STATE 1 (Thinking): Torus / Ring
+    const r1 = 2.5 + (Math.random() * 0.5 - 0.25);
+    const theta1 = Math.random() * Math.PI * 2;
+    const phi1 = Math.random() * Math.PI * 2;
+    pos1[i*3] = Math.cos(theta1) * r1;
+    pos1[i*3+1] = Math.sin(theta1) * r1;
+    pos1[i*3+2] = Math.sin(phi1) * 0.5;
+
+    // STATE 2 (Avatar): Silhouette Head
+    const y = (Math.random() * 4) - 2; 
+    const maxWidth = 1.5 - Math.abs(y * 0.4); 
+    const r2 = Math.random() * maxWidth;
+    const theta2 = Math.random() * Math.PI * 2;
+    pos2[i*3] = r2 * Math.cos(theta2);
+    pos2[i*3+1] = y + 0.5; 
+    pos2[i*3+2] = (Math.random() * 0.5) - 0.25; 
+}
+
+geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PARTICLE_COUNT * 3), 3));
+geometry.setAttribute('aPos0', new THREE.BufferAttribute(pos0, 3));
+geometry.setAttribute('aPos1', new THREE.BufferAttribute(pos1, 3));
+geometry.setAttribute('aPos2', new THREE.BufferAttribute(pos2, 3));
+
+const material = new THREE.ShaderMaterial({
+    vertexShader: document.getElementById('vertexShader').textContent,
+    fragmentShader: document.getElementById('fragmentShader').textContent,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    uniforms: {
+        u_time: { value: 0 },
+        u_progress: { value: 1.0 },
+        u_targetState: { value: 0 },
+        u_prevState: { value: 0 },
+        u_colors: { value: colors },
+        u_audioAmp: { value: 0 }
+    }
+});
+
+const particles = new THREE.Points(geometry, material);
+scene.add(particles);
+
+function changeState(newState) {
+    if (newState === targetState) return;
+    prevState = targetState;
+    targetState = newState;
+    progress = 0.0;
+    material.uniforms.u_prevState.value = prevState;
+    material.uniforms.u_targetState.value = targetState;
+}
+
+document.getElementById('idleBtn').onclick = () => changeState(0);
+document.getElementById('thinkBtn').onclick = () => changeState(1);
+document.getElementById('avatarBtn').onclick = () => changeState(2);
+
+let analyser, dataArray;
+document.getElementById('micBtn').onclick = async () => {
+    const btn = document.getElementById('micBtn');
+    if (isMicActive) {
+        isMicActive = false;
+        btn.textContent = 'Mic OFF';
+        btn.style.color = '#f0f';
+        audioAmp = 0;
+        return;
+    }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioCtx.createMediaStreamSource(stream);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
+        isMicActive = true;
+        btn.textContent = 'Mic ON';
+        btn.style.color = '#0f0';
+        btn.style.borderColor = '#0f0';
+    } catch (err) {
+        alert('Mikrofon tidak dapat diakses: ' + err.message);
+    }
+};
+
+const clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    const time = clock.getElapsedTime();
+    material.uniforms.u_time.value = time;
+
+    if (progress < 1.0) {
+        progress += 0.05; 
+        if (progress > 1.0) progress = 1.0;
+        const t = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+        material.uniforms.u_progress.value = t;
+    }
+
+    if (isMicActive && analyser) {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
+        audioAmp += (average / 255.0 - audioAmp) * 0.2;
+        material.uniforms.u_audioAmp.value = audioAmp;
+    }
+
+    particles.rotation.y = time * 0.1;
+    
+    renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+animate();
+</script>
+</body>
+</html>
