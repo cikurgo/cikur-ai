@@ -3,704 +3,645 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="description" content="NEXUS Sentinel - Browser-based device telemetry & privacy probe">
-<title>NEXUS Sentinel v1.1 — Mobile Threat Audit</title>
+<meta name="description" content="NEXUS Sentinel - Probe telemetri & privasi perangkat berbasis browser">
+<meta name="theme-color" content="#070b14">
+<title>NEXUS Sentinel v1.2 — Audit Keamanan Perangkat</title>
 <style>
-    :root {
-        --bg: #0a0a0a;
-        --panel: #111;
-        --border: #333;
-        --text: #0f0;
-        --text-dim: #0a0;
-        --danger: #f33;
-        --warn: #fa0;
-        --safe: #0f0;
-        --font: 'Courier New', Courier, monospace;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body {
-        height: 100%;
-        background-color: var(--bg);
-        color: var(--text);
-        font-family: var(--font);
-        overflow: hidden;
-    }
-    body {
-        display: flex;
-        flex-direction: column;
-        min-height: 100dvh;
-    }
-
-    /* HEADER & CONTROLS */
-    header {
-        background: var(--panel);
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--border);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 10px;
-        flex-shrink: 0;
-    }
-    h1 {
-        font-size: 1.15rem;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        user-select: none;
-    }
-    .controls {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-    button {
-        background: transparent;
-        color: var(--text);
-        border: 1px solid var(--text);
-        padding: 8px 16px;
-        font-family: var(--font);
-        cursor: pointer;
-        transition: all 0.15s ease;
-        text-transform: uppercase;
-        font-weight: bold;
-        user-select: none;
-        -webkit-tap-highlight-color: transparent;
-    }
-    button:hover:not(:disabled) { background: var(--text); color: var(--bg); }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
-    #scanBtn { border-color: var(--safe); color: var(--safe); }
-    #scanBtn:hover:not(:disabled) { background: var(--safe); color: var(--bg); }
-    #resetBtn { border-color: var(--border); color: #aaa; }
-    #resetBtn:hover:not(:disabled) { background: #333; color: #fff; }
-
-    /* SCORE DISPLAY */
-    .score-container {
-        font-size: 1.05rem;
-        border: 1px solid var(--border);
-        padding: 7px 14px;
-        border-radius: 4px;
-        background: #000;
-        white-space: nowrap;
-    }
-    .score-val { font-weight: bold; font-size: 1.35rem; }
-    .score-safe { color: var(--safe); }
-    .score-warn { color: var(--warn); }
-    .score-danger { color: var(--danger); text-shadow: 0 0 10px var(--danger); }
-
-    /* MAIN LAYOUT */
-    .main-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        flex: 1;
-        min-height: 0;
-        overflow: hidden;
-    }
-    @media (max-width: 768px) {
-        .main-grid {
-            grid-template-columns: 1fr;
-            grid-template-rows: minmax(180px, 38%) 1fr;
-        }
-        .telemetry-panel { border-right: none; border-bottom: 1px solid var(--border); }
-    }
-
-    /* TELEMETRY PANEL */
-    .telemetry-panel {
-        padding: 14px;
-        border-right: 1px solid var(--border);
-        overflow-y: auto;
-        background: #050505;
-        -webkit-overflow-scrolling: touch;
-    }
-    .telemetry-panel h2,
-    .terminal-panel h2 {
-        font-size: 0.95rem;
-        margin-bottom: 12px;
-        border-bottom: 1px dashed var(--text-dim);
-        padding-bottom: 5px;
-        color: var(--text-dim);
-        letter-spacing: 1px;
-    }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #222; vertical-align: top; }
-    td:first-child { color: var(--text-dim); width: 42%; padding-right: 8px; }
-    td:last-child { text-align: right; word-break: break-all; }
-
-    /* TERMINAL LOG PANEL */
-    .terminal-panel {
-        padding: 14px;
-        display: flex;
-        flex-direction: column;
-        background: #000;
-        min-height: 0;
-    }
-    #log {
-        flex: 1;
-        overflow-y: auto;
-        font-size: 0.85rem;
-        line-height: 1.55;
-        -webkit-overflow-scrolling: touch;
-        padding-right: 4px;
-    }
-    #log p { margin-bottom: 4px; word-break: break-word; }
-    .log-info { color: var(--text); }
-    .log-warn { color: var(--warn); }
-    .log-danger { color: var(--danger); font-weight: bold; }
-    .log-success { color: var(--safe); }
-    .log-dim { color: #555; }
-
-    /* SCROLLBAR */
-    .telemetry-panel::-webkit-scrollbar,
-    #log::-webkit-scrollbar { width: 6px; }
-    .telemetry-panel::-webkit-scrollbar-track,
-    #log::-webkit-scrollbar-track { background: #111; }
-    .telemetry-panel::-webkit-scrollbar-thumb,
-    #log::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-
-    /* ANIMATIONS */
-    .cursor::after {
-        content: '█';
-        animation: blink 1s step-start infinite;
-        margin-left: 2px;
-    }
-    @keyframes blink { 50% { opacity: 0; } }
-    .glitch { animation: glitch 0.18s linear infinite; }
-    @keyframes glitch {
-        0% { transform: translate(0); }
-        25% { transform: translate(-2px, 2px); }
-        50% { transform: translate(2px, -2px); }
-        75% { transform: translate(-2px, -2px); }
-        100% { transform: translate(2px, 2px); }
-    }
-
-    .footer-note {
-        font-size: 0.7rem;
-        color: #444;
-        text-align: center;
-        padding: 6px 10px;
-        border-top: 1px solid #1a1a1a;
-        flex-shrink: 0;
-    }
+:root{--bg:#070b14;--s1:#0d1423;--s2:#121b2e;--line:#1f2b44;--txt:#dbe6ff;--dim:#7d8db0;--cy:#4de3ff;--ok:#46e6a8;--warn:#ffb54a;--bad:#ff5d73;--ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html{background:var(--bg)}
+body{min-height:100dvh;color:var(--txt);font-family:var(--ui);font-size:14px;line-height:1.5;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);background:radial-gradient(900px 420px at 50% -120px,rgba(77,227,255,.13),transparent),linear-gradient(rgba(77,227,255,.035) 1px,transparent 1px) 0 0/36px 36px,linear-gradient(90deg,rgba(77,227,255,.035) 1px,transparent 1px) 0 0/36px 36px,var(--bg)}
+.wrap{max-width:1180px;margin:0 auto;padding:14px}
+.i{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:6px 2px 14px}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;color:var(--cy);background:var(--s2);border:1px solid var(--line)}
+.logo .i{width:24px;height:24px}
+h1{font-size:1.1rem;font-weight:700;letter-spacing:.2px}
+.sub{color:var(--dim);font-size:.78rem}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;font-size:.75rem;color:var(--dim);background:var(--s1);border:1px solid var(--line)}
+.chip .i{width:14px;height:14px;color:var(--ok)}
+.card{background:var(--s1);border:1px solid var(--line);border-radius:16px;padding:16px}
+.hero{display:grid;gap:14px;grid-template-columns:minmax(260px,340px) 1fr;margin-bottom:14px}
+.gcard{display:flex;flex-direction:column;align-items:center;gap:14px}
+.gauge{position:relative;width:176px;height:176px;color:var(--ok);transition:color .3s}
+.gauge[data-l=warn]{color:var(--warn)}.gauge[data-l=bad]{color:var(--bad)}.gauge[data-l=idle]{color:var(--dim)}
+.gauge svg{width:100%;height:100%;display:block}
+.gauge .bg{stroke:var(--line)}
+.gauge .fg{stroke:currentColor;transition:stroke-dashoffset .6s cubic-bezier(.2,.8,.2,1)}
+.sweep{position:absolute;inset:8px;border-radius:50%;opacity:0;background:conic-gradient(from 0deg,transparent 0 290deg,rgba(77,227,255,.28) 360deg);pointer-events:none}
+.scanning .sweep{opacity:1;animation:spin 1.6s linear infinite}
+.gmid{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gnum{font-family:var(--mono);font-size:2.6rem;font-weight:700;line-height:1}
+.glab{font-size:.72rem;color:var(--dim);margin-top:4px}
+.verdict{font-weight:700;font-size:1.05rem;text-align:center}
+.shake{animation:shake .5s}
+.btns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;width:100%}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:8px 14px;border-radius:10px;font-weight:600;background:var(--s2);border:1px solid var(--line);transition:background .15s,border-color .15s}
+.btn:hover:not(:disabled){border-color:var(--cy);background:#16233b}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.pri{flex:1 1 100%;background:var(--cy);border-color:var(--cy);color:#04121a}
+.btn.pri:hover:not(:disabled){background:#7aeaff}
+.btn.pri.stop{background:var(--bad);border-color:var(--bad);color:#fff}
+.btn.sm{min-height:32px;padding:4px 10px;font-size:.8rem;font-weight:500}
+h2{display:flex;align-items:center;gap:8px;font-size:.95rem;font-weight:650}
+h2 .i{color:var(--cy)}
+.hd{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.bar{height:6px;border-radius:9px;background:var(--line);overflow:hidden;margin-bottom:12px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cy),var(--ok));transition:width .4s}
+.steps{list-style:none;display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.steps li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--s2);border:1px solid transparent;transition:border-color .2s}
+.steps li.run{border-color:var(--cy)}
+.steps .mi{color:var(--dim)}
+.steps .nm{flex:1;min-width:0}
+.steps .nt{display:block;font-size:.74rem;color:var(--dim)}
+.st{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex-shrink:0}
+.st .i{width:14px;height:14px}
+.st.ok{color:var(--ok)}.st.warn{color:var(--warn)}.st.bad{color:var(--bad)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.spin{width:16px;height:16px;border-radius:50%;border:2px solid var(--line);border-top-color:var(--cy);animation:spin .8s linear infinite}
+.tabs{display:none;gap:6px;margin-bottom:12px;background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:4px}
+.tabs button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 4px;border:0;border-radius:9px;background:transparent;color:var(--dim);font-weight:600;font-size:.85rem}
+.tabs button[aria-selected=true]{background:var(--s2);color:var(--cy)}
+.panes{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.pane{display:flex;flex-direction:column;min-height:0;max-height:560px}
+.scroll{flex:1;overflow-y:auto;min-height:200px;padding-right:4px;-webkit-overflow-scrolling:touch}
+.scroll::-webkit-scrollbar{width:6px}.scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.search{display:flex;align-items:center;gap:8px;padding:0 10px;margin-bottom:10px;border-radius:10px;background:var(--s2);border:1px solid var(--line);color:var(--dim)}
+.search input{flex:1;min-width:0;height:36px;background:transparent;border:0;outline:0;color:var(--txt)}
+.search:focus-within{border-color:var(--cy)}
+.grp{margin-bottom:14px}
+.grp h3{display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;color:var(--cy);margin-bottom:4px}
+.grp h3 .i{width:15px;height:15px}
+.grp h3 em{margin-left:auto;font-style:normal;color:var(--dim);font-weight:400}
+.row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--line);font-size:.84rem}
+.row .k{color:var(--dim);flex:0 0 40%}
+.row .v{text-align:right;font-family:var(--mono);font-size:.8rem;word-break:break-word;min-width:0}
+.row .v.bad{color:var(--bad)}
+.empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:28px 12px;text-align:center;color:var(--dim)}
+.empty .i{width:28px;height:28px}
+.fnd{list-style:none;display:grid;gap:8px}
+.fnd li{display:flex;gap:10px;padding:10px 12px;border-radius:12px;background:var(--s2);border-left:3px solid var(--warn);font-size:.84rem}
+.fnd li.bad{border-left-color:var(--bad)}
+.fnd li .i{margin-top:2px;color:var(--warn)}.fnd li.bad .i{color:var(--bad)}
+.fnd li b{margin-left:auto;font-family:var(--mono);font-weight:600;white-space:nowrap}
+.fl{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.fl button{padding:3px 10px;border-radius:99px;font-size:.75rem;background:transparent;border:1px solid var(--line);color:var(--dim)}
+.fl button[aria-pressed=true]{background:var(--s2);border-color:var(--cy);color:var(--cy)}
+#log{font-family:var(--mono);font-size:.78rem;line-height:1.6;background:#04070d;border:1px solid var(--line);border-radius:12px;padding:10px}
+#log p{margin-bottom:3px;word-break:break-word}
+.log-info{color:var(--txt)}.log-warn{color:var(--warn)}.log-danger{color:var(--bad);font-weight:700}.log-success{color:var(--ok)}.log-dim{color:var(--dim)}
+#log[data-f=success] p:not(.log-success):not(.cursor),#log[data-f=warn] p:not(.log-warn):not(.cursor),#log[data-f=danger] p:not(.log-danger):not(.cursor){display:none}
+.cursor::after{content:'▍';margin-left:2px;animation:blink 1s step-start infinite}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);padding:10px 16px;border-radius:12px;background:var(--s2);border:1px solid var(--cy);opacity:0;pointer-events:none;transition:.25s;z-index:9}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+footer{text-align:center;color:var(--dim);font-size:.74rem;padding:18px 8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes blink{50%{opacity:0}}
+@keyframes shake{20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+@media (max-width:899px){.hero{grid-template-columns:1fr}.tabs{display:flex}.pane{display:none;max-height:none}.pane.active{display:flex}.panes{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 10-4-1.8-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></symbol>
+<symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3M4 12h16"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+<symbol id="i-reset" viewBox="0 0 24 24"><path d="M4 12a8 8 0 102.3-5.7M4 4v4h4"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+<symbol id="i-wifi" viewBox="0 0 24 24"><path d="M2 9a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><circle cx="12" cy="19" r="1"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
+<symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+<symbol id="i-finger" viewBox="0 0 24 24"><path d="M5 12a7 7 0 0114 0M8 14a4 4 0 018 0c0 2-.3 3.8-1 5.5M12 11v3c0 2-.5 4-1.5 6M4 17c.7-1.5 1-3 1-5"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11m0 0l-4-4m4 4l4-4M5 20h14"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 012-2h9"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 002 2h6a2 2 0 002-2l1-12M9 7V4h6v3"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.5v.01"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+</defs></svg>
 
+<div class="wrap">
 <header>
-    <h1>NEXUS Sentinel v1.1</h1>
-    <div class="controls">
-        <div class="score-container">
-            THREAT SCORE: <span id="scoreVal" class="score-val score-safe">0</span>
-        </div>
-        <button id="scanBtn" type="button">Run Scan</button>
-        <button id="resetBtn" type="button">Reset</button>
-    </div>
+  <div class="brand">
+    <div class="logo"><svg class="i"><use href="#i-shield"/></svg></div>
+    <div><h1>NEXUS Sentinel</h1><div class="sub">Audit keamanan &amp; privasi perangkat · v1.2</div></div>
+  </div>
+  <div class="chips"><span class="chip"><svg class="i"><use href="#i-lock"/></svg>Client-side only</span><span class="chip">Tidak mengirim data ke server</span></div>
 </header>
 
-<div class="main-grid">
-    <div class="telemetry-panel">
-        <h2>// DEVICE TELEMETRY (FIELD PROBE)</h2>
-        <table id="probeTable">
-            <tbody>
-                <tr><td>Menunggu pemindaian...</td><td>-</td></tr>
-            </tbody>
-        </table>
+<section class="hero">
+  <div class="card gcard" id="gcard">
+    <div class="gauge" id="gauge" data-l="idle">
+      <div class="sweep"></div>
+      <svg viewBox="0 0 140 140"><circle class="bg" cx="70" cy="70" r="54" fill="none" stroke-width="10"/><circle class="fg" id="ring" cx="70" cy="70" r="54" fill="none" stroke-width="10" stroke-linecap="round" transform="rotate(-90 70 70)"/></svg>
+      <div class="gmid"><div class="gnum" id="scoreVal" role="status" aria-live="polite">0</div><div class="glab">Threat score</div></div>
     </div>
-
-    <div class="terminal-panel">
-        <h2>// SECURITY SENTINEL LOG</h2>
-        <div id="log">
-            <p class="log-info">NEXUS Sentinel v1.1 siap.</p>
-            <p class="log-info">Klik [RUN SCAN] untuk menganalisis perangkat ini.</p>
-            <p class="log-dim">Catatan: Ini adalah probe browser (bukan antivirus). Hasil bersifat indikatif.</p>
-            <p class="log-info cursor">></p>
-        </div>
+    <div class="verdict" id="verdict">Belum dipindai</div>
+    <div class="btns">
+      <button class="btn pri" id="scanBtn" type="button"></button>
+      <button class="btn" id="resetBtn" type="button"><svg class="i"><use href="#i-reset"/></svg>Reset</button>
+      <button class="btn" id="exportBtn" type="button" disabled><svg class="i"><use href="#i-download"/></svg>Ekspor JSON</button>
     </div>
-</div>
+  </div>
+  <div class="card">
+    <div class="hd"><h2><svg class="i"><use href="#i-activity"/></svg>Modul pemindaian</h2><span class="sub" id="progTxt">0 / 5 selesai</span></div>
+    <div class="bar"><i id="prog"></i></div>
+    <ul class="steps" id="steps"></ul>
+    <p class="sub" style="margin-top:12px">Ini probe browser, bukan antivirus. Hasil bersifat indikatif.</p>
+  </div>
+</section>
 
-<div class="footer-note">
-    NEXUS Sentinel · Client-side only · Tidak mengirim data ke server
+<nav class="tabs" role="tablist" aria-label="Panel">
+  <button role="tab" data-tab="tele" aria-selected="true"><svg class="i"><use href="#i-cpu"/></svg>Telemetri</button>
+  <button role="tab" data-tab="fnd" aria-selected="false"><svg class="i"><use href="#i-alert"/></svg>Temuan</button>
+  <button role="tab" data-tab="logp" aria-selected="false"><svg class="i"><use href="#i-list"/></svg>Log</button>
+</nav>
+
+<main class="panes">
+  <section class="card pane active" data-pane="tele">
+    <div class="hd"><h2><svg class="i"><use href="#i-cpu"/></svg>Telemetri perangkat</h2></div>
+    <label class="search"><svg class="i"><use href="#i-search"/></svg><input id="q" type="search" placeholder="Cari data telemetri…" aria-label="Cari telemetri"></label>
+    <div class="scroll" id="tele"></div>
+  </section>
+  <section class="card pane" data-pane="fnd">
+    <div class="hd"><h2><svg class="i"><use href="#i-alert"/></svg>Temuan risiko</h2></div>
+    <div class="scroll" id="fndBox"></div>
+  </section>
+  <section class="card pane" data-pane="logp">
+    <div class="hd"><h2><svg class="i"><use href="#i-list"/></svg>Log sentinel</h2>
+      <div style="display:flex;gap:6px"><button class="btn sm" id="copyBtn" type="button"><svg class="i"><use href="#i-copy"/></svg>Salin</button><button class="btn sm" id="clrBtn" type="button"><svg class="i"><use href="#i-trash"/></svg>Bersihkan</button></div>
+    </div>
+    <div class="fl" id="fl"><button data-f="all" aria-pressed="true">Semua</button><button data-f="success" aria-pressed="false">Aman</button><button data-f="warn" aria-pressed="false">Peringatan</button><button data-f="danger" aria-pressed="false">Bahaya</button></div>
+    <div class="scroll" id="log" data-f="all"></div>
+  </section>
+</main>
+<footer>NEXUS Sentinel · Semua pemeriksaan berjalan lokal di browser Anda</footer>
 </div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 (function () {
-    'use strict';
+'use strict';
+const $ = id => document.getElementById(id);
+const I = n => '<svg class="i" aria-hidden="true"><use href="#i-' + n + '"/></svg>';
+const CIRC = 2 * Math.PI * 54;
+const GROUPS = { dev: ['Perangkat', 'cpu'], scr: ['Layar & lokal', 'monitor'], net: ['Jaringan', 'wifi'], prv: ['Privasi', 'lock'], sto: ['Penyimpanan', 'db'] };
 
-    // === STATE ===
-    let score = 0;
-    let isScanning = false;
-    let abortController = null;   // for future cancellation
-    let scanGeneration = 0;       // invalidate late callbacks
+let score = 0, scanning = false, scanned = false, gen = 0;
+let tele = {}, findings = [], logs = [];
 
-    // === DOM ===
-    const scoreEl   = document.getElementById('scoreVal');
-    const logEl     = document.getElementById('log');
-    const probeBody = document.getElementById('probeTable').querySelector('tbody');
-    const scanBtn   = document.getElementById('scanBtn');
-    const resetBtn  = document.getElementById('resetBtn');
+const scoreEl = $('scoreVal'), logEl = $('log'), ring = $('ring'), gauge = $('gauge');
+const scanBtn = $('scanBtn'), resetBtn = $('resetBtn'), exportBtn = $('exportBtn');
+ring.style.strokeDasharray = CIRC;
+ring.style.strokeDashoffset = CIRC;
 
-    // === HELPERS ===
-    function log(msg, type = 'info') {
-        // Remove trailing cursor if present
-        const last = logEl.lastElementChild;
-        if (last && last.classList.contains('cursor')) last.remove();
-
-        const p = document.createElement('p');
-        p.className = `log-${type}`;
-        p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-        logEl.appendChild(p);
-
-        // Re-add cursor
-        const cursor = document.createElement('p');
-        cursor.className = 'log-info cursor';
-        cursor.textContent = '>';
-        logEl.appendChild(cursor);
-
-        logEl.scrollTop = logEl.scrollHeight;
+// ===== UI helpers =====
+function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('on');
+    clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2000);
+}
+function setScanBtn() {
+    scanBtn.classList.toggle('stop', scanning);
+    scanBtn.innerHTML = scanning ? I('stop') + 'Batalkan' : I('scan') + (scanned ? 'Pindai ulang' : 'Jalankan scan');
+}
+function setScore() {
+    scoreEl.textContent = score;
+    ring.style.strokeDashoffset = CIRC * (1 - score / 100);
+    const lvl = !scanned ? 'idle' : score >= 70 ? 'bad' : score >= 30 ? 'warn' : 'ok';
+    gauge.dataset.l = lvl;
+    $('gcard').classList.toggle('scanning', scanning);
+    $('verdict').textContent = scanning ? 'Memindai…' : !scanned ? 'Belum dipindai' :
+        lvl === 'bad' ? 'Berisiko tinggi' : lvl === 'warn' ? 'Waspada' : 'Aman';
+}
+function updateScore(n, why) {
+    if (!n) return;
+    score = Math.min(100, Math.max(0, score + n));
+    if (why) { findings.push({ sev: n >= 20 ? 'bad' : 'warn', text: why, pts: n }); renderFindings(); }
+    setScore();
+    if (score >= 70) { gauge.classList.remove('shake'); void gauge.offsetWidth; gauge.classList.add('shake'); }
+}
+function log(msg, type = 'info') {
+    const last = logEl.lastElementChild;
+    if (last && last.classList.contains('cursor')) last.remove();
+    const t = new Date().toLocaleTimeString();
+    logs.push({ t, type, msg });
+    const p = document.createElement('p');
+    p.className = 'log-' + type;
+    p.textContent = '[' + t + '] ' + msg;
+    logEl.appendChild(p);
+    const c = document.createElement('p');
+    c.className = 'log-info cursor'; c.textContent = '>';
+    logEl.appendChild(c);
+    logEl.scrollTop = logEl.scrollHeight;
+}
+function resetLog(first) {
+    logs = []; logEl.innerHTML = '';
+    if (first) log(first, 'info'); else {
+        const c = document.createElement('p'); c.className = 'log-info cursor'; c.textContent = '>'; logEl.appendChild(c);
     }
-
-    function updateScore(amount) {
-        if (amount === 0) return;
-        score = Math.min(100, Math.max(0, score + amount));
-        scoreEl.textContent = score;
-        scoreEl.className = 'score-val';
-        if (score >= 70) {
-            scoreEl.classList.add('score-danger');
-            document.body.classList.add('glitch');
-            setTimeout(() => document.body.classList.remove('glitch'), 800);
-        } else if (score >= 30) {
-            scoreEl.classList.add('score-warn');
-        } else {
-            scoreEl.classList.add('score-safe');
-        }
+}
+function addT(g, k, v, bad) {
+    (tele[g] = tele[g] || []).push({ k, v: String(v), bad: !!bad });
+    renderTele();
+}
+function renderTele() {
+    const box = $('tele'), q = $('q').value.trim().toLowerCase();
+    box.textContent = '';
+    const keys = Object.keys(GROUPS).filter(g => tele[g]);
+    if (!keys.length) {
+        box.innerHTML = '<div class="empty">' + I('cpu') + '<div>Belum ada data. Jalankan scan untuk membaca perangkat ini.</div></div>';
+        return;
     }
-
-    function addTelemetry(key, val, isError = false) {
-        const tr = document.createElement('tr');
-        const tdKey = document.createElement('td');
-        const tdVal = document.createElement('td');
-        tdKey.textContent = key;
-        tdVal.textContent = String(val);
-        if (isError) tdVal.style.color = 'var(--danger)';
-        tr.appendChild(tdKey);
-        tr.appendChild(tdVal);
-        probeBody.appendChild(tr);
+    let shown = 0;
+    keys.forEach(g => {
+        const rows = tele[g].filter(r => !q || (r.k + ' ' + r.v).toLowerCase().includes(q));
+        if (!rows.length) return;
+        shown += rows.length;
+        const sec = document.createElement('div'); sec.className = 'grp';
+        const h = document.createElement('h3');
+        h.innerHTML = I(GROUPS[g][1]);
+        h.appendChild(document.createTextNode(GROUPS[g][0]));
+        const em = document.createElement('em'); em.textContent = rows.length; h.appendChild(em);
+        sec.appendChild(h);
+        rows.forEach(r => {
+            const d = document.createElement('div'); d.className = 'row';
+            const k = document.createElement('span'); k.className = 'k'; k.textContent = r.k;
+            const v = document.createElement('span'); v.className = 'v' + (r.bad ? ' bad' : ''); v.textContent = r.v;
+            d.append(k, v); sec.appendChild(d);
+        });
+        box.appendChild(sec);
+    });
+    if (!shown) box.innerHTML = '<div class="empty">' + I('search') + '<div>Tidak ada hasil untuk “' + q.replace(/[<>&]/g, '') + '”.</div></div>';
+}
+function renderFindings() {
+    const box = $('fndBox'); box.textContent = '';
+    if (!findings.length) {
+        box.innerHTML = '<div class="empty">' + I(scanned && !scanning ? 'shield' : 'alert') + '<div>' +
+            (scanned && !scanning ? 'Tidak ada temuan berisiko.' : 'Temuan risiko akan muncul di sini selama scan.') + '</div></div>';
+        return;
     }
+    const ul = document.createElement('ul'); ul.className = 'fnd';
+    findings.forEach(f => {
+        const li = document.createElement('li'); li.className = f.sev;
+        li.innerHTML = I('alert');
+        const s = document.createElement('span'); s.textContent = f.text;
+        const b = document.createElement('b'); b.textContent = '+' + f.pts;
+        li.append(s, b); ul.appendChild(li);
+    });
+    box.appendChild(ul);
+}
 
-    function isPrivateIPv4(ip) {
-        // RFC 1918 + loopback + link-local
-        if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('127.')) return true;
-        if (ip.startsWith('169.254.')) return true;
-        const m = ip.match(/^172\.(\d+)\./);
-        if (m) {
-            const second = parseInt(m[1], 10);
-            if (second >= 16 && second <= 31) return true;
+// ===== Modules registry =====
+const MODS = [
+    { id: 'tele', name: 'Telemetri perangkat', icon: 'cpu', run: checkTelemetry },
+    { id: 'rtc', name: 'Kebocoran IP WebRTC', icon: 'wifi', run: checkWebRTC },
+    { id: 'fps', name: 'Beban main thread', icon: 'activity', run: checkFPS },
+    { id: 'fp', name: 'Sidik jari canvas', icon: 'finger', run: checkFingerprint },
+    { id: 'priv', name: 'Sinyal privasi & izin', icon: 'lock', run: checkPrivacy }
+];
+function buildSteps() {
+    const ul = $('steps'); ul.textContent = '';
+    MODS.forEach(m => {
+        const li = document.createElement('li'); li.id = 'm-' + m.id;
+        li.innerHTML = '<span class="mi">' + I(m.icon) + '</span><span class="nm">' + m.name + '<span class="nt">Menunggu</span></span><span class="st"></span>';
+        ul.appendChild(li);
+        setStep(m.id, 'idle');
+    });
+    setProg(0);
+}
+function setStep(id, state, note) {
+    const li = $('m-' + id); if (!li) return;
+    li.className = state === 'run' ? 'run' : '';
+    const st = li.querySelector('.st');
+    st.className = 'st ' + state;
+    st.innerHTML = state === 'run' ? '<span class="spin"></span>' : state === 'ok' ? I('check') : state === 'warn' ? I('alert') : state === 'bad' ? I('x') : '<span class="dot"></span>';
+    li.querySelector('.nt').textContent = note || ({ idle: 'Menunggu', run: 'Sedang berjalan…' })[state] || '';
+}
+function setProg(n) {
+    $('prog').style.width = (n / MODS.length * 100) + '%';
+    $('progTxt').textContent = n + ' / ' + MODS.length + ' selesai';
+}
+
+// ===== Utilities =====
+function isPrivateIPv4(ip) {
+    if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('127.') || ip.startsWith('169.254.')) return true;
+    const m = ip.match(/^172\.(\d+)\./);
+    return !!m && +m[1] >= 16 && +m[1] <= 31;
+}
+function isPrivateOrLocalIP(ip) {
+    if (!ip) return true;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return isPrivateIPv4(ip);
+    const l = ip.toLowerCase();
+    return l === '::1' || l.startsWith('fc') || l.startsWith('fd') || l.startsWith('fe80:') || l.startsWith('::ffff:');
+}
+function simpleHash(str) {
+    let h = 5381;
+    for (let i = 0; i < str.length; i++) h = ((h << 5) + h) ^ str.charCodeAt(i);
+    return (h >>> 0).toString(16);
+}
+
+// ===== 1. Telemetry =====
+async function checkTelemetry(g) {
+    log('Membaca spesifikasi perangkat keras & browser…');
+    const ua = navigator.userAgent || 'N/A';
+    addT('dev', 'User Agent', ua.length > 80 ? ua.slice(0, 77) + '…' : ua);
+    addT('dev', 'Platform', navigator.platform || 'N/A');
+    addT('dev', 'CPU Cores', navigator.hardwareConcurrency ?? 'N/A');
+    addT('dev', 'Device Memory', navigator.deviceMemory != null ? navigator.deviceMemory + ' GB' : 'N/A');
+    addT('dev', 'Touch Points', navigator.maxTouchPoints ?? 0);
+
+    addT('scr', 'Screen', screen.width + '×' + screen.height + ' @' + (window.devicePixelRatio || 1) + 'x');
+    addT('scr', 'Color Depth', (screen.colorDepth || 'N/A') + ' bit');
+    addT('scr', 'Language', navigator.language || 'N/A');
+    addT('scr', 'Languages', (navigator.languages || []).join(', ') || 'N/A');
+    try { addT('scr', 'Timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'N/A'); } catch (_) { addT('scr', 'Timezone', 'N/A'); }
+
+    try {
+        const gl = document.createElement('canvas').getContext('webgl');
+        if (!gl) addT('dev', 'GPU Renderer', 'WebGL unavailable', true);
+        else {
+            const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+            if (dbg) addT('dev', 'GPU Renderer', gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || 'Unknown');
+            else addT('dev', 'GPU Renderer', 'Extension blocked', true);
+            const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
         }
-        return false;
+    } catch (_) { addT('dev', 'GPU Renderer', 'Blocked / Error', true); }
+
+    try {
+        if (typeof navigator.getBattery === 'function') {
+            const b = await navigator.getBattery();
+            if (g !== gen) return;
+            addT('dev', 'Battery Level', Math.round(b.level * 100) + '%');
+            addT('dev', 'Charging', b.charging ? 'Yes' : 'No');
+        } else addT('dev', 'Battery Level', 'API unsupported');
+    } catch (_) { addT('dev', 'Battery Level', 'Access denied', true); }
+
+    const c = navigator.connection;
+    if (c) {
+        addT('net', 'Network Type', c.effectiveType || c.type || 'Unknown');
+        if (c.downlink != null) addT('net', 'Downlink', c.downlink + ' Mbps');
+        if (c.rtt != null) addT('net', 'RTT', c.rtt + ' ms');
+        if (c.saveData != null) addT('net', 'Save Data', c.saveData ? 'On' : 'Off');
     }
+    addT('net', 'Online Status', navigator.onLine ? 'Online' : 'Offline', !navigator.onLine);
 
-    function isPrivateOrLocalIP(ip) {
-        if (!ip) return true;
-        // IPv4
-        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return isPrivateIPv4(ip);
-        // IPv6 common private/local
-        const lower = ip.toLowerCase();
-        if (lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd') ||
-            lower.startsWith('fe80:') || lower.startsWith('::ffff:')) return true;
-        return false;
-    }
-
-    // Simple non-crypto hash for canvas sample
-    function simpleHash(str) {
-        let h = 5381;
-        for (let i = 0; i < str.length; i++) {
-            h = ((h << 5) + h) ^ str.charCodeAt(i);
+    try {
+        if (navigator.storage && navigator.storage.estimate) {
+            const e = await navigator.storage.estimate();
+            if (g !== gen) return;
+            addT('sto', 'Used / Quota', (e.usage != null ? (e.usage / 1048576).toFixed(1) + ' MB' : 'N/A') + ' / ' + (e.quota != null ? (e.quota / 1073741824).toFixed(2) + ' GB' : 'N/A'));
         }
-        return (h >>> 0).toString(16);
-    }
+    } catch (_) {}
+    if (g === gen) log('Telemetri perangkat berhasil dipetakan.', 'success');
+}
 
-    // === MODULES ===
-
-    // 1. Hardware & Browser Telemetry
-    async function checkTelemetry(gen) {
-        if (gen !== scanGeneration) return;
-        log('Membaca spesifikasi perangkat keras & browser...', 'info');
-        probeBody.innerHTML = '';
-
-        // Basic
-        const ua = navigator.userAgent || 'N/A';
-        addTelemetry('User Agent', ua.length > 80 ? ua.slice(0, 77) + '...' : ua);
-        addTelemetry('Platform', navigator.platform || 'N/A');
-        addTelemetry('Language', navigator.language || 'N/A');
-        addTelemetry('Languages', (navigator.languages || []).join(', ') || 'N/A');
-        addTelemetry('CPU Cores', navigator.hardwareConcurrency ?? 'N/A');
-        addTelemetry('Device Memory', navigator.deviceMemory != null ? navigator.deviceMemory + ' GB' : 'N/A');
-        addTelemetry('Screen', `${screen.width}×${screen.height} @${window.devicePixelRatio || 1}x`);
-        addTelemetry('Color Depth', (screen.colorDepth || 'N/A') + ' bit');
-        addTelemetry('Touch Points', navigator.maxTouchPoints ?? 0);
-        addTelemetry('Cookies Enabled', navigator.cookieEnabled ? 'Yes' : 'No');
-        addTelemetry('Do Not Track', navigator.doNotTrack ?? 'unspecified');
-
-        // Timezone
-        try {
-            addTelemetry('Timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'N/A');
-        } catch (_) {
-            addTelemetry('Timezone', 'N/A');
-        }
-
-        // GPU
-        try {
-            const canvas = document.createElement('canvas');
-            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            if (!gl) {
-                addTelemetry('GPU Renderer', 'WebGL unavailable', true);
-            } else {
-                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-                if (debugInfo) {
-                    const gpu = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || 'Unknown';
-                    addTelemetry('GPU Renderer', gpu);
-                } else {
-                    addTelemetry('GPU Renderer', 'Extension blocked', true);
-                }
-                // Clean up
-                const lose = gl.getExtension('WEBGL_lose_context');
-                if (lose) lose.loseContext();
-            }
-        } catch (e) {
-            addTelemetry('GPU Renderer', 'Blocked / Error', true);
-        }
-
-        // Battery
-        try {
-            if (typeof navigator.getBattery === 'function') {
-                const battery = await navigator.getBattery();
-                if (gen !== scanGeneration) return;
-                addTelemetry('Battery Level', Math.round(battery.level * 100) + '%');
-                addTelemetry('Charging', battery.charging ? 'Yes' : 'No');
-            } else {
-                addTelemetry('Battery Level', 'API unsupported');
-            }
-        } catch (e) {
-            addTelemetry('Battery Level', 'Access denied', true);
-        }
-
-        // Network Information API
-        if (navigator.connection) {
-            const c = navigator.connection;
-            addTelemetry('Network Type', c.effectiveType || c.type || 'Unknown');
-            if (c.downlink != null) addTelemetry('Downlink', c.downlink + ' Mbps');
-            if (c.rtt != null) addTelemetry('RTT', c.rtt + ' ms');
-            if (c.saveData != null) addTelemetry('Save Data', c.saveData ? 'On' : 'Off');
-        }
-        addTelemetry('Online Status', navigator.onLine ? 'Online' : 'Offline', !navigator.onLine);
-
-        // Storage estimate (if available)
-        try {
-            if (navigator.storage && navigator.storage.estimate) {
-                const est = await navigator.storage.estimate();
-                if (gen !== scanGeneration) return;
-                const used = est.usage != null ? (est.usage / 1048576).toFixed(1) + ' MB' : 'N/A';
-                const quota = est.quota != null ? (est.quota / 1073741824).toFixed(2) + ' GB' : 'N/A';
-                addTelemetry('Storage Used / Quota', `${used} / ${quota}`);
-            }
-        } catch (_) { /* ignore */ }
-
-        if (gen === scanGeneration) {
-            log('Telemetri perangkat berhasil dipetakan.', 'success');
-        }
-    }
-
-    // 2. WebRTC IP Leak Check
-    function checkWebRTC(gen) {
-        log('Menguji kebocoran IP via WebRTC...', 'info');
-        return new Promise((resolve) => {
-            if (gen !== scanGeneration) { resolve(); return; }
-
-            let settled = false;
-            let publicFound = false;
-            const foundIPs = new Set();
-
-            const finish = (msg, type) => {
-                if (settled) return;
-                settled = true;
-                try { pc.close(); } catch (_) {}
+// ===== 2. WebRTC leak (parses candidate fields properly) =====
+function checkWebRTC(g) {
+    log('Menguji kebocoran IP via WebRTC…');
+    return new Promise(resolve => {
+        if (g !== gen) { resolve(); return; }
+        let settled = false, pc, timer;
+        const loc = new Set(), pub = new Set();
+        const finish = (msg, type) => {
+            if (settled) return;
+            settled = true; clearTimeout(timer);
+            try { pc && pc.close(); } catch (_) {}
+            if (g === gen) {
+                if (loc.size) addT('net', 'IP lokal (WebRTC)', [...loc].join(', '));
+                if (pub.size) addT('net', 'IP publik (WebRTC)', [...pub].join(', '), true);
                 if (msg) log(msg, type);
-                resolve();
-            };
-
-            let pc;
-            try {
-                pc = new RTCPeerConnection({
-                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-                });
-            } catch (err) {
-                log('WebRTC diblokir / tidak didukung. (Bagus untuk privasi).', 'warn');
-                resolve();
-                return;
             }
-
-            pc.createDataChannel('nexus-probe');
-
-            pc.onicecandidate = (e) => {
-                if (settled || gen !== scanGeneration) return;
-                if (!e.candidate) {
-                    // Gathering complete
-                    if (!publicFound) {
-                        finish('WebRTC: Tidak ada IP publik yang bocor. Aman.', 'success');
-                    } else {
-                        finish(null); // already logged
-                    }
-                    return;
-                }
-
-                const cand = e.candidate.candidate || '';
-                // Extract IPv4 or IPv6
-                const ipMatch = cand.match(/([0-9]{1,3}(?:\.[0-9]{1,3}){3}|[a-fA-F0-9:]+)/);
-                if (!ipMatch) return;
-                const ip = ipMatch[1];
-
-                // Skip obvious non-IP garbage and already seen
-                if (foundIPs.has(ip) || ip.includes('.local')) return;
-                foundIPs.add(ip);
-
-                if (isPrivateOrLocalIP(ip)) {
-                    log(`WebRTC: IP lokal/private terdeteksi (${ip}). Normal.`, 'info');
-                } else {
-                    publicFound = true;
-                    log(`BAHAYA: IP publik (${ip}) bocor via WebRTC! Risiko pelacakan.`, 'danger');
-                    updateScore(35);
-                }
-            };
-
-            pc.onicegatheringstatechange = () => {
-                if (pc.iceGatheringState === 'complete' && !settled) {
-                    if (!publicFound) {
-                        finish('WebRTC: Tidak ada IP publik yang bocor. Aman.', 'success');
-                    } else {
-                        finish(null);
-                    }
-                }
-            };
-
-            pc.createOffer()
-                .then(offer => pc.setLocalDescription(offer))
-                .catch(err => {
-                    log('WebRTC offer gagal: ' + (err.message || 'unknown'), 'warn');
-                    finish(null);
-                });
-
-            // Hard timeout
-            setTimeout(() => {
-                if (!settled) {
-                    if (publicFound) {
-                        finish(null);
-                    } else {
-                        finish('WebRTC: Timeout — tidak ada kebocoran publik terdeteksi.', 'success');
-                    }
-                }
-            }, 4000);
-        });
-    }
-
-    // 3. FPS / main-thread load probe
-    function checkFPS(gen) {
-        log('Mengukur performa frame (indikasi beban background)...', 'info');
-        return new Promise((resolve) => {
-            if (gen !== scanGeneration) { resolve(); return; }
-
-            let frames = 0;
-            const start = performance.now();
-            let resolved = false;
-
-            function loop(t) {
-                if (resolved || gen !== scanGeneration) return;
-                frames++;
-                if (t - start >= 1000) {
-                    resolved = true;
-                    const fps = Math.round((frames * 1000) / (t - start));
-                    addTelemetry('FPS (1s sample)', fps);
-                    if (fps < 20) {
-                        log(`PERINGATAN: FPS sangat rendah (${fps}). Ada beban berat di main thread.`, 'warn');
-                        updateScore(25);
-                    } else if (fps < 40) {
-                        log(`Catatan: FPS moderat (${fps}). Perangkat mungkin sibuk.`, 'warn');
-                        updateScore(10);
-                    } else {
-                        log(`FPS normal (${fps}). Main thread relatif ringan.`, 'success');
-                    }
-                    resolve();
-                } else {
-                    requestAnimationFrame(loop);
-                }
-            }
-            requestAnimationFrame(loop);
-
-            // Safety timeout
-            setTimeout(() => {
-                if (!resolved) {
-                    resolved = true;
-                    log('FPS probe timeout.', 'warn');
-                    resolve();
-                }
-            }, 2500);
-        });
-    }
-
-    // 4. Canvas fingerprint sample (informational)
-    function checkFingerprint(gen) {
-        if (gen !== scanGeneration) return;
-        log('Menguji sidik jari canvas (indikasi kemampuan tracking)...', 'info');
+            resolve();
+        };
         try {
-            const canvas = document.createElement('canvas');
-            canvas.width = 240;
-            canvas.height = 60;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-                log('Canvas 2D tidak tersedia.', 'warn');
-                return;
-            }
-            ctx.textBaseline = 'top';
-            ctx.font = '14px Arial';
-            ctx.fillStyle = '#f60';
-            ctx.fillRect(125, 1, 62, 20);
-            ctx.fillStyle = '#069';
-            ctx.fillText('NEXUS Sentinel v1.1', 2, 15);
-            ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-            ctx.fillText('NEXUS Sentinel v1.1', 4, 17);
-            // Extra geometry to increase uniqueness surface
-            ctx.beginPath();
-            ctx.arc(50, 40, 12, 0, Math.PI * 2);
-            ctx.fill();
-
-            const data = canvas.toDataURL();
-            const hash = simpleHash(data);
-            addTelemetry('Canvas Hash', hash.slice(0, 12) + '…');
-
-            // Almost every modern browser produces a unique fingerprint.
-            // We report it but only add a very small baseline risk.
-            log('Canvas fingerprint tersedia (umum pada hampir semua browser). Risiko tracking iklan rendah–sedang.', 'info');
-            updateScore(5);
-        } catch (e) {
-            log('Canvas fingerprinting diblokir / gagal. Privasi lebih baik.', 'success');
+            pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+        } catch (_) {
+            log('WebRTC diblokir / tidak didukung. (Bagus untuk privasi).', 'warn');
+            addT('net', 'WebRTC', 'Blocked');
+            resolve(); return;
         }
-    }
-
-    // 5. Extra soft checks
-    function checkExtras(gen) {
-        if (gen !== scanGeneration) return;
-        // Webdriver / automation hint
-        if (navigator.webdriver) {
-            log('PERINGATAN: navigator.webdriver = true (kemungkinan automation/bot).', 'warn');
-            updateScore(15);
-            addTelemetry('WebDriver', 'Detected', true);
-        } else {
-            addTelemetry('WebDriver', 'Not detected');
-        }
-
-        // Plugins length (very rough)
-        try {
-            const plugins = navigator.plugins ? navigator.plugins.length : 0;
-            addTelemetry('Plugins count', plugins);
-        } catch (_) {}
-    }
-
-    // === ORCHESTRATOR ===
-    async function runScan() {
-        if (isScanning) return;
-        isScanning = true;
-        scanGeneration++;
-        const gen = scanGeneration;
-
-        scanBtn.disabled = true;
-        resetBtn.disabled = true;
-        scanBtn.textContent = 'Scanning…';
-
-        // Soft reset of display only (keep generation)
-        score = 0;
-        scoreEl.textContent = '0';
-        scoreEl.className = 'score-val score-safe';
-        scoreEl.style.animation = 'none';
-        probeBody.innerHTML = '<tr><td>Memulai probe…</td><td>-</td></tr>';
-        logEl.innerHTML = '';
-        log('Memulai NEXUS Sentinel Deep Scan…', 'warn');
-
-        try {
-            await checkTelemetry(gen);
-            if (gen !== scanGeneration) return;
-
-            await checkWebRTC(gen);
-            if (gen !== scanGeneration) return;
-
-            await checkFPS(gen);
-            if (gen !== scanGeneration) return;
-
-            checkFingerprint(gen);
-            checkExtras(gen);
-
-            if (gen !== scanGeneration) return;
-
-            log('—— PEMINDAIAN SELESAI ——', 'success');
-
-            // Final verdict
-            if (score >= 70) {
-                log(`STATUS AKHIR: SISTEM BERISIKO TINGGI (Threat Score: ${score})`, 'danger');
-                log('TINDAKAN: Periksa ekstensi, putuskan koneksi mencurigakan, clear cache, atau gunakan VPN / browser privacy-focused.', 'danger');
-                scoreEl.style.animation = 'glitch 0.5s infinite';
-            } else if (score >= 30) {
-                log(`STATUS AKHIR: SISTEM WASPADA (Threat Score: ${score})`, 'warn');
-                log('TINDAKAN: Beberapa sinyal anomali terdeteksi. Tetap waspada saat browsing.', 'warn');
-                scoreEl.style.animation = 'none';
+        const done = () => finish(pub.size ? null : 'WebRTC: Tidak ada IP publik yang bocor. Aman.', 'success');
+        pc.createDataChannel('nexus-probe');
+        pc.onicecandidate = e => {
+            if (settled || g !== gen) return;
+            if (!e.candidate) { done(); return; }
+            // Format: candidate:<found> <comp> <proto> <prio> <ADDRESS> <port> typ <type> ...
+            const addr = (e.candidate.candidate || '').split(' ')[4];
+            if (!addr || addr.endsWith('.local') || loc.has(addr) || pub.has(addr)) return;
+            if (isPrivateOrLocalIP(addr)) {
+                loc.add(addr);
+                log('WebRTC: IP lokal/private terdeteksi (' + addr + '). Normal.');
             } else {
-                log(`STATUS AKHIR: SISTEM AMAN (Threat Score: ${score})`, 'success');
-                log('TINDAKAN: Tidak ada indikasi kuat penyadapan/aktif threat dari probe ini.', 'success');
-                scoreEl.style.animation = 'none';
+                pub.add(addr);
+                log('BAHAYA: IP publik (' + addr + ') bocor via WebRTC! Risiko pelacakan.', 'danger');
+                updateScore(35, 'IP publik bocor via WebRTC (' + addr + ')');
             }
-        } catch (err) {
-            log('Error tak terduga selama scan: ' + (err.message || String(err)), 'danger');
-        } finally {
-            if (gen === scanGeneration) {
-                isScanning = false;
-                scanBtn.disabled = false;
-                resetBtn.disabled = false;
-                scanBtn.textContent = 'Run Scan';
-            }
+        };
+        pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') done(); };
+        pc.createOffer().then(o => pc.setLocalDescription(o)).catch(err => {
+            log('WebRTC offer gagal: ' + (err.message || 'unknown'), 'warn');
+            finish(null);
+        });
+        timer = setTimeout(() => finish(pub.size ? null : 'WebRTC: Timeout — tidak ada kebocoran publik terdeteksi.', 'success'), 4000);
+    });
+}
+
+// ===== 3. FPS =====
+function checkFPS(g) {
+    log('Mengukur performa frame (indikasi beban background)…');
+    return new Promise(resolve => {
+        if (g !== gen) { resolve(); return; }
+        let frames = 0, done = false;
+        const start = performance.now();
+        const timer = setTimeout(() => {
+            if (done) return; done = true;
+            log('FPS probe timeout (tab di background?).', 'warn'); resolve();
+        }, 2500);
+        (function loop(t) {
+            if (done || g !== gen) { clearTimeout(timer); if (!done) resolve(); done = true; return; }
+            frames++;
+            if (t - start >= 1000) {
+                done = true; clearTimeout(timer);
+                const fps = Math.round(frames * 1000 / (t - start));
+                addT('dev', 'FPS (1s sample)', fps);
+                if (fps < 20) { log('PERINGATAN: FPS sangat rendah (' + fps + '). Ada beban berat di main thread.', 'warn'); updateScore(25, 'FPS sangat rendah (' + fps + ')'); }
+                else if (fps < 40) { log('Catatan: FPS moderat (' + fps + '). Perangkat mungkin sibuk.', 'warn'); updateScore(10, 'FPS moderat (' + fps + ')'); }
+                else log('FPS normal (' + fps + '). Main thread relatif ringan.', 'success');
+                resolve();
+            } else requestAnimationFrame(loop);
+        })(start);
+    });
+}
+
+// ===== 4. Canvas fingerprint =====
+function checkFingerprint(g) {
+    log('Menguji sidik jari canvas (indikasi kemampuan tracking)…');
+    try {
+        const cv = document.createElement('canvas'); cv.width = 240; cv.height = 60;
+        const ctx = cv.getContext('2d');
+        if (!ctx) { log('Canvas 2D tidak tersedia.', 'warn'); return; }
+        ctx.textBaseline = 'top'; ctx.font = '14px Arial';
+        ctx.fillStyle = '#f60'; ctx.fillRect(125, 1, 62, 20);
+        ctx.fillStyle = '#069'; ctx.fillText('NEXUS Sentinel v1.2', 2, 15);
+        ctx.fillStyle = 'rgba(102,204,0,0.7)'; ctx.fillText('NEXUS Sentinel v1.2', 4, 17);
+        ctx.beginPath(); ctx.arc(50, 40, 12, 0, Math.PI * 2); ctx.fill();
+        addT('prv', 'Canvas Hash', simpleHash(cv.toDataURL()).slice(0, 12) + '…');
+        log('Canvas fingerprint tersedia (umum pada hampir semua browser). Risiko tracking iklan rendah–sedang.');
+        updateScore(5, 'Canvas fingerprint dapat dibaca (baseline tracking)');
+    } catch (_) {
+        log('Canvas fingerprinting diblokir / gagal. Privasi lebih baik.', 'success');
+    }
+}
+
+// ===== 5. Privacy signals & permissions =====
+async function checkPrivacy(g) {
+    log('Memeriksa sinyal privasi & izin situs…');
+    addT('prv', 'Cookies Enabled', navigator.cookieEnabled ? 'Yes' : 'No');
+    addT('prv', 'Do Not Track', navigator.doNotTrack ?? 'unspecified');
+    addT('prv', 'Global Privacy Control', navigator.globalPrivacyControl ? 'On' : 'Off / unsupported');
+    addT('prv', 'Secure Context (HTTPS)', window.isSecureContext ? 'Yes' : 'No', !window.isSecureContext);
+    if (!window.isSecureContext) { log('Halaman tidak berjalan di konteks aman (HTTPS).', 'warn'); updateScore(10, 'Halaman tidak di konteks aman (HTTPS)'); }
+
+    let framed = false; try { framed = window.top !== window.self; } catch (_) { framed = true; }
+    addT('prv', 'Dibuka dalam iframe', framed ? 'Yes' : 'No');
+
+    if (navigator.webdriver) {
+        log('PERINGATAN: navigator.webdriver = true (kemungkinan automation/bot).', 'warn');
+        updateScore(15, 'navigator.webdriver aktif (indikasi automation)');
+        addT('prv', 'WebDriver', 'Detected', true);
+    } else addT('prv', 'WebDriver', 'Not detected');
+    try { addT('dev', 'Plugins count', navigator.plugins ? navigator.plugins.length : 0); } catch (_) {}
+
+    if (navigator.permissions && navigator.permissions.query) {
+        for (const name of ['geolocation', 'camera', 'microphone', 'notifications']) {
+            if (g !== gen) return;
+            try {
+                const r = await navigator.permissions.query({ name });
+                const gr = r.state === 'granted';
+                addT('prv', 'Izin ' + name, r.state, gr && name !== 'notifications');
+                if (gr && name !== 'notifications') { log('Izin ' + name + ' sudah diberikan ke halaman ini.', 'warn'); updateScore(3, 'Izin ' + name + ' aktif untuk halaman ini'); }
+            } catch (_) { addT('prv', 'Izin ' + name, 'unsupported'); }
         }
+    } else log('Permissions API tidak tersedia.', 'dim');
+
+    try { localStorage.setItem('_ns', '1'); localStorage.removeItem('_ns'); addT('sto', 'localStorage', 'Available'); }
+    catch (_) { addT('sto', 'localStorage', 'Blocked'); }
+    addT('sto', 'IndexedDB', window.indexedDB ? 'Available' : 'Unavailable');
+}
+
+// ===== Orchestrator =====
+async function runScan() {
+    if (scanning) return;
+    scanning = true; scanned = true; gen++;
+    const g = gen;
+    score = 0; tele = {}; findings = [];
+    buildSteps(); renderTele(); renderFindings();
+    resetLog();
+    setScanBtn(); setScore();
+    exportBtn.disabled = true;
+    log('Memulai NEXUS Sentinel Deep Scan…', 'warn');
+    let n = 0;
+    try {
+        for (const m of MODS) {
+            if (g !== gen) return;
+            setStep(m.id, 'run');
+            const before = score;
+            try { await m.run(g); } catch (err) {
+                log('Modul ' + m.name + ' gagal: ' + (err.message || err), 'danger');
+                setStep(m.id, 'bad', 'Gagal dijalankan'); setProg(++n); continue;
+            }
+            if (g !== gen) return;
+            const d = score - before;
+            setStep(m.id, d >= 20 ? 'bad' : d > 0 ? 'warn' : 'ok', d > 0 ? 'Risiko +' + d : 'Tidak ada risiko');
+            setProg(++n);
+        }
+        log('—— PEMINDAIAN SELESAI ——', 'success');
+        if (score >= 70) {
+            log('STATUS AKHIR: SISTEM BERISIKO TINGGI (Threat Score: ' + score + ')', 'danger');
+            log('TINDAKAN: Periksa ekstensi, putuskan koneksi mencurigakan, clear cache, atau gunakan VPN / browser privacy-focused.', 'danger');
+        } else if (score >= 30) {
+            log('STATUS AKHIR: SISTEM WASPADA (Threat Score: ' + score + ')', 'warn');
+            log('TINDAKAN: Beberapa sinyal anomali terdeteksi. Tetap waspada saat browsing.', 'warn');
+        } else {
+            log('STATUS AKHIR: SISTEM AMAN (Threat Score: ' + score + ')', 'success');
+            log('TINDAKAN: Tidak ada indikasi kuat penyadapan/aktif threat dari probe ini.', 'success');
+        }
+        exportBtn.disabled = false;
+    } catch (err) {
+        log('Error tak terduga selama scan: ' + (err.message || String(err)), 'danger');
+    } finally {
+        if (g === gen) { scanning = false; setScanBtn(); setScore(); renderFindings(); }
     }
+}
+function cancelScan() {
+    gen++; scanning = false;
+    document.querySelectorAll('#steps li.run').forEach(li => setStep(li.id.slice(2), 'idle', 'Dibatalkan'));
+    log('Pemindaian dibatalkan oleh pengguna.', 'warn');
+    setScanBtn(); setScore(); renderFindings();
+    exportBtn.disabled = !Object.keys(tele).length;
+}
+function reset() {
+    gen++; scanning = false; scanned = false; score = 0; tele = {}; findings = [];
+    resetLog('Log dibersihkan. Siap memindai…');
+    buildSteps(); renderTele(); renderFindings(); setScanBtn(); setScore();
+    exportBtn.disabled = true;
+}
 
-    function reset() {
-        // Invalidate any in-flight scan
-        scanGeneration++;
-        isScanning = false;
+// ===== Export / copy =====
+function exportJSON() {
+    const data = { tool: 'NEXUS Sentinel', version: '1.2', time: new Date().toISOString(), score, verdict: $('verdict').textContent, telemetry: tele, findings, log: logs };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'nexus-sentinel-' + Date.now() + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Laporan JSON diunduh');
+}
+function copyLog() {
+    const text = logs.map(l => '[' + l.t + '] ' + l.msg).join('\n');
+    if (!text) { toast('Log masih kosong'); return; }
+    const fallback = () => {
+        const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        let ok = false; try { ok = document.execCommand('copy'); } catch (_) {}
+        ta.remove(); toast(ok ? 'Log disalin' : 'Gagal menyalin log');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => toast('Log disalin'), fallback);
+    else fallback();
+}
 
-        logEl.innerHTML = '';
-        const p1 = document.createElement('p');
-        p1.className = 'log-info';
-        p1.textContent = 'Log dibersihkan. Siap memindai…';
-        const p2 = document.createElement('p');
-        p2.className = 'log-info cursor';
-        p2.textContent = '>';
-        logEl.appendChild(p1);
-        logEl.appendChild(p2);
+// ===== Events =====
+scanBtn.addEventListener('click', () => scanning ? cancelScan() : runScan());
+resetBtn.addEventListener('click', reset);
+exportBtn.addEventListener('click', exportJSON);
+$('copyBtn').addEventListener('click', copyLog);
+$('clrBtn').addEventListener('click', () => { resetLog(); toast('Log dibersihkan'); });
+$('q').addEventListener('input', renderTele);
+$('fl').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    logEl.dataset.f = b.dataset.f;
+    document.querySelectorAll('#fl button').forEach(x => x.setAttribute('aria-pressed', x === b));
+});
+document.querySelector('.tabs').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.dataset.pane === b.dataset.tab));
+});
 
-        score = 0;
-        scoreEl.textContent = '0';
-        scoreEl.className = 'score-val score-safe';
-        scoreEl.style.animation = 'none';
-        document.body.classList.remove('glitch');
-
-        probeBody.innerHTML = '<tr><td>Menunggu pemindaian...</td><td>-</td></tr>';
-
-        scanBtn.disabled = false;
-        resetBtn.disabled = false;
-        scanBtn.textContent = 'Run Scan';
-    }
-
-    // Events
-    scanBtn.addEventListener('click', runScan);
-    resetBtn.addEventListener('click', reset);
-
-    // Prevent accidental double-tap issues on mobile
-    scanBtn.addEventListener('touchend', (e) => { e.preventDefault(); runScan(); }, { passive: false });
+// ===== Init =====
+buildSteps(); renderTele(); renderFindings(); setScanBtn(); setScore();
+resetLog('NEXUS Sentinel v1.2 siap.');
+log('Tekan “Jalankan scan” untuk menganalisis perangkat ini.');
+log('Catatan: ini probe browser (bukan antivirus). Hasil bersifat indikatif.', 'dim');
 })();
 </script>
 </body>
