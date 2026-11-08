@@ -674,7 +674,7 @@ body[data-state="alert"] #nx9-chip i{background:var(--danger);box-shadow:0 0 10p
      - Anthropic default model stabil + xAI list expand
      - MAX_LIVE_SCENE3D 6→8 dengan notifikasi prune
    ================================================================ */
-const APP_VERSION = '6.9.4-titanium-robust';
+const APP_VERSION = '6.9.4-titanium-robust-r2';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -1317,19 +1317,31 @@ function validateDAG(segments) {
     const issues = [];
     const hasRole = segments.role.length > 0, hasContext = segments.context.length > 0;
     const hasObjective = segments.objective.length > 0, hasRules = segments.rules.length > 0, hasValidation = segments.validation.length > 0;
-    if (hasObjective && !hasRole && !hasContext) issues.push({ type: 'warning', msg: 'DAG WARN: OBJECTIVE without ROLE/CONTEXT.' });
+    const allText = [segments.role, segments.context, segments.rules, segments.objective, segments.validation].flat().join(' ').toLowerCase();
+    const wordCount = allText.split(/\s+/).filter(Boolean).length;
+    const isTiny = wordCount > 0 && wordCount <= 6;  // greeting / sapaan singkat
+    if (hasObjective && !hasRole && !hasContext && !isTiny) issues.push({ type: 'warning', msg: 'DAG WARN: OBJECTIVE without ROLE/CONTEXT.' });
     if (hasRules && !hasObjective) issues.push({ type: 'warning', msg: 'DAG WARN: RULES without OBJECTIVE.' });
     if (hasValidation && !hasObjective) issues.push({ type: 'warning', msg: 'DAG WARN: VALIDATION without OBJECTIVE.' });
-    const allText = [segments.role, segments.context, segments.rules, segments.objective, segments.validation].flat().join(' ').toLowerCase();
     const informal = ['santai','casual','informal','akrab','gaul','santuy'];
     const formal = ['formal','resmi','professional','baku','kaku','akademis'];
     if (informal.some(w => hasTerm(allText, w)) && formal.some(w => hasTerm(allText, w))) {
         issues.push({ type: 'error', msg: 'SYMBOLIC CONFLICT: formal & informal tone together.' });
     }
-    if (allText.split(/\s+/).filter(Boolean).length > 1000) issues.push({ type: 'warning', msg: 'LENGTH WARN: very long prompt.' });
-    if (!hasRole && !hasContext) issues.push({ type: 'error', msg: 'CRITICAL: ROLE and CONTEXT both empty.' });
-    if (!hasObjective) issues.push({ type: 'error', msg: 'CRITICAL: OBJECTIVE empty.' });
-    if (issues.length === 0 && hasObjective) issues.push({ type: 'ok', msg: 'DAG VALID: ready to compile.' });
+    if (wordCount > 1000) issues.push({ type: 'warning', msg: 'LENGTH WARN: very long prompt.' });
+    // v6.9.4: ROLE/CONTEXT kosong pada input pendek = info, bukan CRITICAL
+    if (!hasRole && !hasContext) {
+        if (wordCount === 0) { /* diam — renderIssues akan tampilkan Waiting */ }
+        else if (isTiny) issues.push({ type: 'info', msg: 'INFO: sapaan singkat — ROLE/CONTEXT belum diisi (opsional).' });
+        else issues.push({ type: 'warning', msg: 'WARN: ROLE dan CONTEXT masih kosong.' });
+    }
+    if (!hasObjective) {
+        if (wordCount === 0) { /* empty input */ }
+        else if (isTiny) issues.push({ type: 'info', msg: 'INFO: OBJECTIVE belum jelas — perluas intent agar IR lebih tajam.' });
+        else issues.push({ type: 'warning', msg: 'WARN: OBJECTIVE kosong — tambahkan tujuan/aksi yang diminta.' });
+    }
+    if (issues.length === 0 && (hasObjective || isTiny)) issues.push({ type: 'ok', msg: 'DAG VALID: ready to compile.' });
+    else if (issues.length === 0 && hasRole) issues.push({ type: 'ok', msg: 'DAG VALID: ready to compile.' });
     return issues;
 }
 
@@ -1721,14 +1733,15 @@ function extractScene3dSource(raw) {
     src = src.replace(/(?:^|[^.\w])([A-Za-z_$][\w$]*)\s*=\s*new\s+(?:THREE\.)?PerspectiveCamera\s*\([\s\S]*?\)\s*;?/g,
         function (full, name) {
             if (/^(?:const|let|var)$/.test(name)) return full;
-            return full.replace(/=[\s\S]*/, '= camera; /* was new PerspectiveCamera */');
+            // v6.9.4: hanya ganti sisi kanan assignment, jangan telan sisa file
+            return full.replace(/\s*=\s*new\s+(?:THREE\.)?PerspectiveCamera\s*\([\s\S]*?\)\s*;?/, ' = camera; /* was new PerspectiveCamera */');
         });
     src = src.replace(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+(?:THREE\.)?WebGLRenderer\s*\([\s\S]*?\)\s*;?/g,
         function (_, name) { return 'var ' + name + ' = renderer;'; });
     src = src.replace(/(?:^|[^.\w])([A-Za-z_$][\w$]*)\s*=\s*new\s+(?:THREE\.)?WebGLRenderer\s*\([\s\S]*?\)\s*;?/g,
         function (full, name) {
             if (/^(?:const|let|var)$/.test(name)) return full;
-            return full.replace(/=[\s\S]*/, '= renderer; /* was new WebGLRenderer */');
+            return full.replace(/\s*=\s*new\s+(?:THREE\.)?WebGLRenderer\s*\([\s\S]*?\)\s*;?/, ' = renderer; /* was new WebGLRenderer */');
         });
 
     // 4) DOM injection renderer
@@ -2004,8 +2017,20 @@ function sanitize3DCode(src) {
   return cleaned;
 }
 function sceneDoc(code, id) {
-const safe = sanitize3DCode(code == null ? '' : String(code)).replace(/<\/script/gi, '<\\/script');
-const blank = !safe.trim();
+let safe = sanitize3DCode(code == null ? '' : String(code)).replace(/<\/script/gi, '<\\/script');
+let blank = !safe.trim();
+// v6.9.4: pre-parse — cegah SyntaxError di iframe (Unexpected token) dengan fallback TorusKnot
+if (!blank) {
+    try {
+        // Mirror sandbox signature: (THREE, scene, camera, renderer, onFrame) => { ... }
+        new Function('THREE', 'scene', 'camera', 'renderer', 'onFrame', safe);
+    } catch (synErr) {
+        try { logEvent('ERROR', 'Scene3D pre-parse: ' + String(synErr && synErr.message || synErr).slice(0, 160)); } catch (e) {}
+        try { showToast('Scene3D kode rusak — fallback geometri', 2800, true); } catch (e) {}
+        safe = '/* SYNTAX_FALLBACK: ' + String(synErr && synErr.message || synErr).replace(/\*\//g, '').slice(0, 120) + ' */\n';
+        blank = true;
+    }
+}
 return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob:; connect-src 'none'"><style>html,body{margin:0;height:100%;overflow:hidden;background:#05070d}canvas{display:block;touch-action:none}</style></head><body><script>var ID=${JSON.stringify(id)};function send(t,m,x){parent.postMessage({cgo3d:ID,type:t,msg:m,x:x},'*')}var BLANK=${blank ? 'true' : 'false'};window.onerror=function(m,s,l){if(/ResizeObserver/i.test(String(m)))return true;send('error',String(m)+(l?' (baris '+l+')':''));return true};<\/script><script>
 (function(){
   var CDNS=[
