@@ -509,7 +509,7 @@ body[data-state="alert"] #nx9-chip i{background:var(--danger);box-shadow:0 0 10p
                     <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option>
                 </select>
             </div>
-            <div id="local-brain-warn" role="status" hidden><span>Local Brain aktif. Multi-Agent Swarm dibatasi 1 Ronde untuk mencegah overheat.</span><button class="lnk" id="local-brain-unlock" type="button" title="Buka kunci dropdown ronde (berisiko overheat)">UNLOCK</button></div>
+            <div id="local-brain-warn" role="status" hidden><span>Local Brain aktif. Swarm disarankan ≤2 ronde (anti overheat). UNLOCK untuk 3 ronde.</span><button class="lnk" id="local-brain-unlock" type="button" title="Buka kunci opsi 3 ronde (berisiko overheat)">UNLOCK</button></div>
         </div>
     </footer>
 
@@ -666,8 +666,15 @@ body[data-state="alert"] #nx9-chip i{background:var(--danger);box-shadow:0 0 10p
      - Diagnostics: assert DOM integrity + PROVIDERS shape + abort controller hygiene
      - Soft-capture of postMessage / forge sandbox errors without crashing host
      - History save: atomic try + fallback truncate already present; explicit quota handling
+   6.9.4-titanium-robust (Zero-Regression Hardening Pass):
+     - Local Brain soft-guard: ≤2 ronde default (bukan hard-lock 1); UNLOCK untuk 3
+     - Toast eksplisit: cortex skip, transcript trim, 3D LRU prune, thermal critical
+     - SYNTHESIS delay adaptif (3s free / 0.8s keyed)
+     - Offline early-detect di guardedFetch
+     - Anthropic default model stabil + xAI list expand
+     - MAX_LIVE_SCENE3D 6→8 dengan notifikasi prune
    ================================================================ */
-const APP_VERSION = '6.9.3-titanium-3d-autowire';
+const APP_VERSION = '6.9.4-titanium-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -675,7 +682,7 @@ const STORE_MAX = 60;
 const MAX_CACHE = 30;
 const DEBOUNCE_MS = 260;
 const MAX_INPUT_CHARS = 14000;
-const MAX_LIVE_SCENE3D = 6;   // concurrent WebGL iframes — di atas ini LRU dihancurkan (visible preserved)
+const MAX_LIVE_SCENE3D = 8;   // concurrent WebGL iframes — di atas ini LRU dihancurkan (visible preserved); v6.9.4: 6→8 + toast on prune
 
 /* ===================== ICON SYSTEM (SVG inline — tanpa emoji / glyph) ===================== */
 const ICON_PATHS = {
@@ -920,8 +927,8 @@ const PROVIDERS = {
     anthropic: {
         name: 'Anthropic',
         free: false,
-        models: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5', 'claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-1-20250805', 'claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'],
-        defaultModel: 'claude-sonnet-5-5',
+        models: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-1-20250805', 'claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'],
+        defaultModel: 'claude-sonnet-4-5-20250929',
         build: (key, model) => ({
             endpoint: 'https://api.anthropic.com/v1/messages',
             headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
@@ -933,7 +940,7 @@ const PROVIDERS = {
     xai: {
         name: 'xAI (Grok)',
         free: false,
-        models: ['grok-3', 'grok-3-mini', 'grok-2-1212', 'grok-2-vision-1212'],
+        models: ['grok-3-mini', 'grok-3', 'grok-2-1212', 'grok-2-vision-1212', 'grok-4', 'grok-4-mini'],
         defaultModel: 'grok-3-mini',
         build: (key, model) => ({
             endpoint: 'https://api.x.ai/v1/chat/completions',
@@ -1848,6 +1855,10 @@ function pruneOldestScenes(keepLimit) {
     }
     if (removed) {
         try { logEvent('SYSTEM', '[3D] LRU prune: ' + removed + ' scene dihancurkan (batas ' + limit + ').'); } catch (e) {}
+    }
+    if (removed > 0) {
+        try { logEvent('SYSTEM', '[3D] LRU prune: ' + removed + ' scene dibebaskan (batas concurrent).'); } catch (e) {}
+        try { showToast(removed + ' scene 3D lama dibebaskan (batas GPU)', 2200); } catch (e) {}
     }
     return removed;
 }
@@ -3259,11 +3270,26 @@ function applyLocalBrainGuard(active) {
     if (!sel) return;
     if (active) {
         if (localRoundsPrev === null) localRoundsPrev = sel.value;
-        sel.value = '1'; sel.disabled = true; localRoundsAck = false;
-        if (warn) warn.hidden = false;
+        // v6.9.4: soft guard — cap at 2 rounds (bukan hard-lock 1), tetap bisa UNLOCK ke 3
+        const prev = parseInt(localRoundsPrev, 10) || 1;
+        sel.value = String(Math.min(prev, 2));
+        sel.disabled = false;  // tetap bisa pilih 1–2; opsi 3 butuh UNLOCK
+        localRoundsAck = false;
+        if (warn) {
+            warn.hidden = false;
+            try {
+                const span = warn.querySelector('span');
+                if (span) span.textContent = 'Local Brain aktif. Swarm disarankan ≤2 ronde (anti overheat). UNLOCK untuk 3 ronde.';
+            } catch (e) {}
+        }
+        // Nonaktifkan opsi 3 sampai unlock
+        try {
+            Array.from(sel.options).forEach(o => { if (o.value === '3') o.disabled = true; });
+        } catch (e) {}
     } else {
         if (localRoundsPrev !== null) { sel.value = localRoundsPrev; localRoundsPrev = null; }
         sel.disabled = false; localRoundsAck = false;
+        try { Array.from(sel.options).forEach(o => { o.disabled = false; }); } catch (e) {}
         if (warn) warn.hidden = true;
     }
 }
@@ -3392,16 +3418,26 @@ function deactivateLocalBrain() {
         if (localBrainActive) deactivateLocalBrain(); else await initLocalBrain();
     });
     if (unlock && sel) unlock.addEventListener('click', () => {
-        if (!confirm('Buka kunci ronde Local Brain? Risiko overheat/VRAM tinggi. Lanjutkan?')) return;
+        if (!confirm('Buka kunci ronde Local Brain (izinkan 3 ronde)? Risiko overheat/VRAM tinggi. Lanjutkan?')) return;
         sel.disabled = false;
         localRoundsAck = true;
-        try { showToast('Ronde di-UNLOCK (risiko ditanggung operator)', 2800, true); } catch (e) {}
-        try { logEvent('SYSTEM', '[LOCAL BRAIN] Operator unlock ronde multi-agent.'); } catch (e) {}
+        try { Array.from(sel.options).forEach(o => { o.disabled = false; }); } catch (e) {}
+        try { showToast('Ronde di-UNLOCK — 3 ronde diizinkan (risiko operator)', 2800, true); } catch (e) {}
+        try { logEvent('SYSTEM', '[LOCAL BRAIN] Operator unlock ronde multi-agent (3 allowed).'); } catch (e) {}
     });
     if (sel) sel.addEventListener('change', () => {
-        if (!localBrainActive || sel.value === '1') return;
-        if (confirm('Local Brain aktif. Menjalankan Swarm lebih dari 1 ronde berisiko overheat / VRAM penuh. Lanjutkan?')) localRoundsAck = true;
-        else { sel.value = '1'; sel.disabled = true; localRoundsAck = false; }
+        if (!localBrainActive) return;
+        const r = parseInt(sel.value, 10) || 1;
+        // v6.9.4: 1–2 ronde aman tanpa confirm; 3 ronde butuh UNLOCK/confirm
+        if (r <= 2) return;
+        if (localRoundsAck) return;
+        if (confirm('Local Brain aktif. 3 ronde berisiko overheat/VRAM. Lanjutkan?')) {
+            localRoundsAck = true;
+            try { Array.from(sel.options).forEach(o => { o.disabled = false; }); } catch (e) {}
+        } else {
+            sel.value = '2';
+            localRoundsAck = false;
+        }
     });
     renderLocalBrainBtn();
 })();
@@ -3411,6 +3447,12 @@ async function guardedFetch(req, ms = 60000, _retry = 0) {
     // ============ VALIDASI AWAL ============
     if (!req || typeof req !== 'object') {
         throw new Error('guardedFetch: parameter req tidak valid.');
+    }
+
+    // v6.9.4: deteksi offline lebih awal (kecuali jalur local brain murni)
+    if (typeof navigator !== 'undefined' && navigator.onLine === false && !req.local) {
+        try { showToast('Offline — tidak bisa menghubungi provider', 3000, true); } catch (e) {}
+        throw new Error('Perangkat offline. Hubungkan internet atau aktifkan Local Brain.');
     }
 
     // ============ 1. JALUR LOCAL BRAIN (WEBLLM) ============
@@ -3733,6 +3775,7 @@ async function sendMessage(forceNormal) {
             }
         } catch (memErr) {
             logEvent('ERROR', `[CORTEX] recall skipped: ${memErr.message || memErr}`);
+            try { showToast('Cortex recall dilewati: ' + String(memErr.message || memErr).slice(0, 80), 2800, true); } catch (e) {}
         }
 
         cachedMemoryContext = memoryContext;   // RAG: memori relevan disuntikkan ke systemPrompt tepat sebelum dikirim
@@ -3935,6 +3978,7 @@ function setThermalAlert(on) {
 /** Pembersihan darurat: audio + (critical) studio + destroyScene3d + charts + history trim */
 function emergencyMemoryCleanup(critical) {
     const done = [];
+    try { if (critical) showToast('Thermal critical: membersihkan memori…', 2500, true); } catch (e) {}
     try {
         if (typeof audioVoices !== 'undefined' && Object.keys(audioVoices).length) {
             stopAllSynth(true); done.push('audio');
@@ -4642,9 +4686,15 @@ async function runMultiAgentDiscussion(compiledPrompt) {
         }
     }
     if (!agentDiscussionAborted && !currentAbortController.signal.aborted) {
-        // Jeda 3 detik untuk menghindari Rate Limit API gratis
-        logEvent('SYSTEM', 'Jeda 3 detik sebelum SYNTHESIS...');
-        await sleep(3000);
+        // v6.9.4: jeda adaptif — free-tier 3s, berbayar/key 0.8s
+        {
+            const p = PROVIDERS[settings.provider];
+            const key = ((settings.keys[settings.provider] || '') + '').trim();
+            const freeish = (p && p.free && !key) || (settings.provider === 'pollinations' && !key) || localBrainActive;
+            const delay = freeish ? 3000 : 800;
+            logEvent('SYSTEM', 'Jeda ' + (delay/1000) + 's sebelum SYNTHESIS' + (freeish ? ' (free-tier guard)' : '') + '...');
+            await sleep(delay);
+        }
         
         // Pemangkasan konteks: SYNTHESIS hanya butuh argumen terakhir (maks 5 pesan)
         // agar tidak melebihi limit token model gratis — prioritaskan insight Dr. Cortex
@@ -4655,6 +4705,7 @@ async function runMultiAgentDiscussion(compiledPrompt) {
                 agentTranscript = agentTranscript.slice(0, 4).concat([cortexLast]);
             }
             logEvent('SYSTEM', '[MEMORY] Transkrip dipangkas untuk SYNTHESIS (Cortex diprioritaskan).');
+            try { showToast('Transkrip dipangkas agar muat context SYNTHESIS', 2200); } catch (e) {}
         }
         
         const synthOk = await runAgentTurn(SYNTH_AGENT, compiledPrompt, rounds, rounds, true);
@@ -4694,17 +4745,17 @@ async function sendMultiAgentMessage() {
         return;
     }
 
-    if (localBrainActive) {   // Performance Guard keras: Local Brain = max 1 ronde (anti VRAM/overheat)
+    if (localBrainActive) {   // v6.9.4 soft guard: ≤2 ronde OK; >2 butuh UNLOCK (anti VRAM/overheat)
         const sel = document.getElementById('agent-rounds-select');
         const r = parseInt(sel && sel.value, 10) || 1;
-        if (r > 1) {
-            if (!localRoundsAck) {
-                if (!confirm('Local Brain aktif. Swarm >1 ronde BERISIKO overheat/VRAM. Paksa 1 ronde?\n(OK = 1 ronde aman, Cancel = batalkan)')) return;
-                localRoundsAck = true;
-            }
-            if (sel) sel.value = '1';
-            try { showToast('Local Brain: dipaksa 1 ronde', 2500, true); } catch (e) {}
-            try { logEvent('SYSTEM', '[LOCAL BRAIN] Swarm dipaksa 1 ronde.'); } catch (e) {}
+        if (r > 2 && !localRoundsAck) {
+            if (!confirm('Local Brain aktif. Swarm 3 ronde BERISIKO overheat/VRAM.\nOK = paksa 2 ronde aman, Cancel = batalkan kirim.')) return;
+            if (sel) sel.value = '2';
+            try { showToast('Local Brain: dibatasi 2 ronde (UNLOCK untuk 3)', 2800, true); } catch (e) {}
+            try { logEvent('SYSTEM', '[LOCAL BRAIN] Swarm dibatasi 2 ronde.'); } catch (e) {}
+        } else if (r > 2 && localRoundsAck) {
+            try { showToast('Local Brain: 3 ronde (risiko operator)', 2200, true); } catch (e) {}
+            try { logEvent('SYSTEM', '[LOCAL BRAIN] Swarm 3 ronde — unlocked by operator.'); } catch (e) {}
         }
     }
 
@@ -4754,6 +4805,7 @@ async function sendMultiAgentMessage() {
         }
     } catch (memErr) {
         logEvent('ERROR', `[CORTEX] recall skipped: ${memErr.message || memErr}`);
+        try { showToast('Cortex recall dilewati: ' + String(memErr.message || memErr).slice(0, 80), 2800, true); } catch (e) {}
     }
 
     lastCompiledArtifact = compilePrompt(segments); // keep pure artifact in UI
