@@ -674,7 +674,7 @@ body[data-state="alert"] #nx9-chip i{background:var(--danger);box-shadow:0 0 10p
      - Anthropic default model stabil + xAI list expand
      - MAX_LIVE_SCENE3D 6→8 dengan notifikasi prune
    ================================================================ */
-const APP_VERSION = '6.9.4-titanium-robust-r2';
+const APP_VERSION = '6.9.4-titanium-robust-r3';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -1479,17 +1479,34 @@ function updateArtifactPreview(text) {
 }
 
 function runLiveScan(rawText) {
-    liveSegments = parsePrompt(rawText);
+    const text = String(rawText == null ? '' : rawText);
+    // v6.9.4-r3: composer kosong → jangan tampilkan CRITICAL; biarkan artifact terakhir tetap terlihat
+    if (!text.trim()) {
+        liveSegments = { role: [], context: [], rules: [], objective: [], validation: [], _meta: { guessed: 0 } };
+        liveScore = 0;
+        liveMetrics = { wordCount: 0, flagged: 0, guessed: 0 };
+        liveIssues = [];
+        updateBadges(liveSegments);
+        updateSpecScore(0);
+        renderWordHeat('');
+        renderIssues([]);  // "Waiting input..." — bukan CRITICAL merah
+        if (heatWordsEl) heatWordsEl.textContent = '0 words · ~0 tok';
+        if (heatFlaggedEl) heatFlaggedEl.textContent = '0 flagged';
+        const tb = document.getElementById('token-badge');
+        if (tb) { tb.textContent = '~0 tok'; tb.classList.remove('show', 'warn', 'danger'); }
+        return;
+    }
+    liveSegments = parsePrompt(text);
     const { total } = scorePrompt(liveSegments);
     liveScore = total;
-    liveMetrics = computeMetrics(rawText, liveSegments);
+    liveMetrics = computeMetrics(text, liveSegments);
     liveIssues = validateDAG(liveSegments);
     updateBadges(liveSegments);
     updateSpecScore(liveScore);
-    renderWordHeat(rawText);
+    renderWordHeat(text);
     renderIssues(liveIssues);
-    heatWordsEl.textContent = liveMetrics.wordCount + ' words · ~' + Math.ceil(rawText.length / 4) + ' tok';
-    heatFlaggedEl.textContent = liveMetrics.flagged + ' flagged';
+    if (heatWordsEl) heatWordsEl.textContent = liveMetrics.wordCount + ' words · ~' + Math.ceil(text.length / 4) + ' tok';
+    if (heatFlaggedEl) heatFlaggedEl.textContent = liveMetrics.flagged + ' flagged';
     const tb = document.getElementById('token-badge');
     if (tb) {
         const tok = Math.ceil((liveMetrics.wordCount || 0) * 1.3);
@@ -1498,7 +1515,7 @@ function runLiveScan(rawText) {
         tb.classList.toggle('warn', tok > 2000);
         tb.classList.toggle('danger', tok > 6000);
     }
-    if (rawText.trim()) updateArtifactPreview(compilePrompt(liveSegments));
+    updateArtifactPreview(compilePrompt(liveSegments));
 }
 const debouncedScan = debounce(t => runLiveScan(t), DEBOUNCE_MS);
 function debounce(fn, delay) {
@@ -1665,12 +1682,13 @@ function chartHtml(cfg) { return '<div class="ui-chart" data-cfg="' + escapeHtml
 function looksLikeThreeCode(c) {
     c = String(c || '');
     if (!c) return false;
-    // HTML yang memuat three.min.js / THREE / WebGLRenderer
-    if (/three(?:\.min)?\.js|WebGLRenderer|THREE\.|from\s+['"]three['"]/i.test(c) &&
-        /\b(Mesh|BoxGeometry|SphereGeometry|Torus|Group|Points|PerspectiveCamera|Scene)\b/.test(c)) return true;
-    if (/\bTHREE\b|\bonFrame\s*\(/.test(c) &&
-        /\b(Mesh|BoxGeometry|SphereGeometry|Torus|Group|Points|Line|Scene|PerspectiveCamera|WebGLRenderer)\b/.test(c)) return true;
-    if (/scene\.add\s*\(/.test(c) && /\b(Mesh|Geometry|Group)\b/.test(c)) return true;
+    // v6.9.4-r3: wajib sinyal Three.js eksplisit — HTML/DOM game biasa JANGAN jadi scene3d
+    const hasThree = /\bTHREE\b|three(?:\.min)?\.js|from\s+['"]three['"]/i.test(c);
+    const hasOnFrame = /\bonFrame\s*\(/.test(c);
+    const hasGeom = /\b(Mesh|BoxGeometry|SphereGeometry|TorusKnotGeometry|TorusGeometry|Group|Points|PerspectiveCamera|WebGLRenderer)\b/.test(c);
+    if ((hasThree || hasOnFrame) && hasGeom) return true;
+    if (hasThree && /WebGLRenderer|scene\.add\s*\(/.test(c)) return true;
+    if (hasOnFrame && /scene\.add\s*\(/.test(c)) return true;
     return false;
 }
 function isForce3d(b) {
