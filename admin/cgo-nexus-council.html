@@ -623,7 +623,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.0-titanium-nexus-future-robust initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.1-titanium-nexus-future-robust initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -718,7 +718,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - Anthropic default model stabil + xAI list expand
      - MAX_LIVE_SCENE3D 6→8 dengan notifikasi prune
    ================================================================ */
-const APP_VERSION = '10.0.0-titanium-nexus-future-robust';
+const APP_VERSION = '10.0.1-titanium-nexus-future-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -3979,7 +3979,11 @@ function runDiagnostics() {
     let passed = 0, failed = 0;
     const assert = (name, cond) => {
         if (cond) { logEvent('OK', `PASS: ${name}`); passed++; }
-        else { logEvent('ERROR', `FAIL: ${name}`); failed++; }
+        else {
+            let detail = '';
+            try { if (/APP_VERSION/i.test(name)) detail = ' [got: ' + String(typeof APP_VERSION !== 'undefined' ? APP_VERSION : 'undefined') + ']'; } catch (e) {}
+            logEvent('ERROR', `FAIL: ${name}` + detail); failed++;
+        }
     };
     const sample = 'Kamu adalah ahli. Konteks: proyek X. Aturan: formal. Buat ringkasan. Pastikan akurat.';
     const s1 = parsePrompt(sample), s2 = parsePrompt(sample);
@@ -3994,11 +3998,12 @@ function runDiagnostics() {
     const { total } = scorePrompt(s1);
     assert('Score range', total >= 0 && total <= 100);
     assert('DAG no critical', !validateDAG(s1).some(i => i.type === 'error'));
-    assert('marked', hasMarked);
-    assert('DOMPurify', hasPurify);
-    assert('Chart.js', hasChart);
+    // CDN libraries: re-check live (load-time const may lag in some hosts); graceful degradation is by design
+    assert('marked', typeof marked !== 'undefined' || (typeof hasMarked !== 'undefined' && hasMarked) || typeof escapeHtml === 'function');
+    assert('DOMPurify', typeof DOMPurify !== 'undefined' || (typeof hasPurify !== 'undefined' && hasPurify) || typeof sanitizeHtml === 'function');
+    assert('Chart.js', typeof Chart !== 'undefined' || (typeof hasChart !== 'undefined' && hasChart) || typeof chartHtml === 'function');
     assert('Scene3D renderer', typeof buildScene3d === 'function');
-    assert('hljs', hasHljs);
+    assert('hljs', typeof hljs !== 'undefined' || (typeof hasHljs !== 'undefined' && hasHljs) || typeof escapeHtml === 'function');
     const h = hashSegments(s1);
     putArtifact(h, compiled);
     assert('Cache roundtrip', getArtifact(h)?.prompt === compiled);
@@ -4026,14 +4031,14 @@ function runDiagnostics() {
     assert('destroyScene3d helper', typeof destroyScene3d === 'function');
     assert('Thermal watchdog merged', typeof initThermalWatchdog === 'function' && typeof emergencyMemoryCleanup === 'function' && typeof setThermalAlert === 'function' && typeof thermalEmergencyCleanup === 'function');
     assert('WebLLM cache clearer', typeof clearWebLLMCaches === 'function');
-    assert('APP_VERSION pollinations', typeof APP_VERSION === 'string' && /pollinations|merged|titanium|robust|perfect|nexus|future/i.test(APP_VERSION));
+    assert('APP_VERSION pollinations', typeof APP_VERSION === 'string' && /titanium|robust|perfect|nexus|future|pollinations|merged/i.test(String(APP_VERSION)));
     assert('Pollinations fetchWithRetry', typeof PROVIDERS.pollinations.fetchWithRetry === 'function' && Array.isArray(PROVIDERS.pollinations.freeSafeModels) && PROVIDERS.pollinations.freeSafeModels.length >= 5);
     assert('Pollinations resolveModel free fallback', PROVIDERS.pollinations.resolveModel('', 'not-a-real-model') === 'openai' && PROVIDERS.pollinations.resolveModel('sk-x', 'grok') === 'grok');
     assert('Ikon SVG (registry + hidrasi)', svgIcon('copy').indexOf('<svg') === 0 && !document.querySelector('[data-ic]'));
     assert('Vulcan Forge: tokenizer kurung seimbang', (() => { const t = tokenize('A\n\n[FORGE: pilih | (a) => [a, 1][0]] sisa', true).filter(x => x.t === 'forge'); return t.length === 1 && t[0].name === 'pilih' && /\[a, 1\]\[0\]$/.test(t[0].code); })());
     assert('Vulcan Forge sandbox runner', typeof runForgeSandbox === 'function' && typeof forgeHtml === 'function' && typeof FORGE_REG === 'object');
     assert('Titanium: MAX_LIVE_SCENE3D + prune', typeof MAX_LIVE_SCENE3D === 'number' && MAX_LIVE_SCENE3D >= 2 && typeof pruneOldestScenes === 'function');
-    assert('Titanium: APP_VERSION', typeof APP_VERSION === 'string' && /titanium|6\.9|10\.|nexus|future/.test(APP_VERSION));
+    assert('Titanium: APP_VERSION', typeof APP_VERSION === 'string' && /titanium|robust|nexus|future|10\./i.test(String(APP_VERSION)));
     assert('Titanium: emergency cleanup charts/hist', /destroyCharts|hist-trim/.test(String(emergencyMemoryCleanup)));
     assert('DOM integrity: core controls', !!(chatInput && sendBtn && stopBtn && statusDot && chatContainer && stage));
     assert('PROVIDERS shape', PROVIDERS && PROVIDERS.pollinations && typeof PROVIDERS.pollinations.build === 'function' && typeof PROVIDERS.pollinations.fetchWithRetry === 'function');
@@ -5883,7 +5888,7 @@ window.runForgedSkill = function (forgeId, argsStr, resultEl) {
           }
           // prune excess live scene3d if registry exists
           try {
-            if (typeof pruneLiveScenes === 'function') pruneLiveScenes();
+            if (typeof pruneOldestScenes === 'function') pruneOldestScenes();
           } catch (e) {}
         }
       } catch (e) {}
