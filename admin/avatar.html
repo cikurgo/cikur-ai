@@ -73,12 +73,12 @@ void main(){
   pos.xy=vec2(pos.x*ca-pos.y*sa,pos.x*sa+pos.y*ca);
   float n=mix(.022+uAmp*.07,.005+uAmp*.008,p);
   pos+=n*vec3(sin(uT*1.3+aR*80.+pos.y*3.),cos(uT*1.1+aR*50.+pos.x*3.),sin(uT*.9+aR*70.));
-  vec4 c=mix(c0,c1,p);
+  vec4 cc=mix(c0,c1,p);
   float vis=1.; if(aE.z>1.5)vis=1.-smoothstep(.25,.85,uBlink); else if(aE.z>.5)vis=smoothstep(.03,.3,op);
   vis=mix(1.,vis,p);
   vec4 mv=modelViewMatrix*vec4(pos,1.); gl_Position=projectionMatrix*mv;
-  gl_PointSize=c.a*uPR*(40./-mv.z)*(1.+uAmp*.5*(1.-p*.7))*vis;
-  vC=c.rgb*(1.+uAmp*.7*(1.-p*.6))*vis;
+  gl_PointSize=cc.a*uPR*(40./-mv.z)*(1.+uAmp*.5*(1.-p*.7))*vis;
+  vC=cc.rgb*(1.+uAmp*.7*(1.-p*.6))*vis;
 }
 </script>
 <script type="x-shader/x-fragment" id="fs">
