@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS Sentinel - Mobile Threat Audit</title>
+<style>
+    :root {
+        --bg: #0a0a0a;
+        --panel: #111;
+        --border: #333;
+        --text: #0f0;
+        --text-dim: #0a0;
+        --danger: #f33;
+        --warn: #fa0;
+        --safe: #0f0;
+        --font: 'Courier New', Courier, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+        background-color: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    
+    /* HEADER & CONTROLS */
+    header {
+        background: var(--panel);
+        padding: 15px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    h1 { font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; }
+    .controls { display: flex; gap: 10px; align-items: center; }
+    button {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--text);
+        padding: 8px 16px;
+        font-family: var(--font);
+        cursor: pointer;
+        transition: all 0.2s;
+        text-transform: uppercase;
+        font-weight: bold;
+    }
+    button:hover { background: var(--text); color: var(--bg); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #scanBtn { border-color: var(--safe); color: var(--safe); }
+    #scanBtn:hover { background: var(--safe); color: var(--bg); }
+    
+    /* SCORE DISPLAY */
+    .score-container {
+        font-size: 1.2rem;
+        border: 1px solid var(--border);
+        padding: 8px 16px;
+        border-radius: 4px;
+        background: #000;
+    }
+    .score-val { font-weight: bold; font-size: 1.4rem; }
+    .score-safe { color: var(--safe); }
+    .score-warn { color: var(--warn); }
+    .score-danger { color: var(--danger); text-shadow: 0 0 10px var(--danger); }
+
+    /* MAIN LAYOUT (Split View) */
+    .main-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        flex: 1;
+        overflow: hidden;
+    }
+    @media (max-width: 768px) {
+        .main-grid { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+    }
+
+    /* TELEMETRY PANEL (Left/Top) */
+    .telemetry-panel {
+        padding: 15px;
+        border-right: 1px solid var(--border);
+        overflow-y: auto;
+        background: #050505;
+    }
+    .telemetry-panel h2 { font-size: 1rem; margin-bottom: 15px; border-bottom: 1px dashed var(--text-dim); padding-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #222; }
+    td:first-child { color: var(--text-dim); }
+    td:last-child { text-align: right; word-break: break-all; }
+    
+    /* TERMINAL LOG PANEL (Right/Bottom) */
+    .terminal-panel {
+        padding: 15px;
+        display: flex;
+        flex-direction: column;
+        background: #000;
+    }
+    .terminal-panel h2 { font-size: 1rem; margin-bottom: 10px; color: var(--text-dim); }
+    #log {
+        flex: 1;
+        overflow-y: auto;
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+    #log p { margin-bottom: 5px; }
+    .log-info { color: var(--text); }
+    .log-warn { color: var(--warn); }
+    .log-danger { color: var(--danger); font-weight: bold; }
+    .log-success { color: var(--safe); }
+
+    /* ANIMATIONS & EFFECTS */
+    .cursor::after { content: '█'; animation: blink 1s step-start infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+    .glitch { animation: glitch 0.2s linear infinite; }
+    @keyframes glitch { 0% { transform: translate(0) } 25% { transform: translate(-2px, 2px) } 50% { transform: translate(2px, -2px) } 75% { transform: translate(-2px, -2px) } 100% { transform: translate(2px, 2px) } }
+</style>
+</head>
+<body>
+
+<header>
+    <h1>NEXUS Sentinel v1.0</h1>
+    <div class="controls">
+        <div class="score-container">
+            THREAT SCORE: <span id="scoreVal" class="score-val score-safe">0</span>
+        </div>
+        <button id="scanBtn">Run Scan</button>
+        <button id="resetBtn">Reset</button>
+    </div>
+</header>
+
+<div class="main-grid">
+    <!-- KIRI: Hardware Telemetry -->
+    <div class="telemetry-panel">
+        <h2>// DEVICE TELEMETRY (FIELD PROBE)</h2>
+        <table id="probeTable">
+            <tbody>
+                <tr><td>Menunggu pemindaian...</td><td>-</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- KANAN: Security Log -->
+    <div class="terminal-panel">
+        <h2>// SECURITY SENTINEL LOG</h2>
+        <div id="log">
+            <p class="log-info">NEXUS Sentinel siap.</p>
+            <p class="log-info">Klik [RUN SCAN] untuk menganalisis perangkat ini.</p>
+            <p class="log-info cursor">></p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // === STATE ===
+    let score = 0;
+    let isScanning = false;
+    
+    // === DOM ELEMENTS ===
+    const scoreEl = document.getElementById('scoreVal');
+    const logEl = document.getElementById('log');
+    const probeTable = document.getElementById('probeTable').querySelector('tbody');
+    const scanBtn = document.getElementById('scanBtn');
+    const resetBtn = document.getElementById('resetBtn');
+
+    // === HELPERS ===
+    function log(msg, type = 'info') {
+        const p = document.createElement('p');
+        p.className = `log-${type}`;
+        p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logEl.appendChild(p);
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateScore(amount) {
+        score += amount;
+        if (score > 100) score = 100;
+        scoreEl.textContent = score;
+        
+        scoreEl.className = 'score-val';
+        if (score > 70) {
+            scoreEl.classList.add('score-danger');
+            document.body.classList.add('glitch');
+            setTimeout(() => document.body.classList.remove('glitch'), 1000);
+        } else if (score > 30) {
+            scoreEl.classList.add('score-warn');
+        } else {
+            scoreEl.classList.add('score-safe');
+        }
+    }
+
+    function addTelemetry(key, val, isError = false) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${key}</td><td style="${isError ? 'color:var(--danger)' : ''}">${val}</td>`;
+        probeTable.appendChild(tr);
+    }
+
+    // === CORE MODULES ===
+
+    // 1. Hardware & Browser Telemetry (Real)
+    async function checkTelemetry() {
+        log('Membaca spesifikasi perangkat keras...', 'info');
+        probeTable.innerHTML = ''; // Clear
+        
+        addTelemetry('User Agent', navigator.userAgent.split(' ')[0]);
+        addTelemetry('Platform', navigator.platform);
+        addTelemetry('CPU Cores', navigator.hardwareConcurrency || 'N/A');
+        addTelemetry('RAM (Est)', (navigator.deviceMemory || 'N/A') + ' GB');
+        addTelemetry('Screen', `${screen.width}x${screen.height}`);
+        
+        // GPU Check
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            const gpu = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+            addTelemetry('GPU Renderer', gpu);
+        } catch (e) {
+            addTelemetry('GPU Renderer', 'Blocked', true);
+        }
+
+        // Battery Check
+        try {
+            if (navigator.getBattery) {
+                const battery = await navigator.getBattery();
+                addTelemetry('Battery Level', Math.round(battery.level * 100) + '%');
+                addTelemetry('Charging', battery.charging ? 'Yes' : 'No');
+            } else {
+                addTelemetry('Battery Level', 'API Unsupported', true);
+            }
+        } catch (e) {
+            addTelemetry('Battery Level', 'Access Denied', true);
+        }
+
+        // Network
+        if (navigator.connection) {
+            addTelemetry('Network Type', navigator.connection.effectiveType || 'Unknown');
+            addTelemetry('Downlink', (navigator.connection.downlink || 'N/A') + ' Mbps');
+        }
+        addTelemetry('Status', navigator.onLine ? 'Online' : 'Offline', !navigator.onLine);
+        
+        log('Telemetri perangkat keras berhasil dipetakan.', 'success');
+    }
+
+    // 2. WebRTC Leak Check (Real)
+    async function checkWebRTC() {
+        log('Menguji kebocoran IP via WebRTC (Indikator Penyadapan Jaringan)...', 'info');
+        return new Promise((resolve) => {
+            let leaked = false;
+            try {
+                const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+                pc.createDataChannel('');
+                pc.onicecandidate = (e) => {
+                    if (!e.candidate) {
+                        pc.close();
+                        if (!leaked) log('WebRTC Test: Tidak ada kebocoran IP lokal terdeteksi. Aman.', 'success');
+                        resolve();
+                        return;
+                    }
+                    const ipRegex = /([0-9]{1,3}(\.[0-9]{1,3}){3})/;
+                    const match = e.candidate.candidate.match(ipRegex);
+                    if (match && !leaked) {
+                        const ip = match[1];
+                        if (ip.startsWith('192.168') || ip.startsWith('10.') || ip.startsWith('127.')) {
+                            log(`WebRTC: IP Lokal terdeteksi (${ip}). Normal untuk jaringan lokal.`, 'info');
+                        } else {
+                            leaked = true;
+                            log(`BAHAYA: IP Publik (${ip}) bocor via WebRTC! Ini celah pelacakan.`, 'danger');
+                            updateScore(40);
+                        }
+                    }
+                };
+                pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                setTimeout(() => { try{pc.close()}catch(e){}; resolve(); }, 3000); // Timeout
+            } catch (err) {
+                log('WebRTC diblokir oleh konfigurasi browser. (Bagus untuk privasi).', 'warn');
+                resolve();
+            }
+        });
+    }
+
+    // 3. FPS Check (Deteksi Malware/Cryptominer)
+    function checkFPS() {
+        log('Mengukur performa grafis (Deteksi Cryptominer di background)...', 'info');
+        return new Promise((resolve) => {
+            let frames = 0;
+            const start = performance.now();
+            function loop(t) {
+                frames++;
+                if (t - start >= 1000) {
+                    const fps = Math.round((frames * 1000) / (t - start));
+                    addTelemetry('FPS (Current)', fps);
+                    if (fps < 25) {
+                        log(`PERINGATAN: FPS rendah (${fps}). Ada proses berat berjalan di background!`, 'warn');
+                        updateScore(20);
+                    } else {
+                        log(`FPS normal (${fps}). Kinerja perangkat lancar.`, 'success');
+                    }
+                    resolve();
+                } else {
+                    requestAnimationFrame(loop);
+                }
+            }
+            requestAnimationFrame(loop);
+        });
+    }
+
+    // 4. Canvas Fingerprinting (Deteksi Pelacakan)
+    function checkFingerprint() {
+        log('Menguji keunikan sidik jari perangkat (Canvas Fingerprint)...', 'info');
+        try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#f60';
+            ctx.fillRect(125, 1, 62, 20);
+            ctx.fillStyle = '#069';
+            ctx.fillText('NEXUS Sentinel', 2, 15);
+            ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+            ctx.fillText('NEXUS Sentinel', 4, 17);
+            
+            const data = canvas.toDataURL();
+            const hash = data.length + data.slice(-50); // Simple hash
+            
+            addTelemetry('Canvas Hash', hash.substring(0, 15) + '...');
+            log('Perangkat memiliki sidik jari grafis unik. Risiko pelacakan iklan (rendah).', 'info');
+            updateScore(10); // Risiko dasar
+        } catch (e) {
+            log('Canvas Fingerprinting diblokir. Privasi terjaga.', 'success');
+        }
+    }
+
+    // === MAIN ORCHESTRATOR ===
+    async function runScan() {
+        if (isScanning) return;
+        isScanning = true;
+        scanBtn.disabled = true;
+        scanBtn.textContent = 'Scanning...';
+        reset(); 
+        
+        log('Memulai NEXUS Sentinel Deep Scan...', 'warn');
+        
+        await checkTelemetry();
+        await checkWebRTC();
+        await checkFPS();
+        checkFingerprint();
+        
+        log('--- PEMINDAIAN SELESAI ---', 'success');
+        
+        // Final Verdict
+        if (score >= 70) {
+            log('STATUS AKHIR: SISTEM BERISIKO TINGGI! (Threat Score: ' + score + ')', 'danger');
+            log('TINDAKAN: Segera putuskan koneksi mencurigakan, hapus cache browser, atau gunakan VPN.', 'danger');
+            scoreEl.style.animation = 'glitch 0.5s infinite';
+        } else if (score >= 30) {
+            log('STATUS AKHIR: SISTEM WASPADA (Threat Score: ' + score + ')', 'warn');
+            log('TINDAKAN: Beberapa parameter menunjukkan anomali. Hati-hati saat browsing.', 'warn');
+            scoreEl.style.animation = 'none';
+        } else {
+            log('STATUS AKHIR: SISTEM AMAN (Threat Score: ' + score + ')', 'success');
+            log('TINDAKAN: Tidak ada indikasi penyadapan aktif. Perangkat dalam kondisi baik.', 'success');
+            scoreEl.style.animation = 'none';
+        }
+
+        isScanning = false;
+        scanBtn.disabled = false;
+        scanBtn.textContent = 'Run Scan';
+    }
+
+    function reset() {
+        logEl.innerHTML = '<p class="log-info">Log dibersihkan. Siap memindai...</p><p class="log-info cursor">></p>';
+        score = 0;
+        scoreEl.textContent = '0';
+        scoreEl.className = 'score-val score-safe';
+        scoreEl.style.animation = 'none';
+        probeTable.innerHTML = '<tr><td>Menunggu pemindaian...</td><td>-</td></tr>';
+    }
+
+    // Event Listeners
+    scanBtn.addEventListener('click', runScan);
+    resetBtn.addEventListener('click', reset);
+
+</script>
+</body>
+</html>
