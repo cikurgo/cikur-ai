@@ -623,7 +623,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.0-nexus-future initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.0-titanium-nexus-future-robust initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -718,7 +718,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - Anthropic default model stabil + xAI list expand
      - MAX_LIVE_SCENE3D 6→8 dengan notifikasi prune
    ================================================================ */
-const APP_VERSION = '10.0.0-nexus-future';
+const APP_VERSION = '10.0.0-titanium-nexus-future-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -4026,19 +4026,24 @@ function runDiagnostics() {
     assert('destroyScene3d helper', typeof destroyScene3d === 'function');
     assert('Thermal watchdog merged', typeof initThermalWatchdog === 'function' && typeof emergencyMemoryCleanup === 'function' && typeof setThermalAlert === 'function' && typeof thermalEmergencyCleanup === 'function');
     assert('WebLLM cache clearer', typeof clearWebLLMCaches === 'function');
-    assert('APP_VERSION pollinations', typeof APP_VERSION === 'string' && /pollinations|merged|titanium|robust|perfect/i.test(APP_VERSION));
+    assert('APP_VERSION pollinations', typeof APP_VERSION === 'string' && /pollinations|merged|titanium|robust|perfect|nexus|future/i.test(APP_VERSION));
     assert('Pollinations fetchWithRetry', typeof PROVIDERS.pollinations.fetchWithRetry === 'function' && Array.isArray(PROVIDERS.pollinations.freeSafeModels) && PROVIDERS.pollinations.freeSafeModels.length >= 5);
     assert('Pollinations resolveModel free fallback', PROVIDERS.pollinations.resolveModel('', 'not-a-real-model') === 'openai' && PROVIDERS.pollinations.resolveModel('sk-x', 'grok') === 'grok');
     assert('Ikon SVG (registry + hidrasi)', svgIcon('copy').indexOf('<svg') === 0 && !document.querySelector('[data-ic]'));
     assert('Vulcan Forge: tokenizer kurung seimbang', (() => { const t = tokenize('A\n\n[FORGE: pilih | (a) => [a, 1][0]] sisa', true).filter(x => x.t === 'forge'); return t.length === 1 && t[0].name === 'pilih' && /\[a, 1\]\[0\]$/.test(t[0].code); })());
     assert('Vulcan Forge sandbox runner', typeof runForgeSandbox === 'function' && typeof forgeHtml === 'function' && typeof FORGE_REG === 'object');
     assert('Titanium: MAX_LIVE_SCENE3D + prune', typeof MAX_LIVE_SCENE3D === 'number' && MAX_LIVE_SCENE3D >= 2 && typeof pruneOldestScenes === 'function');
-    assert('Titanium: APP_VERSION', typeof APP_VERSION === 'string' && /titanium|6\.9/.test(APP_VERSION));
+    assert('Titanium: APP_VERSION', typeof APP_VERSION === 'string' && /titanium|6\.9|10\.|nexus|future/.test(APP_VERSION));
     assert('Titanium: emergency cleanup charts/hist', /destroyCharts|hist-trim/.test(String(emergencyMemoryCleanup)));
     assert('DOM integrity: core controls', !!(chatInput && sendBtn && stopBtn && statusDot && chatContainer && stage));
     assert('PROVIDERS shape', PROVIDERS && PROVIDERS.pollinations && typeof PROVIDERS.pollinations.build === 'function' && typeof PROVIDERS.pollinations.fetchWithRetry === 'function');
     assert('Abort hygiene: currentAbortController starts null', currentAbortController === null || currentAbortController === undefined || typeof currentAbortController.abort === 'function');
     assert('Perfect: setStatus null-safe', typeof setStatus === 'function');
+    assert('Future: Temporal Echo DOM', !!document.getElementById('nx10-echo'));
+    assert('Future: Intent DNA helper', typeof window.NexusFuture === 'object' && typeof window.NexusFuture.refreshDna === 'function');
+    assert('Future: Capsule export', typeof window.NexusFuture === 'object' && typeof window.NexusFuture.exportCapsule === 'function');
+    assert('Future: APP_VERSION nexus', typeof APP_VERSION === 'string' && /nexus|future|10\./.test(APP_VERSION));
+
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
 }
