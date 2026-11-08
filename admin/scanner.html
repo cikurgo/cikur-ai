@@ -2,8 +2,9 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NEXUS Sentinel - Mobile Threat Audit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="description" content="NEXUS Sentinel - Browser-based device telemetry & privacy probe">
+<title>NEXUS Sentinel v1.1 — Mobile Threat Audit</title>
 <style>
     :root {
         --bg: #0a0a0a;
@@ -17,29 +18,43 @@
         --font: 'Courier New', Courier, monospace;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
+    html, body {
+        height: 100%;
         background-color: var(--bg);
         color: var(--text);
         font-family: var(--font);
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
         overflow: hidden;
     }
-    
+    body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+    }
+
     /* HEADER & CONTROLS */
     header {
         background: var(--panel);
-        padding: 15px;
+        padding: 12px 16px;
         border-bottom: 1px solid var(--border);
         display: flex;
         justify-content: space-between;
         align-items: center;
         flex-wrap: wrap;
         gap: 10px;
+        flex-shrink: 0;
     }
-    h1 { font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px; }
-    .controls { display: flex; gap: 10px; align-items: center; }
+    h1 {
+        font-size: 1.15rem;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        user-select: none;
+    }
+    .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
     button {
         background: transparent;
         color: var(--text);
@@ -47,94 +62,142 @@
         padding: 8px 16px;
         font-family: var(--font);
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.15s ease;
         text-transform: uppercase;
         font-weight: bold;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
     }
-    button:hover { background: var(--text); color: var(--bg); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button:hover:not(:disabled) { background: var(--text); color: var(--bg); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
     #scanBtn { border-color: var(--safe); color: var(--safe); }
-    #scanBtn:hover { background: var(--safe); color: var(--bg); }
-    
+    #scanBtn:hover:not(:disabled) { background: var(--safe); color: var(--bg); }
+    #resetBtn { border-color: var(--border); color: #aaa; }
+    #resetBtn:hover:not(:disabled) { background: #333; color: #fff; }
+
     /* SCORE DISPLAY */
     .score-container {
-        font-size: 1.2rem;
+        font-size: 1.05rem;
         border: 1px solid var(--border);
-        padding: 8px 16px;
+        padding: 7px 14px;
         border-radius: 4px;
         background: #000;
+        white-space: nowrap;
     }
-    .score-val { font-weight: bold; font-size: 1.4rem; }
+    .score-val { font-weight: bold; font-size: 1.35rem; }
     .score-safe { color: var(--safe); }
     .score-warn { color: var(--warn); }
     .score-danger { color: var(--danger); text-shadow: 0 0 10px var(--danger); }
 
-    /* MAIN LAYOUT (Split View) */
+    /* MAIN LAYOUT */
     .main-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         flex: 1;
+        min-height: 0;
         overflow: hidden;
     }
     @media (max-width: 768px) {
-        .main-grid { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+        .main-grid {
+            grid-template-columns: 1fr;
+            grid-template-rows: minmax(180px, 38%) 1fr;
+        }
+        .telemetry-panel { border-right: none; border-bottom: 1px solid var(--border); }
     }
 
-    /* TELEMETRY PANEL (Left/Top) */
+    /* TELEMETRY PANEL */
     .telemetry-panel {
-        padding: 15px;
+        padding: 14px;
         border-right: 1px solid var(--border);
         overflow-y: auto;
         background: #050505;
+        -webkit-overflow-scrolling: touch;
     }
-    .telemetry-panel h2 { font-size: 1rem; margin-bottom: 15px; border-bottom: 1px dashed var(--text-dim); padding-bottom: 5px; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #222; }
-    td:first-child { color: var(--text-dim); }
+    .telemetry-panel h2,
+    .terminal-panel h2 {
+        font-size: 0.95rem;
+        margin-bottom: 12px;
+        border-bottom: 1px dashed var(--text-dim);
+        padding-bottom: 5px;
+        color: var(--text-dim);
+        letter-spacing: 1px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid #222; vertical-align: top; }
+    td:first-child { color: var(--text-dim); width: 42%; padding-right: 8px; }
     td:last-child { text-align: right; word-break: break-all; }
-    
-    /* TERMINAL LOG PANEL (Right/Bottom) */
+
+    /* TERMINAL LOG PANEL */
     .terminal-panel {
-        padding: 15px;
+        padding: 14px;
         display: flex;
         flex-direction: column;
         background: #000;
+        min-height: 0;
     }
-    .terminal-panel h2 { font-size: 1rem; margin-bottom: 10px; color: var(--text-dim); }
     #log {
         flex: 1;
         overflow-y: auto;
-        font-size: 0.9rem;
-        line-height: 1.5;
+        font-size: 0.85rem;
+        line-height: 1.55;
+        -webkit-overflow-scrolling: touch;
+        padding-right: 4px;
     }
-    #log p { margin-bottom: 5px; }
+    #log p { margin-bottom: 4px; word-break: break-word; }
     .log-info { color: var(--text); }
     .log-warn { color: var(--warn); }
     .log-danger { color: var(--danger); font-weight: bold; }
     .log-success { color: var(--safe); }
+    .log-dim { color: #555; }
 
-    /* ANIMATIONS & EFFECTS */
-    .cursor::after { content: '█'; animation: blink 1s step-start infinite; }
+    /* SCROLLBAR */
+    .telemetry-panel::-webkit-scrollbar,
+    #log::-webkit-scrollbar { width: 6px; }
+    .telemetry-panel::-webkit-scrollbar-track,
+    #log::-webkit-scrollbar-track { background: #111; }
+    .telemetry-panel::-webkit-scrollbar-thumb,
+    #log::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+    /* ANIMATIONS */
+    .cursor::after {
+        content: '█';
+        animation: blink 1s step-start infinite;
+        margin-left: 2px;
+    }
     @keyframes blink { 50% { opacity: 0; } }
-    .glitch { animation: glitch 0.2s linear infinite; }
-    @keyframes glitch { 0% { transform: translate(0) } 25% { transform: translate(-2px, 2px) } 50% { transform: translate(2px, -2px) } 75% { transform: translate(-2px, -2px) } 100% { transform: translate(2px, 2px) } }
+    .glitch { animation: glitch 0.18s linear infinite; }
+    @keyframes glitch {
+        0% { transform: translate(0); }
+        25% { transform: translate(-2px, 2px); }
+        50% { transform: translate(2px, -2px); }
+        75% { transform: translate(-2px, -2px); }
+        100% { transform: translate(2px, 2px); }
+    }
+
+    .footer-note {
+        font-size: 0.7rem;
+        color: #444;
+        text-align: center;
+        padding: 6px 10px;
+        border-top: 1px solid #1a1a1a;
+        flex-shrink: 0;
+    }
 </style>
 </head>
 <body>
 
 <header>
-    <h1>NEXUS Sentinel v1.0</h1>
+    <h1>NEXUS Sentinel v1.1</h1>
     <div class="controls">
         <div class="score-container">
             THREAT SCORE: <span id="scoreVal" class="score-val score-safe">0</span>
         </div>
-        <button id="scanBtn">Run Scan</button>
-        <button id="resetBtn">Reset</button>
+        <button id="scanBtn" type="button">Run Scan</button>
+        <button id="resetBtn" type="button">Reset</button>
     </div>
 </header>
 
 <div class="main-grid">
-    <!-- KIRI: Hardware Telemetry -->
     <div class="telemetry-panel">
         <h2>// DEVICE TELEMETRY (FIELD PROBE)</h2>
         <table id="probeTable">
@@ -144,49 +207,68 @@
         </table>
     </div>
 
-    <!-- KANAN: Security Log -->
     <div class="terminal-panel">
         <h2>// SECURITY SENTINEL LOG</h2>
         <div id="log">
-            <p class="log-info">NEXUS Sentinel siap.</p>
+            <p class="log-info">NEXUS Sentinel v1.1 siap.</p>
             <p class="log-info">Klik [RUN SCAN] untuk menganalisis perangkat ini.</p>
+            <p class="log-dim">Catatan: Ini adalah probe browser (bukan antivirus). Hasil bersifat indikatif.</p>
             <p class="log-info cursor">></p>
         </div>
     </div>
 </div>
 
+<div class="footer-note">
+    NEXUS Sentinel · Client-side only · Tidak mengirim data ke server
+</div>
+
 <script>
+(function () {
+    'use strict';
+
     // === STATE ===
     let score = 0;
     let isScanning = false;
-    
-    // === DOM ELEMENTS ===
-    const scoreEl = document.getElementById('scoreVal');
-    const logEl = document.getElementById('log');
-    const probeTable = document.getElementById('probeTable').querySelector('tbody');
-    const scanBtn = document.getElementById('scanBtn');
-    const resetBtn = document.getElementById('resetBtn');
+    let abortController = null;   // for future cancellation
+    let scanGeneration = 0;       // invalidate late callbacks
+
+    // === DOM ===
+    const scoreEl   = document.getElementById('scoreVal');
+    const logEl     = document.getElementById('log');
+    const probeBody = document.getElementById('probeTable').querySelector('tbody');
+    const scanBtn   = document.getElementById('scanBtn');
+    const resetBtn  = document.getElementById('resetBtn');
 
     // === HELPERS ===
     function log(msg, type = 'info') {
+        // Remove trailing cursor if present
+        const last = logEl.lastElementChild;
+        if (last && last.classList.contains('cursor')) last.remove();
+
         const p = document.createElement('p');
         p.className = `log-${type}`;
         p.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
         logEl.appendChild(p);
+
+        // Re-add cursor
+        const cursor = document.createElement('p');
+        cursor.className = 'log-info cursor';
+        cursor.textContent = '>';
+        logEl.appendChild(cursor);
+
         logEl.scrollTop = logEl.scrollHeight;
     }
 
     function updateScore(amount) {
-        score += amount;
-        if (score > 100) score = 100;
+        if (amount === 0) return;
+        score = Math.min(100, Math.max(0, score + amount));
         scoreEl.textContent = score;
-        
         scoreEl.className = 'score-val';
-        if (score > 70) {
+        if (score >= 70) {
             scoreEl.classList.add('score-danger');
             document.body.classList.add('glitch');
-            setTimeout(() => document.body.classList.remove('glitch'), 1000);
-        } else if (score > 30) {
+            setTimeout(() => document.body.classList.remove('glitch'), 800);
+        } else if (score >= 30) {
             scoreEl.classList.add('score-warn');
         } else {
             scoreEl.classList.add('score-safe');
@@ -195,110 +277,256 @@
 
     function addTelemetry(key, val, isError = false) {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${key}</td><td style="${isError ? 'color:var(--danger)' : ''}">${val}</td>`;
-        probeTable.appendChild(tr);
+        const tdKey = document.createElement('td');
+        const tdVal = document.createElement('td');
+        tdKey.textContent = key;
+        tdVal.textContent = String(val);
+        if (isError) tdVal.style.color = 'var(--danger)';
+        tr.appendChild(tdKey);
+        tr.appendChild(tdVal);
+        probeBody.appendChild(tr);
     }
 
-    // === CORE MODULES ===
+    function isPrivateIPv4(ip) {
+        // RFC 1918 + loopback + link-local
+        if (ip.startsWith('10.') || ip.startsWith('192.168.') || ip.startsWith('127.')) return true;
+        if (ip.startsWith('169.254.')) return true;
+        const m = ip.match(/^172\.(\d+)\./);
+        if (m) {
+            const second = parseInt(m[1], 10);
+            if (second >= 16 && second <= 31) return true;
+        }
+        return false;
+    }
 
-    // 1. Hardware & Browser Telemetry (Real)
-    async function checkTelemetry() {
-        log('Membaca spesifikasi perangkat keras...', 'info');
-        probeTable.innerHTML = ''; // Clear
-        
-        addTelemetry('User Agent', navigator.userAgent.split(' ')[0]);
-        addTelemetry('Platform', navigator.platform);
-        addTelemetry('CPU Cores', navigator.hardwareConcurrency || 'N/A');
-        addTelemetry('RAM (Est)', (navigator.deviceMemory || 'N/A') + ' GB');
-        addTelemetry('Screen', `${screen.width}x${screen.height}`);
-        
-        // GPU Check
+    function isPrivateOrLocalIP(ip) {
+        if (!ip) return true;
+        // IPv4
+        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return isPrivateIPv4(ip);
+        // IPv6 common private/local
+        const lower = ip.toLowerCase();
+        if (lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd') ||
+            lower.startsWith('fe80:') || lower.startsWith('::ffff:')) return true;
+        return false;
+    }
+
+    // Simple non-crypto hash for canvas sample
+    function simpleHash(str) {
+        let h = 5381;
+        for (let i = 0; i < str.length; i++) {
+            h = ((h << 5) + h) ^ str.charCodeAt(i);
+        }
+        return (h >>> 0).toString(16);
+    }
+
+    // === MODULES ===
+
+    // 1. Hardware & Browser Telemetry
+    async function checkTelemetry(gen) {
+        if (gen !== scanGeneration) return;
+        log('Membaca spesifikasi perangkat keras & browser...', 'info');
+        probeBody.innerHTML = '';
+
+        // Basic
+        const ua = navigator.userAgent || 'N/A';
+        addTelemetry('User Agent', ua.length > 80 ? ua.slice(0, 77) + '...' : ua);
+        addTelemetry('Platform', navigator.platform || 'N/A');
+        addTelemetry('Language', navigator.language || 'N/A');
+        addTelemetry('Languages', (navigator.languages || []).join(', ') || 'N/A');
+        addTelemetry('CPU Cores', navigator.hardwareConcurrency ?? 'N/A');
+        addTelemetry('Device Memory', navigator.deviceMemory != null ? navigator.deviceMemory + ' GB' : 'N/A');
+        addTelemetry('Screen', `${screen.width}×${screen.height} @${window.devicePixelRatio || 1}x`);
+        addTelemetry('Color Depth', (screen.colorDepth || 'N/A') + ' bit');
+        addTelemetry('Touch Points', navigator.maxTouchPoints ?? 0);
+        addTelemetry('Cookies Enabled', navigator.cookieEnabled ? 'Yes' : 'No');
+        addTelemetry('Do Not Track', navigator.doNotTrack ?? 'unspecified');
+
+        // Timezone
+        try {
+            addTelemetry('Timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'N/A');
+        } catch (_) {
+            addTelemetry('Timezone', 'N/A');
+        }
+
+        // GPU
         try {
             const canvas = document.createElement('canvas');
             const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-            const gpu = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-            addTelemetry('GPU Renderer', gpu);
+            if (!gl) {
+                addTelemetry('GPU Renderer', 'WebGL unavailable', true);
+            } else {
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                    const gpu = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || 'Unknown';
+                    addTelemetry('GPU Renderer', gpu);
+                } else {
+                    addTelemetry('GPU Renderer', 'Extension blocked', true);
+                }
+                // Clean up
+                const lose = gl.getExtension('WEBGL_lose_context');
+                if (lose) lose.loseContext();
+            }
         } catch (e) {
-            addTelemetry('GPU Renderer', 'Blocked', true);
+            addTelemetry('GPU Renderer', 'Blocked / Error', true);
         }
 
-        // Battery Check
+        // Battery
         try {
-            if (navigator.getBattery) {
+            if (typeof navigator.getBattery === 'function') {
                 const battery = await navigator.getBattery();
+                if (gen !== scanGeneration) return;
                 addTelemetry('Battery Level', Math.round(battery.level * 100) + '%');
                 addTelemetry('Charging', battery.charging ? 'Yes' : 'No');
             } else {
-                addTelemetry('Battery Level', 'API Unsupported', true);
+                addTelemetry('Battery Level', 'API unsupported');
             }
         } catch (e) {
-            addTelemetry('Battery Level', 'Access Denied', true);
+            addTelemetry('Battery Level', 'Access denied', true);
         }
 
-        // Network
+        // Network Information API
         if (navigator.connection) {
-            addTelemetry('Network Type', navigator.connection.effectiveType || 'Unknown');
-            addTelemetry('Downlink', (navigator.connection.downlink || 'N/A') + ' Mbps');
+            const c = navigator.connection;
+            addTelemetry('Network Type', c.effectiveType || c.type || 'Unknown');
+            if (c.downlink != null) addTelemetry('Downlink', c.downlink + ' Mbps');
+            if (c.rtt != null) addTelemetry('RTT', c.rtt + ' ms');
+            if (c.saveData != null) addTelemetry('Save Data', c.saveData ? 'On' : 'Off');
         }
-        addTelemetry('Status', navigator.onLine ? 'Online' : 'Offline', !navigator.onLine);
-        
-        log('Telemetri perangkat keras berhasil dipetakan.', 'success');
+        addTelemetry('Online Status', navigator.onLine ? 'Online' : 'Offline', !navigator.onLine);
+
+        // Storage estimate (if available)
+        try {
+            if (navigator.storage && navigator.storage.estimate) {
+                const est = await navigator.storage.estimate();
+                if (gen !== scanGeneration) return;
+                const used = est.usage != null ? (est.usage / 1048576).toFixed(1) + ' MB' : 'N/A';
+                const quota = est.quota != null ? (est.quota / 1073741824).toFixed(2) + ' GB' : 'N/A';
+                addTelemetry('Storage Used / Quota', `${used} / ${quota}`);
+            }
+        } catch (_) { /* ignore */ }
+
+        if (gen === scanGeneration) {
+            log('Telemetri perangkat berhasil dipetakan.', 'success');
+        }
     }
 
-    // 2. WebRTC Leak Check (Real)
-    async function checkWebRTC() {
-        log('Menguji kebocoran IP via WebRTC (Indikator Penyadapan Jaringan)...', 'info');
+    // 2. WebRTC IP Leak Check
+    function checkWebRTC(gen) {
+        log('Menguji kebocoran IP via WebRTC...', 'info');
         return new Promise((resolve) => {
-            let leaked = false;
-            try {
-                const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
-                pc.createDataChannel('');
-                pc.onicecandidate = (e) => {
-                    if (!e.candidate) {
-                        pc.close();
-                        if (!leaked) log('WebRTC Test: Tidak ada kebocoran IP lokal terdeteksi. Aman.', 'success');
-                        resolve();
-                        return;
-                    }
-                    const ipRegex = /([0-9]{1,3}(\.[0-9]{1,3}){3})/;
-                    const match = e.candidate.candidate.match(ipRegex);
-                    if (match && !leaked) {
-                        const ip = match[1];
-                        if (ip.startsWith('192.168') || ip.startsWith('10.') || ip.startsWith('127.')) {
-                            log(`WebRTC: IP Lokal terdeteksi (${ip}). Normal untuk jaringan lokal.`, 'info');
-                        } else {
-                            leaked = true;
-                            log(`BAHAYA: IP Publik (${ip}) bocor via WebRTC! Ini celah pelacakan.`, 'danger');
-                            updateScore(40);
-                        }
-                    }
-                };
-                pc.createOffer().then(offer => pc.setLocalDescription(offer));
-                setTimeout(() => { try{pc.close()}catch(e){}; resolve(); }, 3000); // Timeout
-            } catch (err) {
-                log('WebRTC diblokir oleh konfigurasi browser. (Bagus untuk privasi).', 'warn');
+            if (gen !== scanGeneration) { resolve(); return; }
+
+            let settled = false;
+            let publicFound = false;
+            const foundIPs = new Set();
+
+            const finish = (msg, type) => {
+                if (settled) return;
+                settled = true;
+                try { pc.close(); } catch (_) {}
+                if (msg) log(msg, type);
                 resolve();
+            };
+
+            let pc;
+            try {
+                pc = new RTCPeerConnection({
+                    iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                });
+            } catch (err) {
+                log('WebRTC diblokir / tidak didukung. (Bagus untuk privasi).', 'warn');
+                resolve();
+                return;
             }
+
+            pc.createDataChannel('nexus-probe');
+
+            pc.onicecandidate = (e) => {
+                if (settled || gen !== scanGeneration) return;
+                if (!e.candidate) {
+                    // Gathering complete
+                    if (!publicFound) {
+                        finish('WebRTC: Tidak ada IP publik yang bocor. Aman.', 'success');
+                    } else {
+                        finish(null); // already logged
+                    }
+                    return;
+                }
+
+                const cand = e.candidate.candidate || '';
+                // Extract IPv4 or IPv6
+                const ipMatch = cand.match(/([0-9]{1,3}(?:\.[0-9]{1,3}){3}|[a-fA-F0-9:]+)/);
+                if (!ipMatch) return;
+                const ip = ipMatch[1];
+
+                // Skip obvious non-IP garbage and already seen
+                if (foundIPs.has(ip) || ip.includes('.local')) return;
+                foundIPs.add(ip);
+
+                if (isPrivateOrLocalIP(ip)) {
+                    log(`WebRTC: IP lokal/private terdeteksi (${ip}). Normal.`, 'info');
+                } else {
+                    publicFound = true;
+                    log(`BAHAYA: IP publik (${ip}) bocor via WebRTC! Risiko pelacakan.`, 'danger');
+                    updateScore(35);
+                }
+            };
+
+            pc.onicegatheringstatechange = () => {
+                if (pc.iceGatheringState === 'complete' && !settled) {
+                    if (!publicFound) {
+                        finish('WebRTC: Tidak ada IP publik yang bocor. Aman.', 'success');
+                    } else {
+                        finish(null);
+                    }
+                }
+            };
+
+            pc.createOffer()
+                .then(offer => pc.setLocalDescription(offer))
+                .catch(err => {
+                    log('WebRTC offer gagal: ' + (err.message || 'unknown'), 'warn');
+                    finish(null);
+                });
+
+            // Hard timeout
+            setTimeout(() => {
+                if (!settled) {
+                    if (publicFound) {
+                        finish(null);
+                    } else {
+                        finish('WebRTC: Timeout — tidak ada kebocoran publik terdeteksi.', 'success');
+                    }
+                }
+            }, 4000);
         });
     }
 
-    // 3. FPS Check (Deteksi Malware/Cryptominer)
-    function checkFPS() {
-        log('Mengukur performa grafis (Deteksi Cryptominer di background)...', 'info');
+    // 3. FPS / main-thread load probe
+    function checkFPS(gen) {
+        log('Mengukur performa frame (indikasi beban background)...', 'info');
         return new Promise((resolve) => {
+            if (gen !== scanGeneration) { resolve(); return; }
+
             let frames = 0;
             const start = performance.now();
+            let resolved = false;
+
             function loop(t) {
+                if (resolved || gen !== scanGeneration) return;
                 frames++;
                 if (t - start >= 1000) {
+                    resolved = true;
                     const fps = Math.round((frames * 1000) / (t - start));
-                    addTelemetry('FPS (Current)', fps);
-                    if (fps < 25) {
-                        log(`PERINGATAN: FPS rendah (${fps}). Ada proses berat berjalan di background!`, 'warn');
-                        updateScore(20);
+                    addTelemetry('FPS (1s sample)', fps);
+                    if (fps < 20) {
+                        log(`PERINGATAN: FPS sangat rendah (${fps}). Ada beban berat di main thread.`, 'warn');
+                        updateScore(25);
+                    } else if (fps < 40) {
+                        log(`Catatan: FPS moderat (${fps}). Perangkat mungkin sibuk.`, 'warn');
+                        updateScore(10);
                     } else {
-                        log(`FPS normal (${fps}). Kinerja perangkat lancar.`, 'success');
+                        log(`FPS normal (${fps}). Main thread relatif ringan.`, 'success');
                     }
                     resolve();
                 } else {
@@ -306,85 +534,174 @@
                 }
             }
             requestAnimationFrame(loop);
+
+            // Safety timeout
+            setTimeout(() => {
+                if (!resolved) {
+                    resolved = true;
+                    log('FPS probe timeout.', 'warn');
+                    resolve();
+                }
+            }, 2500);
         });
     }
 
-    // 4. Canvas Fingerprinting (Deteksi Pelacakan)
-    function checkFingerprint() {
-        log('Menguji keunikan sidik jari perangkat (Canvas Fingerprint)...', 'info');
+    // 4. Canvas fingerprint sample (informational)
+    function checkFingerprint(gen) {
+        if (gen !== scanGeneration) return;
+        log('Menguji sidik jari canvas (indikasi kemampuan tracking)...', 'info');
         try {
             const canvas = document.createElement('canvas');
+            canvas.width = 240;
+            canvas.height = 60;
             const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                log('Canvas 2D tidak tersedia.', 'warn');
+                return;
+            }
             ctx.textBaseline = 'top';
             ctx.font = '14px Arial';
             ctx.fillStyle = '#f60';
             ctx.fillRect(125, 1, 62, 20);
             ctx.fillStyle = '#069';
-            ctx.fillText('NEXUS Sentinel', 2, 15);
+            ctx.fillText('NEXUS Sentinel v1.1', 2, 15);
             ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
-            ctx.fillText('NEXUS Sentinel', 4, 17);
-            
+            ctx.fillText('NEXUS Sentinel v1.1', 4, 17);
+            // Extra geometry to increase uniqueness surface
+            ctx.beginPath();
+            ctx.arc(50, 40, 12, 0, Math.PI * 2);
+            ctx.fill();
+
             const data = canvas.toDataURL();
-            const hash = data.length + data.slice(-50); // Simple hash
-            
-            addTelemetry('Canvas Hash', hash.substring(0, 15) + '...');
-            log('Perangkat memiliki sidik jari grafis unik. Risiko pelacakan iklan (rendah).', 'info');
-            updateScore(10); // Risiko dasar
+            const hash = simpleHash(data);
+            addTelemetry('Canvas Hash', hash.slice(0, 12) + '…');
+
+            // Almost every modern browser produces a unique fingerprint.
+            // We report it but only add a very small baseline risk.
+            log('Canvas fingerprint tersedia (umum pada hampir semua browser). Risiko tracking iklan rendah–sedang.', 'info');
+            updateScore(5);
         } catch (e) {
-            log('Canvas Fingerprinting diblokir. Privasi terjaga.', 'success');
+            log('Canvas fingerprinting diblokir / gagal. Privasi lebih baik.', 'success');
         }
     }
 
-    // === MAIN ORCHESTRATOR ===
+    // 5. Extra soft checks
+    function checkExtras(gen) {
+        if (gen !== scanGeneration) return;
+        // Webdriver / automation hint
+        if (navigator.webdriver) {
+            log('PERINGATAN: navigator.webdriver = true (kemungkinan automation/bot).', 'warn');
+            updateScore(15);
+            addTelemetry('WebDriver', 'Detected', true);
+        } else {
+            addTelemetry('WebDriver', 'Not detected');
+        }
+
+        // Plugins length (very rough)
+        try {
+            const plugins = navigator.plugins ? navigator.plugins.length : 0;
+            addTelemetry('Plugins count', plugins);
+        } catch (_) {}
+    }
+
+    // === ORCHESTRATOR ===
     async function runScan() {
         if (isScanning) return;
         isScanning = true;
+        scanGeneration++;
+        const gen = scanGeneration;
+
         scanBtn.disabled = true;
-        scanBtn.textContent = 'Scanning...';
-        reset(); 
-        
-        log('Memulai NEXUS Sentinel Deep Scan...', 'warn');
-        
-        await checkTelemetry();
-        await checkWebRTC();
-        await checkFPS();
-        checkFingerprint();
-        
-        log('--- PEMINDAIAN SELESAI ---', 'success');
-        
-        // Final Verdict
-        if (score >= 70) {
-            log('STATUS AKHIR: SISTEM BERISIKO TINGGI! (Threat Score: ' + score + ')', 'danger');
-            log('TINDAKAN: Segera putuskan koneksi mencurigakan, hapus cache browser, atau gunakan VPN.', 'danger');
-            scoreEl.style.animation = 'glitch 0.5s infinite';
-        } else if (score >= 30) {
-            log('STATUS AKHIR: SISTEM WASPADA (Threat Score: ' + score + ')', 'warn');
-            log('TINDAKAN: Beberapa parameter menunjukkan anomali. Hati-hati saat browsing.', 'warn');
-            scoreEl.style.animation = 'none';
-        } else {
-            log('STATUS AKHIR: SISTEM AMAN (Threat Score: ' + score + ')', 'success');
-            log('TINDAKAN: Tidak ada indikasi penyadapan aktif. Perangkat dalam kondisi baik.', 'success');
-            scoreEl.style.animation = 'none';
-        }
+        resetBtn.disabled = true;
+        scanBtn.textContent = 'Scanning…';
 
-        isScanning = false;
-        scanBtn.disabled = false;
-        scanBtn.textContent = 'Run Scan';
-    }
-
-    function reset() {
-        logEl.innerHTML = '<p class="log-info">Log dibersihkan. Siap memindai...</p><p class="log-info cursor">></p>';
+        // Soft reset of display only (keep generation)
         score = 0;
         scoreEl.textContent = '0';
         scoreEl.className = 'score-val score-safe';
         scoreEl.style.animation = 'none';
-        probeTable.innerHTML = '<tr><td>Menunggu pemindaian...</td><td>-</td></tr>';
+        probeBody.innerHTML = '<tr><td>Memulai probe…</td><td>-</td></tr>';
+        logEl.innerHTML = '';
+        log('Memulai NEXUS Sentinel Deep Scan…', 'warn');
+
+        try {
+            await checkTelemetry(gen);
+            if (gen !== scanGeneration) return;
+
+            await checkWebRTC(gen);
+            if (gen !== scanGeneration) return;
+
+            await checkFPS(gen);
+            if (gen !== scanGeneration) return;
+
+            checkFingerprint(gen);
+            checkExtras(gen);
+
+            if (gen !== scanGeneration) return;
+
+            log('—— PEMINDAIAN SELESAI ——', 'success');
+
+            // Final verdict
+            if (score >= 70) {
+                log(`STATUS AKHIR: SISTEM BERISIKO TINGGI (Threat Score: ${score})`, 'danger');
+                log('TINDAKAN: Periksa ekstensi, putuskan koneksi mencurigakan, clear cache, atau gunakan VPN / browser privacy-focused.', 'danger');
+                scoreEl.style.animation = 'glitch 0.5s infinite';
+            } else if (score >= 30) {
+                log(`STATUS AKHIR: SISTEM WASPADA (Threat Score: ${score})`, 'warn');
+                log('TINDAKAN: Beberapa sinyal anomali terdeteksi. Tetap waspada saat browsing.', 'warn');
+                scoreEl.style.animation = 'none';
+            } else {
+                log(`STATUS AKHIR: SISTEM AMAN (Threat Score: ${score})`, 'success');
+                log('TINDAKAN: Tidak ada indikasi kuat penyadapan/aktif threat dari probe ini.', 'success');
+                scoreEl.style.animation = 'none';
+            }
+        } catch (err) {
+            log('Error tak terduga selama scan: ' + (err.message || String(err)), 'danger');
+        } finally {
+            if (gen === scanGeneration) {
+                isScanning = false;
+                scanBtn.disabled = false;
+                resetBtn.disabled = false;
+                scanBtn.textContent = 'Run Scan';
+            }
+        }
     }
 
-    // Event Listeners
+    function reset() {
+        // Invalidate any in-flight scan
+        scanGeneration++;
+        isScanning = false;
+
+        logEl.innerHTML = '';
+        const p1 = document.createElement('p');
+        p1.className = 'log-info';
+        p1.textContent = 'Log dibersihkan. Siap memindai…';
+        const p2 = document.createElement('p');
+        p2.className = 'log-info cursor';
+        p2.textContent = '>';
+        logEl.appendChild(p1);
+        logEl.appendChild(p2);
+
+        score = 0;
+        scoreEl.textContent = '0';
+        scoreEl.className = 'score-val score-safe';
+        scoreEl.style.animation = 'none';
+        document.body.classList.remove('glitch');
+
+        probeBody.innerHTML = '<tr><td>Menunggu pemindaian...</td><td>-</td></tr>';
+
+        scanBtn.disabled = false;
+        resetBtn.disabled = false;
+        scanBtn.textContent = 'Run Scan';
+    }
+
+    // Events
     scanBtn.addEventListener('click', runScan);
     resetBtn.addEventListener('click', reset);
 
+    // Prevent accidental double-tap issues on mobile
+    scanBtn.addEventListener('touchend', (e) => { e.preventDefault(); runScan(); }, { passive: false });
+})();
 </script>
 </body>
 </html>
