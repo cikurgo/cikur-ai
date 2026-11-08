@@ -186,7 +186,7 @@ function initApp(){
                  (navigator.maxTouchPoints > 1 && window.innerWidth < 900);
   var isLowEnd = (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ||
                  (window.devicePixelRatio > 2.5 && isMobile);
-  var N = isLowEnd ? 10000 : (isMobile ? 16000 : 28000);
+  var N = isLowEnd ? 15000 : (isMobile ? 26000 : 36000);
 
   var TAU = Math.PI * 2, R = Math.random;
   function g(){ return (R()+R()+R()-1.5)*.8; }
@@ -231,7 +231,7 @@ function initApp(){
   }
 
   /* ===== AVATAR SETENGAH BADAN ===== */
-  var H = 1.32, WX = .88, DZ = 1.05, HY = .95, YM = -.7;
+  var H = 1.27, WX = .93, DZ = 1.05, HY = .95, YM = -.7;
   function prof(q){ return q<0 ? Math.pow(Math.max(0,1-Math.pow(-q,2.6)),.4545) : Math.sqrt(Math.max(0,1-q*q)); }
   function rel(x,y){
     var ax = Math.abs(x), r = 0, t = cl((.42-y)/.66,0,1);
@@ -259,7 +259,7 @@ function initApp(){
     else j = lr(-.22,1,sm(YM-.02,YM-.2,y))*(y < YM-.2 ? L : 1);
     return [j, .55*gs(x,.5)*gs(y-YM,.3), .8*gs(ax-.38,.2)*gs(y-YM,.2), .5*gs(ax,.5)*gs(y-.62,.25)];
   }
-  var XT = [-1.45,-1.7,-2,-2.3,-2.8,-3.6,-4.5], WT = [.55,1.25,2.05,2.65,2.6,2.35,2.2];
+  var XT = [-.9,-1.2,-1.55,-1.9,-2.5,-3.4,-4.4], WT = [.62,1.3,2.05,2.65,2.6,2.35,2.2];
   function hw(Y){
     for(var i=1;i<7;i++){
       if((Y<=XT[i-1] && Y>=XT[i]) || i===6){
@@ -305,7 +305,10 @@ function initApp(){
     }
     return [[x,y,z], C, D, E];
   }
+  var FM=[[0,0],[.24,.2],[.265,.235],[.29,.265],[.35,.33],[.375,.355],[.395,.375],[.58,.52],[.595,.535],[.65,.6],[.88,.9],[.96,.97],[1,1]];
+  function mapF(f){for(var j=1;j<FM.length;j++)if(f<=FM[j][0]){var u=(f-FM[j-1][0])/(FM[j][0]-FM[j-1][0]);return FM[j-1][1]+u*(FM[j][1]-FM[j-1][1])}return f}
   function av(i,f){
+    f=mapF(f);
     var P, C, D=[0,0,0,0], E=[0,0,0,1], B=0, hd=1, k, s, t, x, y, z, a, r, q, w, az, lum;
     if(f < .2){
       var cz, ok=0, tr=0;
@@ -319,7 +322,7 @@ function initApp(){
         if(cz>.3 && Math.abs(Math.abs(x)-.4)<.21 && Math.abs(y-.3)<.1) ok=0;
       }
       var fo = cl(cz,0,1), bp = Math.min(1.4, 1 + cl(rel(x,y),-.1,.3)*2);
-      C = cz<.12 ? [.1,.5,1,.7] : [Math.min(1.3,bp), (.52+.3*fo)*bp, (.12+.16*fo)*bp, .5+.4*fo];
+      C = cz<.12 ? [.1,.5,1,.7] : [Math.min(1.3,bp), (.52+.3*fo)*bp, (.12+.16*fo)*bp, .64+.4*fo];
       var d = skD(x,y); D = [d[0],d[1],d[2],0]; E = [0,d[3],0,1]; P = [x,y,z];
     } else if(f < .235){
       var up = R()<.43; t = R()*2-1; x = t*.37;
@@ -367,7 +370,7 @@ function initApp(){
         az = ((R()*96)|0)/96*TAU + g()*.012;
         var c0 = Math.cos(az), hl = c0>0 ? .12+.83*Math.pow(c0,1.6) : .12-.95*Math.pow(-c0,1.2);
         q = lr(hl/H, 1, Math.pow(R(),.8)); az += .07*Math.sin(q*9 + az*3)*(1-q);
-        var rs = 1.04 + .12*Math.pow(R(),1.5) + .04*Math.sin(az*5 + q*7);
+        var rs = 1.07 + .2*Math.pow(R(),1.3) + .05*Math.sin(az*5 + q*7);
         w = prof(q);
         x = WX*w*rs*Math.sin(az)*1.02; y = q*H*(1+(rs-1)*.5); z = DZ*w*rs*Math.cos(az);
         lum = cl(.4 + .4*Math.cos(az) + .3*q, 0, 1);
@@ -383,44 +386,44 @@ function initApp(){
       P=[x,y,z];
     } else if(f < .535){
       s=R()<.5?-1:1; a=R()*TAU; r=R()<.6?1:.6;
-      P=[s*(.86+.06*r+.03*Math.sin(a)), .04+.27*r*Math.sin(a), -.1+.15*r*Math.cos(a)];
+      P=[s*(.91+.06*r+.03*Math.sin(a)), .04+.27*r*Math.sin(a), -.1+.15*r*Math.cos(a)];
       C=[1,.55,.18,.7];
     } else if(f < .6){
-      y = R()<.55 ? -.95-((R()*22)|0)*.078 : lr(-.95,-2.65,R());
-      r = .43 + .4*Math.pow(cl((-y-1.7)/1,0,1),2);
-      var warm = sm(-1.6,-.95,y); E=[0,0,0,sm(-2.6,-1,y)*.95];
+      y = R()<.55 ? -.95-((R()*13)|0)*.078 : lr(-.95,-2.05,R());
+      r = .52 + .75*Math.pow(cl((-y-1.3)/.75,0,1),2);
+      var warm = sm(-1.5,-.95,y); E=[0,0,0,sm(-2,-1,y)*.95];
       if(R() < .16){
-        t=R(); s=R()<.5?-1:1; x=s*(.5-.38*t); y=-1-1.5*t;
-        z=-.06+.4*Math.sqrt(Math.max(0,1-Math.pow(x/.43,2)))+.02; C=[1,.75,.4,.8];
+        t=R(); s=R()<.5?-1:1; x=s*(.56-.4*t); y=-1-.95*t;
+        z=-.06+.48*Math.sqrt(Math.max(0,1-Math.pow(x/.52,2)))+.02; C=[1,.75,.4,.8];
       } else {
         az = R()<.7 ? (R()-.5)*TAU*.6 : R()*TAU;
-        x = r*Math.sin(az); z = -.06 + .4*Math.cos(az)*r/.43;
+        x = r*Math.sin(az); z = -.06 + .48*Math.cos(az)*Math.min(1,r/.52);
         C = [lr(.15,1,warm), lr(.5,.55,warm), lr(1,.18,warm), .7];
       }
       P=[x,y,z];
     } else if(f < .9){
       hd=0; E=[0,0,0,0]; k=R(); s=R()<.5?-1:1; t=R();
       if(k < .62){
-        y = R()<.6 ? -1.5-((R()*38)|0)*.078 : lr(-1.5,-4.45,R());
+        y = R()<.6 ? -.9-((R()*45)|0)*.078 : lr(-.9,-4.4,R());
         w = hw(y); az = R()<.8 ? (R()-.5)*Math.PI : R()*TAU;
         x = w*Math.sin(az); z = -.12 + (.3+.3*cl((w-.5)/1.4,0,1))*Math.cos(az);
         var e = .55 + .8*Math.abs(Math.sin(az)), fd = sm(-4.5,-3.4,y);
         C = [.1*e*fd, .5*e*fd, e*fd, .8];
       } else if(k < .72){
-        x = s*lr(.62,0,Math.pow(t,1.1)) + (R()<.4 ? s*.12*(1-t) : 0);
-        y = lr(-1.6,-2.75,t); z = tz(x,y)+.03; C=[1,.6,.2,R()<.4?.6:1];
+        x = s*lr(.7,0,Math.pow(t,1.1)) + (R()<.4 ? s*.12*(1-t) : 0);
+        y = lr(-.95,-2.1,t); z = tz(x,y)+.03; C=[1,.6,.2,R()<.4?.6:1];
       } else if(k < .8){
-        x = s*lr(.12,1.9,t); y=-2.12+.18*Math.sin(t*2.4)-.1*t; z=tz(x,y)+.03; C=[1,.8,.45,.7];
+        x = s*lr(.12,1.9,t); y=-1.5+.18*Math.sin(t*2.4)-.1*t; z=tz(x,y)+.03; C=[1,.8,.45,.7];
       } else if(k < .88){
         a = lr(.2,Math.PI-.2,R()); r=.3+.18*((R()*5)|0);
-        x = s*2.05 + r*Math.cos(a); y=-2.55 + r*Math.sin(a)*.7; z=tz(x,y)+.02; C=[.2,.6,1,.85];
+        x = s*2.05 + r*Math.cos(a); y=-1.95 + r*Math.sin(a)*.7; z=tz(x,y)+.02; C=[.2,.6,1,.85];
       } else if(k < .93){
-        x=g()*.01; y=lr(-2.75,-4.45,t); z=tz(x,y)+.02; C=[.4,.8,1,.7];
+        x=g()*.01; y=lr(-2.1,-2.3,t); z=tz(x,y)+.02; C=[.4,.8,1,.7];
       } else {
         a=R()*TAU; r=R()<.6?.26:.1*Math.sqrt(R());
-        x=Math.cos(a)*r; y=-3.2+Math.sin(a)*r; z=tz(x,y)+.04; C=[.5,.95,1,1.6];
+        x=Math.cos(a)*r; y=-2.6+Math.sin(a)*r; z=tz(x,y)+.04; C=[.5,.95,1,1.6];
       }
-      B = sm(-2.9,-2.2,y); P=[x,y,z];
+      B = sm(-2.4,-1.5,y); P=[x,y,z];
     } else if(f < .97){
       hd=0; E=[0,0,0,0]; k=R(); a=R()*TAU;
       if(k < .35){ r=2.9; P=[Math.cos(a)*r, .7+Math.sin(a)*r, -1]; C=[.3,.75,1,.55]; }
@@ -603,6 +606,13 @@ function initApp(){
   }
   document.getElementById('bSp').onclick = function(){ speak(!spk); };
   pill.onclick = function(){ speak(false); };
+  window.NexusAvatar = {
+    say: function(t){ TXT = String(t||'').replace(/\s+/g,' ').slice(0,600) || TXT; go(1); speak(true); },
+    stop: function(){ speak(false); },
+    show: function(){ go(1); },
+    hide: function(){ go(0); },
+    get speaking(){ return spk; }
+  };
 
   document.getElementById('bMic').onclick = async function(){
     var b = this;
