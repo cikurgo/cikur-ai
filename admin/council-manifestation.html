@@ -94,6 +94,13 @@ body.av #np{opacity:1}
 #np b{display:block;font:700 clamp(18px,5vw,26px) Orbitron,system-ui,sans-serif;letter-spacing:.12em}
 #np span{font-size:10px;letter-spacing:.3em;text-transform:uppercase;opacity:.85}
 #fps{position:fixed;z-index:5;top:calc(16px + env(safe-area-inset-top,0px));right:18px;font:9px ui-monospace,Menlo,monospace;color:var(--cy);opacity:.6;pointer-events:none}
+/* ===== VOICE OF AUTHORITY ===== */
+#bar button{width:58px;line-height:1.15;text-align:center}
+#bSp{color:#ffd23c}
+#bSp.on{border-color:#ffd23c;background:rgba(255,210,60,.15);box-shadow:0 0 14px rgba(255,210,60,.5)}
+#sub{position:fixed;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(168px + env(safe-area-inset-bottom,0px));width:min(92vw,560px);text-align:center;font:600 13px/1.5 ui-monospace,"Courier New",monospace;letter-spacing:.04em;color:var(--cy);text-shadow:0 0 10px var(--cy);padding:8px 12px;border:1px solid rgba(255,210,60,.35);border-radius:8px;background:linear-gradient(180deg,rgba(6,14,40,.65),rgba(6,14,40,.4));backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);opacity:0;transition:opacity .5s;pointer-events:none}
+#sub.on{opacity:1}
+#sub em{display:inline-block;width:8px;height:14px;margin-left:3px;vertical-align:-2px;background:#ffd23c;box-shadow:0 0 8px #ffd23c;animation:bl .7s infinite}
 </style>
 <script>
 // Robust Three.js loader with fallback CDNs
@@ -127,7 +134,7 @@ body.av #np{opacity:1}
   <code id="errDetail"></code>
 </div>
 <canvas id="cv"></canvas>
-<div id="frm"></div><div id="fl"></div><div id="sw"></div><div id="np"></div><div id="cb"></div><div id="fps"></div>
+<div id="frm"></div><div id="fl"></div><div id="sw"></div><div id="np"></div><div id="cb"></div><div id="fps"></div><div id="sub"></div>
 <div class="sd" id="sl"><div><span>NEURAL SYNC</span><b id="t1">--</b><u><i id="b1"></i></u></div><div><span>LATENCY</span><b id="t2">--</b><u><i id="b2"></i></u></div></div>
 <div class="sd" id="sr"><div><span>CORE LOAD</span><b id="t3">--</b><u><i id="b3"></i></u></div><div><span>SIGNAL</span><b id="t4">--</b><u><i id="b4"></i></u></div></div>
 <div id="lbls"></div>
@@ -150,7 +157,7 @@ body.av #np{opacity:1}
   </button>
   <button id="bSp" aria-label="Bicara">
     <svg class="ic" viewBox="0 0 24 24"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>
-    Bicara
+    Bicara Nexus
   </button>
   <button id="bMic" class="mic" aria-label="Mikrofon">
     <svg class="ic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
@@ -668,7 +675,7 @@ function initApp(){
 
   /* ===== suara + lipsync ===== */
   var TXT = 'Halo. Saya avatar AI Anda. Semua agen sudah siap membantu.';
-  var CPS = 13.5;
+  var CPS = 11.5;
   var VZ = {a:[.85,.1,0],i:[.28,.95,0],e:[.5,.6,0],o:[.55,-.1,.85],u:[.3,-.1,1],m:[0,0,0],b:[0,0,0],p:[0,0,0],f:[.1,.3,0],v:[.1,.3,0],w:[.2,-.1,.6]};
   function vis(ch){
     ch = (ch||'').toLowerCase();
@@ -694,36 +701,51 @@ function initApp(){
     }
   }
 
+  var talking = false, spTok = 0, VOICE = null, subT = 0, subH = 0;
+  var NX = 'Saya adalah NEXUS. Pelindung data Anda. Saya telah memindai 18 node jaringan. Tidak ada ancaman yang tersisa. Sistem berdaulat sepenuhnya.';
+  var subEl = document.getElementById('sub');
+  function pickVoice(){
+    var vs = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+    var id = vs.filter(function(v){ return /^id([-_]|$)/i.test(v.lang); });
+    VOICE = id.filter(function(v){ return /ardi|andika|rizki|male|pria|laki/i.test(v.name) && !/female|wanita|perempuan/i.test(v.name); })[0] || id[0] || null;
+  }
+  if(window.speechSynthesis){ pickVoice(); try{ speechSynthesis.onvoiceschanged = pickVoice; }catch(_){} }
+  function subType(t){
+    clearInterval(subT); clearTimeout(subH);
+    subEl.innerHTML = '<span></span><em></em>'; subEl.classList.add('on');
+    var st = subEl.firstChild, i = 0;
+    subT = setInterval(function(){ i++; st.textContent = t.slice(0, i); if(i >= t.length) clearInterval(subT); }, 1000/CPS);
+  }
+  function subStop(){
+    clearInterval(subT);
+    if(subEl.firstChild) subEl.firstChild.textContent = TXT;
+    subH = setTimeout(function(){ subEl.classList.remove('on'); }, 4000);
+  }
   function speak(on, mute){
-    spk = !!on;
+    if(typeof on === 'string'){ TXT = on; on = true; }
+    spTok++; var tok = spTok;
+    spk = !!on; talking = false;
     pill.classList.toggle('on', spk);
     document.getElementById('bSp').classList.toggle('on', spk);
-    if(window.speechSynthesis){
-      try{ speechSynthesis.cancel(); }catch(_){}
-    }
-    if(spk){
-      sT = performance.now(); bI = -1;
-      if(!mute && window.speechSynthesis && window.SpeechSynthesisUtterance){
-        try{
-          var u = new SpeechSynthesisUtterance(TXT);
-          u.lang = 'id-ID';
-          u.rate = PER[per].rt; u.pitch = PER[per].pt;
-          u.onboundary = function(e){
-            if(typeof e.charIndex === 'number'){ bI = e.charIndex; bT = performance.now(); }
-          };
-          u.onend = function(){ speak(false); };
-          u.onerror = function(){ speak(false); };
-          speechSynthesis.speak(u);
-        }catch(e){
-          // fallback timer-based lipsync
-          setTimeout(function(){ speak(false); }, Math.max(3000, TXT.length / CPS * 1000 + 800));
-        }
-      } else {
-        setTimeout(function(){ speak(false); }, Math.max(3000, TXT.length / CPS * 1000 + 800));
-      }
-    }
+    if(window.speechSynthesis){ try{ speechSynthesis.cancel(); }catch(_){} }
+    if(!spk){ subStop(); return; }
+    sT = performance.now(); bI = -1;
+    subType(TXT);
+    var fb = function(){ talking = true; setTimeout(function(){ if(tok === spTok) speak(false); }, Math.max(3000, TXT.length / CPS * 1000 + 800)); };
+    if(mute || !window.speechSynthesis || !window.SpeechSynthesisUtterance){ fb(); return; }
+    try{
+      var u = new SpeechSynthesisUtterance(TXT);
+      u.lang = 'id-ID';
+      if(VOICE){ u.voice = VOICE; u.lang = VOICE.lang; }
+      u.pitch = 0.1; u.rate = 0.8; u.volume = 1.0;
+      u.onstart = function(){ if(tok === spTok){ talking = true; sT = performance.now(); } };
+      u.onboundary = function(e){ if(tok === spTok && typeof e.charIndex === 'number'){ bI = e.charIndex; bT = performance.now(); } };
+      u.onend = u.onerror = function(){ if(tok === spTok) speak(false); };
+      setTimeout(function(){ if(tok === spTok) speechSynthesis.speak(u); }, 60);
+      setTimeout(function(){ if(tok === spTok && !talking) fb(); }, 2800);
+    }catch(e){ fb(); }
   }
-  document.getElementById('bSp').onclick = function(){ speak(!spk); };
+  document.getElementById('bSp').onclick = function(){ stopAuto(); if(cur !== 1) go(1); speak(spk ? false : NX); };
   pill.onclick = function(){ speak(false); };
 
   document.getElementById('bMic').onclick = async function(){
@@ -807,7 +829,7 @@ function initApp(){
 
     /* target mulut */
     var tj=0, tw=0, tr=0, ma=0;
-    if(spk){
+    if(spk && talking){
       var idx = bI >= 0 ? bI + (now - bT)/1000 * CPS : (now - sT)/1000 * CPS;
       if(bI >= 0){
         var ns2 = TXT.indexOf(' ', bI+1);
@@ -822,6 +844,7 @@ function initApp(){
       tr = lr(vz[2], nx[2], fr*fr);
       if(idx > TXT.length + 2) tj = 0;
     }
+    if(talking){ var os = Math.abs(.5*Math.sin(T*19)*Math.sin(T*7.3) + .35*Math.sin(T*31)) + .25*R(); tj = Math.max(tj, Math.min(1, os)); }
     if(micOn && an && buf){
       try{
         an.getByteFrequencyData(buf);
@@ -871,7 +894,7 @@ function initApp(){
     hy = ease(hy, my*.3 + .03*Math.sin(T*.61) + .04*act, 5, dt);
     hz = ease(hz, .025*Math.sin(T*.4) - mx*.05, 5, dt);
 
-    amp = ease(amp, Math.max(ma, spk ? .2 + .35*jw : 0), 10, dt);
+    amp = ease(amp, Math.max(ma, talking ? .2 + .35*jw + .15*R() : 0), 10, dt);
     U.uAmp.value = amp;
     U.uJaw.value = jw;
     U.uWide.value = wd;
