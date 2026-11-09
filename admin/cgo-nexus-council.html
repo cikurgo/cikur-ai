@@ -6437,5 +6437,420 @@ window.runForgedSkill = function (forgeId, argsStr, resultEl) {
   } catch (err) { console.warn('[SOUL] modul gagal dimuat, NEXUS inti tetap berjalan:', err); }
 })();
 </script>
+<!-- ===== NEXUS SPATIAL OS v1.0 · Zero-Gravity Chat · Council Table · Tangible LBC =====
+     Modul aditif: hanya MEMBACA DOM chat yang sudah ada (#chat-container .thought) lalu mencerminkannya ke ruang 3D.
+     Bila Three.js gagal dimuat / WebGL tidak ada, NEXUS klasik 2D tetap berjalan normal. Ctrl+Shift+5 = Spatial on/off · Ctrl+Shift+6 = LBC -->
+<style>
+#sp-root{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none}
+body:not(.sp) #sp-root,body:not(.sp) #sp-hud{display:none}
+#sp-gl{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto;touch-action:none;cursor:grab}
+#sp-gl:active{cursor:grabbing}
+#sp-css{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+body.sp #stage{opacity:0;pointer-events:none;transition:opacity .4s}
+body.sp #jump-bottom{display:none}
+.sp-panel{width:300px;max-height:260px;display:flex;flex-direction:column;border-radius:16px;overflow:hidden;color:#e8eeff;font:13px/1.55 'Newsreader',Georgia,serif;
+ background:linear-gradient(145deg,rgba(255,255,255,.11),rgba(255,255,255,.03)),rgba(10,16,34,.58);
+ border:1px solid color-mix(in srgb,var(--pc) 55%,transparent);
+ box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),0 12px 40px rgba(0,0,0,.5),0 0 26px color-mix(in srgb,var(--pc) 32%,transparent);
+ -webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4);backface-visibility:hidden;will-change:transform}
+.sp-panel.user{width:240px}
+.sp-h{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:grab;touch-action:none;user-select:none;font:400 10px/1 'JetBrains Mono',monospace;letter-spacing:.16em;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.08)}
+.sp-h i{width:7px;height:7px;border-radius:50%;background:var(--pc);box-shadow:0 0 10px var(--pc)}
+.sp-h u{margin-left:auto;text-decoration:none;opacity:.4}
+.sp-panel.act{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08),0 0 44px color-mix(in srgb,var(--pc) 65%,transparent)}
+.sp-b{padding:6px 14px 12px;overflow:auto;touch-action:pan-y;scrollbar-width:thin;overscroll-behavior:contain}
+.sp-b p{margin:.45em 0}.sp-b h1,.sp-b h2,.sp-b h3{font-size:14px;margin:.5em 0 .2em}.sp-b pre{overflow:auto;font-size:11px;background:rgba(0,0,0,.35);padding:8px;border-radius:8px}
+.sp-b ul,.sp-b ol{padding-left:1.2em;margin:.3em 0}.sp-b img{max-width:100%}
+.sp-new{animation:spn 1.3s ease-out}
+@keyframes spn{0%{box-shadow:0 0 70px var(--pc),0 0 0 2px var(--pc)}100%{}}
+.sp-tag{font:400 11px/1 'JetBrains Mono',monospace;letter-spacing:.18em;text-transform:uppercase;white-space:nowrap;padding:4px 9px;border-radius:99px;background:rgba(8,12,26,.6);border:1px solid var(--pc);color:var(--pc);pointer-events:none}
+.sp-lab{font:400 10px/1.3 'JetBrains Mono',monospace;text-align:center;color:#a5f3fc;pointer-events:none;white-space:nowrap;text-shadow:0 0 8px #000}
+.sp-lab b{display:block;font-size:12px;color:#e0f2fe}.sp-lab.bad,.sp-lab.bad b{color:#fca5a5}
+#sp-hud{position:fixed;top:calc(max(10px,env(safe-area-inset-top)) + 54px);left:12px;z-index:46;max-width:min(330px,calc(100vw - 24px));padding:10px 12px;border-radius:14px;font:400 11px/1.5 'JetBrains Mono',monospace;color:#cffafe;
+ background:rgba(8,14,30,.62);border:1px solid rgba(103,232,249,.35);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+#sp-hud[hidden]{display:none}
+#sp-hud b{letter-spacing:.18em}#sp-hud .bad{color:#fca5a5}#sp-hud .ok{color:#67e8f9}
+#sp-hud div{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+#sp-hud button{font:inherit;letter-spacing:.12em;padding:5px 9px;border-radius:8px;border:1px solid rgba(103,232,249,.4);background:rgba(103,232,249,.08);color:inherit;cursor:pointer}
+#sp-hud button[data-a=tamper]{border-color:rgba(248,113,113,.5);color:#fca5a5}
+#sp-toggle.active,#sp-lbc-btn.active{color:var(--accent)}
+@media(prefers-reduced-motion:reduce){.sp-new{animation:none}}
+</style>
+<script>
+(function () {
+  'use strict';
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var voidEl = $('#void'), chat = $('#chat-container'), dock = $('#avatar-btn');
+  if (!voidEl || !chat || !dock) return;
+  var LS = 'nexus_spatial', reduce = false;
+  try { reduce = matchMedia('(prefers-reduced-motion:reduce)').matches; } catch (e) {}
+  var want = true; try { want = localStorage.getItem(LS) !== '0'; } catch (e) {}
+  var AG = { nova: ['Dr. Nova', '#38bdf8'], flux: ['Dr. Flux', '#10b981'], cgo: ['CGO', '#f59e0b'], lyric: ['Dr. Lyric', '#ef4444'], cortex: ['Dr. Cortex', '#a78bfa'] };
+  var ORDER = ['nova', 'flux', 'cgo', 'lyric', 'cortex'];
+  var ZERO = new Array(65).join('0');
+  var on = false, ready = false, loading = false, mode = 'chat';
+  var gl, cssr, scene, cam, world, panelsG, lbcG, tableG, root, hud;
+  var W = 0, H = 0, D = 800, U = 1, zoomF = 1, q = 0, last = 0, raf = 0, tick = 0;
+  var panels = [], blocks = [], sel = null, seats = {}, seatLab = {}, tableT = 0, tableMat = [], tableR = 300;
+  var yaw = 0, pitch = 0, vy = 0, vp = 0, dragging = false, idleAt = 0;
+  var activeId = null, scanOn = false, glow = 0;
+  var pts, laser, laser2, pulse, chainLine, chainP = Promise.resolve();
+  var cubeGeo, edgeGeo, fpsEma = 16, fpsT = 0;
+  function toast(m, w) { try { showToast(m, 3000, !!w); } catch (e) {} }
+  function loadJs(src, cb) { var s = document.createElement('script'); s.src = src; s.onload = cb; s.onerror = fail; document.head.appendChild(s); }
+  function fail() { loading = false; document.body.classList.remove('sp'); toast('Spatial OS gagal dimuat (cek koneksi/WebGL) — UI klasik tetap aktif.', true); }
+
+  /* ---------- BOOT ---------- */
+  function boot() {
+    if (ready) return setOn(true);
+    if (loading) return; loading = true;
+    var go = function () {
+      if (window.THREE && THREE.CSS3DRenderer) return init();
+      loadJs('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS3DRenderer.js', init);
+    };
+    if (window.THREE && THREE.REVISION) go(); else loadJs('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js', go);
+  }
+  function init() {
+    try {
+      root = document.createElement('div'); root.id = 'sp-root';
+      voidEl.insertBefore(root, $('#stage'));
+      gl = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'low-power' });
+      gl.setClearColor(0x000000, 0); gl.domElement.id = 'sp-gl'; root.appendChild(gl.domElement);
+      cssr = new THREE.CSS3DRenderer(); cssr.domElement.id = 'sp-css'; root.appendChild(cssr.domElement);
+      scene = new THREE.Scene(); cam = new THREE.PerspectiveCamera(50, 1, 1, 6000);
+      world = new THREE.Group(); scene.add(world);
+      panelsG = new THREE.Group(); lbcG = new THREE.Group(); tableG = new THREE.Group(); world.add(panelsG); world.add(lbcG); world.add(tableG);
+      lbcG.visible = false;
+      cubeGeo = new THREE.BoxGeometry(64, 64, 64); edgeGeo = new THREE.EdgesGeometry(cubeGeo);
+      buildFx(); buildTable(); buildHud(); bindInput();
+      new MutationObserver(onMut).observe(chat, { childList: true, subtree: true, characterData: true });
+      ready = true; loading = false;
+      resize(); addEventListener('resize', resize);
+      addBlock('sys', 'NEXUS GENESIS · Spatial OS v1.0');
+      Array.prototype.forEach.call(chat.querySelectorAll('.thought'), function (th) { addPanel(th); });
+      setOn(true);
+      toast('Spatial OS aktif · seret panel/ruang · roda = zoom · Ctrl+Shift+5 = klasik');
+    } catch (e) { console.warn('[SPATIAL]', e); fail(); }
+  }
+
+  /* ---------- FX: partikel avatar + laser ---------- */
+  function buildFx() {
+    var N = 170, pos = new Float32Array(N * 3), g = new THREE.BufferGeometry();
+    for (var i = 0; i < N; i++) {
+      var u = Math.random() * 2 - 1, a = Math.random() * 6.283, r = 110 + Math.random() * 60, s = Math.sqrt(1 - u * u);
+      pos[i * 3] = r * s * Math.cos(a); pos[i * 3 + 1] = r * u; pos[i * 3 + 2] = r * s * Math.sin(a);
+    }
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    pts = new THREE.Points(g, new THREE.PointsMaterial({ size: 3.2, color: 0x38bdf8, transparent: true, opacity: .15, depthWrite: false, blending: THREE.AdditiveBlending }));
+    scene.add(pts);
+    var mk = function (op) {
+      var lg = new THREE.BufferGeometry(); lg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      var l = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending }));
+      l.frustumCulled = false; l.visible = false; scene.add(l); return l;
+    };
+    laser = mk(.95); laser2 = mk(.45);
+    var pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
+    pulse = new THREE.Points(pg, new THREE.PointsMaterial({ size: 14, color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    pulse.frustumCulled = false; pulse.visible = false; scene.add(pulse);
+    /* rantai LBC */
+    var cg = new THREE.BufferGeometry(); cg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(30 * 6), 3)); cg.setAttribute('color', new THREE.BufferAttribute(new Float32Array(30 * 6), 3));
+    chainLine = new THREE.LineSegments(cg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    chainLine.frustumCulled = false; lbcG.add(chainLine);
+  }
+
+  /* ---------- COUNCIL TABLE ---------- */
+  function buildTable() {
+    tableG.rotation.x = -1.2;
+    ORDER.forEach(function (id, i) {
+      var c = new THREE.Color(AG[id][1]);
+      var m = new THREE.Mesh(new THREE.SphereGeometry(13, 16, 12), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .6 }));
+      tableG.add(m); seats[id] = m;
+      var el = document.createElement('div'); el.className = 'sp-tag'; el.style.setProperty('--pc', AG[id][1]); el.textContent = AG[id][0].replace('Dr. ', '');
+      var o = new THREE.CSS3DObject(el); world.add(o); seatLab[id] = o;
+    });
+  }
+  function layoutTable() {
+    tableR = Math.min(W * (W < 700 ? .36 : .27), 360);
+    tableG.position.set(0, -H * (W < 700 ? .3 : .27), 0);
+    tableG.children.slice().forEach(function (c) { if (c.userData.ring) { tableG.remove(c); c.geometry.dispose(); } });
+    tableMat = [];
+    var add = function (geo, op, col) { var m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide })); m.userData.ring = 1; m.userData.op = op; tableG.add(m); tableMat.push(m); };
+    add(new THREE.TorusGeometry(tableR, 4, 10, 96), .5, 0x38bdf8);
+    add(new THREE.TorusGeometry(tableR * .62, 1.5, 6, 72), .25, 0x818cf8);
+    add(new THREE.CircleGeometry(tableR, 64), .06, 0x38bdf8);
+    tableG.updateMatrix();
+    ORDER.forEach(function (id, i) {
+      var f = -Math.PI / 2 + i * (Math.PI * 2 / 5);
+      seats[id].position.set(Math.cos(f) * tableR, Math.sin(f) * tableR, 0);
+      var v = seats[id].position.clone().applyMatrix4(tableG.matrix);
+      seatLab[id].position.set(v.x, v.y + 30, v.z);
+    });
+  }
+
+  /* ---------- PANEL CHAT ZERO-GRAVITY ---------- */
+  function addPanel(th) {
+    if (th._sp || th.classList.contains('boot')) return;
+    var role = th.classList.contains('user') ? 'user' : 'ai', id = th.dataset.agent === 'synth' ? 'cortex' : th.dataset.agent, a = id && AG[id];
+    var el = document.createElement('div'); el.className = 'sp-panel sp-new ' + role;
+    el.style.setProperty('--pc', a ? a[1] : (role === 'user' ? '#e2e8f0' : '#38bdf8'));
+    el.innerHTML = '<div class="sp-h"><i></i><span></span><u>⠿ drag</u></div><div class="sp-b"></div>';
+    el.firstChild.children[1].textContent = a ? a[0] : (role === 'user' ? 'Anda' : 'NEXUS');
+    var obj = new THREE.CSS3DObject(el);
+    var p = { th: th, el: el, obj: obj, body: el.lastChild, id: id, ang: pickAngle(role), z: -90 + Math.random() * 170, rz: (Math.random() - .5) * .16, rx: (Math.random() - .5) * .12, born: performance.now(), pinned: false, tm: 0, op: -1 };
+    th._sp = p; panels.push(p); panelsG.add(obj); sync(p); wire(p);
+    obj.scale.setScalar(.01);
+    if (panels.length > 12) removePanel(panels[0]);
+    setTimeout(function () { el.classList.remove('sp-new'); }, 1400);
+  }
+  function removePanel(p) {
+    var i = panels.indexOf(p); if (i >= 0) panels.splice(i, 1);
+    panelsG.remove(p.obj); if (p.el.parentNode) p.el.parentNode.removeChild(p.el); clearTimeout(p.tm); if (p.th) p.th._sp = null;
+  }
+  function pickAngle(role) {
+    var c = [], d, best = 0, score = -1;
+    for (d = 0; d < 360; d += 30) { var bot = d >= 60 && d <= 120; if (role === 'user' ? !bot : bot) continue; c.push(d * Math.PI / 180); }
+    c.forEach(function (a) {
+      var m = 9; panels.forEach(function (p) { var x = Math.abs(((a - p.ang) % 6.283 + 9.425) % 6.283 - 3.1416); if (x < m) m = x; });
+      m += Math.random() * .2; if (m > score) { score = m; best = a; }
+    });
+    return best;
+  }
+  function sync(p) {
+    var fl = p.th.querySelector('.flow'); if (!fl) return;
+    var c = fl.cloneNode(true);
+    Array.prototype.forEach.call(c.querySelectorAll('canvas,iframe,script,button,.ui-chart,.mcopy'), function (n) { n.remove(); });
+    Array.prototype.forEach.call(c.querySelectorAll('[id]'), function (n) { n.removeAttribute('id'); });
+    var b = p.body, near = b.scrollHeight - b.scrollTop - b.clientHeight < 60;
+    b.textContent = ''; b.appendChild(c); if (near) b.scrollTop = b.scrollHeight;
+    p.el.classList.toggle('act', p.th.classList.contains('live'));
+    queueCommit(p);
+  }
+  function queueCommit(p) {
+    clearTimeout(p.ct);
+    p.ct = setTimeout(function () {
+      if (!p.th || p.th._lbc) return;
+      if (p.th.classList.contains('live')) return queueCommit(p);
+      var fl = p.th.querySelector('.flow'), t = fl ? (fl.innerText || '').trim() : ''; if (!t) return;
+      p.th._lbc = 1; addBlock(p.id || (p.th.classList.contains('user') ? 'user' : 'nexus'), t.slice(0, 1500));
+    }, 1600);
+  }
+  function onMut(ms) {
+    var dirty = new Set();
+    ms.forEach(function (m) {
+      if (m.target === chat) {
+        Array.prototype.forEach.call(m.addedNodes, function (n) { if (n.classList && n.classList.contains('thought')) addPanel(n); });
+        Array.prototype.forEach.call(m.removedNodes, function (n) { if (n._sp) removePanel(n._sp); });
+        return;
+      }
+      var n = m.target.nodeType === 3 ? m.target.parentNode : m.target, th = n && n.closest && n.closest('.thought');
+      if (th && th._sp) dirty.add(th._sp);
+    });
+    dirty.forEach(function (p) { if (!p.tm) p.tm = setTimeout(function () { p.tm = 0; sync(p); }, 200); });
+  }
+  function wire(p) {
+    var el = p.el, drag = false, lx = 0, ly = 0, v = new THREE.Vector3(), qi = new THREE.Quaternion();
+    el.addEventListener('pointerdown', function (e) {
+      if (!e.target.closest('.sp-h')) return; e.preventDefault(); drag = true; lx = e.clientX; ly = e.clientY; p.pinned = true; el.setPointerCapture(e.pointerId);
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!drag) return; var dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY;
+      if (e.shiftKey) { p.obj.rotation.y += dx * .01; p.obj.rotation.x += dy * .01; return; }
+      var f = (cam.position.z - p.obj.position.z) / cam.position.z;
+      qi.copy(world.quaternion).invert(); v.set(dx * f, -dy * f, 0).applyQuaternion(qi); p.obj.position.add(v);
+    });
+    var end = function () { drag = false; };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    el.addEventListener('dblclick', function (e) { if (e.target.closest('.sp-h')) p.pinned = false; });
+  }
+
+  /* ---------- LBC: blok 3D ---------- */
+  async function sha(s) {
+    try { var b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(function (x) { return x.toString(16).padStart(2, '0'); }).join(''); }
+    catch (e) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return ('00000000' + (h >>> 0).toString(16)).slice(-8).repeat(8); }
+  }
+  function bdata(b) { return b.i + '|' + b.ts + '|' + b.prev + '|' + b.who + '|' + b.text; }
+  function addBlock(who, text) {
+    chainP = chainP.then(async function () {
+      var b = { i: blocks.length, ts: Date.now(), prev: blocks.length ? blocks[blocks.length - 1].hash : ZERO, who: who, text: text, valid: true };
+      b.hash = await sha(bdata(b)); blocks.push(b); sel = b; makeCube(b); layoutBlocks(); info();
+    });
+  }
+  function makeCube(b) {
+    var g = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: 0x0ea5e9, transparent: true, opacity: .2, depthWrite: false }),
+      e = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0x67e8f9 })),
+      core = new THREE.Mesh(cubeGeo, new THREE.MeshBasicMaterial({ color: 0x22d3ee, transparent: true, opacity: .75 }));
+    var box = new THREE.Mesh(cubeGeo, m); box.userData.b = b; core.scale.setScalar(.35);
+    g.add(box); g.add(e); g.add(core); lbcG.add(g);
+    var el = document.createElement('div'); el.className = 'sp-lab'; var lab = new THREE.CSS3DObject(el); lbcG.add(lab);
+    b.g = g; b.box = box; b.e = e; b.core = core; b.lab = lab; b.el = el; b.seed = Math.random() * 6; paint();
+  }
+  function visBlocks() { var n = W < 700 ? 8 : 14; return blocks.slice(-n); }
+  function layoutBlocks() {
+    var v = visBlocks(), n = v.length, gap = Math.min(110 * U, (W * .8) / Math.max(n, 1));
+    blocks.forEach(function (b) { var s = v.indexOf(b) >= 0; if (b.g) { b.g.visible = s; b.lab.visible = s; b.el.style.display = s && mode === 'lbc' ? '' : 'none'; } });
+    v.forEach(function (b, k) { b.bx = (k - (n - 1) / 2) * gap; b.by = Math.sin(k * .8) * 70 * U; b.bz = Math.cos(k * .8) * 90 * U; b.sc = Math.min(1, gap / 90); });
+  }
+  async function verify() {
+    var ok = true, prev = ZERO;
+    for (var i = 0; i < blocks.length; i++) { var b = blocks[i], h = await sha(bdata(b)), good = ok && h === b.hash && b.prev === prev; b.valid = good; if (!good) ok = false; prev = h; }
+    paint(); info();
+  }
+  async function repair() {
+    var from = sel ? sel.i : 0; for (var j = from; j < blocks.length; j++) { var b = blocks[j]; b.prev = j ? blocks[j - 1].hash : ZERO; b.hash = await sha(bdata(b)); }
+    await verify();
+  }
+  function paint() {
+    blocks.forEach(function (b) {
+      if (!b.g) return; var bad = !b.valid;
+      b.box.material.color.setHex(bad ? 0xef4444 : 0x0ea5e9); b.e.material.color.setHex(bad ? 0xfca5a5 : 0x67e8f9); b.core.material.color.setHex(bad ? 0xff2d2d : 0x22d3ee);
+      b.el.className = 'sp-lab' + (bad ? ' bad' : ''); b.el.innerHTML = '<b>#' + b.i + '</b>' + (bad ? 'HASH MISMATCH' : b.hash.slice(0, 8) + '…');
+    });
+  }
+  function info() {
+    var el = $('#sp-info'); if (!el) return;
+    if (!sel) { el.textContent = 'Belum ada blok.'; return; }
+    var ok = blocks.every(function (b) { return b.valid; });
+    el.innerHTML = '#' + sel.i + ' · ' + sel.who + ' · ' + sel.hash.slice(0, 14) + '…<br><span class="' + (sel.valid ? 'ok' : 'bad') + '">' + (sel.valid ? 'VALID' : 'RANTAI RUSAK') + '</span> · ' + blocks.length + ' blok · rantai ' + (ok ? 'utuh' : 'terputus');
+  }
+  function buildHud() {
+    hud = document.createElement('div'); hud.id = 'sp-hud'; hud.hidden = true;
+    hud.innerHTML = '<b>NEXUS LBC</b><div id="sp-info" style="display:block;margin:4px 0 0">—</div><div><button data-a="verify">VERIFY</button><button data-a="tamper">TAMPER</button><button data-a="repair">REPAIR</button></div>';
+    document.body.appendChild(hud);
+    hud.addEventListener('click', function (e) {
+      var a = e.target.dataset && e.target.dataset.a; if (!a) return;
+      if (a === 'verify') verify(); else if (a === 'repair') repair();
+      else if (a === 'tamper' && sel) { sel.text += ' ◼ALTERED'; verify(); }
+    });
+  }
+  function setMode(m) {
+    mode = m; var l = m === 'lbc';
+    lbcG.visible = l; panelsG.visible = !l; hud.hidden = !l;
+    panels.forEach(function (p) { p.el.style.display = l ? 'none' : ''; });
+    ORDER.forEach(function (id) { seatLab[id].element.style.display = l ? 'none' : ''; });
+    layoutBlocks(); info(); $('#sp-lbc-btn').classList.toggle('active', l);
+    if (l) verify();
+  }
+
+  /* ---------- INPUT: putar ruang, zoom, pilih kubus ---------- */
+  function bindInput() {
+    var el = gl.domElement, lx = 0, ly = 0, moved = 0, ray = new THREE.Raycaster(), nd = new THREE.Vector2();
+    el.addEventListener('pointerdown', function (e) { dragging = true; moved = 0; lx = e.clientX; ly = e.clientY; vy = vp = 0; el.setPointerCapture(e.pointerId); });
+    el.addEventListener('pointermove', function (e) {
+      if (!dragging) return; var dx = e.clientX - lx, dy = e.clientY - ly; lx = e.clientX; ly = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
+      vy = dx * .005; vp = dy * .004; yaw += vy; pitch = Math.max(-.6, Math.min(.6, pitch + vp)); idleAt = performance.now();
+    });
+    el.addEventListener('pointerup', function (e) {
+      dragging = false; idleAt = performance.now();
+      if (mode !== 'lbc' || moved > 6) return;
+      nd.set(e.clientX / W * 2 - 1, -(e.clientY / H) * 2 + 1); ray.setFromCamera(nd, cam);
+      var hit = ray.intersectObjects(blocks.filter(function (b) { return b.g && b.g.visible; }).map(function (b) { return b.box; }))[0];
+      if (hit) { sel = hit.object.userData.b; info(); }
+    });
+    el.addEventListener('wheel', function (e) { e.preventDefault(); zoomF = Math.max(.6, Math.min(1.6, zoomF * (e.deltaY > 0 ? 1.06 : .94))); cam.position.z = D * zoomF; }, { passive: false });
+  }
+  function resize() {
+    if (!ready) return; W = voidEl.clientWidth; H = voidEl.clientHeight;
+    gl.setPixelRatio(q ? 1 : Math.min(devicePixelRatio || 1, 1.5)); gl.setSize(W, H); cssr.setSize(W, H);
+    cam.aspect = W / H; cam.updateProjectionMatrix(); D = (H / 2) / Math.tan(cam.fov * Math.PI / 360); cam.position.set(0, 0, D * zoomF);
+    U = W < 700 ? .8 : Math.max(.7, Math.min(1.1, W / 1100)); layoutTable(); layoutBlocks();
+  }
+
+  /* ---------- LOOP ---------- */
+  function setScan(id) {
+    try {
+      var C = window.CouncilAvatar; if (!C || !C.signal) return;
+      if (id) { var c = new THREE.Color(AG[id][1]); C.signal({ type: 'scan', on: true, level: 1, col: [c.r * 255 | 0, c.g * 255 | 0, c.b * 255 | 0] }); scanOn = true; }
+      else if (scanOn) { C.signal({ type: 'scan', on: false, level: 0 }); scanOn = false; }
+    } catch (e) {}
+  }
+  function frame(t) {
+    raf = requestAnimationFrame(frame); if (document.hidden) return;
+    var g = $('#thermal-guard'); if (g && g.classList.contains('on') && (tick & 1)) { tick++; return; }
+    var dt = Math.min(64, t - last); last = t; tick++;
+    fpsEma += (dt - fpsEma) * .05; fpsT += dt;
+    if (fpsT > 2500) { fpsT = 0; if (fpsEma > 33 && q < 2) { q++; if (q === 1) gl.setPixelRatio(1); else pts.visible = false; gl.setSize(W, H); } }
+    /* inersia + kembali ke posisi nyaman saat idle */
+    if (!dragging) { yaw += vy; pitch += vp; vy *= .93; vp *= .93; if (t - idleAt > 5000) { yaw *= .985; pitch *= .985; } }
+    world.rotation.set(pitch, yaw, 0);
+    var swarm = !!document.body.dataset.swarm, id = null;
+    if (tick % 6 === 0) { var lv = $('.thought.agent.live'); id = lv && lv.dataset.agent; if (id === 'synth') id = 'cortex'; if (!AG[id]) id = null; if (id !== activeId) { activeId = id; setScan(swarm ? id : null); } }
+    if (mode === 'chat') updChat(t, dt, swarm); else updLbc(t);
+    world.updateMatrixWorld(true); updFx(t, dt, swarm && mode === 'chat');
+    gl.render(scene, cam); cssr.render(scene, cam);
+  }
+  function updChat(t, dt, swarm) {
+    var rx = W < 700 ? W * .22 : W * .3, ry = H * (swarm ? .2 : .27), cy = swarm ? H * .12 : 0, n = panels.length;
+    panels.forEach(function (p, k) {
+      var e = Math.min(1, (t - p.born) / 550); e = 1 - Math.pow(1 - e, 3);
+      var rank = n - 1 - k, op = (e * (rank > 7 ? Math.max(.18, 1 - (rank - 7) * .2) : 1)).toFixed(2);
+      if (op !== p.op) { p.op = op; p.el.style.opacity = op; }
+      p.obj.scale.setScalar(U * (.3 + .7 * e));
+      if (p.pinned) return;
+      if (!reduce) p.ang += dt * .00006;
+      var a = p.ang; p.obj.position.set(Math.cos(a) * rx, -Math.sin(a) * ry + cy + (reduce ? 0 : Math.sin(t * .0009 + k) * 6), p.z);
+      p.obj.rotation.set(-Math.sin(a) * .2 + p.rx, -Math.cos(a) * .5, p.rz);
+    });
+    tableT += ((swarm ? 1 : 0) - tableT) * .08; var vis = tableT > .02; tableG.visible = vis;
+    tableG.scale.setScalar(.6 + .4 * tableT); tableMat.forEach(function (m) { m.material.opacity = m.userData.op * tableT; });
+    ORDER.forEach(function (id) { var on = activeId === id && swarm, s = seats[id]; s.scale.setScalar(on ? 1.5 + Math.sin(t * .012) * .2 : 1); s.material.opacity = on ? 1 : .55; var el = seatLab[id].element; el.style.opacity = tableT.toFixed(2); el.style.display = vis ? '' : 'none'; });
+  }
+  function updLbc(t) {
+    var v = visBlocks(), pos = chainLine.geometry.attributes.position.array, col = chainLine.geometry.attributes.color.array, k = 0;
+    v.forEach(function (b, i) {
+      if (!b.g) return; var bad = !b.valid, j = bad && !reduce ? 4 : 0, s = (b === sel ? 1.25 : 1) * (b.sc || 1);
+      b.g.position.set(b.bx + (j ? (Math.random() - .5) * j : 0), b.by + Math.sin(t * .0012 + b.seed) * 9 + (j ? (Math.random() - .5) * j : 0), b.bz);
+      b.g.rotation.set(t * .0003 + b.seed + (j ? (Math.random() - .5) * .15 : 0), t * .0005 + b.seed, 0); b.g.scale.setScalar(s * U);
+      b.core.rotation.y = t * .002; b.lab.position.set(b.g.position.x, b.g.position.y - 62 * U * s, b.g.position.z); b.lab.scale.setScalar(U);
+      if (i < v.length - 1 && v[i + 1].g) {
+        var n = v[i + 1], r = (b.valid && n.valid) ? [.25, .9, 1] : [1, .2, .2];
+        pos[k * 6] = b.g.position.x; pos[k * 6 + 1] = b.g.position.y; pos[k * 6 + 2] = b.g.position.z;
+        pos[k * 6 + 3] = b.bx + (n.valid ? 0 : (Math.random() - .5) * 4); pos[k * 6 + 4] = n.by + Math.sin(t * .0012 + n.seed) * 9; pos[k * 6 + 5] = n.bz;
+        for (var c = 0; c < 2; c++) { col[k * 6 + c * 3] = r[0]; col[k * 6 + c * 3 + 1] = r[1]; col[k * 6 + c * 3 + 2] = r[2]; }
+        k++;
+      }
+    });
+    chainLine.geometry.setDrawRange(0, k * 2); chainLine.geometry.attributes.position.needsUpdate = true; chainLine.geometry.attributes.color.needsUpdate = true;
+  }
+  var _wp = null;
+  function updFx(t, dt, swarmTable) {
+    var tgt = swarmTable && activeId ? 1 : (mode === 'chat' && document.body.dataset.busy ? .35 : .1);
+    glow += (tgt - glow) * .08;
+    pts.material.opacity = .12 + glow * .8; pts.scale.setScalar(1 + glow * .22 + Math.sin(t * .004) * glow * .04); pts.rotation.y += dt * (.0002 + glow * .0008);
+    if (activeId) pts.material.color.set(AG[activeId][1]);
+    var on = swarmTable && activeId && seats[activeId];
+    laser.visible = laser2.visible = pulse.visible = !!on;
+    if (!on) return;
+    _wp = _wp || new THREE.Vector3(); seats[activeId].getWorldPosition(_wp);
+    var c = AG[activeId][1]; laser.material.color.set(c); laser2.material.color.set(c);
+    var a = laser.geometry.attributes.position.array, b = laser2.geometry.attributes.position.array;
+    a[0] = _wp.x; a[1] = _wp.y; a[2] = _wp.z; a[3] = a[4] = a[5] = 0;
+    b[0] = _wp.x + 2; b[1] = _wp.y + 2; b[2] = _wp.z; b[3] = 2; b[4] = 2; b[5] = 0;
+    laser.geometry.attributes.position.needsUpdate = laser2.geometry.attributes.position.needsUpdate = true;
+    var f = (t * .0016) % 1, pa = pulse.geometry.attributes.position.array; pa[0] = _wp.x * (1 - f); pa[1] = _wp.y * (1 - f); pa[2] = _wp.z * (1 - f); pulse.geometry.attributes.position.needsUpdate = true;
+  }
+
+  /* ---------- ON / OFF + tombol ---------- */
+  function setOn(v) {
+    on = !!v; document.body.classList.toggle('sp', on);
+    try { localStorage.setItem(LS, on ? '1' : '0'); } catch (e) {}
+    var b = $('#sp-toggle'); if (b) { b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); }
+    cancelAnimationFrame(raf);
+    if (on && ready) { resize(); last = performance.now(); raf = requestAnimationFrame(frame); }
+    else if (!on) { setScan(null); if (mode === 'lbc') setMode('chat'); }
+  }
+  dock.insertAdjacentHTML('beforebegin',
+    '<button class="btn-icon" id="sp-toggle" title="Spatial OS 3D (Ctrl+Shift+5)" aria-label="Spatial OS" aria-pressed="false"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="4"></ellipse><circle cx="12" cy="12" r="2.5"></circle></svg></button>' +
+    '<button class="btn-icon" id="sp-lbc-btn" title="NEXUS LBC · blok 3D (Ctrl+Shift+6)" aria-label="NEXUS LBC"><svg viewBox="0 0 24 24"><rect x="2" y="8" width="7" height="7" rx="1"></rect><rect x="15" y="8" width="7" height="7" rx="1"></rect><path d="M9 11.5h6"></path></svg></button>');
+  $('#sp-toggle').addEventListener('click', function () { if (on) setOn(false); else boot(); });
+  $('#sp-lbc-btn').addEventListener('click', function () { if (!ready) { boot(); var iv = setInterval(function () { if (ready) { clearInterval(iv); setMode('lbc'); } }, 200); } else { if (!on) setOn(true); setMode(mode === 'lbc' ? 'chat' : 'lbc'); } });
+  addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey && e.shiftKey)) return;
+    if (e.code === 'Digit5') { e.preventDefault(); $('#sp-toggle').click(); } else if (e.code === 'Digit6') { e.preventDefault(); $('#sp-lbc-btn').click(); }
+  });
+  window.SpatialOS = { on: function () { return on; }, mode: function () { return mode; }, blocks: function () { return blocks; }, setMode: setMode, verify: verify };
+  if (want) boot();
+})();
+</script>
+
 </body>
 </html>
