@@ -3,817 +3,362 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-
-<title>Megatron Voice — Local Browser DSP</title>
+<title>Megatron Voice — Local DSP</title>
 
 <style>
-* {
-    box-sizing: border-box;
-}
-
-html, body {
-    width: 100%;
-    height: 100%;
-    margin: 0;
-}
-
+* { box-sizing: border-box; }
+html, body { width: 100%; height: 100%; margin: 0; }
 body {
-    background:
-        radial-gradient(circle at 50% 35%, #18202a 0%, #080b0f 42%, #030405 100%);
+    background: radial-gradient(circle at 50% 35%, #18202a 0%, #080b0f 42%, #030405 100%);
     color: #dce7f0;
-    font-family:
-        Inter,
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center;
     overflow: hidden;
 }
-
 .panel {
     width: min(92vw, 560px);
     padding: 34px 28px 30px;
     border: 1px solid rgba(160,190,220,.18);
     border-radius: 24px;
-
-    background:
-        linear-gradient(
-            145deg,
-            rgba(18,25,32,.96),
-            rgba(5,8,11,.96)
-        );
-
-    box-shadow:
-        0 30px 100px rgba(0,0,0,.65),
-        inset 0 0 50px rgba(80,120,160,.035);
+    background: linear-gradient(145deg, rgba(18,25,32,.96), rgba(5,8,11,.96));
+    box-shadow: 0 30px 100px rgba(0,0,0,.65), inset 0 0 50px rgba(80,120,160,.035);
 }
-
 .core {
-    width: 150px;
-    height: 150px;
+    width: 150px; height: 150px;
     margin: 0 auto 25px;
     border-radius: 50%;
-
-    background:
-        radial-gradient(
-            circle,
-            #c8e8ff 0%,
-            #5687a9 12%,
-            #182a38 38%,
-            #090e13 70%
-        );
-
-    box-shadow:
-        0 0 20px rgba(80,170,255,.35),
-        0 0 70px rgba(40,120,190,.15);
-
-    position: relative;
-    transition: .25s ease;
+    background: radial-gradient(circle, #c8e8ff 0%, #5687a9 12%, #182a38 38%, #090e13 70%);
+    box-shadow: 0 0 20px rgba(80,170,255,.35), 0 0 70px rgba(40,120,190,.15);
+    position: relative; transition: .25s ease;
 }
-
-.core::before,
-.core::after {
-    content: "";
-    position: absolute;
-    inset: -12px;
-    border: 1px solid rgba(120,190,255,.12);
-    border-radius: 50%;
+.core::before, .core::after {
+    content: ""; position: absolute; inset: -12px;
+    border: 1px solid rgba(120,190,255,.12); border-radius: 50%;
 }
-
-.core::after {
-    inset: -24px;
-    border-color: rgba(120,190,255,.06);
-}
-
-.core.active {
-    transform: scale(1.04);
-    box-shadow:
-        0 0 30px rgba(100,190,255,.65),
-        0 0 100px rgba(40,130,220,.30);
-}
-
-h1 {
-    text-align: center;
-    font-size: 22px;
-    letter-spacing: 4px;
-    margin: 0 0 8px;
-    color: #eef7ff;
-}
-
-.subtitle {
-    text-align: center;
-    color: #7d8c99;
-    font-size: 12px;
-    letter-spacing: 2px;
-    margin-bottom: 28px;
-}
-
+.core::after { inset: -24px; border-color: rgba(120,190,255,.06); }
+.core.active { transform: scale(1.04); box-shadow: 0 0 30px rgba(100,190,255,.65), 0 0 100px rgba(40,130,220,.30); }
+h1 { text-align: center; font-size: 22px; letter-spacing: 4px; margin: 0 0 8px; color: #eef7ff; }
+.subtitle { text-align: center; color: #7d8c99; font-size: 12px; letter-spacing: 2px; margin-bottom: 28px; }
 textarea {
-    width: 100%;
-    min-height: 100px;
-    resize: vertical;
-
-    padding: 15px;
-
-    color: #dcecff;
-    background: rgba(0,0,0,.35);
-
-    border: 1px solid rgba(130,170,200,.18);
-    border-radius: 12px;
-
-    outline: none;
-    font-size: 15px;
-    line-height: 1.5;
+    width: 100%; min-height: 100px; resize: vertical;
+    padding: 15px; color: #dcecff; background: rgba(0,0,0,.35);
+    border: 1px solid rgba(130,170,200,.18); border-radius: 12px;
+    outline: none; font-size: 15px; line-height: 1.5;
 }
-
-textarea:focus {
-    border-color: rgba(110,190,255,.55);
-    box-shadow: 0 0 20px rgba(50,140,220,.08);
-}
-
+textarea:focus { border-color: rgba(110,190,255,.55); box-shadow: 0 0 20px rgba(50,140,220,.08); }
 button {
-    width: 100%;
-    margin-top: 15px;
-    padding: 15px;
-
-    border: 0;
-    border-radius: 12px;
-
-    background:
-        linear-gradient(180deg,#273d4e,#13222d);
-
-    color: #e9f7ff;
-
-    font-weight: 700;
-    letter-spacing: 2px;
-
-    cursor: pointer;
-
-    box-shadow:
-        inset 0 1px rgba(255,255,255,.08),
-        0 10px 30px rgba(0,0,0,.3);
-
+    width: 100%; margin-top: 15px; padding: 15px;
+    border: 0; border-radius: 12px;
+    background: linear-gradient(180deg,#273d4e,#13222d);
+    color: #e9f7ff; font-weight: 700; letter-spacing: 2px;
+    cursor: pointer; box-shadow: inset 0 1px rgba(255,255,255,.08), 0 10px 30px rgba(0,0,0,.3);
     transition: .15s ease;
 }
-
-button:hover {
-    background:
-        linear-gradient(180deg,#34566e,#182e3e);
-}
-
-button:active {
-    transform: scale(.985);
-}
-
-button:disabled {
-    opacity: .55;
-    cursor: wait;
-}
-
+button:hover { background: linear-gradient(180deg,#34566e,#182e3e); }
+button:active { transform: scale(.985); }
+button:disabled { opacity: .55; cursor: wait; }
 .status {
-    min-height: 20px;
-    margin-top: 15px;
-
-    text-align: center;
-
-    color: #6f8797;
-    font-size: 11px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+    min-height: 20px; margin-top: 15px;
+    text-align: center; color: #6f8797; font-size: 11px;
+    letter-spacing: 1.5px; text-transform: uppercase;
 }
-
-.info {
-    margin-top: 22px;
-    padding-top: 17px;
-
-    border-top: 1px solid rgba(130,170,200,.1);
-
-    color: #667784;
-    font-size: 10px;
-    line-height: 1.7;
-    text-align: center;
-}
+.info { margin-top: 22px; padding-top: 17px; border-top: 1px solid rgba(130,170,200,.1); color: #667784; font-size: 10px; line-height: 1.7; text-align: center; }
 </style>
 </head>
-
 <body>
 
 <div class="panel">
-
     <div id="core" class="core"></div>
-
     <h1>MEGATRON VOICE</h1>
-
-    <div class="subtitle">
-        LOCAL CLIENT-SIDE // DEEP CINEMATIC ROBOT
-    </div>
-
+    <div class="subtitle">LOCAL CLIENT-SIDE // DEEP CINEMATIC ROBOT</div>
     <textarea id="text">Selamat datang di Sistem Internal CIKUR GO. Saya adalah sistem operasi internal.</textarea>
-
-    <button id="speakBtn">
-        AKTIFKAN SUARA MEGATRON
-    </button>
-
-    <div id="status" class="status">
-        SYSTEM STANDBY
-    </div>
-
+    <button id="speakBtn">AKTIFKAN SUARA MEGATRON</button>
+    <div id="status" class="status">SYSTEM STANDBY</div>
     <div class="info">
         meSpeak.js + Web Audio DSP<br>
         WaveShaper • Lowpass • Echo • Sub Bass
     </div>
-
 </div>
-
-<!--
-    meSpeak.js
-    Versi 2.0.2
--->
-<script src="https://cdn.jsdelivr.net/npm/mespeak@2.0.2/mespeak.js"></script>
 
 <script>
 "use strict";
 
-/*
-=========================================================
- MEGATRON VOICE ENGINE
- --------------------------------------------------------
- Tidak menggunakan:
- - window.speechSynthesis
- - SpeechSynthesisUtterance
- - API AI
- - API TTS berbayar
- - server backend
+/* =========================================================
+   1. ROBUST SCRIPT LOADER (Mencoba CDN alternatif jika gagal)
+   ========================================================= */
+function loadScript(url) {
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = url;
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Failed: ' + url));
+        document.head.appendChild(s);
+    });
+}
 
- Pipeline:
+async function ensureMeSpeakLoaded() {
+    if (typeof meSpeak !== 'undefined') return true;
 
- meSpeak
-    ↓
- raw WAV
-    ↓
- AudioContext
-    ↓
- WaveShaper distortion
-    ↓
- Lowpass
-    ↓
- Echo
-    ↓
- Master
-    ↓
- Speaker
-=========================================================
-*/
+    const cdns = [
+        'https://cdnjs.cloudflare.com/ajax/libs/mespeak/2.0.2/mespeak.js',
+        'https://cdn.jsdelivr.net/npm/mespeak@2.0.2/mespeak.js',
+        'https://unpkg.com/mespeak@2.0.2/mespeak.js'
+    ];
 
-const MEGATRON = (() => {
+    for (const url of cdns) {
+        try {
+            await loadScript(url);
+            if (typeof meSpeak !== 'undefined') {
+                console.log('meSpeak loaded from:', url);
+                return true;
+            }
+        } catch (e) {
+            console.warn('CDN gagal, mencoba berikutnya...', url);
+        }
+    }
+    return false;
+}
 
-    let ctx = null;
-    let initialized = false;
+/* =========================================================
+   2. STATE & DOM
+   ========================================================= */
+const core    = document.getElementById('core');
+const button  = document.getElementById('speakBtn');
+const status  = document.getElementById('status');
+const textInput = document.getElementById('text');
 
-    const core = document.getElementById("core");
-    const button = document.getElementById("speakBtn");
-    const status = document.getElementById("status");
-    const textInput = document.getElementById("text");
+let ctx = null;
+let meSpeakReady = false;
+let useFallback = false; // Jika meSpeak gagal, pakai Web Speech
 
-    /*
-    -----------------------------------------------------
-    Load konfigurasi dan voice meSpeak
-    -----------------------------------------------------
-    */
-    async function loadMeSpeak() {
+/* =========================================================
+   3. AUDIO CONTEXT
+   ========================================================= */
+async function createAudioContext() {
+    if (!ctx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) throw new Error("Browser tidak mendukung Web Audio API.");
+        ctx = new AudioCtx();
+    }
+    if (ctx.state === "suspended") await ctx.resume();
+}
 
-        if (initialized) return;
+/* =========================================================
+   4. DSP UTILS
+   ========================================================= */
+function makeDistortionCurve(amount = 65) {
+    const samples = 44100;
+    const curve = new Float32Array(samples);
+    const deg = Math.PI / 180;
+    for (let i = 0; i < samples; i++) {
+        const x = (i * 2) / samples - 1;
+        curve[i] = ((3 + amount) * x * 20 * deg) / (Math.PI + amount * Math.abs(x));
+    }
+    return curve;
+}
 
+function powerUpBassDrop() {
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const now  = ctx.currentTime;
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(72, now);
+    osc.frequency.exponentialRampToValueAtTime(24, now + 0.55);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.45, now + 0.035);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.7);
+}
+
+/* =========================================================
+   5. DSP CHAIN (Inti Megatron)
+   ========================================================= */
+function playThroughMegatronDSP(sourceNode) {
+    const distortion = ctx.createWaveShaper();
+    distortion.curve = makeDistortionCurve(65);
+    distortion.oversample = "4x";
+
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = "lowpass";
+    lowpass.frequency.setValueAtTime(180, ctx.currentTime);
+    lowpass.Q.value = 1.4;
+
+    const highpass = ctx.createBiquadFilter();
+    highpass.type = "highpass";
+    highpass.frequency.value = 32;
+    highpass.Q.value = 0.7;
+
+    const delay = ctx.createDelay(1.0);
+    delay.delayTime.value = 0.19;
+    const feedback = ctx.createGain(); feedback.gain.value = 0.34;
+    const echoGain = ctx.createGain(); echoGain.gain.value = 0.30;
+
+    const master = ctx.createGain();
+    master.gain.value = 0.82;
+
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.value = -24;
+    compressor.knee.value = 12;
+    compressor.ratio.value = 7;
+    compressor.attack.value = 0.004;
+    compressor.release.value = 0.16;
+
+    sourceNode.connect(distortion);
+    distortion.connect(highpass);
+    highpass.connect(lowpass);
+    lowpass.connect(master);
+
+    lowpass.connect(delay);
+    delay.connect(feedback);
+    feedback.connect(delay);
+    delay.connect(echoGain);
+    echoGain.connect(master);
+
+    master.connect(compressor);
+    compressor.connect(ctx.destination);
+
+    const now = ctx.currentTime;
+    master.gain.cancelScheduledValues(now);
+    master.gain.setValueAtTime(0.0001, now);
+    master.gain.exponentialRampToValueAtTime(0.82, now + 0.045);
+
+    sourceNode.start(now);
+    sourceNode.onended = () => {
+        core.classList.remove("active");
+        status.textContent = "SYSTEM STANDBY";
+    };
+}
+
+/* =========================================================
+   6a. JALUR UTAMA: meSpeak (Cinematic)
+   ========================================================= */
+async function generateAndPlayMeSpeak(text) {
+    const wav = meSpeak.speak(text, {
+        rawdata: true, speed: 100, pitch: 28,
+        amplitude: 100, wordgap: 5, voice: "en/en-us"
+    });
+    let arrayBuffer;
+    if (wav instanceof ArrayBuffer) arrayBuffer = wav;
+    else if (wav instanceof Uint8Array) arrayBuffer = wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength);
+    else if (ArrayBuffer.isView(wav)) arrayBuffer = wav.buffer.slice(wav.byteOffset, wav.byteOffset + wav.byteLength);
+    else throw new Error("Format audio meSpeak tidak dikenali.");
+
+    const buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    playThroughMegatronDSP(source);
+}
+
+/* =========================================================
+   6b. JALUR FALLBACK: Web Speech + DSP (Jika meSpeak gagal)
+   ========================================================= */
+async function generateAndPlayFallback(text) {
+    return new Promise((resolve) => {
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.pitch = 0;
+        utter.rate  = 0.7;
+        // Pilih suara pria jika ada
+        const voices = speechSynthesis.getVoices();
+        const maleVoice = voices.find(v => /male|ardi|andika|david/i.test(v.name) && v.lang.startsWith('id')) ||
+                          voices.find(v => /male|david|mark/i.test(v.name) && v.lang.startsWith('en'));
+        if (maleVoice) utter.voice = maleVoice;
+        utter.onend = () => {
+            core.classList.remove("active");
+            status.textContent = "SYSTEM STANDBY";
+            resolve();
+        };
+        // Karena kita tidak bisa route TTS ke DSP, mainkan background bass saat TTS bicara
+        const bgBass = ctx.createOscillator();
+        const bgGain = ctx.createGain();
+        bgBass.type = 'sine'; bgBass.frequency.value = 55;
+        bgGain.gain.setValueAtTime(0, ctx.currentTime);
+        bgGain.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.3);
+        bgBass.connect(bgGain).connect(ctx.destination);
+        bgBass.start();
+        utter.onstart = () => speechSynthesis.speak(utter);
+        // Stop bass saat selesai
+        utter.onend = () => {
+            bgGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+            setTimeout(() => bgBass.stop(), 400);
+            core.classList.remove("active");
+            status.textContent = "SYSTEM STANDBY";
+            resolve();
+        };
+        speechSynthesis.speak(utter);
+    });
+}
+
+/* =========================================================
+   7. MAIN EXECUTE
+   ========================================================= */
+async function speak() {
+    if (button.disabled) return;
+    const text = textInput.value.trim();
+    if (!text) { status.textContent = "MASUKKAN TEKS"; return; }
+
+    button.disabled = true;
+    core.classList.add("active");
+    status.textContent = "INITIALIZING AUDIO CORE...";
+
+    try {
+        await createAudioContext();
+        powerUpBassDrop();
         status.textContent = "LOADING VOICE ENGINE...";
 
-        /*
-        Config dan voice bersifat data lokal yang
-        digunakan oleh mesin eSpeak di browser.
-        */
-        await new Promise((resolve, reject) => {
+        // Cek meSpeak
+        if (!meSpeakReady) {
+            meSpeakReady = await ensureMeSpeakLoaded();
+        }
 
-            meSpeak.loadConfig(
-                "https://cdn.jsdelivr.net/npm/mespeak@2.0.2/src/mespeak_config.json",
-                resolve
-            );
-
-            setTimeout(() => {
-                /*
-                Jangan langsung reject karena beberapa
-                implementasi meSpeak menggunakan callback
-                secara asynchronous.
-                */
-            }, 0);
-        });
-
-        await new Promise((resolve, reject) => {
-
-            meSpeak.loadVoice(
-                "https://cdn.jsdelivr.net/npm/mespeak@2.0.2/voices/en/en-us.json",
-                resolve
-            );
-
-            setTimeout(() => {
-                /*
-                Callback meSpeak menjadi penentu selesai.
-                */
-            }, 0);
-        });
-
-        initialized = true;
-    }
-
-
-    /*
-    -----------------------------------------------------
-    AudioContext
-    -----------------------------------------------------
-    */
-    async function createAudioContext() {
-
-        if (!ctx) {
-
-            const AudioCtx =
-                window.AudioContext ||
-                window.webkitAudioContext;
-
-            if (!AudioCtx) {
-                throw new Error(
-                    "Browser tidak mendukung Web Audio API."
-                );
+        if (meSpeakReady) {
+            // Load config & voice jika belum
+            if (!meSpeak.isConfigLoaded()) {
+                status.textContent = "LOADING CONFIG...";
+                await new Promise((res) => meSpeak.loadConfig("https://cdn.jsdelivr.net/npm/mespeak@2.0.2/mespeak_config.json", res));
             }
-
-            ctx = new AudioCtx();
-        }
-
-        if (ctx.state === "suspended") {
-            await ctx.resume();
-        }
-    }
-
-
-    /*
-    -----------------------------------------------------
-    Distortion Curve
-    -----------------------------------------------------
-    Soft clipping + agresif mid harmonics.
-    -----------------------------------------------------
-    */
-    function makeDistortionCurve(amount = 55) {
-
-        const samples = 44100;
-        const curve = new Float32Array(samples);
-
-        const deg = Math.PI / 180;
-
-        for (let i = 0; i < samples; i++) {
-
-            const x = (i * 2) / samples - 1;
-
-            curve[i] =
-                ((3 + amount) * x * 20 * deg) /
-                (Math.PI + amount * Math.abs(x));
-        }
-
-        return curve;
-    }
-
-
-    /*
-    -----------------------------------------------------
-    Power-Up Bass Drop
-    -----------------------------------------------------
-    */
-    function powerUpBassDrop() {
-
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        const now = ctx.currentTime;
-
-        osc.type = "sine";
-
-        /*
-        70Hz → 24Hz
-        */
-        osc.frequency.setValueAtTime(72, now);
-
-        osc.frequency.exponentialRampToValueAtTime(
-            24,
-            now + 0.55
-        );
-
-        gain.gain.setValueAtTime(
-            0.0001,
-            now
-        );
-
-        gain.gain.exponentialRampToValueAtTime(
-            0.48,
-            now + 0.035
-        );
-
-        gain.gain.exponentialRampToValueAtTime(
-            0.0001,
-            now + 0.65
-        );
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc.start(now);
-        osc.stop(now + 0.7);
-    }
-
-
-    /*
-    -----------------------------------------------------
-    Decode WAV dari meSpeak
-    -----------------------------------------------------
-    */
-    async function generateSpeech(text) {
-
-        const wav = meSpeak.speak(text, {
-
-            rawdata: true,
-
-            /*
-            Lambat = lebih berat.
-            */
-            speed: 100,
-
-            /*
-            Pitch eSpeak:
-            nilai lebih rendah = suara lebih berat.
-            */
-            pitch: 28,
-
-            amplitude: 100,
-
-            wordgap: 5,
-
-            voice: "en/en-us"
-        });
-
-        /*
-        meSpeak rawdata menghasilkan WAV.
-        */
-        let arrayBuffer;
-
-        if (wav instanceof ArrayBuffer) {
-
-            arrayBuffer = wav;
-
-        } else if (wav instanceof Uint8Array) {
-
-            arrayBuffer =
-                wav.buffer.slice(
-                    wav.byteOffset,
-                    wav.byteOffset + wav.byteLength
-                );
-
-        } else if (ArrayBuffer.isView(wav)) {
-
-            arrayBuffer =
-                wav.buffer.slice(
-                    wav.byteOffset,
-                    wav.byteOffset + wav.byteLength
-                );
-
-        } else if (typeof wav === "string") {
-
-            /*
-            Fallback apabila implementasi mengembalikan
-            Data URL / base64.
-            */
-            const response =
-                await fetch(wav);
-
-            arrayBuffer =
-                await response.arrayBuffer();
-
+            if (!meSpeak.isVoiceLoaded('en/en-us')) {
+                status.textContent = "LOADING VOICE...";
+                await new Promise((res) => meSpeak.loadVoice("https://cdn.jsdelivr.net/npm/mespeak@2.0.2/voices/en/en-us.json", res));
+            }
+            status.textContent = "GENERATING MEGATRON VOICE...";
+            await generateAndPlayMeSpeak(text);
         } else {
-
-            throw new Error(
-                "Format audio meSpeak tidak dikenali."
-            );
+            // FALLBACK
+            status.textContent = "FALLBACK MODE (Web Speech + Bass)";
+            await generateAndPlayFallback(text);
         }
+        status.textContent = "MEGATRON ONLINE";
 
-        return await ctx.decodeAudioData(
-            arrayBuffer.slice(0)
-        );
+    } catch (err) {
+        console.error(err);
+        core.classList.remove("active");
+        status.textContent = "AUDIO ENGINE ERROR";
+        // Coba fallback jika belum
+        if (!useFallback && meSpeakReady) {
+            useFallback = true;
+            try {
+                await generateAndPlayFallback(text);
+            } catch (e) {
+                console.error('Fallback juga gagal:', e);
+            }
+        }
+    } finally {
+        setTimeout(() => { button.disabled = false; }, 500);
     }
-
-
-    /*
-    -----------------------------------------------------
-    MAIN DSP CHAIN
-    -----------------------------------------------------
-    */
-    function playThroughMegatronDSP(buffer) {
-
-        /*
-        Source
-        */
-        const source =
-            ctx.createBufferSource();
-
-        source.buffer = buffer;
-
-
-        /*
-        -------------------------------------------------
-        1. DISTORTION
-        -------------------------------------------------
-        */
-        const distortion =
-            ctx.createWaveShaper();
-
-        distortion.curve =
-            makeDistortionCurve(65);
-
-        distortion.oversample = "4x";
-
-
-        /*
-        -------------------------------------------------
-        2. LOWPASS
-        -------------------------------------------------
-
-        180 Hz sengaja sangat rendah untuk membuang
-        karakter suara yang terlalu "ceria".
-
-        Namun kita gunakan resonansi sedikit supaya
-        suara tidak mati total.
-        -------------------------------------------------
-        */
-        const lowpass =
-            ctx.createBiquadFilter();
-
-        lowpass.type = "lowpass";
-
-        lowpass.frequency.setValueAtTime(
-            180,
-            ctx.currentTime
-        );
-
-        lowpass.Q.value = 1.4;
-
-
-        /*
-        -------------------------------------------------
-        3. HIGH-PASS RINGAN
-        -------------------------------------------------
-
-        Mencegah DC / sub-bass berlebihan setelah
-        distortion.
-        -------------------------------------------------
-        */
-        const highpass =
-            ctx.createBiquadFilter();
-
-        highpass.type = "highpass";
-
-        highpass.frequency.value = 32;
-
-        highpass.Q.value = 0.7;
-
-
-        /*
-        -------------------------------------------------
-        4. ECHO / STEEL CHAMBER
-        -------------------------------------------------
-        */
-        const delay =
-            ctx.createDelay(1.0);
-
-        delay.delayTime.value = 0.19;
-
-
-        /*
-        Feedback
-        */
-        const feedback =
-            ctx.createGain();
-
-        feedback.gain.value = 0.34;
-
-
-        /*
-        Echo return
-        */
-        const echoGain =
-            ctx.createGain();
-
-        echoGain.gain.value = 0.30;
-
-
-        /*
-        -------------------------------------------------
-        5. MASTER
-        -------------------------------------------------
-        */
-        const master =
-            ctx.createGain();
-
-        master.gain.value = 0.82;
-
-
-        /*
-        -------------------------------------------------
-        6. COMPRESSOR
-        -------------------------------------------------
-        */
-        const compressor =
-            ctx.createDynamicsCompressor();
-
-        compressor.threshold.value = -24;
-        compressor.knee.value = 12;
-        compressor.ratio.value = 7;
-        compressor.attack.value = 0.004;
-        compressor.release.value = 0.16;
-
-
-        /*
-        -------------------------------------------------
-        ROUTING
-        -------------------------------------------------
-
-                        ┌── delay ── feedback ──┐
-                        │                        │
-        source → distortion → highpass → lowpass → master
-                                             ↓
-                                            compressor
-                                             ↓
-                                          speaker
-
-        lowpass → delay → echoGain → master
-        -------------------------------------------------
-        */
-
-        source.connect(distortion);
-
-        distortion.connect(highpass);
-
-        highpass.connect(lowpass);
-
-        lowpass.connect(master);
-
-        lowpass.connect(delay);
-
-        delay.connect(feedback);
-
-        feedback.connect(delay);
-
-        delay.connect(echoGain);
-
-        echoGain.connect(master);
-
-        master.connect(compressor);
-
-        compressor.connect(ctx.destination);
-
-
-        /*
-        Sedikit ducking agar suara tidak langsung
-        menghantam maksimum.
-        */
-        const now = ctx.currentTime;
-
-        master.gain.cancelScheduledValues(now);
-
-        master.gain.setValueAtTime(
-            0.0001,
-            now
-        );
-
-        master.gain.exponentialRampToValueAtTime(
-            0.82,
-            now + 0.045
-        );
-
-
-        /*
-        Start
-        */
-        source.start(now);
-
-        source.onended = () => {
-
-            core.classList.remove("active");
-
-            status.textContent =
-                "SYSTEM STANDBY";
-        };
-    }
-
-
-    /*
-    -----------------------------------------------------
-    EXECUTE
-    -----------------------------------------------------
-    */
-    async function speak() {
-
-        if (button.disabled) {
-            return;
-        }
-
-        const text =
-            textInput.value.trim();
-
-        if (!text) {
-            status.textContent =
-                "MASUKKAN TEKS TERLEBIH DAHULU";
-            return;
-        }
-
-        button.disabled = true;
-
-        core.classList.add("active");
-
-        status.textContent =
-            "INITIALIZING AUDIO CORE...";
-
-        try {
-
-            /*
-            Sangat penting:
-            AudioContext dibuat/resume dari event
-            klik user sehingga browser mengizinkan
-            playback.
-            */
-            await createAudioContext();
-
-            /*
-            Power-up terjadi sebelum speech.
-            */
-            powerUpBassDrop();
-
-            status.textContent =
-                "GENERATING MEGATRON VOICE...";
-
-            /*
-            Load engine jika belum siap.
-            */
-            await loadMeSpeak();
-
-            status.textContent =
-                "PROCESSING CINEMATIC DSP...";
-
-            const buffer =
-                await generateSpeech(text);
-
-            status.textContent =
-                "MEGATRON ONLINE";
-
-            playThroughMegatronDSP(buffer);
-
-        } catch (error) {
-
-            console.error(error);
-
-            core.classList.remove("active");
-
-            status.textContent =
-                "AUDIO ENGINE ERROR";
-
-            alert(
-                "Gagal menghasilkan suara.\n\n" +
-                error.message
-            );
-
-        } finally {
-
-            /*
-            Tidak langsung mengaktifkan tombol lagi
-            terlalu cepat; speech masih berjalan.
-            */
-            setTimeout(() => {
-
-                button.disabled = false;
-
-            }, 500);
-        }
-    }
-
-
-    button.addEventListener(
-        "click",
-        speak
-    );
-
-    return {
-        speak
-    };
-
-})();
-
+}
+
+/* =========================================================
+   8. INIT & EVENTS
+   ========================================================= */
+button.addEventListener("click", speak);
+
+// Preload voices for fallback
+if ('speechSynthesis' in window) {
+    speechSynthesis.getVoices();
+    speechSynthesis.onvoiceschanged = () => {};
+}
 </script>
 
 </body>
