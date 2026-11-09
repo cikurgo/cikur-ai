@@ -623,7 +623,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.2-titanium-nexus-future-robust initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.3-titanium-nexus-future-robust initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -718,7 +718,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - Anthropic default model stabil + xAI list expand
      - MAX_LIVE_SCENE3D 6→8 dengan notifikasi prune
    ================================================================ */
-const APP_VERSION = '10.0.2-titanium-nexus-future-robust';
+const APP_VERSION = '10.0.3-titanium-nexus-future-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -1904,6 +1904,16 @@ function pruneOldestScenes(keepLimit) {
         let score = 0; // higher = safer to prune
         if (!fr || !fr.isConnected) score = 100;
         else {
+            // Lindungi scene di jawaban dewan yang baru / sedang di-peek
+            try {
+                const host = fr.closest && fr.closest('.thought');
+                if (host && (host.classList.contains('peek') || host.classList.contains('live'))) score -= 50;
+                else if (host) {
+                    const all = Array.from(document.querySelectorAll('#chat-container .thought'));
+                    const pos = all.indexOf(host);
+                    if (pos >= all.length - 3) score -= 30; // 3 pesan terakhir dilindungi
+                }
+            } catch (e) {}
             try {
                 const r = fr.getBoundingClientRect();
                 const vh = window.innerHeight || 800, vw = window.innerWidth || 1200;
@@ -2212,7 +2222,12 @@ function buildScene3d(el, opt) {
     el.classList.add('ready');
     Object.keys(s3dReg).forEach(k => { try { if (!s3dReg[k] || !s3dReg[k].fr || !s3dReg[k].fr.isConnected) delete s3dReg[k]; } catch (e) { delete s3dReg[k]; } });
     // Anti-GPU leak: batasi concurrent WebGL sebelum membuat scene baru
-    try { pruneOldestScenes(MAX_LIVE_SCENE3D - 1); } catch (e) {}
+    // Saat multi-agent aktif, izinkan lebih banyak scene agar hasil dewan tidak langsung terhapus
+    try {
+        const swarmBusy = !!(document.body.dataset.swarm && document.body.dataset.busy);
+        const lim = swarmBusy ? Math.max(MAX_LIVE_SCENE3D, 12) : MAX_LIVE_SCENE3D;
+        pruneOldestScenes(lim - 1);
+    } catch (e) {}
     const code = el.dataset.code || ''; el.removeAttribute('data-code');
     const id = 's3d' + (++s3dN) + Math.random().toString(36).slice(2, 7), live = !!isGenerating && !o.noHeal, fresh = !!isGenerating && !o.lazy, skey = studioKey(code), doc = sceneDoc(code, id);
     const fr = document.createElement('iframe'); fr.setAttribute('sandbox', 'allow-scripts allow-downloads'); fr.title = 'Scene 3D'; fr.srcdoc = doc;
@@ -2647,18 +2662,15 @@ function createStream(flow, silent) {
     const waiters = [];
     const release = () => {
         if (thought && thought.classList.contains('live')) {
-            // Biarkan jawaban terakhir tetap terbaca sebentar (peek) sebelum fokus hilang
-            try { thought.classList.add('peek'); setTimeout(() => { try { thought.classList.remove('peek'); } catch (e) {} }, 2800); } catch (e) {}
+            try {
+                thought.classList.add('peek');
+                setTimeout(() => { try { thought.classList.remove('peek'); } catch (e) {} }, 3200);
+            } catch (e) {}
             setFocus(null);
         }
         waiters.splice(0).forEach(r => r());
     };
     const delayFor = () => {
-        // Saat ending: sprint cepat agar finish() tidak menahan giliran berikutnya terlalu lama
-        if (ending) {
-            const back = target.length - shown;
-            return back > 400 ? 0 : back > 80 ? 1 : 3;
-        }
         const back = target.length - shown, ch = target[shown - 1] || '', nx = target[shown] || '';
         let d = back > 900 ? 1.5 : back > 300 ? 4 : back > 90 ? 9 : 17;
         if (/[.!?]/.test(ch) && /\s/.test(nx)) d += back > 300 ? 25 : 150;
@@ -2676,11 +2688,6 @@ function createStream(flow, silent) {
         const now = performance.now();
         if (!force && now - lastR < 32) return;
         lastR = now;
-        // Saat finished: selalu tokenisasi ulang dari awal agar fence 3D/chart/HTML yang semula partial menjadi final
-        if (finished) {
-            nB = 0;
-            doneEl.innerHTML = '';
-        }
         const blocks = tokenize(target.slice(0, shown), finished);
         while (nB < blocks.length && (blocks[nB].done || finished)) {
             const b = blocks[nB++]; if (b.t === 'pending') continue;
@@ -2695,23 +2702,12 @@ function createStream(flow, silent) {
         if (finished) return;
         finished = true;
         shown = target.length;
+        // PENTING: reset nB + rebuild agar fence scene3d/chart/html yang tadinya partial menjadi final
+        nB = 0;
+        doneEl.innerHTML = '';
         render(true);
-        // Safety-net: pastikan seluruh konten kaya (scene3d/chart/html/forge) ter-hydrate
-        try {
-            if (target && target.trim()) {
-                const safety = document.createElement('div');
-                safety.innerHTML = safeMarkdown(target);
-                // Hanya ganti jika doneEl tampak kosong padahal target punya fence kaya
-                const rich = /```\s*(scene3d|chart|html)|\[UI:(CHART|CODE)|\[FORGE:/i.test(target);
-                if (rich && !doneEl.querySelector('.ui-scene3d, .ui-chart, .ui-code, .vulcan-skill-box')) {
-                    doneEl.innerHTML = safety.innerHTML;
-                    hydrate(doneEl, silent);
-                } else {
-                    // Re-hydrate apa pun yang belum ready
-                    hydrate(doneEl, silent);
-                }
-            }
-        } catch (e) { try { logEvent('ERROR', '[STREAM] final hydrate: ' + (e.message || e)); } catch (z) {} }
+        // Safety: pastikan hydrate menyentuh semua blok kaya
+        try { hydrate(doneEl, silent); } catch (e) {}
         cur.remove();
         activeStreams.delete(s);
         try { window.CouncilAvatar && CouncilAvatar.onDone(thought, target); } catch (e) {}
@@ -2721,12 +2717,10 @@ function createStream(flow, silent) {
     function frame(ts) {
         raf = 0; if (!last) last = ts; carry += Math.min(ts - last, 100); last = ts;
         let moved = 0;
-        const maxMove = ending ? 400 : 48; // sprint besar saat ending
-        while (shown < target.length && carry >= wait && moved < maxMove) {
+        while (shown < target.length && carry >= wait && moved < 48) {
             carry -= wait; shown++;
             const cc = target.charCodeAt(shown - 1); if (cc >= 0xD800 && cc <= 0xDBFF && shown < target.length) shown++;
             moved++; wait = delayFor();
-            if (ending && wait === 0) { /* batch cepat */ }
         }
         if (moved) render(false);
         if (shown < target.length) raf = requestAnimationFrame(frame);
@@ -2735,17 +2729,15 @@ function createStream(flow, silent) {
     function kick() { if (finished || raf) return; if (shown < target.length) raf = requestAnimationFrame(frame); else if (ending) complete(); }
     const s = {
         push(t) { target = t; kick(); },
+        // Saat API selesai: langsung final render (jangan tunggu typewriter) agar 3D/chart/HTML pasti terbentuk
         finish() {
             ending = true;
             return new Promise(r => {
                 if (finished) return r();
                 waiters.push(r);
-                // Jika sisa teks masih panjang, lompat hampir ke akhir agar tidak menahan dewan berikutnya
-                const back = target.length - shown;
-                if (back > 1200) {
-                    shown = Math.max(shown, target.length - 400);
-                }
-                kick();
+                if (raf) { try { cancelAnimationFrame(raf); } catch (e) {} raf = 0; }
+                last = 0;
+                complete();
             });
         },
         skip(t) { if (t != null) target = t; shown = target.length; if (raf) cancelAnimationFrame(raf); raf = 0; last = 0; complete(); },
@@ -3973,6 +3965,22 @@ async function sendMessage(forceNormal) {
         } else {
             stream.push(fullAiResponse);
             await stream.finish();
+            // Finalisasi konten kaya (3D/chart/html) untuk jalur single-agent
+            try {
+                const flowEl = stream && stream._flow; // may be undefined
+                const host = document.querySelector('#chat-container .thought.live .flow') ||
+                             document.querySelector('#chat-container .thought:last-child .flow');
+                if (host && fullAiResponse) {
+                    const wantsRich = /```\s*(scene3d|chart|html)|\[UI:CHART|\[FORGE:/i.test(fullAiResponse);
+                    const hasRich = host.querySelector('.ui-scene3d, .ui-chart, .ui-code, .vulcan-skill-box');
+                    if (wantsRich && !hasRich) {
+                        host.innerHTML = safeMarkdown(fullAiResponse);
+                        hydrate(host, false);
+                    } else {
+                        hydrate(host, false);
+                    }
+                }
+            } catch (e) {}
             chatHistory.push({ role: 'assistant', content: fullAiResponse });
             if (chatHistory.length > STORE_MAX) chatHistory = chatHistory.slice(-STORE_MAX);
             saveToStorage();
@@ -4757,15 +4765,24 @@ async function runAgentTurn(agent, compiledPrompt, roundNum, totalRounds, isFina
         }
         bubbleDiv.stream.push(fullText);
         await bubbleDiv.stream.finish();
-        // Pastikan konten final (3D / chart / HTML / forge) benar-benar terpasang di DOM
+        // Finalisasi wajib: render ulang konten kaya jika stream gagal memasang scene3d/chart/html/forge
         try {
-            if (fullText && bubbleDiv && !bubbleDiv.querySelector('.ui-scene3d.ready, .ui-chart.ready, .ui-code.ready')) {
-                const hasRich = /```\s*(scene3d|chart|html)|\[UI:(CHART|CODE)|\[FORGE:/i.test(fullText);
-                if (hasRich) {
-                    bubbleDiv.innerHTML = safeMarkdown(fullText);
-                    hydrate(bubbleDiv, false);
-                }
-            } else if (bubbleDiv) {
+            const wantsRich = /```\s*(scene3d|chart|html|htm)|\[UI:(CHART|CODE)|\[FORGE:/i.test(fullText || '');
+            const hasScene = !!bubbleDiv.querySelector('.ui-scene3d');
+            const hasChart = !!bubbleDiv.querySelector('.ui-chart');
+            const hasCode = !!bubbleDiv.querySelector('.ui-code');
+            const hasForge = !!bubbleDiv.querySelector('.vulcan-skill-box');
+            const missing = wantsRich && (
+                (/```\s*scene3d/i.test(fullText) && !hasScene) ||
+                ((/```\s*chart/i.test(fullText) || /\[UI:CHART/i.test(fullText)) && !hasChart) ||
+                (/```\s*html/i.test(fullText) && !hasCode) ||
+                (/\[FORGE:/i.test(fullText) && !hasForge)
+            );
+            if (missing || (wantsRich && !hasScene && !hasChart && !hasCode && !hasForge)) {
+                bubbleDiv.innerHTML = safeMarkdown(fullText);
+                hydrate(bubbleDiv, false);
+                logEvent('SYSTEM', '[' + agent.name + '] rich media di-finalisasi ulang');
+            } else {
                 hydrate(bubbleDiv, false);
             }
         } catch (e) { try { logEvent('ERROR', '[AGENT] post-finish hydrate: ' + (e.message || e)); } catch (z) {} }
@@ -4833,18 +4850,16 @@ async function runMultiAgentDiscussion(compiledPrompt) {
             const ok = await runAgentTurn(agent, compiledPrompt, r, rounds, false);
             if (!ok) { agentDiscussionAborted = true; break roundLoop; }
             if (currentAbortController.signal.aborted) { agentDiscussionAborted = true; break roundLoop; }
-            // Adaptive inter-agent delay: biarkan jawaban terbaca; free tier lebih panjang
+            // Jeda antar-dewan: cukup lama agar jawaban + 3D/chart sempat terbaca
             {
                 const p = PROVIDERS[settings.provider];
                 const key = ((settings.keys[settings.provider] || '') + '').trim();
                 const freeish = (p && p.free && !key) || (settings.provider === 'pollinations' && !key);
                 const lastTx = agentTranscript.length ? (agentTranscript[agentTranscript.length - 1].text || '') : '';
                 const len = lastTx.length;
-                // base + bonus per panjang jawaban (agar dewan tidak saling potong)
-                let ms = freeish ? 1400 : 900;
-                if (len > 600) ms += Math.min(2200, Math.floor(len / 350) * 400);
-                // jika ada konten kaya, beri waktu ekstra mount 3D/chart
-                if (/```\s*(scene3d|chart|html)|\[UI:CHART/i.test(lastTx)) ms += 700;
+                let ms = freeish ? 1800 : 1200;
+                if (len > 400) ms += Math.min(2800, Math.floor(len / 280) * 450);
+                if (/```\s*(scene3d|chart|html)|\[UI:CHART/i.test(lastTx)) ms += 1000;
                 await sleep(ms);
             }
         }
