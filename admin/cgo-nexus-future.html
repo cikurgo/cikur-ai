@@ -5270,6 +5270,14 @@ function importBackup(file) {
         ['Impor cadangan JSON', () => fileIn.click(), 'upload'],
         ['Jalankan self-test', runDiagnostics, 'shield'],
         ['Hapus memori Cortex', wipeCortex, 'database'],
+        ['Avatar: bacakan jawaban terakhir (Alt+R)', () => window.NexusFX && window.NexusFX.read(false), 'volume'],
+        ['Avatar: hentikan bacaan', () => window.NexusFX && window.NexusFX.stop(), 'stop'],
+        ['Avatar: baca jawaban otomatis nyala / mati', () => window.NexusFX && window.NexusFX.auto(), 'volume'],
+        ['Panggil Dr. Nova', () => window.NexusFX && window.NexusFX.summon('nova'), 'chevron'],
+        ['Panggil Dr. Flux', () => window.NexusFX && window.NexusFX.summon('flux'), 'chevron'],
+        ['Panggil CGO', () => window.NexusFX && window.NexusFX.summon('cgo'), 'chevron'],
+        ['Panggil Dr. Lyric', () => window.NexusFX && window.NexusFX.summon('lyric'), 'chevron'],
+        ['Panggil Dr. Cortex', () => window.NexusFX && window.NexusFX.summon('cortex'), 'chevron'],
         ['Bersihkan riwayat', () => clearBtn.click(), 'trash']
     ];
     const pal = document.createElement('div'); pal.id = 'palette';
@@ -6437,201 +6445,41 @@ window.runForgedSkill = function (forgeId, argsStr, resultEl) {
   } catch (err) { console.warn('[SOUL] modul gagal dimuat, NEXUS inti tetap berjalan:', err); }
 })();
 </script>
-<!-- ═══ NEXUS FUTURE LAYER v1 · aditif & non-destruktif: semua fungsi lama tetap utuh ═══ -->
+<!-- ═══ NEXUS VISUAL LAYER v3 · murni ornamen; tidak menambah tombol/fitur yang sudah ada di aplikasi ═══ -->
 <style id="fx-css">
-#fx-grid{position:absolute;left:-30%;right:-30%;bottom:0;height:52vh;pointer-events:none;opacity:.55;
-background:linear-gradient(rgba(var(--aura-a),.26) 1px,transparent 1px) 0 0/100% 52px,linear-gradient(90deg,rgba(var(--aura-a),.26) 1px,transparent 1px) 0 0/52px 100%;
+#fx-grid{position:absolute;left:-30%;right:-30%;bottom:0;height:46vh;pointer-events:none;opacity:.4;
+background:linear-gradient(rgba(var(--aura-a),.24) 1px,transparent 1px) 0 0/100% 52px,linear-gradient(90deg,rgba(var(--aura-a),.24) 1px,transparent 1px) 0 0/52px 100%;
 transform:perspective(520px) rotateX(64deg);transform-origin:50% 100%;animation:fxg 9s linear infinite;
 -webkit-mask-image:linear-gradient(transparent,#000 75%);mask-image:linear-gradient(transparent,#000 75%)}
 @keyframes fxg{to{background-position:0 52px,0 0}}
 body[data-theme="light"] #fx-grid{display:none}
 body[data-state="alert"] #fx-grid{filter:hue-rotate(150deg) saturate(2)}
-#composer{-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4);transition:box-shadow .4s}
 #composer:focus-within{box-shadow:0 0 0 1px rgba(var(--aura-a),.5),0 0 46px -12px rgba(var(--aura-a),.7)}
-.thought:last-child{animation:fxin .55s cubic-bezier(.2,.8,.2,1)}
-@keyframes fxin{from{transform:translateY(14px)}}
-#fx-pulse{position:fixed;left:14px;top:calc(max(10px,env(safe-area-inset-top)) + 54px);z-index:18;display:flex;flex-direction:column;gap:.3rem;font:300 .66rem/1.4 var(--mono);color:var(--dim);pointer-events:none}
-#fx-pulse b{font-weight:400;color:var(--ink);letter-spacing:.06em}
-#fx-pulse .st{display:flex;align-items:center;gap:.55rem}
-#fx-pulse i{width:18px;height:2px;background:var(--accent);box-shadow:0 0 10px var(--accent);transition:width .5s,background .4s}
-body[data-state="thinking"] #fx-pulse i{width:44px;animation:fxp 1s ease-in-out infinite}
-body[data-state="alert"] #fx-pulse i{width:44px;background:var(--danger);box-shadow:0 0 10px var(--danger)}
-@keyframes fxp{50%{opacity:.25}}
-#fx-k{position:fixed;left:14px;top:calc(max(10px,env(safe-area-inset-top)) + 100px);z-index:18;min-width:44px;height:36px;padding:0 .7rem;border-radius:18px;font:400 .68rem var(--mono);color:var(--dim);box-shadow:inset 0 0 0 1px rgba(160,180,220,.16);opacity:.55;transition:opacity .3s,color .3s}
-#fx-k:hover,#fx-k:focus-visible{opacity:1;color:var(--ink)}
-#fx-mic{display:grid;place-items:center;width:40px;height:40px;color:var(--dim);flex:none}
-#fx-mic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
-#fx-mic.on{color:var(--danger);animation:fxp 1s ease-in-out infinite}
-#fx-pal{position:fixed;inset:0;z-index:9000;display:none;align-items:flex-start;justify-content:center;padding:14vh 1rem 0;background:rgba(2,4,10,.58);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
-#fx-pal.on{display:flex}
-body[data-theme="light"] #fx-pal{background:rgba(220,226,238,.6)}
-#fx-box{width:min(34rem,100%);max-height:62vh;display:flex;flex-direction:column;border-radius:18px;background:var(--layer);box-shadow:0 0 0 1px rgba(160,180,220,.14),0 40px 90px -30px #000,0 0 70px -30px rgba(var(--aura-a),.8);overflow:hidden}
-#fx-q{font:300 .95rem var(--mono);color:var(--ink);background:none;border:0;outline:0;padding:1.1rem 1.2rem;border-bottom:1px solid rgba(160,180,220,.12)}
-#fx-q::placeholder{color:var(--dim)}
-#fx-ls{overflow-y:auto;padding:.4rem;scrollbar-width:thin}
-.fx-i{display:flex;justify-content:space-between;gap:1rem;width:100%;text-align:left;padding:.7rem .8rem;border-radius:10px;font:300 .82rem var(--mono);color:var(--text-muted)}
-.fx-i small{color:var(--dim);font-size:.68rem}
-.fx-i.on{background:rgba(var(--aura-a),.16);color:var(--ink);box-shadow:inset 2px 0 0 var(--accent)}
-@media(max-width:560px){#fx-pulse div:not(.st){display:none}}
-@media(prefers-reduced-motion:reduce){#fx-grid,.thought:last-child,#fx-pulse i,#fx-mic.on{animation:none}}
+@media(prefers-reduced-motion:reduce){#fx-grid{animation:none}}
 </style>
 <script id="fx-js">
 (function () { try {
-  var $ = function (i) { return document.getElementById(i); }, B = document.body;
-  var RM = matchMedia('(prefers-reduced-motion:reduce)').matches;
-  var inp = $('chat-input'), cc = $('chat-container'), vd = $('void'), base = document.title;
-  function mk(tag, id, html, par, before) { var e = document.createElement(tag); if (id) e.id = id; if (html) e.innerHTML = html; (par || B).insertBefore(e, before || null); return e; }
-
-  /* 1 · lantai grid holografik (di bawah avatar, di atas aura) */
-  if (vd) { var g = mk('div', 'fx-grid', '', vd, vd.children[2]); g.setAttribute('aria-hidden', 'true'); }
-
-  /* 2 · Nexus Pulse: telemetri sesi nyata (hanya membaca DOM) */
-  var P = mk('div', 'fx-pulse', '<div class="st"><i></i><b id="fx-st">IDLE</b></div><div id="fx-m">0 pesan · 0 kata</div><div id="fx-l">siap</div>');
-  var t0 = 0, noteT = 0, lastLat = 'siap';
-  function note(t) { var l = $('fx-l'); l.textContent = t; clearTimeout(noteT); noteT = setTimeout(function () { l.textContent = lastLat; }, 3200); }
-  function syncState() {
-    var s = B.getAttribute('data-state') || 'idle';
-    $('fx-st').textContent = s.toUpperCase();
-    document.title = (s === 'idle' ? '' : '● ' + s + ' · ') + base;
-    if (s !== 'idle' && !t0) t0 = Date.now();
-    else if (s === 'idle' && t0) { lastLat = 'respons terakhir ' + ((Date.now() - t0) / 1000).toFixed(1) + ' dtk'; $('fx-l').textContent = lastLat; t0 = 0; }
+  var vd = document.getElementById('void');
+  if (vd && !document.getElementById('fx-grid')) {
+    var g = document.createElement('div'); g.id = 'fx-grid'; g.setAttribute('aria-hidden', 'true');
+    vd.insertBefore(g, vd.children[2] || null);   /* di bawah avatar, di atas aura */
   }
-  var sT = 0;
-  function stats() {
-    sT = 0; if (!cc) return;
-    var n = cc.querySelectorAll('.thought').length, w = (cc.textContent.match(/\S+/g) || []).length;
-    $('fx-m').textContent = n + ' pesan · ' + (w > 999 ? (w / 1000).toFixed(1) + 'k' : w) + ' kata';
-  }
-  new MutationObserver(syncState).observe(B, { attributes: true, attributeFilter: ['data-state'] });
-  if (cc) new MutationObserver(function () { if (!sT) sT = setTimeout(stats, 900); }).observe(cc, { childList: true, subtree: true, characterData: true });
-  syncState(); stats();
-
-  /* 3 · Command Palette (Ctrl/⌘+K): setiap aksi memicu tombol lama, jadi perilakunya identik */
-  var A = [];
-  function btn(id, l, k) { A.push({ l: l, k: k || '', f: function () { var e = $(id); if (e) e.click(); } }); }
-  btn('multiagent-btn', 'Cognitive Swarm (multi-agen)', 'Ctrl+Shift+M');
-  btn('avatar-btn', 'Panggung Avatar Dewan', 'Ctrl+Shift+4');
-  btn('studio-btn', 'Buka 3D Studio', 'Ctrl+Shift+3');
-  btn('sample-btn', 'Inject seed (contoh prompt)');
-  btn('heal-btn', 'Recalibrate (auto-heal)', 'Ctrl+Shift+H');
-  btn('compile-only-btn', 'Simulate (compile tanpa kirim)', 'Ctrl+Shift+O');
-  btn('stop-btn', 'Terminate generasi');
-  btn('diag-btn', 'Jalankan self-test');
-  btn('theme-btn', 'Ganti tema');
-  btn('toggle-telemetry-btn', 'Tampilkan / sembunyikan telemetri');
-  btn('avatar-voice-btn', 'Suara avatar on/off');
-  btn('audio-toggle-btn', 'Audio engine on/off');
-  btn('local-brain-btn', 'Local Brain on/off');
-  btn('settings-btn', 'Pengaturan & provider');
-  A.push({ l: 'Fokus ke kolom prompt', k: '/', f: function () { if (inp) inp.focus(); } });
-  A.push({ l: 'Lompat ke pesan terbaru', f: function () { var s = $('stage'); if (s) s.scrollTo({ top: s.scrollHeight, behavior: RM ? 'auto' : 'smooth' }); } });
-  A.push({ l: 'Dikte suara ke prompt', k: 'Alt+M', f: dict });
-  A.push({ l: 'Ekspor percakapan (.md)', f: exp });
-
-  window.NexusFX = { act: function (l, k, f) { A.push({ l: l, k: k || '', f: f }); }, note: note };
-  var pal = mk('div', 'fx-pal', '<div id="fx-box" role="dialog" aria-modal="true" aria-label="Palet perintah"><input id="fx-q" autocomplete="off" spellcheck="false" placeholder="Ketik perintah…  ↑↓ pilih · Enter jalankan · Esc tutup"><div id="fx-ls" role="listbox"></div></div>');
-  var q = $('fx-q'), ls = $('fx-ls'), cur = 0, view = [];
-  function render() {
-    var s = q.value.trim().toLowerCase();
-    view = A.filter(function (a) { return !s || (a.l + ' ' + a.k).toLowerCase().indexOf(s) > -1; });
-    if (cur >= view.length) cur = 0;
-    ls.innerHTML = '';
-    view.forEach(function (a, i) {
-      var b = mk('button', '', '<span></span><small></small>', ls); b.className = 'fx-i' + (i === cur ? ' on' : ''); b.type = 'button';
-      b.firstChild.textContent = a.l; b.lastChild.textContent = a.k;
-      b.onclick = function () { run(a); };
-    });
-    var on = ls.querySelector('.on'); if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest' });
-  }
-  function run(a) { close(); setTimeout(a.f, 30); }
-  function open() { pal.classList.add('on'); q.value = ''; cur = 0; render(); q.focus(); }
-  function close() { pal.classList.remove('on'); }
-  q.addEventListener('input', function () { cur = 0; render(); });
-  q.addEventListener('keydown', function (e) {
-    if (e.key === 'ArrowDown') { cur = Math.min(view.length - 1, cur + 1); render(); e.preventDefault(); }
-    else if (e.key === 'ArrowUp') { cur = Math.max(0, cur - 1); render(); e.preventDefault(); }
-    else if (e.key === 'Enter' && view[cur]) { e.preventDefault(); run(view[cur]); }
-  });
-  pal.addEventListener('mousedown', function (e) { if (e.target === pal) close(); });
-  var kb = mk('button', 'fx-k', 'Perintah', B); kb.type = 'button'; kb.title = 'Palet perintah (Ctrl/⌘+K)'; kb.setAttribute('aria-label', 'Buka palet perintah'); kb.onclick = open;
-  document.addEventListener('keydown', function (e) {
-    var typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target || {}).tagName || '');
-    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); pal.classList.contains('on') ? close() : open(); }
-    else if (e.key === 'Escape' && pal.classList.contains('on')) { close(); e.stopPropagation(); }
-    else if (e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'm') { e.preventDefault(); dict(); }
-    else if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && inp) { e.preventDefault(); inp.focus(); }
-  }, true);
-
-  /* 4 · Dikte suara (Web Speech API, hanya muncul bila didukung browser) */
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, dOn = false, d0 = '', mic = null;
-  var cp = $('composer'), sb = $('send-btn');
-  if (SR && cp && sb) {
-    mic = mk('button', 'fx-mic', '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>', cp, sb);
-    mic.type = 'button'; mic.title = 'Dikte suara (Alt+M)'; mic.setAttribute('aria-label', 'Dikte suara'); mic.onclick = dict;
-  }
-  function dict() {
-    if (!SR || !inp) return note('Dikte tidak didukung browser ini');
-    if (dOn) { try { rec.stop(); } catch (e) {} return; }
-    rec = new SR(); rec.lang = document.documentElement.lang === 'id' ? 'id-ID' : (navigator.language || 'id-ID');
-    rec.interimResults = true; rec.continuous = true; d0 = inp.value ? inp.value.replace(/\s*$/, ' ') : '';
-    rec.onstart = function () { dOn = true; if (mic) mic.classList.add('on'); note('Mendengarkan…'); };
-    rec.onresult = function (e) {
-      var s = ''; for (var i = 0; i < e.results.length; i++) s += e.results[i][0].transcript;
-      inp.value = d0 + s; inp.dispatchEvent(new Event('input', { bubbles: true }));
-    };
-    rec.onend = rec.onerror = function () { dOn = false; if (mic) mic.classList.remove('on'); };
-    try { rec.start(); } catch (e) {}
-  }
-
-  /* 5 · Ekspor percakapan ke Markdown */
-  function exp() {
-    var o = ['# Sesi NEXUS · ' + new Date().toLocaleString('id-ID'), ''];
-    if (cc) cc.querySelectorAll('.thought').forEach(function (t) {
-      var w = t.querySelector('.who'), f = t.querySelector('.flow'); if (!f) return;
-      o.push('## ' + (w ? w.textContent.trim() : '—'), '', f.innerText.trim(), '');
-    });
-    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([o.join('\n')], { type: 'text/markdown' }));
-    a.download = 'nexus-sesi-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.md';
-    B.appendChild(a); a.click(); a.remove(); setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
-    note('Percakapan diekspor');
-  }
-
-  /* 6 · Draf otomatis: prompt yang belum terkirim tidak hilang saat tab ditutup */
-  try {
-    var KEY = 'fx.nexus.draft';
-    if (inp && !inp.value) { var dv = localStorage.getItem(KEY); if (dv) { inp.value = dv; inp.dispatchEvent(new Event('input', { bubbles: true })); } }
-    var lastD = inp ? inp.value : '';
-    setInterval(function () {
-      if (!inp || inp.value === lastD) return; lastD = inp.value;
-      if (lastD) localStorage.setItem(KEY, lastD); else localStorage.removeItem(KEY);
-    }, 1500);
-  } catch (e) {}
-} catch (err) { console.warn('[FUTURE] lapisan upgrade gagal dimuat, NEXUS inti tetap berjalan:', err); } })();
+} catch (err) { console.warn('[FUTURE] visual gagal dimuat:', err); } })();
 </script>
 
-<!-- ═══ SOUL BRIDGE v2 · hanya memakai pintu resmi CouncilAvatar; shader & wajah avatar TIDAK disentuh ═══ -->
+<!-- ═══ SOUL BRIDGE v3 · hanya pintu resmi CouncilAvatar; wajah/shader avatar TIDAK disentuh ═══ -->
 <script id="fx-bridge">
 (function () { try {
-  var CA = window.CouncilAvatar, FX = window.NexusFX;
-  if (!CA || !FX) return;
-  var $ = function (i) { return document.getElementById(i); }, B = document.body;
+  var CA = window.CouncilAvatar; if (!CA) return;
+  var B = document.body;
   var NAME = { nova: 'Dr. Nova', flux: 'Dr. Flux', cgo: 'CGO', lyric: 'Dr. Lyric', cortex: 'Dr. Cortex' };
   function sig(m) { try { CA.signal(m); } catch (e) {} }
+  function note(t, w) { try { showToast(t, 2600, !!w); } catch (e) {} }
   function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) {} }
   function idle() { return (B.getAttribute('data-state') || 'idle') === 'idle'; }
+  function lastAI() { var t = document.querySelectorAll('#chat-container .thought:not(.user)'); return t[t.length - 1]; }
 
-  /* 1 · Pulse: persona avatar yang aktif + status merakit diri */
-  var pl = $('fx-pulse'), av = null, morph = false;
-  if (pl) { av = document.createElement('div'); av.id = 'fx-av'; pl.appendChild(av); }
-  function showAv() {
-    if (!av) return;
-    var on = false; try { on = CA.isOn(); } catch (e) {}
-    av.textContent = !on ? 'avatar tersembunyi' : morph ? 'avatar merakit diri…' : 'avatar · ' + (NAME[CA.current()] || 'siaga');
-  }
-  CA.on(function (d) { if (d.type === 'morph') { morph = d.phase !== 'end'; showAv(); } });
-  setInterval(showAv, 900); showAv();
-
-  /* 2 · Bacakan jawaban penuh: antrean kalimat lewat CA.say (menunggu morph & kalimat sebelumnya selesai) */
+  /* 1 · bacakan jawaban penuh lewat avatar (antrean kalimat via CA.say) */
   var tok = 0;
   function api() { var f = document.querySelector('#cav-stage iframe'); try { return f && f.contentWindow.NexusAvatar; } catch (e) { return null; } }
   function clean(t) {
@@ -6642,43 +6490,40 @@ body[data-theme="light"] #fx-pal{background:rgba(220,226,238,.6)}
     var s = t.match(/[^.!?]+[.!?]+(\s|$)|[^.!?]+$/g) || [], out = [], cur = '';
     s.forEach(function (x) { cur += x; if (cur.length >= 60) { out.push(cur.trim().slice(0, 260)); cur = ''; } });
     if (cur.trim()) out.push(cur.trim().slice(0, 260));
-    if (skipFirst) out.shift();               /* kalimat pertama sudah dibacakan oleh host */
-    return out.slice(0, 8);                   /* batas ±2000 karakter agar tidak berlarut */
+    if (skipFirst) out.shift();               /* kalimat pertama sudah dibacakan host */
+    return out.slice(0, 8);
   }
   function read(auto) {
-    var th = document.querySelectorAll('#chat-container .thought:not(.user)'); th = th[th.length - 1];
-    var f = th && th.querySelector('.flow'); if (!f) return FX.note('Belum ada jawaban untuk dibacakan');
-    if (!idle()) return FX.note('Tunggu jawaban selesai dulu');
+    var th = lastAI(), f = th && th.querySelector('.flow');
+    if (!f) return note('Belum ada jawaban untuk dibacakan', true);
+    if (!idle()) return note('Tunggu jawaban selesai dulu', true);
+    if (!api()) return note('Avatar belum aktif — nyalakan panggung avatar dulu', true);
     var c = chunks(clean(f.innerText), auto), my = ++tok, first = !auto, ag = th.dataset && th.dataset.agent;
     if (!c.length) return;
-    FX.note('Avatar membacakan jawaban…');
+    note('Avatar membacakan jawaban…');
     (function nx() {
       if (my !== tok) return;
       var a = api(); if (!a) return;
       var busy = false; try { busy = a.busy() || CA.morphing(); } catch (e) {}
       if (busy) return setTimeout(nx, 350);
-      var s = c.shift(); if (!s) return FX.note('Selesai dibacakan');
+      var s = c.shift(); if (!s) return;
       try { first && ag ? CA.say(s, ag) : CA.say(s); } catch (e) {} first = false;
       setTimeout(nx, 700);
     })();
   }
-  function cancelRead() { tok++; }
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') cancelRead();
-    else if (e.altKey && !e.ctrlKey && e.key.toLowerCase() === 'r') { e.preventDefault(); read(false); }
-  }, true);
-  ['stop-btn', 'clear-btn'].forEach(function (id) { var b = $(id); if (b) b.addEventListener('click', cancelRead); });
-
-  /* 3 · Palet: panggil persona, bacakan, mode baca otomatis */
-  Object.keys(NAME).forEach(function (id) { FX.act('Panggil ' + NAME[id], '', function () { CA.summon(id); FX.note(NAME[id] + ' dipanggil'); }); });
-  FX.act('Avatar bacakan jawaban terakhir', 'Alt+R', function () { read(false); });
-  FX.act('Hentikan bacaan avatar', 'Esc', function () { cancelRead(); try { CA.halt(); } catch (e) {} });
+  function stop() { tok++; try { CA.halt(); } catch (e) {} }
   var auto = ls('fx.autoread') === '1';
-  FX.act('Baca jawaban penuh otomatis: ' + (auto ? 'NYALA' : 'MATI') + ' (ketuk untuk ganti)', '', function () {
-    auto = !auto; ls('fx.autoread', auto ? '1' : '0'); FX.note('Baca otomatis ' + (auto ? 'NYALA' : 'MATI'));
-  });
+  function toggleAuto() { auto = !auto; ls('fx.autoread', auto ? '1' : '0'); note('Baca jawaban otomatis: ' + (auto ? 'NYALA' : 'MATI')); }
+  function summon(id) { try { CA.summon(id); note((NAME[id] || id) + ' dipanggil'); } catch (e) {} }
+  window.NexusFX = { read: read, stop: stop, auto: toggleAuto, summon: summon };   /* dipakai entri palet bawaan (Ctrl+K) */
 
-  /* 4 · Nada jawaban -> efek avatar bawaan (glitch ringan / ping); dipicu saat sistem kembali idle */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') tok++;
+    else if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 'r') { e.preventDefault(); read(false); }
+  }, true);
+  ['stop-btn', 'clear-btn'].forEach(function (id) { var b = document.getElementById(id); if (b) b.addEventListener('click', function () { tok++; }); });
+
+  /* 2 · nada jawaban -> efek avatar bawaan (glitch ringan / ping) saat sistem kembali idle */
   var prev = B.getAttribute('data-state') || 'idle';
   var WARN = /\b(peringatan|bahaya|kritis|error|gagal|risiko|rentan|ancaman|warning|critical|vulnerab)/i;
   var GOOD = /\b(berhasil|sukses|aman|selesai|valid|terverifikasi|success|verified|passed)\b/i;
@@ -6686,18 +6531,18 @@ body[data-theme="light"] #fx-pal{background:rgba(220,226,238,.6)}
     var s = B.getAttribute('data-state') || 'idle', was = prev; prev = s;
     if (was !== 'thinking' || s !== 'idle') return;
     setTimeout(function () {
-      var th = document.querySelectorAll('#chat-container .thought:not(.user)'); th = th[th.length - 1];
-      var t = th ? (th.textContent || '').slice(0, 4000) : '';
+      var th = lastAI(), t = th ? (th.textContent || '').slice(0, 4000) : '';
       if (WARN.test(t)) sig({ type: 'glitch', level: .3, ms: 700 });
       else if (GOOD.test(t)) sig({ type: 'ping' });
       if (auto) setTimeout(function () { read(true); }, 1200);
     }, 500);
   }).observe(B, { attributes: true, attributeFilter: ['data-state'] });
 
-  /* 5 · Dikte -> avatar "mendengarkan" (ping saat mulai & berhenti). Nama persona yang diucapkan
-        otomatis dikenali oleh pendeteksi lama karena dikte memicu event input pada kolom prompt. */
-  var mic = $('fx-mic');
-  if (mic) new MutationObserver(function () { sig({ type: 'ping' }); }).observe(mic, { attributes: true, attributeFilter: ['class'] });
+  /* 3 · tombol VOICE bawaan aktif -> avatar "mendengarkan" (ping). Nama persona yang diucapkan dikenali
+        pendeteksi lama karena VOICE bawaan memicu event input pada kolom prompt. */
+  var tl = document.getElementById('tools');
+  var vb = tl && Array.prototype.filter.call(tl.querySelectorAll('button'), function (b) { return /^\s*VOICE\s*$/.test(b.textContent); })[0];
+  if (vb) new MutationObserver(function () { sig({ type: 'ping' }); }).observe(vb, { attributes: true, attributeFilter: ['class'] });
 } catch (err) { console.warn('[BRIDGE] gagal dimuat, avatar & NEXUS inti tetap berjalan:', err); } })();
 </script>
 
