@@ -724,7 +724,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - Anthropic default model stabil + xAI list expand
      - MAX_LIVE_SCENE3D 6→8 dengan notifikasi prune
    ================================================================ */
-const APP_VERSION = '10.0.4-titanium-rich-render-fix';
+const APP_VERSION = '10.0.5-titanium-chart-loose-json';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -2611,42 +2611,109 @@ function destroyScene3d(root) {
         try { logEvent('ERROR', '[3D] destroyScene3d: ' + (e.message || e)); } catch (z) {}
     }
 }
+function looseJsonParse(raw) {
+    let s = String(raw == null ? '' : raw).trim();
+    if (!s) throw new Error('kosong');
+    s = s.replace(/^```(?:json|chart|javascript|js)?\s*/i, '').replace(/```\s*$/,'');
+    s = s.replace(/^\s*chart\s*/i, '');
+    // buang komentar
+    s = s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    // ambil objek/array terluar bila ada teks di sekitarnya
+    if (s[0] !== '{' && s[0] !== '[') {
+        const a = s.indexOf('{'), b = s.indexOf('[');
+        let start = -1;
+        if (a >= 0 && (b < 0 || a < b)) start = a;
+        else if (b >= 0) start = b;
+        if (start >= 0) {
+            const open = s[start], close = open === '{' ? '}' : ']';
+            let depth = 0, inStr = false, q = '', esc = false, end = -1;
+            for (let i = start; i < s.length; i++) {
+                const c = s[i];
+                if (inStr) {
+                    if (esc) { esc = false; continue; }
+                    if (c === '\\') { esc = true; continue; }
+                    if (c === q) inStr = false;
+                    continue;
+                }
+                if (c === '"' || c === "'") { inStr = true; q = c; continue; }
+                if (c === open) depth++;
+                else if (c === close) { depth--; if (depth === 0) { end = i; break; } }
+            }
+            if (end > start) s = s.slice(start, end + 1);
+        }
+    }
+    // trailing commas
+    s = s.replace(/,\s*([}\]])/g, '$1');
+    // Coba strict dulu
+    try { return JSON.parse(s); } catch (e1) { /* continue */ }
+    // Single-quoted strings → double-quoted (sederhana, aman untuk config chart)
+    let t = '';
+    let mode = 0; // 0 normal, 1 single str, 2 double str
+    let esc = false;
+    for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        if (mode === 0) {
+            if (c === "'") { mode = 1; t += '"'; continue; }
+            if (c === '"') { mode = 2; t += c; continue; }
+            t += c; continue;
+        }
+        if (mode === 1) {
+            if (esc) { esc = false; if (c === "'") { t += "'"; continue; } t += '\\' + c; continue; }
+            if (c === '\\') { esc = true; continue; }
+            if (c === "'") { mode = 0; t += '"'; continue; }
+            if (c === '"') { t += '\\"'; continue; }
+            if (c === '\n') { t += '\\n'; continue; }
+            t += c; continue;
+        }
+        // mode 2 double
+        if (esc) { esc = false; t += '\\' + c; continue; }
+        if (c === '\\') { esc = true; continue; }
+        if (c === '"') { mode = 0; t += c; continue; }
+        t += c;
+    }
+    s = t;
+    s = s.replace(/,\s*([}\]])/g, '$1');
+    try { return JSON.parse(s); } catch (e2) { /* continue */ }
+    // Quote unquoted keys: { type: "bar" } / , labels:
+    s = s.replace(/([{,]\s*)([A-Za-z_$][\w$]*)(\s*:)/g, '$1"$2"$3');
+    s = s.replace(/,\s*([}\]])/g, '$1');
+    try { return JSON.parse(s); } catch (e3) {
+        // terakhir: ganti ' yang tersisa di value non-string context sulit — lempar error asli
+        throw e3;
+    }
+}
 function buildChart(el) {
     el.classList.add('ready');
     if (!hasChart) { el.textContent = 'Chart.js tidak tersedia'; return; }
     try {
-        let raw = readAttrPayload(el, 'cfg');
+        let raw = (typeof readAttrPayload === 'function') ? readAttrPayload(el, 'cfg') : (el.dataset.cfg || '');
         el.removeAttribute('data-cfg');
-        // Bersihkan artefak umum dari output AI
-        raw = String(raw || '').trim()
-            .replace(/^```(?:json|chart)?\s*/i, '').replace(/```\s*$/,'')
-            .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
-            .replace(/,\s*([}\]])/g, '$1'); // trailing comma
-        // Kadang AI membungkus array datasets saja — angkat ke objek Chart
-        let cfg;
-        try { cfg = JSON.parse(raw); }
-        catch (pe) {
-            // coba potong ke objek JSON pertama
-            const a = raw.indexOf('{'), b = raw.lastIndexOf('}');
-            if (a >= 0 && b > a) cfg = JSON.parse(raw.slice(a, b + 1));
-            else throw pe;
+        let cfg = looseJsonParse(raw);
+        if (Array.isArray(cfg)) {
+            cfg = { type: 'bar', data: { labels: cfg.map((_, i) => String(i + 1)), datasets: [{ label: 'data', data: cfg }] } };
         }
-        if (Array.isArray(cfg)) cfg = { type: 'bar', data: { labels: cfg.map((_, i) => String(i + 1)), datasets: [{ label: 'data', data: cfg }] } };
         if (!cfg || typeof cfg !== 'object') throw new Error('bukan objek');
-        // Jika hanya {labels, datasets} tanpa type
-        if (!cfg.type && cfg.data) cfg.type = 'bar';
-        if (!cfg.type && (cfg.labels || cfg.datasets)) {
+        // Bentuk longgar: {labels, datasets} tanpa wrapper data
+        if (!cfg.type && !cfg.data && (cfg.labels || cfg.datasets)) {
             cfg = { type: 'bar', data: { labels: cfg.labels || [], datasets: cfg.datasets || [] } };
         }
+        if (!cfg.type && cfg.data) cfg.type = 'bar';
         cfg.options = Object.assign({}, cfg.options || {}, { responsive: true, maintainAspectRatio: false });
         if (!cfg.type) cfg.type = 'bar';
         if (!cfg.data) cfg.data = { labels: [], datasets: [] };
-        if (!cfg.data.datasets) cfg.data.datasets = [];
-        if (!cfg.data.labels) cfg.data.labels = [];
+        if (!Array.isArray(cfg.data.datasets)) cfg.data.datasets = [];
+        if (!Array.isArray(cfg.data.labels)) cfg.data.labels = [];
+        // Pastikan tiap dataset punya data array
+        cfg.data.datasets = cfg.data.datasets.map(function (ds, i) {
+            if (ds == null || typeof ds !== 'object') return { label: 'series ' + (i + 1), data: [] };
+            if (!Array.isArray(ds.data)) ds.data = [];
+            if (ds.label == null) ds.label = 'series ' + (i + 1);
+            return ds;
+        });
         const cv = document.createElement('canvas'); el.appendChild(cv);
         charts.push(new Chart(cv, cfg));
     } catch (e) {
-        el.innerHTML = '<p class="err">grafik gagal dirender: ' + escapeHtml(String(e.message || e).slice(0, 120)) + '</p>';
+        el.innerHTML = '<p class="err">grafik gagal dirender: ' + escapeHtml(String(e.message || e).slice(0, 140)) + '</p>';
         try { logEvent('ERROR', 'Chart: ' + (e.message || e)); } catch (z) {}
     }
 }
