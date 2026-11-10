@@ -89,6 +89,12 @@ body[data-focus] .thought:not(.live){opacity:.2!important;filter:blur(4px)!impor
 .exec-out{padding:.2rem 1.1rem 1.1rem;font:400 .78rem/1.65 var(--mono);color:rgba(196,208,232,.6);white-space:pre-wrap}.exec-out .e{color:#fca5a5}
 .exec-frame{width:100%;height:230px;border:0;border-radius:10px;background:#fff}
 .ui-chart{position:relative;height:260px;margin:1.6em 0}
+.ui-html{position:relative;margin:1.6em 0;border-radius:16px;overflow:hidden;background:rgba(10,16,30,.8);box-shadow:0 0 0 1px rgba(var(--aura-a),.28),0 36px 70px -34px rgba(0,0,0,.95)}
+.ui-html .ui-html-frame{display:block;width:100%;height:min(420px,55vh);border:0;background:#fff;color-scheme:light}
+.ui-html .ui-html-bar{display:flex;gap:.1rem;align-items:center;flex-wrap:wrap;padding:0 .5rem;border-top:1px solid rgba(148,163,184,.15);background:rgba(10,16,30,.92)}
+.ui-html .ui-html-bar .lnk{min-height:34px;padding:.3rem .5rem;font-size:.68rem}
+.ui-html .ui-html-st{margin-left:auto;font:400 .68rem var(--mono);color:var(--dim)}
+.ui-html.ready.err .ui-html-st{color:#fca5a5}
 .ui-alert{font:400 clamp(1.5rem,5.5vw,2.3rem)/1.3 var(--serif);color:#ff6b73;text-shadow:0 0 34px rgba(255,40,60,.65);margin:1.3em 0}
 .ui-pending{height:2px;width:4rem;margin:.8em 0;background:linear-gradient(90deg,transparent,rgba(var(--aura-a),1),transparent) 0 0/200% 100%;animation:sweep 1.3s linear infinite}
 @keyframes sweep{to{background-position:-200% 0}}
@@ -718,7 +724,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - Anthropic default model stabil + xAI list expand
      - MAX_LIVE_SCENE3D 6→8 dengan notifikasi prune
    ================================================================ */
-const APP_VERSION = '10.0.3-titanium-nexus-future-robust';
+const APP_VERSION = '10.0.4-titanium-rich-render-fix';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -1721,8 +1727,50 @@ function tokenize(text, final) {
 function sanitizeHtml(h) { return hasPurify ? DOMPurify.sanitize(h) : escapeHtml(h); }
 function mdHtml(s, inline) { if (!hasMarked) return escapeHtml(s).replace(/\n/g, '<br>'); return sanitizeHtml(inline ? marked.parseInline(s) : marked.parse(s)); }
 function codeHtml(lang, code) { const l = (lang || '').replace(/[^a-z0-9+#-]/g, ''); return '<div class="ui-code" data-lang="' + l + '"><pre><code class="language-' + (l || 'plaintext') + '">' + escapeHtml(code) + '</code></pre></div>'; }
-function chartHtml(cfg) { return '<div class="ui-chart" data-cfg="' + escapeHtml(String(cfg).trim()) + '"></div>'; }
+function attrPayload(s) {
+    try { return encodeURIComponent(String(s == null ? '' : s)); } catch (e) { return ''; }
+}
+function readAttrPayload(el, key) {
+    if (!el) return '';
+    let raw = '';
+    try { raw = el.getAttribute('data-' + key) || ''; } catch (e) { raw = ''; }
+    if (!raw) {
+        try { raw = (el.dataset && el.dataset[key]) || ''; } catch (e) {}
+    }
+    if (!raw) return '';
+    // Payload baru: encodeURIComponent (ada %). Legacy: teks mentah / entity HTML.
+    if (raw.indexOf('%') === -1) {
+        if (raw.indexOf('&') !== -1) {
+            try {
+                const t = document.createElement('textarea');
+                t.innerHTML = raw;
+                return t.value;
+            } catch (z) { return raw; }
+        }
+        return raw;
+    }
+    try { return decodeURIComponent(raw); } catch (e) {
+        try {
+            const t = document.createElement('textarea');
+            t.innerHTML = raw;
+            return t.value;
+        } catch (z) { return raw; }
+    }
+}
+function chartHtml(cfg) { return '<div class="ui-chart" data-cfg="' + attrPayload(String(cfg).trim()) + '"></div>'; }
+function htmlPreviewHtml(code) { return '<div class="ui-html" data-html="' + attrPayload(String(code).trim()) + '"></div>'; }
 /* v6.2+ SMART 3D PARSER: scene3d | js | html-full-page THREE → auto render sebagai scene3d */
+function looksLikeChartConfig(c) {
+    c = String(c || '').trim();
+    if (!c || c.length < 12) return false;
+    // buang fence sisa bila ada
+    c = c.replace(/^```(?:json|chart)?\s*/i, '').replace(/```\s*$/,'').trim();
+    if (c[0] !== '{' && c[0] !== '[') return false;
+    // sinyal Chart.js yang umum
+    if (/\b(type|data|datasets|labels)\b/.test(c) && /[{,]\s*"?(type|data|datasets|labels)"?\s*:/.test(c)) return true;
+    if (/"type"\s*:\s*"(bar|line|pie|doughnut|radar|polarArea|bubble|scatter)"/.test(c)) return true;
+    return false;
+}
 function looksLikeThreeCode(c) {
     c = String(c || '');
     if (!c) return false;
@@ -1850,11 +1898,21 @@ function blockHTML(b) {
     switch (b.t) {
         case 'md': return mdHtml(b.s);
         case 'code': {
-            if (b.lang === 'chart') return b.done ? chartHtml(b.code) : '<div class="ui-pending"></div>';
-            if (b.lang === 'scene3d' || isForce3d(b)) {
+            const lang0 = String(b.lang || '').toLowerCase().trim();
+            // Chart: fence chart, atau json yang terlihat seperti config Chart.js
+            if (lang0 === 'chart' || (lang0 === 'json' && looksLikeChartConfig(b.code))) {
+                return b.done ? chartHtml(b.code) : '<div class="ui-pending"></div>';
+            }
+            // 3D: scene3d resmi atau kode/HTML yang terdeteksi Three.js
+            if (lang0 === 'scene3d' || isForce3d(b)) {
                 if (!b.done) return '<div class="ui-pending"></div>';
                 const normalized = extractScene3dSource(b.code);
                 return scene3dHtml(normalized || b.code);
+            }
+            // Full HTML → langsung tayang di sandbox (bukan hanya tombol EXEC)
+            if (lang0 === 'html' || lang0 === 'htm') {
+                if (!b.done) return '<div class="ui-pending"></div>';
+                return htmlPreviewHtml(b.code);
             }
             return codeHtml(b.lang, b.code);
         }
@@ -1955,7 +2013,7 @@ const lazy3dObserver = window.IntersectionObserver ? new IntersectionObserver(es
 }), { rootMargin: '300px 0px' }) : null;
 // Cache memori Cortex untuk satu sesi panel multi-agen (recall HANYA sekali per pesan)
 let cachedMemoryContext = '', cachedMemoryCount = 0;
-function scene3dHtml(code) { const c = extractScene3dSource(code); return '<div class="ui-scene3d" data-code="' + escapeHtml(String(c || code).trim()) + '"></div>'; }
+function scene3dHtml(code) { const c = extractScene3dSource(code); return '<div class="ui-scene3d" data-code="' + attrPayload(String(c || code).trim()) + '"></div>'; }
 /**
  * THE OMNI-BRIDGE SANITIZER (Lexer Level)
  * Membersihkan deklarasi global yang bertabrakan tanpa merusak string/komentar.
@@ -2228,7 +2286,7 @@ function buildScene3d(el, opt) {
         const lim = swarmBusy ? Math.max(MAX_LIVE_SCENE3D, 12) : MAX_LIVE_SCENE3D;
         pruneOldestScenes(lim - 1);
     } catch (e) {}
-    const code = el.dataset.code || ''; el.removeAttribute('data-code');
+    const code = readAttrPayload(el, 'code'); el.removeAttribute('data-code');
     const id = 's3d' + (++s3dN) + Math.random().toString(36).slice(2, 7), live = !!isGenerating && !o.noHeal, fresh = !!isGenerating && !o.lazy, skey = studioKey(code), doc = sceneDoc(code, id);
     const fr = document.createElement('iframe'); fr.setAttribute('sandbox', 'allow-scripts allow-downloads'); fr.title = 'Scene 3D'; fr.srcdoc = doc;
     const bar = document.createElement('div'); bar.className = 's3d-bar';
@@ -2469,7 +2527,7 @@ function studioShow(key) {
     if (!s) { studio.sel = null; studioClearView(); studioRender(); return; }
     studio.sel = key;
     const host = document.getElementById('studio-view'); host.textContent = '';
-    const el = document.createElement('div'); el.className = 'ui-scene3d'; el.dataset.code = s.code; host.appendChild(el);
+    const el = document.createElement('div'); el.className = 'ui-scene3d'; el.setAttribute('data-code', attrPayload(s.code)); host.appendChild(el);
     buildScene3d(el, { noHeal: true, inStudio: true });
     document.getElementById('studio-title').textContent = s.title;
     studioRender();
@@ -2557,23 +2615,38 @@ function buildChart(el) {
     el.classList.add('ready');
     if (!hasChart) { el.textContent = 'Chart.js tidak tersedia'; return; }
     try {
-        let raw = el.dataset.cfg || '';
+        let raw = readAttrPayload(el, 'cfg');
         el.removeAttribute('data-cfg');
         // Bersihkan artefak umum dari output AI
-        raw = String(raw).trim()
+        raw = String(raw || '').trim()
             .replace(/^```(?:json|chart)?\s*/i, '').replace(/```\s*$/,'')
             .replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
             .replace(/,\s*([}\]])/g, '$1'); // trailing comma
-        const cfg = JSON.parse(raw);
+        // Kadang AI membungkus array datasets saja — angkat ke objek Chart
+        let cfg;
+        try { cfg = JSON.parse(raw); }
+        catch (pe) {
+            // coba potong ke objek JSON pertama
+            const a = raw.indexOf('{'), b = raw.lastIndexOf('}');
+            if (a >= 0 && b > a) cfg = JSON.parse(raw.slice(a, b + 1));
+            else throw pe;
+        }
+        if (Array.isArray(cfg)) cfg = { type: 'bar', data: { labels: cfg.map((_, i) => String(i + 1)), datasets: [{ label: 'data', data: cfg }] } };
         if (!cfg || typeof cfg !== 'object') throw new Error('bukan objek');
+        // Jika hanya {labels, datasets} tanpa type
+        if (!cfg.type && cfg.data) cfg.type = 'bar';
+        if (!cfg.type && (cfg.labels || cfg.datasets)) {
+            cfg = { type: 'bar', data: { labels: cfg.labels || [], datasets: cfg.datasets || [] } };
+        }
         cfg.options = Object.assign({}, cfg.options || {}, { responsive: true, maintainAspectRatio: false });
-        // Pastikan data & type ada
         if (!cfg.type) cfg.type = 'bar';
         if (!cfg.data) cfg.data = { labels: [], datasets: [] };
+        if (!cfg.data.datasets) cfg.data.datasets = [];
+        if (!cfg.data.labels) cfg.data.labels = [];
         const cv = document.createElement('canvas'); el.appendChild(cv);
         charts.push(new Chart(cv, cfg));
     } catch (e) {
-        el.innerHTML = '<p class="err">grafik gagal dirender: ' + escapeHtml(String(e.message || e).slice(0, 80)) + '</p>';
+        el.innerHTML = '<p class="err">grafik gagal dirender: ' + escapeHtml(String(e.message || e).slice(0, 120)) + '</p>';
         try { logEvent('ERROR', 'Chart: ' + (e.message || e)); } catch (z) {}
     }
 }
@@ -2621,6 +2694,60 @@ function buildCodeHead(p) {
         if (a === 'exec') execCode(p, lang, code.textContent);
     });
 }
+function buildHtmlPreview(el) {
+    if (!el || el.classList.contains('ready')) return;
+    el.classList.add('ready');
+    let code = '';
+    try { code = readAttrPayload(el, 'html'); } catch (e) { code = ''; }
+    el.removeAttribute('data-html');
+    code = String(code || '');
+    const bar = document.createElement('div');
+    bar.className = 'ui-html-bar';
+    const st = document.createElement('span');
+    st.className = 'ui-html-st';
+    st.textContent = 'HTML LIVE';
+    const mk = (label, fn, icon) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'lnk';
+        b.innerHTML = (icon ? ic(icon) : '') + '<span>' + escapeHtml(label) + '</span>';
+        b.onclick = fn; bar.appendChild(b); return b;
+    };
+    const frame = document.createElement('iframe');
+    frame.className = 'ui-html-frame';
+    frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals allow-popups');
+    frame.setAttribute('referrerpolicy', 'no-referrer');
+    frame.title = 'HTML preview';
+    // CSP longgar-sedang: izinkan inline + gambar data/https agar demo HTML berguna, tanpa navigasi parent
+    const csp = "default-src 'none'; style-src 'unsafe-inline' https: data:; img-src data: blob: https: http:; media-src data: blob: https:; font-src data: https:; script-src 'unsafe-inline' 'unsafe-eval' https:; connect-src https: http:; frame-src data: blob:;";
+    const doc = '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + csp + '"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;min-height:100%;background:#fff;color:#111;font:14px/1.5 system-ui,sans-serif}img,video{max-width:100%}</style></head><body>' + code + '</body></html>';
+    try {
+        frame.srcdoc = doc;
+        st.textContent = 'HTML LIVE';
+    } catch (e) {
+        st.textContent = 'Gagal memuat HTML';
+        el.classList.add('err');
+        try { logEvent('ERROR', 'HTML preview: ' + (e.message || e)); } catch (z) {}
+    }
+    mk('SOURCE', () => {
+        const pre = el.querySelector('.ui-html-source');
+        if (pre) { pre.remove(); return; }
+        const box = document.createElement('pre');
+        box.className = 'ui-html-source';
+        box.style.cssText = 'margin:0;padding:.7rem 1rem;max-height:220px;overflow:auto;font:400 .72rem/1.55 var(--mono);color:var(--ink);background:rgba(0,0,0,.35);white-space:pre-wrap;word-break:break-word';
+        box.textContent = code;
+        el.appendChild(box);
+    }, 'filetext');
+    mk('COPY', () => { copyText(code).then(() => showToast('HTML disalin')).catch(() => showToast('Gagal menyalin', 2000, true)); }, 'copy');
+    mk('OPEN', () => {
+        try {
+            const w = window.open('about:blank', '_blank');
+            if (w) { w.document.open(); w.document.write(doc); w.document.close(); }
+            else showToast('Popup diblokir browser', 2200, true);
+        } catch (e) { showToast('Gagal membuka tab', 2200, true); }
+    }, 'maximize');
+    bar.appendChild(st);
+    el.append(frame, bar);
+}
 function hydrate(root, silent) {
     root.querySelectorAll('.ui-code:not(.ready)').forEach(p => {
         const c = p.querySelector('code');
@@ -2628,6 +2755,7 @@ function hydrate(root, silent) {
         buildCodeHead(p);
     });
     root.querySelectorAll('.ui-chart:not(.ready)').forEach(buildChart);
+    root.querySelectorAll('.ui-html:not(.ready)').forEach(buildHtmlPreview);
     const pending3d = Array.from(root.querySelectorAll('.ui-scene3d:not(.ready)'));
     pending3d.forEach((el, idx) => {
         // Lazy hanya untuk scene lama di riwayat; scene terbaru (akhir stream) selalu build langsung
@@ -3987,7 +4115,7 @@ async function sendMessage(forceNormal) {
                              document.querySelector('#chat-container .thought:last-child .flow');
                 if (host && fullAiResponse) {
                     const wantsRich = /```\s*(scene3d|chart|html)|\[UI:CHART|\[FORGE:/i.test(fullAiResponse);
-                    const hasRich = host.querySelector('.ui-scene3d, .ui-chart, .ui-code, .vulcan-skill-box');
+                    const hasRich = host.querySelector('.ui-scene3d, .ui-chart, .ui-code, .ui-html, .vulcan-skill-box');
                     if (wantsRich && !hasRich) {
                         host.innerHTML = safeMarkdown(fullAiResponse);
                         hydrate(host, false);
@@ -4850,7 +4978,7 @@ async function runMultiAgentDiscussion(compiledPrompt) {
         const flow = host.querySelector('.flow');
         const sceneEl = document.createElement('div');
         sceneEl.className = 'ui-scene3d';
-        sceneEl.dataset.code = SWARM_BRAIN_SCENE;
+        sceneEl.setAttribute('data-code', attrPayload(SWARM_BRAIN_SCENE));
         flow.appendChild(sceneEl);
         chatContainer.appendChild(host);
         buildScene3d(sceneEl, { noHeal: true });
