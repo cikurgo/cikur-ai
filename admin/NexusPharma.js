@@ -1,8 +1,8 @@
 /* ------------------------------------------------------------------
  * NexusPharma.js – In-Silico Drug Discovery Engine
- * Scientific-Grade Client-Side Prototype (v3.1.0-robust)
+ * Scientific-Grade Client-Side Prototype (v3.2.0-robust)
  *
- * v3.1.0: bug-fix + verified additions (see CHANGELOG at bottom of file)
+ * v3.2.0: hardening + ljCurve / parseAtoms / screenLibrary (see CHANGELOG at bottom of file)
  *
  * Upgrades over v2.2:
  *  - Higher-precision physical constants (COULOMB_K from 1/(4πε₀) conversion)
@@ -49,7 +49,8 @@
   function roundTo(v, digits) {
     if (!Number.isFinite(v)) return v;
     const p = Math.pow(10, digits);
-    return Math.round(v * p) / p;
+    const out = Math.round(v * p) / p;
+    return Number.isFinite(out) ? out : v; // v3.2: no Infinity from v*p overflow
   }
 
   function opt(o) { return (o !== null && typeof o === 'object') ? o : {}; }
@@ -191,7 +192,7 @@
    * @param {number} r
    * @param {number} [epsilon=0.1]
    * @param {number} [sigma=3.5]
-   * @param {object} [opts] { softCore=true, alpha=0.5 }
+   * @param {object} [opts] { softCore=true, alpha=SOFTCORE_ALPHA (0.18) }
    * @returns {number} energy kcal/mol
    */
   function calculateLennardJones(r, epsilon = 0.1, sigma = 3.5, opts = {}) {
@@ -259,6 +260,7 @@
       const A = opts.dielA ?? 1.0;
       const B = opts.dielB ?? 0.5;
       eps = A + B * rEff;
+      if (!isFiniteNumber(eps) || eps < 1e-3) eps = 1e-3; // v3.2: never divide by ≤0 dielectric
     }
 
     const energy = (COULOMB_K * q1 * q2) / (eps * rEff);
@@ -297,6 +299,10 @@
 
     const lig = ligandAtoms.filter(isValidAtom);
     const pro = proteinAtoms.filter(isValidAtom);
+    const maxPairs = isFiniteNumber(options.maxPairs) && options.maxPairs > 0 ? options.maxPairs : 25e6;
+    if (lig.length * pro.length > maxPairs) {
+      return errorResult(`Terlalu banyak pasangan atom (${lig.length}×${pro.length} > ${maxPairs}); naikkan options.maxPairs atau kurangi atom`);
+    }
 
     if (lig.length === 0 || pro.length === 0) {
       return errorResult('Tidak ada atom valid setelah filter');
@@ -575,6 +581,63 @@
   }
 
   // ------------------------------------------------------------------
+  // 5c. v3.2 additions: energy curve, atom parser, library screening
+  // ------------------------------------------------------------------
+
+  /** LJ + optional Coulomb curve for plotting. Returns [{r, lj, coulomb, total}]. */
+  function ljCurve(epsilon = 0.1, sigma = 3.5, rMin = 2, rMax = 10, points = 80, opts = {}) {
+    opts = opt(opts);
+    if (!isFiniteNumber(rMin) || !isFiniteNumber(rMax) || rMax <= rMin) { rMin = 2; rMax = 10; }
+    points = clamp(Math.floor(isFiniteNumber(points) ? points : 80), 2, 2000);
+    const q1 = isFiniteNumber(opts.q1) ? opts.q1 : 0, q2 = isFiniteNumber(opts.q2) ? opts.q2 : 0;
+    const out = [];
+    for (let i = 0; i < points; i++) {
+      const r = rMin + (rMax - rMin) * i / (points - 1);
+      const lj = calculateLennardJones(r, epsilon, sigma, opts);
+      const coulomb = (q1 && q2) ? calculateCoulomb(r, q1, q2, opts.dielectric ?? 4, opts) : 0;
+      out.push({ r: roundTo(r, 4), lj: roundTo(lj, 5), coulomb: roundTo(coulomb, 5), total: roundTo(lj + coulomb, 5) });
+    }
+    return out;
+  }
+
+  /**
+   * parseAtoms – text → atoms. One atom per line: x y z charge [epsilon sigma D A]
+   * (separator: space, comma, tab or semicolon; '#' starts a comment; D/A = 1|0|d|a).
+   * Returns { atoms, errors:[{line,msg}] } – bad lines are reported, never thrown.
+   */
+  function parseAtoms(text) {
+    const atoms = [], errors = [];
+    if (typeof text !== 'string') return { atoms, errors: [{ line: 0, msg: 'Input bukan teks' }] };
+    text.split(/\r?\n/).forEach((raw, i) => {
+      const line = raw.replace(/#.*$/, '').trim();
+      if (!line) return;
+      const t = line.split(/[\s,;]+/);
+      const n = t.slice(0, 6).map(Number);
+      if (t.length < 4 || n.slice(0, 4).some(v => !Number.isFinite(v))) {
+        errors.push({ line: i + 1, msg: 'Butuh minimal: x y z charge (angka)' }); return;
+      }
+      const a = { x: n[0], y: n[1], z: n[2], charge: n[3] };
+      if (t.length > 4 && Number.isFinite(n[4]) && n[4] >= 0) a.epsilon = n[4];
+      if (t.length > 5 && Number.isFinite(n[5]) && n[5] > 0) a.sigma = n[5];
+      const flag = v => v !== undefined && /^(1|d|a|true|y)$/i.test(v);
+      if (flag(t[6])) a.hbondDonor = true;
+      if (flag(t[7])) a.hbondAcceptor = true;
+      atoms.push(a);
+    });
+    return { atoms, errors };
+  }
+
+  /** Rank a list of candidates ({name, mw, logP, hbd, hba, rotB, psa, ...}) by drug-likeness score. */
+  function screenLibrary(list) {
+    if (!Array.isArray(list)) return [];
+    return list.map((c, i) => {
+      const a = analyzeCandidate(c);
+      return { name: (c && c.name) || ('Kandidat ' + (i + 1)), score: a.drugLikeness.score,
+               status: a.drugLikeness.status, lipinski: a.lipinski.pass, qedLike: a.drugLikeness.qedLike, report: a };
+    }).sort((x, y) => y.score - x.score);
+  }
+
+  // ------------------------------------------------------------------
   // 6. Exhaustive Self-Test
   // ------------------------------------------------------------------
   function selfTest(verbose = false) {
@@ -714,6 +777,22 @@
       return a.drugLikeness.status === 'LULUS' && a.lipinski.pass && a.efficiency.LE > 0;
     })());
 
+    // ---------- v3.2 ----------
+    const cv = ljCurve(0.2, 3.5, 3, 8, 30, { softCore: false });
+    assert('ljCurve length & min near rmin', cv.length === 30 && Math.min(...cv.map(p => p.lj)) < -0.19);
+    assert('ljCurve bad range falls back', ljCurve(0.1, 3.5, 9, 2, 5).length === 5);
+    const pa = parseAtoms('0 0 0 0.2 0.1 3.4 1 0 # donor\nbad line\n1,1,1,-0.3');
+    assert('parseAtoms good+bad lines', pa.atoms.length === 2 && pa.errors.length === 1 && pa.atoms[0].hbondDonor === true);
+    assert('parseAtoms non-string safe', parseAtoms(null).atoms.length === 0);
+    assert('maxPairs guard → ERROR', simulateDockingAdvanced(lig, pro, { maxPairs: 3 }).status === 'ERROR');
+    assert('negative dielB stays finite', Number.isFinite(calculateCoulomb(5, 1, -1, 4, { distanceDependent: true, dielA: 1, dielB: -1 })));
+    assert('roundTo overflow-safe', roundTo(1e307, 3) === 1e307);
+    assert('screenLibrary sorted', (() => {
+      const r = screenLibrary([{ name: 'bad', mw: 700, logP: 7, hbd: 6, hba: 12, rotB: 14, psa: 200 },
+                               { mw: 340, logP: 2.1, hbd: 2, hba: 5, rotB: 6, psa: 95 }]);
+      return r[0].score > r[1].score && r[1].name === 'bad';
+    })());
+
     // ---------- Constants sanity ----------
     assert('COULOMB_K precision', Math.abs(COULOMB_K - 332.063713) < 0.0001);
 
@@ -761,8 +840,13 @@
     evaluateExtraFilters,
     analyzeCandidate,
 
+    // New in v3.2
+    ljCurve,
+    parseAtoms,
+    screenLibrary,
+
     // Metadata
-    version: '3.1.0-robust',
+    version: '3.2.0-robust',
     constants: {
       COULOMB_K,
       SOFTCORE_ALPHA,
@@ -781,3 +865,15 @@
   }
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
+
+/* ------------------------------------------------------------------
+ * CHANGELOG
+ * v3.2.0  + ljCurve(), parseAtoms(), screenLibrary()
+ *         + maxPairs guard in docking (no browser freeze on huge inputs)
+ *         ! roundTo no longer returns Infinity on overflow
+ *         ! distance-dependent dielectric can never be ≤ 0
+ *         ! doc fix: LJ default soft-core alpha is 0.18 (was documented 0.5)
+ *         + 8 new self-tests (62 total); all v3.1 golden values unchanged
+ * v3.1.0  Lipinski-only checkLipinski fix, logD, Kd↔ΔG, Cheng–Prusoff,
+ *         LE/BEI/SEI/LLE, CNS MPO, extra filters, analyzeCandidate
+ * ------------------------------------------------------------------ */
