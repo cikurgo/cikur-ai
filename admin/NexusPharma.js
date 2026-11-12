@@ -18,7 +18,7 @@
     if ([molecularWeight, logP, hBondDonors, hBondAcceptors].some(v => !Number.isFinite(v) || v < 0)) {
       return "GAGAL (Input Tidak Valid)";
     }
-    
+   
     let violations = 0;
     if (molecularWeight > 500) violations++;
     if (logP > 5) violations++;
