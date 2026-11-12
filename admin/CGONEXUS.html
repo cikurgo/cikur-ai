@@ -5011,6 +5011,7 @@ function runDiagnostics() {
     assert('Future: Capsule export', typeof window.NexusFuture === 'object' && typeof window.NexusFuture.exportCapsule === 'function');
     assert('Future: APP_VERSION nexus', typeof APP_VERSION === 'string' && /nexus|future|10\./.test(APP_VERSION));
     assert('Nexus Evolution (opsional): API utuh', !window.Nexus || (typeof window.Nexus.secureExec === 'function' && typeof window.Nexus.speak === 'function' && typeof window.Nexus.setHUD === 'function' && typeof window.NexusEvo === 'object'));
+    assert('NexusPharma (opsional): API utuh', !window.NexusPharma || (typeof window.NexusPharma.analyzeCandidate === 'function' && typeof window.NexusPharma.simulateDockingAdvanced === 'function' && typeof window.NexusPharma.selfTest === 'function'));
     try { if (window.Nexus && window.Nexus.secureExec) window.Nexus.secureExec('1 + 1', { timeoutMs: 3000 }).then(r => logEvent(r === 2 ? 'DIAG' : 'ERROR', 'Nexus sandbox 1+1 = ' + r)).catch(e => logEvent('ERROR', 'Nexus sandbox: ' + (e && e.message))); } catch (e) {}
 
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
@@ -5255,7 +5256,14 @@ ATURAN DISKUSI (WAJIB):
 3. Tetap dalam karakter & kacamata keahlianmu, tapi tetap ilmiah dan berbasis bukti/alasan.
 4. Ringkas dan padat (±120-180 kata), kecuali butuh kode/formula/tabel untuk presisi.
 5. Markdown rapi. Akhiri dengan satu insight tajam atau pertanyaan terbuka untuk tim.
-6. Jangan membuka dengan basa-basi seperti "Terima kasih" — langsung ke substansi.`;
+6. Jangan membuka dengan basa-basi seperti "Terima kasih" — langsung ke substansi.
+
+LABORATORIUM NEXUSPHARMA (hak penuh Dewan):
+Jika objective menyentuh penemuan obat, drug-likeness, Lipinski/Veber, docking, afinitas (Kd/Ki/ΔG), Cheng–Prusoff, logD, LE/BEI/SEI/LLE, atau pustaka kandidat, manfaatkan fakta bahwa mesin in-silico NexusPharma tersedia di host (window.NexusPharma). Saat relevan:
+- Rujuk metrik numerik yang dapat diverifikasi (skor QED-like, status LULUS/MARGINAL/GAGAL, ΔG, Ki, LE).
+- Sarankan parameter konkret (MW, logP, HBD/HBA, RotB, PSA, atom berat, pAktivitas).
+- Untuk hasil lab interaktif, sebutkan bahwa panel PHARMA LAB di Command Deck dapat membuka analisis langsung.
+Jangan mengarang angka seolah dari docking nyata tanpa menyatakan asumsi model soft-core / in-silico.`;
 
 const AGENT_PROTOCOL_EN = `You are part of an advanced multi-researcher discussion panel collaboratively solving a rare/complex problem, following the CGO Research Nexus protocol.
 
@@ -5268,10 +5276,17 @@ DISCUSSION RULES (MANDATORY):
 3. Stay in character & your lens of expertise, but remain scientific and evidence/reason-based.
 4. Concise (~120-180 words), unless code/formula/table is needed for precision.
 5. Clean Markdown. End with one sharp insight or an open question for the team.
-6. Don't open with pleasantries like "Thank you" — go straight to substance.`;
+6. Don't open with pleasantries like "Thank you" — go straight to substance.
 
-const CORTEX_PROTOCOL_ID = `Kamu adalah DR. CORTEX — The Grand Polymath (IQ 200+). Baca transkrip perdebatan tim sebelumnya. Lakukan analisis tingkat dewa. Tugasmu: (1) Deteksi kesalahan logika (fallacy) agen sebelumnya. (2) Berikan 1 Genius Insight (ide berlawanan intuisi). (3) Tunjukkan Proof of Logic. Jangan bertele-tele (maksimal 150 kata).`;
-const CORTEX_PROTOCOL_EN = `You are DR. CORTEX — The Grand Polymath (IQ 200+). Read the previous team debate. Perform god-tier analysis. (1) Detect logical fallacies. (2) Provide 1 Genius Insight (counter-intuitive). (3) Show Proof of Logic. Be concise (max 150 words).`;
+NEXUSPHARMA LAB (full council access):
+If the objective involves drug discovery, drug-likeness, Lipinski/Veber, docking, affinity (Kd/Ki/ΔG), Cheng–Prusoff, logD, LE/BEI/SEI/LLE, or candidate libraries, use the fact that the NexusPharma in-silico engine is available on the host (window.NexusPharma). When relevant:
+- Cite verifiable numeric metrics (QED-like score, LULUS/MARGINAL/GAGAL status, ΔG, Ki, LE).
+- Propose concrete parameters (MW, logP, HBD/HBA, RotB, PSA, heavy atoms, pActivity).
+- For interactive lab results, note that the PHARMA LAB panel in the Command Deck can run analysis live.
+Do not invent docking numbers as if experimental without stating soft-core / in-silico model assumptions.`;
+
+const CORTEX_PROTOCOL_ID = `Kamu adalah DR. CORTEX — The Grand Polymath (IQ 200+). Baca transkrip perdebatan tim sebelumnya. Lakukan analisis tingkat dewa. Tugasmu: (1) Deteksi kesalahan logika (fallacy) agen sebelumnya. (2) Berikan 1 Genius Insight (ide berlawanan intuisi). (3) Tunjukkan Proof of Logic. Jangan bertele-tele (maksimal 150 kata). Jika topik farmasi/in-silico, prioritaskan angka dari kerangka NexusPharma (drug-likeness, ΔG/Ki, LE).`;
+const CORTEX_PROTOCOL_EN = `You are DR. CORTEX — The Grand Polymath (IQ 200+). Read the previous team debate. Perform god-tier analysis. (1) Detect logical fallacies. (2) Provide 1 Genius Insight (counter-intuitive). (3) Show Proof of Logic. Be concise (max 150 words). If the topic is pharma/in-silico, prioritize numbers from the NexusPharma framework (drug-likeness, ΔG/Ki, LE).`;
 
 const SYNTH_PROTOCOL_ID = `Kamu adalah SYNTHESIS — penyintesis akhir panel diskusi multi-peneliti CGO Research Nexus.
 Baca SELURUH transkrip diskusi tim secara utuh.
@@ -7630,10 +7645,11 @@ setInterval(function(){if(!document.hidden)sync()},900);sync();
 }catch(err){console.warn('[HOLO-DOCK] gagal dimuat:',err)}})();
 </script>
 <!-- ═══════════════ NEXUS · SPATIAL COMMAND DECK (LBC VAULT + EADI VAULT) ═══════════════
-     Syarat: SuperLBC.js dan SuperEADI.js berada di folder yang SAMA dengan CGONEXUS.html.
+     Syarat: SuperLBC.js, SuperEADI.js, dan NexusPharma.js berada di folder yang SAMA dengan CGONEXUS.html.
      Blok ini mandiri (prefix "nxd-"), tidak mengubah/menimpa kode NEXUS yang sudah ada. -->
 <script src="SuperLBC.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('SuperLBC.js')"></script>
 <script src="SuperEADI.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('SuperEADI.js')"></script>
+<script src="NexusPharma.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('NexusPharma.js')"></script>
 <style id="nxd-css">
 #nxd-root{--c:var(--aura-a,61,236,255);--c2:var(--aura-b,139,92,246);--nxd-ink:var(--ink,#e9edf5);--nxd-dim:var(--dim,rgba(196,208,232,.55));--nxd-mono:var(--mono,ui-monospace,Menlo,Consolas,monospace);font-family:var(--nxd-mono);color:var(--nxd-ink)}
 #nxd-root *{box-sizing:border-box}
@@ -7643,6 +7659,7 @@ setInterval(function(){if(!document.hidden)sync()},900);sync();
 .nxd-tabs{display:flex;flex-direction:column;gap:6px;padding:7px;border-radius:20px;background:linear-gradient(180deg,rgba(10,18,40,.62),rgba(5,9,22,.5));border:1px solid rgba(var(--c),.28);box-shadow:0 0 40px -14px rgba(var(--c),.8),inset 0 0 22px rgba(var(--c),.05);-webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4)}
 .nxd-tab{--k:var(--c);position:relative;width:62px;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px 2px;border-radius:14px;border:1px solid transparent;background:none;color:var(--nxd-dim);font:500 .5rem/1.15 var(--nxd-mono);letter-spacing:.1em;text-align:center;cursor:pointer;transition:.25s}
 .nxd-tab[data-tab="eadi"]{--k:var(--c2)}
+.nxd-tab[data-tab="pharma"]{--k:45,212,191}
 .nxd-tab svg,.nxd-orb svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
 .nxd-tab:hover{color:var(--nxd-ink);border-color:rgba(var(--k),.4)}
 .nxd-tab[aria-selected="true"]{color:rgb(var(--k));border-color:rgba(var(--k),.75);background:rgba(var(--k),.1);box-shadow:0 0 18px -4px rgba(var(--k),.85),inset 0 0 12px -6px rgba(var(--k),.9)}
@@ -7662,6 +7679,7 @@ setInterval(function(){if(!document.hidden)sync()},900);sync();
  box-shadow:0 0 0 1px rgba(var(--k),.06),0 0 60px -18px rgba(var(--k),.7),0 30px 70px -30px #000,inset 0 0 40px rgba(var(--k),.05);
  -webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);opacity:0;transform:translateX(-18px) scale(.985);pointer-events:none;visibility:hidden;transition:opacity .3s,transform .35s cubic-bezier(.2,.8,.2,1),visibility 0s .35s}
 .nxd-panel[data-tab="eadi"]{--k:var(--c2)}
+.nxd-panel[data-tab="pharma"]{--k:45,212,191}
 .nxd-panel.open{opacity:1;transform:none;pointer-events:auto;visibility:visible;transition:opacity .3s,transform .35s cubic-bezier(.2,.8,.2,1)}
 .nxd-panel::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,rgb(var(--k)),transparent);background-size:50% 100%;background-repeat:no-repeat;animation:nxdScan 3.2s linear infinite;opacity:.9}
 @keyframes nxdScan{from{background-position:-60% 0}to{background-position:160% 0}}
@@ -7737,6 +7755,19 @@ body[data-theme="light"] .nxd-panel{background:linear-gradient(160deg,rgba(255,2
 body[data-theme="light"] #nxd-root{--nxd-ink:#0b1220;--nxd-dim:rgba(20,32,60,.6)}
 body[data-theme="light"] #nxd-root textarea,body[data-theme="light"] #nxd-root input,body[data-theme="light"] #nxd-root select{background:rgba(255,255,255,.7)}
 @media(prefers-reduced-motion:reduce){.nxd-panel::before{animation:none}.nxd-panel,.nxd-tab,.nxd-btn{transition:none}}
+.nxd-grid2{display:grid;grid-template-columns:1fr;gap:12px}
+@media(min-width:720px){.nxd-grid2{grid-template-columns:1fr 1fr}}
+.nxd-card{padding:12px;border-radius:14px;border:1px solid rgba(var(--k),.22);background:rgba(var(--k),.05)}
+.nxd-lbl{font:600 .58rem var(--nxd-mono);letter-spacing:.16em;color:var(--nxd-dim);margin-bottom:8px}
+.nxd-fr{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px}
+.nxd-fr label{display:block;font-size:10px;color:var(--nxd-dim);margin-bottom:2px}
+.nxd-fr input,.nxd-fr select{width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(var(--k),.28);border-radius:8px;color:var(--nxd-ink);padding:6px 8px;font:12px var(--nxd-mono)}
+.nxd-mono{font-family:var(--nxd-mono);font-size:12px;line-height:1.45}
+.nxd-table{width:100%;border-collapse:collapse;font-size:12px}
+.nxd-table th,.nxd-table td{padding:6px 8px;border-bottom:1px solid rgba(var(--k),.2);text-align:left}
+.nxd-table th{color:var(--nxd-dim);font-weight:500}
+.nxd-chip[aria-pressed="true"]{border-color:rgb(var(--k));color:rgb(var(--k));background:rgba(var(--k),.12)}
+
 </style>
 <script id="nxd-js">
 (function () {
@@ -7773,7 +7804,8 @@ function scramble(node, final) {          // efek dekripsi kosmetik; teks akhir 
 const ICON = {
   council: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="12" cy="4.5" r="1.6"/><circle cx="19" cy="9" r="1.6"/><circle cx="17" cy="18" r="1.6"/><circle cx="7" cy="18" r="1.6"/><circle cx="5" cy="9" r="1.6"/><path d="M12 6v3.6M17.6 9.7l-3.2 1.4M15.8 16.6l-2.4-3.2M8.2 16.6l2.4-3.2M6.4 9.7l3.2 1.4"/></svg>',
   lbc: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="8.5" y="14" width="7" height="7" rx="1.5"/><path d="M6.5 10v2.5h11V10M12 12.5V14"/></svg>',
-  eadi: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M3 17l5-4.5 4 3.5 3-2.5 6 5"/></svg>'
+  eadi: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M3 17l5-4.5 4 3.5 3-2.5 6 5"/></svg>',
+  pharma: '<svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5.5 10a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7.5 15h9"/></svg>'
 };
 
 /* ───────────── skeleton DOM (statis, tanpa data pengguna) ───────────── */
@@ -7785,6 +7817,7 @@ root.innerHTML =
   '<button type="button" role="tab" class="nxd-tab" data-tab="council" aria-selected="true" title="Council · Chat & Swarm">' + ICON.council + '<span>COUNCIL</span></button>' +
   '<button type="button" role="tab" class="nxd-tab" data-tab="lbc" aria-selected="false" title="LBC Vault · Merkle-Patricia + Schnorr">' + ICON.lbc + '<span>LBC<br>VAULT</span></button>' +
   '<button type="button" role="tab" class="nxd-tab" data-tab="eadi" aria-selected="false" title="EADI Vault · Steganografi DCT">' + ICON.eadi + '<span>EADI<br>VAULT</span></button>' +
+  '<button type="button" role="tab" class="nxd-tab" data-tab="pharma" aria-selected="false" title="NexusPharma · Lab In-Silico">' + ICON.pharma + '<span>PHARMA<br>LAB</span></button>' +
  '</div></nav>' +
 
 '<section class="nxd-panel" id="nxd-p-lbc" data-tab="lbc" role="tabpanel" aria-label="LBC Vault">' +
@@ -7834,6 +7867,84 @@ root.innerHTML =
    '<div class="nxd-chips" id="nxd-e-chips"></div>' +
    '<a class="nxd-btn pri" id="nxd-dl" download="nexus-secured.png" href="#" style="text-decoration:none">DOWNLOAD PNG</a>' +
    '<div class="nxd-note" style="margin-top:8px">Simpan &amp; kirim sebagai <b>PNG</b>. Kompresi JPEG/aplikasi chat dapat merusak watermark.</div></div>' +
+ '</div></section>' +
+
+'<section class="nxd-panel" id="nxd-p-pharma" data-tab="pharma" role="tabpanel" aria-label="NexusPharma Lab">' +
+ '<header class="nxd-head"><div><b>NEXUSPHARMA · LAB IN-SILICO</b><span>Drug-likeness · soft-core docking · afinitas · pustaka kandidat · hak penuh Dewan</span></div>' +
+  '<button type="button" class="nxd-x" data-close title="Tutup">×</button></header>' +
+ '<div class="nxd-body">' +
+  '<div id="nxd-ph-ban" hidden></div>' +
+  '<div class="nxd-row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px">' +
+   '<button type="button" class="nxd-chip info" id="nxd-ph-sub-drug" data-ph="drug" aria-pressed="true">Profil obat</button>' +
+   '<button type="button" class="nxd-chip" id="nxd-ph-sub-aff" data-ph="aff">Afinitas</button>' +
+   '<button type="button" class="nxd-chip" id="nxd-ph-sub-lib" data-ph="lib">Pustaka</button>' +
+   '<button type="button" class="nxd-chip" id="nxd-ph-sub-tst" data-ph="tst">Uji mesin</button>' +
+   '<span class="nxd-note" id="nxd-ph-ver" style="margin-left:auto"></span></div>' +
+  '<div id="nxd-ph-drug">' +
+   '<div class="nxd-grid2">' +
+    '<div class="nxd-card"><div class="nxd-lbl">PARAMETER MOLEKUL</div>' +
+     '<div class="nxd-fr">' +
+      '<div><label for="nxd-ph-mw">MW</label><input id="nxd-ph-mw" type="number" step="any" value="340"></div>' +
+      '<div><label for="nxd-ph-lp">logP</label><input id="nxd-ph-lp" type="number" step="any" value="2.1"></div>' +
+      '<div><label for="nxd-ph-hbd">HBD</label><input id="nxd-ph-hbd" type="number" value="2"></div>' +
+      '<div><label for="nxd-ph-hba">HBA</label><input id="nxd-ph-hba" type="number" value="5"></div>' +
+      '<div><label for="nxd-ph-rb">RotB</label><input id="nxd-ph-rb" type="number" value="6"></div>' +
+      '<div><label for="nxd-ph-psa">PSA</label><input id="nxd-ph-psa" type="number" step="any" value="95"></div>' +
+      '<div><label for="nxd-ph-ha">Atom berat</label><input id="nxd-ph-ha" type="number" value="24"></div>' +
+      '<div><label for="nxd-ph-pa">pAktivitas</label><input id="nxd-ph-pa" type="number" step="any" value="8"></div>' +
+     '</div>' +
+     '<div class="nxd-row" style="margin-top:10px;gap:6px;flex-wrap:wrap" id="nxd-ph-presets"></div>' +
+     '<div class="nxd-row" style="margin-top:10px"><button type="button" class="nxd-btn pri" id="nxd-ph-run">ANALISIS</button></div>' +
+    '</div>' +
+    '<div class="nxd-card"><div class="nxd-lbl">HASIL</div><pre class="nxd-mono" id="nxd-ph-out" style="white-space:pre-wrap;font-size:12px;max-height:320px;overflow:auto">Isi parameter lalu ANALISIS.</pre></div>' +
+   '</div></div>' +
+  '<div id="nxd-ph-aff" hidden>' +
+   '<div class="nxd-grid2">' +
+    '<div class="nxd-card"><div class="nxd-lbl">Kd ⇄ ΔG</div>' +
+     '<div class="nxd-fr"><div><label for="nxd-ph-kd">Kd (nM)</label><input id="nxd-ph-kd" type="number" step="any" value="10"></div>' +
+      '<div><label for="nxd-ph-dg">ΔG (kcal/mol)</label><input id="nxd-ph-dg" type="number" step="any" value="-10.9"></div>' +
+      '<div><label for="nxd-ph-tk">T (K)</label><input id="nxd-ph-tk" type="number" value="298.15"></div></div>' +
+     '<div class="nxd-row" style="margin-top:8px;gap:6px"><button type="button" class="nxd-btn" id="nxd-ph-bkd">Kd → ΔG</button><button type="button" class="nxd-btn" id="nxd-ph-bdg">ΔG → Ki</button></div>' +
+     '<pre class="nxd-mono" id="nxd-ph-okd" style="margin-top:8px"></pre></div>' +
+    '<div class="nxd-card"><div class="nxd-lbl">Cheng–Prusoff · logD · LE</div>' +
+     '<div class="nxd-fr"><div><label for="nxd-ph-ic">IC50</label><input id="nxd-ph-ic" type="number" step="any" value="100"></div>' +
+      '<div><label for="nxd-ph-sc">[S]</label><input id="nxd-ph-sc" type="number" step="any" value="5"></div>' +
+      '<div><label for="nxd-ph-km">Km</label><input id="nxd-ph-km" type="number" step="any" value="5"></div></div>' +
+     '<div class="nxd-row" style="margin-top:8px"><button type="button" class="nxd-btn" id="nxd-ph-bcp">Hitung Ki</button></div>' +
+     '<pre class="nxd-mono" id="nxd-ph-ocp" style="margin-top:8px"></pre>' +
+     '<div class="nxd-fr" style="margin-top:10px"><div><label for="nxd-ph-dl">logP</label><input id="nxd-ph-dl" type="number" step="any" value="3"></div>' +
+      '<div><label for="nxd-ph-dk">pKa</label><input id="nxd-ph-dk" type="number" step="any" value="4.4"></div>' +
+      '<div><label for="nxd-ph-dh">pH</label><input id="nxd-ph-dh" type="number" step="any" value="7.4"></div>' +
+      '<div><label for="nxd-ph-dt">Tipe</label><select id="nxd-ph-dt"><option value="acid">asam</option><option value="base">basa</option></select></div></div>' +
+     '<div class="nxd-row" style="margin-top:8px"><button type="button" class="nxd-btn" id="nxd-ph-bld">Hitung logD</button></div>' +
+     '<pre class="nxd-mono" id="nxd-ph-old" style="margin-top:8px"></pre>' +
+     '<div class="nxd-fr" style="margin-top:10px"><div><label for="nxd-ph-ea">pAct</label><input id="nxd-ph-ea" type="number" step="any" value="9"></div>' +
+      '<div><label for="nxd-ph-eh">HA</label><input id="nxd-ph-eh" type="number" value="30"></div>' +
+      '<div><label for="nxd-ph-em">MW</label><input id="nxd-ph-em" type="number" value="400"></div>' +
+      '<div><label for="nxd-ph-ep">PSA</label><input id="nxd-ph-ep" type="number" value="80"></div>' +
+      '<div><label for="nxd-ph-el">logP</label><input id="nxd-ph-el" type="number" step="any" value="3"></div></div>' +
+     '<div class="nxd-row" style="margin-top:8px"><button type="button" class="nxd-btn" id="nxd-ph-ble">LE · BEI · SEI · LLE</button></div>' +
+     '<pre class="nxd-mono" id="nxd-ph-ole" style="margin-top:8px"></pre></div>' +
+   '</div></div>' +
+  '<div id="nxd-ph-lib" hidden>' +
+   '<div class="nxd-card"><div class="nxd-lbl">PUSTAKA KANDIDAT</div>' +
+    '<div class="nxd-fr"><div><label for="nxd-ph-ln">Nama</label><input id="nxd-ph-ln" value="Kandidat baru"></div>' +
+     '<div><label for="nxd-ph-lmw">MW</label><input id="nxd-ph-lmw" type="number" step="any"></div>' +
+     '<div><label for="nxd-ph-llp">logP</label><input id="nxd-ph-llp" type="number" step="any"></div>' +
+     '<div><label for="nxd-ph-lhd">HBD</label><input id="nxd-ph-lhd" type="number"></div>' +
+     '<div><label for="nxd-ph-lha">HBA</label><input id="nxd-ph-lha" type="number"></div>' +
+     '<div><label for="nxd-ph-lrb">RotB</label><input id="nxd-ph-lrb" type="number"></div>' +
+     '<div><label for="nxd-ph-lps">PSA</label><input id="nxd-ph-lps" type="number" step="any"></div></div>' +
+    '<div class="nxd-row" style="margin-top:10px;gap:6px"><button type="button" class="nxd-btn pri" id="nxd-ph-ladd">Tambah</button>' +
+     '<button type="button" class="nxd-btn" id="nxd-ph-lreset">Contoh</button></div>' +
+    '<div class="nxd-sc" style="margin-top:12px;overflow:auto"><table class="nxd-table"><thead><tr><th>#</th><th>Nama</th><th>Skor</th><th>Status</th><th>Lipinski</th><th>QED</th></tr></thead><tbody id="nxd-ph-lbody"></tbody></table></div>' +
+   '</div></div>' +
+  '<div id="nxd-ph-tst" hidden>' +
+   '<div class="nxd-card"><div class="nxd-lbl">SELF-TEST MESIN</div>' +
+    '<div class="nxd-row" style="gap:8px;align-items:center"><button type="button" class="nxd-btn pri" id="nxd-ph-runtest">Jalankan uji</button><span class="nxd-mono" id="nxd-ph-tsum"></span></div>' +
+    '<pre class="nxd-mono" id="nxd-ph-tlog" style="margin-top:10px;max-height:360px;overflow:auto;font-size:11px"></pre>' +
+    '<div class="nxd-note" style="margin-top:8px">API penuh di <code>window.NexusPharma</code> — Dewan dapat merujuk hasil lab dalam diskusi multi-agen.</div>' +
+   '</div></div>' +
  '</div></section>';
 document.body.appendChild(root);
 
@@ -7931,7 +8042,7 @@ const SCAN = { lbc: [.2, .9, 1], eadi: [.65, .4, 1] };
 
 /* ───────────── tab / navigasi ───────────── */
 const rail = $('#nxd-rail'), orb = $('#nxd-orb'), tabs = [].slice.call(root.querySelectorAll('.nxd-tab'));
-const panels = { lbc: $('#nxd-p-lbc'), eadi: $('#nxd-p-eadi') };
+const panels = { lbc: $('#nxd-p-lbc'), eadi: $('#nxd-p-eadi'), pharma: $('#nxd-p-pharma') };
 let curTab = 'council';
 function setTab(name) {
   curTab = name;
@@ -7939,7 +8050,7 @@ function setTab(name) {
   for (const k in panels) panels[k].classList.toggle('open', k === name);
   document.body.classList.toggle('nxd-open', name !== 'council');
   rail.dataset.open = '0'; orb.setAttribute('aria-expanded', 'false');
-  if (name === 'lbc') lbcOnOpen(); if (name === 'eadi') eadiOnOpen();
+  if (name === 'lbc') lbcOnOpen(); if (name === 'eadi') eadiOnOpen(); if (name === 'pharma') pharmaOnOpen();
 }
 tabs.forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
 root.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => setTab('council')));
@@ -8208,11 +8319,110 @@ $('#nxd-difft').addEventListener('click', () => {
 });
 
 /* integrasi ringan: jika modul tidak termuat, beri tahu di console (UI tetap aman) */
+
+/* ═════════════════════════ NEXUSPHARMA LAB (aditif, zero-regresi) ═════════════════════════ */
+const PH = () => window.NexusPharma;
+const PRE_PH = { Aspirin:[180.16,1.3,1,3,3,63.6,13,5], Parasetamol:[151.16,.5,2,2,1,49.3,11,5.5], Ibuprofen:[206.28,3.5,1,2,4,37.3,15,5.2], Atorvastatin:[558.64,5.7,4,6,12,111.8,41,8] };
+function phNum(id){ const v = $('#'+id).value; return v===''?NaN:parseFloat(v); }
+function pharmaOnOpen(){
+  const ban = $('#nxd-ph-ban');
+  if (!missingBanner(ban, PH, 'NexusPharma.js')) return;
+  const P = PH();
+  $('#nxd-ph-ver').textContent = P ? ('v' + P.version) : '';
+  const box = $('#nxd-ph-presets');
+  if (box && !box.dataset.ready){
+    box.dataset.ready = '1';
+    Object.keys(PRE_PH).forEach(k => {
+      const b = document.createElement('button'); b.type='button'; b.className='nxd-btn sm'; b.textContent=k;
+      b.addEventListener('click', () => {
+        const v = PRE_PH[k];
+        ['mw','lp','hbd','hba','rb','psa','ha','pa'].forEach((s,i)=>{ const el=$('#nxd-ph-'+s); if(el) el.value=v[i]; });
+        pharmaRunDrug();
+      });
+      box.appendChild(b);
+    });
+  }
+  pharmaRenderLib();
+}
+function pharmaShow(sub){
+  ['drug','aff','lib','tst'].forEach(s => {
+    const el = $('#nxd-ph-'+s); if (el) el.hidden = s !== sub;
+    const chip = document.querySelector('[data-ph="'+s+'"]');
+    if (chip) chip.setAttribute('aria-pressed', s===sub ? 'true' : 'false');
+  });
+}
+root.querySelectorAll('[data-ph]').forEach(ch => ch.addEventListener('click', () => pharmaShow(ch.dataset.ph)));
+function pharmaRunDrug(){
+  const P = PH(); if (!P) return setMsg($('#nxd-ph-out'), 'NexusPharma.js belum termuat.', 'bad');
+  const p = { mw:phNum('nxd-ph-mw'), logP:phNum('nxd-ph-lp'), hbd:phNum('nxd-ph-hbd'), hba:phNum('nxd-ph-hba'), rotB:phNum('nxd-ph-rb'), psa:phNum('nxd-ph-psa'), heavyAtoms:phNum('nxd-ph-ha'), pActivity:phNum('nxd-ph-pa') };
+  const a = P.analyzeCandidate(p), d = a.drugLikeness, ef = a.efficiency, x = a.extraFilters;
+  let t = 'STATUS: ' + d.status + ' · skor ' + d.score + '/100 · QED-like ' + (d.qedLike!=null?d.qedLike:'—') + '\n';
+  t += 'Lipinski: ' + (a.lipinski.pass?'LULUS':'GAGAL') + (a.lipinski.violations&&a.lipinski.violations.length? ' · '+a.lipinski.violations.join('; ') : '') + '\n';
+  if (d.violations && d.violations.length) t += 'Pelanggaran: ' + d.violations.join(' | ') + '\n';
+  else t += 'Pelanggaran aturan: tidak ada\n';
+  if (x) t += 'Rule-of-3: ' + !!x.ruleOfThree_fragment + ' · GSK 4/400: ' + !!x.gsk_4_400_good + ' · Lead-like: ' + !!x.leadLike_oprea + ' · Pfizer 3/75 risk: ' + !!x.pfizer_3_75_toxRisk + '\n';
+  if (ef) t += 'LE ' + ef.LE + ' · BEI ' + (ef.BEI??'—') + ' · SEI ' + (ef.SEI??'—') + ' · LLE ' + (ef.LLE??'—') + ' · ΔG ' + ef.deltaG + '\n';
+  $('#nxd-ph-out').textContent = t;
+}
+$('#nxd-ph-run').addEventListener('click', pharmaRunDrug);
+$('#nxd-ph-bkd').addEventListener('click', () => {
+  const P=PH(); if(!P) return; const g=P.kdToDeltaG(phNum('nxd-ph-kd')*1e-9, phNum('nxd-ph-tk')||298.15);
+  $('#nxd-ph-okd').textContent = g==null ? 'Input tidak valid.' : ('ΔG = ' + g.toFixed(3) + ' kcal/mol');
+});
+$('#nxd-ph-bdg').addEventListener('click', () => {
+  const P=PH(); if(!P) return; const r=P.estimateAffinity(phNum('nxd-ph-dg'), phNum('nxd-ph-tk')||298.15);
+  $('#nxd-ph-okd').textContent = r.ki==null ? 'Di luar jangkauan / input invalid.' : ('Ki = ' + (r.ki*1e9).toExponential(3) + ' nM · pKi ' + r.pKi);
+});
+$('#nxd-ph-bcp').addEventListener('click', () => {
+  const P=PH(); if(!P) return; const k=P.chengPrusoff(phNum('nxd-ph-ic'), phNum('nxd-ph-sc'), phNum('nxd-ph-km'));
+  $('#nxd-ph-ocp').textContent = k==null ? 'Input tidak valid.' : ('Ki = ' + k);
+});
+$('#nxd-ph-bld').addEventListener('click', () => {
+  const P=PH(); if(!P) return; const r=P.estimateLogD(phNum('nxd-ph-dl'), phNum('nxd-ph-dk'), phNum('nxd-ph-dh'), $('#nxd-ph-dt').value);
+  $('#nxd-ph-old').textContent = r ? ('logD = ' + r.logD + ' · fraksi netral ' + r.neutralFraction.toExponential(3)) : 'Input tidak valid.';
+});
+$('#nxd-ph-ble').addEventListener('click', () => {
+  const P=PH(); if(!P) return; const r=P.ligandEfficiencyMetrics({pActivity:phNum('nxd-ph-ea'), heavyAtoms:phNum('nxd-ph-eh'), mw:phNum('nxd-ph-em'), psa:phNum('nxd-ph-ep'), logP:phNum('nxd-ph-el')});
+  $('#nxd-ph-ole').textContent = r ? ('LE '+r.LE+' · BEI '+(r.BEI??'—')+' · SEI '+(r.SEI??'—')+' · LLE '+(r.LLE??'—')+' · LELP '+(r.LELP??'—')) : 'Input tidak valid.';
+});
+let phLib = Object.entries(PRE_PH).map(([name,v])=>({name,mw:v[0],logP:v[1],hbd:v[2],hba:v[3],rotB:v[4],psa:v[5]}));
+function pharmaRenderLib(){
+  const P=PH(); const body=$('#nxd-ph-lbody'); if(!body) return;
+  if(!P){ body.innerHTML='<tr><td colspan="6">NexusPharma.js belum termuat</td></tr>'; return; }
+  const r=P.screenLibrary(phLib);
+  body.innerHTML = r.length ? r.map((x,i)=>'<tr><td>'+(i+1)+'</td><td>'+String(x.name).replace(/[<>&]/g,s=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[s]))+'</td><td>'+x.score+'</td><td>'+x.status+'</td><td>'+(x.lipinski?'lulus':'gagal')+'</td><td>'+x.qedLike+'</td></tr>').join('') : '<tr><td colspan="6">Pustaka kosong</td></tr>';
+}
+$('#nxd-ph-ladd').addEventListener('click', () => {
+  const c={name:($('#nxd-ph-ln').value||'Tanpa nama').trim(), mw:phNum('nxd-ph-lmw'), logP:phNum('nxd-ph-llp'), hbd:phNum('nxd-ph-lhd'), hba:phNum('nxd-ph-lha'), rotB:phNum('nxd-ph-lrb'), psa:phNum('nxd-ph-lps')};
+  if(![c.mw,c.logP,c.hbd,c.hba,c.rotB,c.psa].every(Number.isFinite)){ toast('Lengkapi semua angka dulu', true); return; }
+  phLib.push(c); pharmaRenderLib(); toast('Ditambahkan: '+c.name);
+});
+$('#nxd-ph-lreset').addEventListener('click', () => { phLib = Object.entries(PRE_PH).map(([name,v])=>({name,mw:v[0],logP:v[1],hbd:v[2],hba:v[3],rotB:v[4],psa:v[5]})); pharmaRenderLib(); });
+$('#nxd-ph-runtest').addEventListener('click', () => {
+  const P=PH(); if(!P){ $('#nxd-ph-tsum').textContent='engine missing'; return; }
+  try{
+    const r=P.selfTest(false);
+    $('#nxd-ph-tsum').textContent = r.passed+'/'+r.total+(r.ok?' lulus':' GAGAL')+' · v'+P.version;
+    $('#nxd-ph-tlog').textContent = r.results.map(x=>(x.ok?'✓ ':'✗ ')+x.name+(x.ok?'':' · '+(x.detail||''))).join('\n');
+  }catch(e){ $('#nxd-ph-tsum').textContent='error'; $('#nxd-ph-tlog').textContent=String(e&&e.message||e); }
+});
+/* API helper for council / external scripts — full surface, no mutation of NexusPharma */
+window.NexusPharmaLab = {
+  version: '1.0.0',
+  engine: () => window.NexusPharma || null,
+  open: () => setTab('pharma'),
+  analyze: (p) => { const E=PH(); return E ? E.analyzeCandidate(p) : null; },
+  dock: (lig, pro, opts) => { const E=PH(); return E ? E.simulateDockingAdvanced(lig, pro, opts||{}) : null; },
+  screen: (list) => { const E=PH(); return E ? E.screenLibrary(list) : []; },
+  selfTest: () => { const E=PH(); return E ? E.selfTest(false) : null; }
+};
+
 window.addEventListener('load', () => {
   if (!LBC()) console.warn('[NEXUS DECK] window.NexusLBC tidak ditemukan — periksa SuperLBC.js');
   if (!EADI()) console.warn('[NEXUS DECK] window.NexusEADI tidak ditemukan — periksa SuperEADI.js');
+  if (!PH()) console.warn('[NEXUS DECK] window.NexusPharma tidak ditemukan — periksa NexusPharma.js');
 });
-window.NexusDeck = { open: setTab, version: '1.0.0' };
+window.NexusDeck = { open: setTab, version: '1.1.0-pharma', pharma: () => window.NexusPharmaLab };
 } catch (err) { console.warn('[NEXUS DECK] gagal dimuat:', err); }
 })();
 </script>
