@@ -781,26 +781,3 @@
   }
 
 })(typeof globalThis !== 'undefined' ? globalThis : this);
-
-/* ------------------------------------------------------------------
- * CHANGELOG v3.0.0 → v3.1.0
- * FIXED
- *  - options/opts = null no longer throws TypeError (4 public functions).
- *  - Docking: non-finite total energy is now reported as ERROR instead of
- *    silently becoming 0 (e.g. hbEnergy:'x' used to hide a NaN).
- *  - Docking: hbCutoff / hbEnergy validated (invalid → defaults).
- *  - checkLipinski: now Lipinski-only (≤1 violation). v3.0 rejected
- *    aspirin & paracetamol because Ghose/Muegge MW floors leaked in.
- *  - estimateAffinity: T ≤ 0 / NaN / overflow → null (was ±Infinity pKi).
- *  - RT_298K: 0.592486 → 0.592485 (derived from CODATA R).
- * ADDED (additive only; no existing field removed or renamed)
- *  - docking: ligandAtomsDropped, proteinAtomsDropped, ligandEfficiency
- *  - estimateLogD, kdToDeltaG, chengPrusoff, ligandEfficiencyMetrics,
- *    cnsMPO, evaluateExtraFilters, analyzeCandidate
- * KNOWN LIMITS (unchanged by design – be honest in any UI)
- *  - Soft-core LJ shifts the well ~1.5% inward vs classic LJ (default kept
- *    for backward compatibility; pass {softCore:false} for exact LJ).
- *  - Docking energy is a pairwise sum, NOT a calibrated free energy; the
- *    Ki estimate is order-of-magnitude only. Not a substitute for
- *    AutoDock/Vina/FEP, and no output here is a validated drug lead.
- * ------------------------------------------------------------------ */
