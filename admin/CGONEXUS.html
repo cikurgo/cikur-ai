@@ -7629,5 +7629,593 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'&&pan.classLi
 setInterval(function(){if(!document.hidden)sync()},900);sync();
 }catch(err){console.warn('[HOLO-DOCK] gagal dimuat:',err)}})();
 </script>
+<!-- ═══════════════ NEXUS · SPATIAL COMMAND DECK (LBC VAULT + EADI VAULT) ═══════════════
+     Syarat: SuperLBC.js dan SuperEADI.js berada di folder yang SAMA dengan CGONEXUS.html.
+     Blok ini mandiri (prefix "nxd-"), tidak mengubah/menimpa kode NEXUS yang sudah ada. -->
+<script src="SuperLBC.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('SuperLBC.js')"></script>
+<script src="SuperEADI.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('SuperEADI.js')"></script>
+<style id="nxd-css">
+#nxd-root{--c:var(--aura-a,61,236,255);--c2:var(--aura-b,139,92,246);--nxd-ink:var(--ink,#e9edf5);--nxd-dim:var(--dim,rgba(196,208,232,.55));--nxd-mono:var(--mono,ui-monospace,Menlo,Consolas,monospace);font-family:var(--nxd-mono);color:var(--nxd-ink)}
+#nxd-root *{box-sizing:border-box}
+#nxd-root [hidden]{display:none!important}
+/* ── Rail melayang (kiri) ── */
+#nxd-rail{position:fixed;z-index:40;left:max(8px,env(safe-area-inset-left));top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.nxd-tabs{display:flex;flex-direction:column;gap:6px;padding:7px;border-radius:20px;background:linear-gradient(180deg,rgba(10,18,40,.62),rgba(5,9,22,.5));border:1px solid rgba(var(--c),.28);box-shadow:0 0 40px -14px rgba(var(--c),.8),inset 0 0 22px rgba(var(--c),.05);-webkit-backdrop-filter:blur(14px) saturate(1.4);backdrop-filter:blur(14px) saturate(1.4)}
+.nxd-tab{--k:var(--c);position:relative;width:62px;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:6px 2px;border-radius:14px;border:1px solid transparent;background:none;color:var(--nxd-dim);font:500 .5rem/1.15 var(--nxd-mono);letter-spacing:.1em;text-align:center;cursor:pointer;transition:.25s}
+.nxd-tab[data-tab="eadi"]{--k:var(--c2)}
+.nxd-tab svg,.nxd-orb svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.nxd-tab:hover{color:var(--nxd-ink);border-color:rgba(var(--k),.4)}
+.nxd-tab[aria-selected="true"]{color:rgb(var(--k));border-color:rgba(var(--k),.75);background:rgba(var(--k),.1);box-shadow:0 0 18px -4px rgba(var(--k),.85),inset 0 0 12px -6px rgba(var(--k),.9)}
+.nxd-tab[aria-selected="true"]::before{content:"";position:absolute;left:-9px;top:22%;bottom:22%;width:2px;border-radius:2px;background:rgb(var(--k));box-shadow:0 0 10px rgb(var(--k))}
+.nxd-orb{opacity:.7;transition:opacity .2s;display:none;width:44px;height:44px;border-radius:15px;place-items:center;border:1px solid rgba(var(--c),.4);background:rgba(8,14,30,.66);color:rgb(var(--c));cursor:pointer;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 0 22px -6px rgba(var(--c),.8)}
+@media(max-width:999px){
+ #nxd-rail{top:42%}
+ .nxd-orb{display:grid}
+ #nxd-rail[data-open="0"] .nxd-tabs{display:none}
+ #nxd-rail[data-open="1"] .nxd-tabs{animation:nxdIn .25s ease-out}
+}
+#nxd-rail .nxd-orb:hover,#nxd-rail .nxd-orb[aria-expanded="true"]{opacity:1}
+@keyframes nxdIn{from{opacity:0;transform:translateX(-10px)}}
+/* ── Panel kaca (glassmorphism) ── */
+.nxd-panel{--k:var(--c);position:fixed;z-index:39;left:calc(max(8px,env(safe-area-inset-left)) + 80px);top:84px;bottom:150px;width:min(27rem,calc(100vw - 100px));display:flex;flex-direction:column;border-radius:22px;overflow:hidden;
+ background:linear-gradient(160deg,rgba(10,18,42,.56),rgba(5,9,22,.42));border:1px solid rgba(var(--k),.38);
+ box-shadow:0 0 0 1px rgba(var(--k),.06),0 0 60px -18px rgba(var(--k),.7),0 30px 70px -30px #000,inset 0 0 40px rgba(var(--k),.05);
+ -webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);opacity:0;transform:translateX(-18px) scale(.985);pointer-events:none;visibility:hidden;transition:opacity .3s,transform .35s cubic-bezier(.2,.8,.2,1),visibility 0s .35s}
+.nxd-panel[data-tab="eadi"]{--k:var(--c2)}
+.nxd-panel.open{opacity:1;transform:none;pointer-events:auto;visibility:visible;transition:opacity .3s,transform .35s cubic-bezier(.2,.8,.2,1)}
+.nxd-panel::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,rgb(var(--k)),transparent);background-size:50% 100%;background-repeat:no-repeat;animation:nxdScan 3.2s linear infinite;opacity:.9}
+@keyframes nxdScan{from{background-position:-60% 0}to{background-position:160% 0}}
+@media(max-width:999px){.nxd-panel{left:8px;right:8px;width:auto;top:auto;bottom:max(8px,env(safe-area-inset-bottom));max-height:64dvh;transform:translateY(24px)}}
+@media(max-width:999px){body.nxd-open #summoner{opacity:0!important;pointer-events:none!important}}
+.nxd-ph{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 14px 10px;border-bottom:1px solid rgba(var(--k),.16)}
+.nxd-pt{font:500 .72rem var(--nxd-mono);letter-spacing:.3em;color:rgb(var(--k));text-shadow:0 0 14px rgba(var(--k),.7)}
+.nxd-ps{font:400 .56rem var(--nxd-mono);letter-spacing:.12em;color:var(--nxd-dim);margin-top:3px;text-transform:uppercase}
+.nxd-x{width:34px;height:34px;border-radius:10px;border:1px solid rgba(var(--k),.25);background:rgba(var(--k),.06);color:var(--nxd-ink);font-size:1.1rem;line-height:1;cursor:pointer}
+.nxd-x:hover{border-color:rgba(var(--k),.8)}
+.nxd-body{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:12px 14px 16px;scrollbar-width:thin;scrollbar-color:rgba(var(--k),.4) transparent;display:flex;flex-direction:column;gap:14px}
+.nxd-lab{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font:400 .58rem var(--nxd-mono);letter-spacing:.2em;text-transform:uppercase;color:rgb(var(--k));margin-bottom:6px}
+.nxd-lab i{font-style:normal;letter-spacing:.05em;text-transform:none;color:var(--nxd-dim);font-size:.56rem}
+#nxd-root textarea,#nxd-root input[type="password"],#nxd-root input[type="text"],#nxd-root select{width:100%;padding:.6rem .7rem;border-radius:12px;border:1px solid rgba(var(--k),.28);background:rgba(2,5,14,.5);color:var(--nxd-ink);font:400 max(16px,.78rem) var(--nxd-mono);outline:none;resize:vertical;transition:.2s}
+#nxd-root textarea:focus,#nxd-root input:focus,#nxd-root select:focus{border-color:rgba(var(--k),.85);box-shadow:0 0 0 3px rgba(var(--k),.14),0 0 22px -6px rgba(var(--k),.7)}
+#nxd-root select option{background:#0a1226;color:#e9edf5}
+.nxd-btn{--b:var(--k);display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:40px;padding:.5rem .8rem;border-radius:12px;border:1px solid rgba(var(--b),.4);background:rgba(var(--b),.07);color:var(--nxd-ink);font:500 .62rem var(--nxd-mono);letter-spacing:.14em;text-transform:uppercase;cursor:pointer;transition:.2s;text-decoration:none}
+.nxd-btn:hover:not(:disabled){border-color:rgba(var(--b),.9);box-shadow:0 0 18px -6px rgba(var(--b),.9);color:rgb(var(--b))}
+.nxd-btn:disabled{opacity:.45;cursor:progress}
+.nxd-btn.pri{width:100%;min-height:46px;margin-top:8px;color:#02040a;font-weight:700;border:0;background:linear-gradient(135deg,rgb(var(--c)),rgb(var(--c2)));box-shadow:0 0 28px -8px rgba(var(--k),.95)}
+.nxd-btn.pri:hover:not(:disabled){color:#02040a;filter:brightness(1.12);box-shadow:0 0 36px -4px rgba(var(--k),.9)}
+.nxd-btn.sm{min-height:34px;padding:.35rem .6rem;font-size:.56rem}
+.nxd-row{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.nxd-id{display:flex;align-items:center;gap:8px;padding:.5rem .7rem;border-radius:12px;border:1px dashed rgba(var(--k),.3);background:rgba(2,5,14,.35)}
+.nxd-id code{font:400 .7rem var(--nxd-mono);color:var(--nxd-ink);word-break:break-all}
+.nxd-kv{padding:.5rem .65rem;border-radius:12px;border:1px solid rgba(var(--k),.18);background:rgba(2,5,14,.38);cursor:copy;transition:.2s;margin-bottom:6px}
+.nxd-kv:hover{border-color:rgba(var(--k),.6)}
+.nxd-kv b{display:block;font:400 .52rem var(--nxd-mono);letter-spacing:.2em;color:var(--nxd-dim);text-transform:uppercase;margin-bottom:3px}
+.nxd-kv code{display:block;font:400 .66rem/1.45 var(--nxd-mono);color:var(--nxd-ink);word-break:break-all;overflow-wrap:anywhere}
+.nxd-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 2px}
+.nxd-chip{padding:.25rem .55rem;border-radius:99px;font:500 .54rem var(--nxd-mono);letter-spacing:.1em;border:1px solid rgba(16,185,129,.55);color:#34d399;background:rgba(16,185,129,.1)}
+.nxd-chip.bad{border-color:rgba(239,68,68,.7);color:#f87171;background:rgba(239,68,68,.1)}
+.nxd-chip.info{border-color:rgba(var(--k),.45);color:rgb(var(--k));background:rgba(var(--k),.08)}
+.nxd-msg{margin-top:8px;font:400 .62rem/1.5 var(--nxd-mono);color:var(--nxd-dim);min-height:1em;white-space:pre-wrap}
+.nxd-msg.ok{color:#34d399}.nxd-msg.bad{color:#f87171}
+.nxd-banner{padding:.6rem .75rem;border-radius:12px;border:1px solid rgba(245,158,11,.6);background:rgba(245,158,11,.1);color:#fbbf24;font:400 .64rem/1.5 var(--nxd-mono)}
+.nxd-banner.bad{border-color:rgba(239,68,68,.7);background:rgba(239,68,68,.1);color:#f87171}
+#nxd-ledger{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+#nxd-ledger li{display:flex;justify-content:space-between;gap:8px;padding:.4rem .6rem;border-radius:10px;border:1px solid rgba(var(--k),.14);background:rgba(2,5,14,.3);font:400 .6rem var(--nxd-mono);cursor:pointer;transition:.2s}
+#nxd-ledger li:hover{border-color:rgba(var(--k),.6)}
+#nxd-ledger li span:last-child{color:var(--nxd-dim)}
+.nxd-note{font:400 .58rem/1.55 var(--nxd-mono);color:var(--nxd-dim)}
+/* ── EADI ── */
+.nxd-drop{position:relative;display:grid;place-items:center;min-height:120px;padding:10px;border-radius:16px;border:1.5px dashed rgba(var(--k),.45);background:repeating-linear-gradient(45deg,rgba(var(--k),.04) 0 10px,transparent 10px 20px);text-align:center;cursor:pointer;transition:.25s;overflow:hidden}
+.nxd-drop:hover,.nxd-drop.over{border-color:rgb(var(--k));background-color:rgba(var(--k),.08);box-shadow:0 0 30px -8px rgba(var(--k),.8),inset 0 0 30px -12px rgba(var(--k),.8)}
+.nxd-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.nxd-drop .t{font:500 .66rem var(--nxd-mono);letter-spacing:.14em;color:rgb(var(--k))}
+.nxd-drop .s{font:400 .56rem var(--nxd-mono);color:var(--nxd-dim);margin-top:4px}
+.nxd-drop img{max-width:100%;max-height:150px;border-radius:10px;display:block;margin:0 auto 6px}
+.nxd-meter{height:6px;border-radius:6px;background:rgba(var(--k),.14);overflow:hidden;margin-top:6px}
+.nxd-meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,rgb(var(--c)),rgb(var(--c2)));box-shadow:0 0 10px rgba(var(--k),.8);transition:width .3s,background .3s}
+.nxd-meter.over i{background:#ef4444;box-shadow:0 0 10px #ef4444}
+.nxd-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nxd-cmp{position:relative;width:100%;max-height:46dvh;margin:0 auto;border-radius:14px;overflow:hidden;border:1px solid rgba(var(--k),.3);background:#02040a;--p:50%;touch-action:pan-y}
+.nxd-cmp img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;-webkit-user-drag:none;user-select:none}
+.nxd-cmp img.b{clip-path:inset(0 0 0 var(--p))}
+.nxd-cmp .ln{position:absolute;top:0;bottom:0;left:var(--p);width:2px;margin-left:-1px;background:rgb(var(--k));box-shadow:0 0 12px rgb(var(--k));pointer-events:none}
+.nxd-cmp .ln::after{content:"⇆";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:#02040a;border:1px solid rgb(var(--k));color:rgb(var(--k));font-size:.8rem}
+.nxd-cmp input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:ew-resize}
+.nxd-cmp .tg{position:absolute;top:6px;font:500 .5rem var(--nxd-mono);letter-spacing:.14em;padding:2px 6px;border-radius:6px;background:rgba(2,4,10,.7);color:var(--nxd-ink);pointer-events:none}
+.nxd-cmp .tg.a{left:6px}.nxd-cmp .tg.b{right:6px;color:rgb(var(--k))}
+#nxd-diff{width:100%;border-radius:14px;border:1px solid rgba(var(--k),.3);background:#02040a;display:block;max-height:46dvh;object-fit:contain}
+.nxd-psnr{padding:.7rem .8rem;border-radius:14px;border:1px solid rgba(var(--k),.3);background:rgba(2,5,14,.42)}
+.nxd-psnr .v{display:flex;align-items:baseline;gap:8px;font:500 1.5rem var(--nxd-mono);color:rgb(var(--k));text-shadow:0 0 16px rgba(var(--k),.7)}
+.nxd-psnr .v small{font:400 .62rem var(--nxd-mono);color:var(--nxd-dim);text-shadow:none}
+.nxd-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.nxd-stats div{padding:.4rem .5rem;border-radius:10px;border:1px solid rgba(var(--k),.16);background:rgba(2,5,14,.3)}
+.nxd-stats b{display:block;font:400 .48rem var(--nxd-mono);letter-spacing:.16em;color:var(--nxd-dim)}
+.nxd-stats span{font:500 .74rem var(--nxd-mono)}
+/* ── Kanvas efek partikel (di balik panel, di atas avatar/chat) ── */
+#nxd-fx{position:fixed;inset:0;width:100%;height:100%;z-index:38;pointer-events:none}
+body[data-theme="light"] .nxd-panel{background:linear-gradient(160deg,rgba(255,255,255,.7),rgba(238,241,246,.6));color:#0b1220}
+body[data-theme="light"] #nxd-root{--nxd-ink:#0b1220;--nxd-dim:rgba(20,32,60,.6)}
+body[data-theme="light"] #nxd-root textarea,body[data-theme="light"] #nxd-root input,body[data-theme="light"] #nxd-root select{background:rgba(255,255,255,.7)}
+@media(prefers-reduced-motion:reduce){.nxd-panel::before{animation:none}.nxd-panel,.nxd-tab,.nxd-btn{transition:none}}
+</style>
+<script id="nxd-js">
+(function () {
+'use strict';
+try {
+if (document.getElementById('nxd-root')) return;
+
+/* ───────────── util ───────────── */
+const $ = (s, r) => (r || document).querySelector(s);
+const LBC = () => window.NexusLBC, EADI = () => window.NexusEADI;
+const reduce = (() => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
+const toast = (t, warn) => { try { showToast(t, 2600, !!warn); } catch (e) {} };
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
+const short = (h, a, b) => h && h.length > a + b + 1 ? h.slice(0, a) + '…' + h.slice(-b) : (h || '—');
+const HEX64 = /^[0-9a-f]{64}$/;
+async function copy(text, label) {
+  try { await navigator.clipboard.writeText(text); toast((label || 'Teks') + ' disalin'); }
+  catch (e) { toast('Clipboard ditolak browser', true); }
+}
+function setMsg(node, text, kind) { node.textContent = text || ''; node.className = 'nxd-msg' + (kind ? ' ' + kind : ''); }
+function scramble(node, final) {          // efek dekripsi kosmetik; teks akhir selalu sama dengan data asli
+  if (reduce) { node.textContent = final; return; }
+  const hex = '0123456789abcdef', n = final.length; let i = 0;
+  const id = setInterval(() => {
+    i += Math.max(1, Math.ceil(n / 14));
+    if (i >= n) { clearInterval(id); node.textContent = final; return; }
+    let pad = ''; for (let k = i; k < n; k++) pad += hex[(Math.random() * 16) | 0];
+    node.textContent = final.slice(0, i) + pad;
+  }, 35);
+}
+const ICON = {
+  council: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="12" cy="4.5" r="1.6"/><circle cx="19" cy="9" r="1.6"/><circle cx="17" cy="18" r="1.6"/><circle cx="7" cy="18" r="1.6"/><circle cx="5" cy="9" r="1.6"/><path d="M12 6v3.6M17.6 9.7l-3.2 1.4M15.8 16.6l-2.4-3.2M8.2 16.6l2.4-3.2M6.4 9.7l3.2 1.4"/></svg>',
+  lbc: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="8.5" y="14" width="7" height="7" rx="1.5"/><path d="M6.5 10v2.5h11V10M12 12.5V14"/></svg>',
+  eadi: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M3 17l5-4.5 4 3.5 3-2.5 6 5"/></svg>'
+};
+
+/* ───────────── skeleton DOM (statis, tanpa data pengguna) ───────────── */
+const root = document.createElement('div'); root.id = 'nxd-root';
+root.innerHTML =
+'<nav id="nxd-rail" data-open="0" aria-label="Spatial Command Deck">' +
+ '<button type="button" class="nxd-orb" id="nxd-orb" aria-expanded="false" aria-label="Buka Command Deck">' + ICON.council + '</button>' +
+ '<div class="nxd-tabs" role="tablist" aria-orientation="vertical">' +
+  '<button type="button" role="tab" class="nxd-tab" data-tab="council" aria-selected="true" title="Council · Chat & Swarm">' + ICON.council + '<span>COUNCIL</span></button>' +
+  '<button type="button" role="tab" class="nxd-tab" data-tab="lbc" aria-selected="false" title="LBC Vault · Merkle-Patricia + Schnorr">' + ICON.lbc + '<span>LBC<br>VAULT</span></button>' +
+  '<button type="button" role="tab" class="nxd-tab" data-tab="eadi" aria-selected="false" title="EADI Vault · Steganografi DCT">' + ICON.eadi + '<span>EADI<br>VAULT</span></button>' +
+ '</div></nav>' +
+
+'<section class="nxd-panel" id="nxd-p-lbc" data-tab="lbc" role="tabpanel" aria-label="LBC Vault">' +
+ '<header class="nxd-ph"><div><div class="nxd-pt">LBC VAULT</div><div class="nxd-ps">Merkle-Patricia Trie · Schnorr BIP-340</div></div><button type="button" class="nxd-x" data-close aria-label="Tutup panel">×</button></header>' +
+ '<div class="nxd-body">' +
+  '<div class="nxd-banner" id="nxd-lbc-ban" hidden></div>' +
+  '<div><div class="nxd-lab">Signer identity <i>kunci privat hanya di memori</i></div>' +
+   '<div class="nxd-id"><code id="nxd-pub">belum dibuat (otomatis saat SEAL pertama)</code></div>' +
+   '<div class="nxd-row"><button type="button" class="nxd-btn sm" id="nxd-newkey">New key</button><button type="button" class="nxd-btn sm" id="nxd-impkey">Import</button><button type="button" class="nxd-btn sm" id="nxd-cppub">Copy pub</button><button type="button" class="nxd-btn sm" id="nxd-exppriv">Export priv</button></div></div>' +
+  '<div><label class="nxd-lab" for="nxd-lbc-in">Payload <i id="nxd-lbc-cnt">0 / 4000</i></label>' +
+   '<textarea id="nxd-lbc-in" rows="3" maxlength="4000" placeholder="Catatan, keputusan Dewan, hash dokumen… apa pun yang ingin disegel permanen."></textarea>' +
+   '<button type="button" class="nxd-btn pri" id="nxd-seal">SEAL TO BLOCKCHAIN</button></div>' +
+  '<div id="nxd-lbc-res" hidden><div class="nxd-lab">Hasil segel <i id="nxd-r-time"></i></div>' +
+   '<div class="nxd-kv" data-copy="root"><b>Root hash (Merkle-Patricia)</b><code id="nxd-r-root"></code></div>' +
+   '<div class="nxd-kv" data-copy="sig"><b>Signature · Schnorr BIP-340 (64 byte)</b><code id="nxd-r-sig"></code></div>' +
+   '<div class="nxd-kv" data-copy="key"><b>Trie key (SHA-256 isi)</b><code id="nxd-r-key"></code></div>' +
+   '<div class="nxd-kv" data-copy="pub"><b>Signer (x-only pubkey)</b><code id="nxd-r-pub"></code></div>' +
+   '<div class="nxd-kv" data-copy="bh"><b>Block hash · prev-linked</b><code id="nxd-r-bh"></code></div>' +
+   '<div class="nxd-chips" id="nxd-r-chips"></div><div class="nxd-note">Ketuk kotak mana pun untuk menyalin.</div></div>' +
+  '<div><div class="nxd-lab">Ledger <i id="nxd-lcount"></i></div><ol id="nxd-ledger"></ol>' +
+   '<div class="nxd-row"><button type="button" class="nxd-btn sm" id="nxd-vchain">Verify chain</button><button type="button" class="nxd-btn sm" id="nxd-lst">Self-test</button><button type="button" class="nxd-btn sm" id="nxd-lreset">Reset</button></div>' +
+   '<div class="nxd-msg" id="nxd-lmsg" aria-live="polite"></div></div>' +
+ '</div></section>' +
+
+'<section class="nxd-panel" id="nxd-p-eadi" data-tab="eadi" role="tabpanel" aria-label="EADI Vault">' +
+ '<header class="nxd-ph"><div><div class="nxd-pt">EADI VAULT</div><div class="nxd-ps">Ratio-based DCT Watermarking</div></div><button type="button" class="nxd-x" data-close aria-label="Tutup panel">×</button></header>' +
+ '<div class="nxd-body">' +
+  '<div class="nxd-banner" id="nxd-eadi-ban" hidden></div>' +
+  '<div><div class="nxd-lab">Gambar pembawa <i id="nxd-e-info">belum ada</i></div>' +
+   '<label class="nxd-drop" id="nxd-drop"><input type="file" id="nxd-file" accept="image/*" aria-label="Pilih gambar"><div id="nxd-drop-in"><div class="t">DROP GAMBAR DI SINI</div><div class="s">atau ketuk untuk memilih · PNG/JPG/WebP</div></div></label></div>' +
+  '<div><label class="nxd-lab" for="nxd-e-text">Teks rahasia <i id="nxd-e-cap">kapasitas: —</i></label>' +
+   '<textarea id="nxd-e-text" rows="3" maxlength="8000" placeholder="Pesan yang akan disisipkan tak kasatmata ke dalam piksel…"></textarea>' +
+   '<div class="nxd-meter" id="nxd-meter"><i></i></div>' +
+   '<div class="nxd-grid2" style="margin-top:8px"><div><label class="nxd-lab" for="nxd-e-key">Kunci sebar</label><input type="password" id="nxd-e-key" autocomplete="off" placeholder="opsional"></div>' +
+   '<div><label class="nxd-lab" for="nxd-e-red">Redundansi</label><select id="nxd-e-red"><option value="1">1× · kapasitas maks</option><option value="3">3× · seimbang</option><option value="5">5× · tahan kompresi</option></select></div></div>' +
+   '<button type="button" class="nxd-btn pri" id="nxd-embed" disabled>EMBED &amp; SECURE</button>' +
+   '<div class="nxd-row"><button type="button" class="nxd-btn sm" id="nxd-extract" disabled>Extract dari gambar</button><button type="button" class="nxd-btn sm" id="nxd-est">Self-test</button></div>' +
+   '<div class="nxd-msg" id="nxd-emsg" aria-live="polite"></div></div>' +
+  '<div id="nxd-e-res" hidden>' +
+   '<div class="nxd-lab">Perbandingan <i>geser untuk membandingkan</i></div>' +
+   '<div class="nxd-cmp" id="nxd-cmp"><img class="a" id="nxd-ca" alt="Gambar asli"><img class="b" id="nxd-cb" alt="Gambar hasil"><span class="ln"></span><span class="tg a">ASLI</span><span class="tg b">SECURED</span><input type="range" id="nxd-cr" min="0" max="100" value="50" aria-label="Geser perbandingan asli dan hasil"></div>' +
+   '<canvas id="nxd-diff" hidden aria-label="Peta selisih piksel diperkuat"></canvas>' +
+   '<div class="nxd-row"><button type="button" class="nxd-btn sm" id="nxd-difft">Peta selisih ×12</button></div>' +
+   '<div class="nxd-lab" style="margin-top:12px">Laporan PSNR <i>dari modul EADI</i></div>' +
+   '<div class="nxd-psnr"><div class="v"><span id="nxd-ps-v">—</span><small>dB</small></div><div class="nxd-meter"><i id="nxd-ps-bar"></i></div><div class="nxd-note" id="nxd-ps-t" style="margin-top:6px"></div>' +
+   '<div class="nxd-stats" id="nxd-stats"></div></div>' +
+   '<div class="nxd-chips" id="nxd-e-chips"></div>' +
+   '<a class="nxd-btn pri" id="nxd-dl" download="nexus-secured.png" href="#" style="text-decoration:none">DOWNLOAD PNG</a>' +
+   '<div class="nxd-note" style="margin-top:8px">Simpan &amp; kirim sebagai <b>PNG</b>. Kompresi JPEG/aplikasi chat dapat merusak watermark.</div></div>' +
+ '</div></section>';
+document.body.appendChild(root);
+
+/* ───────────── efek partikel latar (canvas) ───────────── */
+const FX = { cv: null, g: null, W: 0, H: 0, dpr: 1, run: false, mode: 'lbc', pow: 0, target: 0, t: 0, flash: 0, flashFail: false, nodes: [], cols: [], cell: 30, conv: 0, col: '61,236,255' };
+function fxEnsure() {
+  if (FX.cv) return;
+  FX.cv = document.createElement('canvas'); FX.cv.id = 'nxd-fx'; FX.cv.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(FX.cv); FX.g = FX.cv.getContext('2d');
+  addEventListener('resize', fxSize, { passive: true }); fxSize();
+}
+function fxSize() {
+  if (!FX.cv) return;
+  FX.dpr = Math.min(window.devicePixelRatio || 1, 2); FX.W = innerWidth; FX.H = innerHeight;
+  FX.cv.width = FX.W * FX.dpr; FX.cv.height = FX.H * FX.dpr; FX.g.setTransform(FX.dpr, 0, 0, FX.dpr, 0, 0);
+}
+function fxColor(mode) {
+  const cs = getComputedStyle(document.body);
+  const v = (mode === 'eadi' ? cs.getPropertyValue('--aura-b') : cs.getPropertyValue('--aura-a')).trim();
+  return /^\d+\s*,\s*\d+\s*,\s*\d+$/.test(v) ? v : (mode === 'eadi' ? '139,92,246' : '61,236,255');
+}
+function fxStart(mode) {
+  fxEnsure(); FX.mode = mode; FX.col = fxColor(mode); FX.target = 1; FX.conv = 0; FX.flash = 0; FX.t = 0;
+  const n = Math.max(24, Math.min(64, Math.round(FX.W * FX.H / 22000)));
+  FX.nodes = Array.from({ length: n }, () => ({ x: Math.random() * FX.W, y: Math.random() * FX.H, vx: (Math.random() - .5) * 38, vy: (Math.random() - .5) * 38 }));
+  const nc = Math.round(FX.W / 34);
+  FX.cols = Array.from({ length: nc }, (_, i) => ({ x: i * 34 + 8, y: Math.random() * FX.H, s: 40 + Math.random() * 90, a: Math.random() }));
+  if (reduce) { FX.pow = .5; }
+  if (!FX.run) { FX.run = true; requestAnimationFrame(fxLoop); }
+}
+function fxStop(ok) { FX.target = 0; FX.flash = 1; FX.flashFail = !ok; FX.conv = ok ? 1 : 0; }
+let fxLast = 0;
+function fxLoop(now) {
+  const dt = Math.min(.05, (now - (fxLast || now)) / 1000); fxLast = now; FX.t += dt;
+  const g = FX.g, W = FX.W, H = FX.H, c = FX.col;
+  FX.pow += (FX.target - FX.pow) * (1 - Math.exp(-(FX.target ? 3 : 2.2) * dt));
+  FX.flash *= Math.exp(-2.4 * dt);
+  g.clearRect(0, 0, W, H);
+  const p = FX.pow, cx = W * .5, cy = H * .42;
+  if (FX.mode === 'lbc') {
+    g.font = '11px ui-monospace,Menlo,monospace'; g.textBaseline = 'top';
+    for (const k of FX.cols) {           // hujan nibble heksadesimal
+      k.y += k.s * dt; if (k.y > H) k.y = -20;
+      g.fillStyle = 'rgba(' + c + ',' + (.18 * p) + ')';
+      for (let i = 0; i < 6; i++) g.fillText('0123456789abcdef'[((k.a * 16 + i * 5 + Math.floor(FX.t * 6)) | 0) % 16], k.x, k.y - i * 13);
+    }
+    const nd = FX.nodes, pull = FX.target === 0 && FX.conv ? 1 - FX.flash : 0;
+    for (const n of nd) {
+      n.x += n.vx * dt; n.y += n.vy * dt;
+      if (n.x < 0 || n.x > W) n.vx *= -1; if (n.y < 0 || n.y > H) n.vy *= -1;
+      if (pull) { n.x += (cx - n.x) * pull * 2.2 * dt; n.y += (cy - n.y) * pull * 2.2 * dt; }
+    }
+    g.lineWidth = 1;
+    for (let i = 0; i < nd.length; i++) for (let j = i + 1; j < nd.length; j++) {
+      const dx = nd[i].x - nd[j].x, dy = nd[i].y - nd[j].y, d2 = dx * dx + dy * dy, R = 170 * 170;
+      if (d2 < R) {
+        const a = (1 - d2 / R) * .55 * p; g.strokeStyle = 'rgba(' + c + ',' + a + ')';
+        g.beginPath(); g.moveTo(nd[i].x, nd[i].y); g.lineTo(nd[j].x, nd[j].y); g.stroke();
+        if (((i * 7 + j) % 5) === 0) {   // pulsa data yang meluncur di garis
+          const u = (FX.t * .8 + (i + j) * .13) % 1; g.fillStyle = 'rgba(255,255,255,' + (.8 * p) + ')';
+          g.fillRect(nd[i].x + (nd[j].x - nd[i].x) * u - 1.5, nd[i].y + (nd[j].y - nd[i].y) * u - 1.5, 3, 3);
+        }
+      }
+    }
+    g.fillStyle = 'rgba(' + c + ',' + (.9 * p) + ')'; for (const n of nd) g.fillRect(n.x - 1.5, n.y - 1.5, 3, 3);
+  } else {                                 // EADI: grid blok DCT 8×8 + balok pemindai
+    const s = FX.cell, cols = Math.ceil(W / s), rows = Math.ceil(H / s);
+    g.strokeStyle = 'rgba(' + c + ',' + (.07 * p) + ')'; g.lineWidth = 1; g.beginPath();
+    for (let x = 0; x <= cols; x++) { g.moveTo(x * s, 0); g.lineTo(x * s, H); }
+    for (let y = 0; y <= rows; y++) { g.moveTo(0, y * s); g.lineTo(W, y * s); }
+    g.stroke();
+    const n = Math.round(46 * p);
+    for (let i = 0; i < n; i++) {
+      const h = Math.sin(i * 91.7 + Math.floor(FX.t * 9) * 13.3) * 43758.5, f = h - Math.floor(h), h2 = Math.sin(i * 12.9 + Math.floor(FX.t * 9) * 7.7) * 24634.6, f2 = h2 - Math.floor(h2);
+      g.fillStyle = 'rgba(' + c + ',' + (.1 + .22 * ((i % 4) / 3)) * p + ')'; g.fillRect(((f * cols) | 0) * s + 1, ((f2 * rows) | 0) * s + 1, s - 2, s - 2);
+    }
+    const by = ((FX.t * .55) % 1) * H, gr = g.createLinearGradient(0, by - 60, 0, by + 4);
+    gr.addColorStop(0, 'rgba(' + c + ',0)'); gr.addColorStop(1, 'rgba(' + c + ',' + (.55 * p) + ')');
+    g.fillStyle = gr; g.fillRect(0, by - 60, W, 64);
+  }
+  if (FX.flash > .02) {                    // gelombang kejut saat selesai
+    const r = (1 - FX.flash) * Math.max(W, H) * .7, col = FX.flashFail ? '239,68,68' : c;
+    g.strokeStyle = 'rgba(' + col + ',' + FX.flash * .8 + ')'; g.lineWidth = 2 + 6 * FX.flash;
+    g.beginPath(); g.arc(cx, cy, r, 0, 6.2832); g.stroke();
+  }
+  if (FX.pow < .01 && FX.target === 0 && FX.flash < .03) { g.clearRect(0, 0, W, H); FX.run = false; fxLast = 0; return; }
+  requestAnimationFrame(fxLoop);
+}
+
+/* ───────────── sinkron dengan avatar 3D (opsional, aman jika tidak aktif) ───────────── */
+function avSig(d) {
+  try { const f = document.querySelector('#cav-stage iframe'), a = f && f.contentWindow && f.contentWindow.NexusAvatar; if (a && a.signal) a.signal(d); } catch (e) {}
+}
+const SCAN = { lbc: [.2, .9, 1], eadi: [.65, .4, 1] };
+
+/* ───────────── tab / navigasi ───────────── */
+const rail = $('#nxd-rail'), orb = $('#nxd-orb'), tabs = [].slice.call(root.querySelectorAll('.nxd-tab'));
+const panels = { lbc: $('#nxd-p-lbc'), eadi: $('#nxd-p-eadi') };
+let curTab = 'council';
+function setTab(name) {
+  curTab = name;
+  tabs.forEach(t => t.setAttribute('aria-selected', t.dataset.tab === name ? 'true' : 'false'));
+  for (const k in panels) panels[k].classList.toggle('open', k === name);
+  document.body.classList.toggle('nxd-open', name !== 'council');
+  rail.dataset.open = '0'; orb.setAttribute('aria-expanded', 'false');
+  if (name === 'lbc') lbcOnOpen(); if (name === 'eadi') eadiOnOpen();
+}
+tabs.forEach(t => t.addEventListener('click', () => setTab(t.dataset.tab)));
+root.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => setTab('council')));
+orb.addEventListener('click', () => { const o = rail.dataset.open === '1' ? '0' : '1'; rail.dataset.open = o; orb.setAttribute('aria-expanded', o === '1' ? 'true' : 'false'); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && curTab !== 'council' && root.contains(document.activeElement)) setTab('council'); });
+function missingBanner(node, lib, file) {
+  const miss = (window.__nxdMissing || []).indexOf(file) >= 0 || !lib();
+  if (miss) { node.hidden = false; node.className = 'nxd-banner'; node.textContent = file + ' tidak termuat. Letakkan file itu di folder yang sama dengan CGONEXUS.html lalu muat ulang.'; }
+  return !miss;
+}
+
+/* ═════════════════════════ LBC VAULT ═════════════════════════ */
+const LKEY = 'nxd.lbc.v1';
+const L = { trie: null, blocks: [], kp: null, busy: false, ready: false };
+const lin = $('#nxd-lbc-in'), sealBtn = $('#nxd-seal'), lmsg = $('#nxd-lmsg');
+const ZERO = '0'.repeat(64);
+const blockMsg = (b) => 'NEXUS-LBC/v1|' + b.h + '|' + b.prev + '|' + b.key + '|' + b.root;
+function validBlocks(a) {
+  if (!Array.isArray(a) || a.length > 500) return false;
+  return a.every(b => b && Number.isInteger(b.h) && Number.isFinite(b.ts) && ['key', 'root', 'prev', 'pub', 'bh'].every(k => typeof b[k] === 'string' && HEX64.test(b[k])) && typeof b.sig === 'string' && /^[0-9a-f]{128}$/.test(b.sig));
+}
+function lbcInit() {
+  if (L.ready) return true;
+  const lib = LBC(); if (!lib) return false;
+  L.trie = new lib.MerklePatriciaTrie(); L.blocks = [];
+  const raw = lsGet(LKEY);
+  if (raw) {
+    try {
+      const o = JSON.parse(raw);
+      if (!validBlocks(o.blocks)) throw new Error('format blok tidak valid');
+      L.trie = lib.MerklePatriciaTrie.fromJSON(o.trie, o.blocks.length ? o.blocks[o.blocks.length - 1].root : undefined);
+      L.blocks = o.blocks;
+    } catch (e) {                         // data tersimpan rusak/dimanipulasi → karantina, mulai bersih
+      lsSet(LKEY + '.quarantine', raw); try { localStorage.removeItem(LKEY); } catch (x) {}
+      L.trie = new lib.MerklePatriciaTrie(); L.blocks = [];
+      const b = $('#nxd-lbc-ban'); b.hidden = false; b.className = 'nxd-banner bad';
+      b.textContent = 'Ledger tersimpan GAGAL verifikasi root (' + e.message + '). Salinannya dikarantina; ledger baru dimulai.';
+    }
+  }
+  L.ready = true; return true;
+}
+function lbcPersist() { lsSet(LKEY, JSON.stringify({ trie: L.trie.toJSON(), blocks: L.blocks })); }
+function renderPub() { $('#nxd-pub').textContent = L.kp ? L.kp.publicKey : 'belum dibuat (otomatis saat SEAL pertama)'; }
+function renderLedger() {
+  const ol = $('#nxd-ledger'); ol.textContent = '';
+  $('#nxd-lcount').textContent = L.blocks.length + ' blok';
+  L.blocks.slice(-6).reverse().forEach(b => {
+    const li = document.createElement('li'), a = document.createElement('span'), d = document.createElement('span');
+    a.textContent = '#' + b.h + ' · ' + short(b.root, 10, 4); d.textContent = new Date(b.ts).toLocaleTimeString('id-ID');
+    li.append(a, d); li.title = 'Tampilkan blok #' + b.h; li.addEventListener('click', () => showBlock(b, null, false)); ol.appendChild(li);
+  });
+}
+function chip(text, cls) { const s = document.createElement('span'); s.className = 'nxd-chip' + (cls ? ' ' + cls : ''); s.textContent = text; return s; }
+let shown = null;
+function showBlock(b, checks, animate) {
+  shown = b; $('#nxd-lbc-res').hidden = false;
+  const set = (id, v) => animate ? scramble($(id), v) : ($(id).textContent = v);
+  set('#nxd-r-root', b.root); set('#nxd-r-sig', b.sig); set('#nxd-r-key', b.key); set('#nxd-r-pub', b.pub); set('#nxd-r-bh', b.bh);
+  $('#nxd-r-time').textContent = checks ? checks.ms + ' ms' : 'blok #' + b.h;
+  const box = $('#nxd-r-chips'); box.textContent = '';
+  box.append(chip('BLOK #' + b.h, 'info'));
+  if (checks) {
+    box.append(chip(checks.sig ? 'SCHNORR ✓ VALID' : 'SCHNORR ✗ GAGAL', checks.sig ? '' : 'bad'));
+    box.append(chip(checks.proof ? 'MERKLE PROOF ✓ · kedalaman ' + checks.depth : 'MERKLE PROOF ✗', checks.proof ? '' : 'bad'));
+  } else {
+    const lib = LBC(); box.append(chip(lib.schnorrVerify(b.sig, blockMsg(b), b.pub) ? 'SCHNORR ✓ VALID' : 'SCHNORR ✗ GAGAL', lib.schnorrVerify(b.sig, blockMsg(b), b.pub) ? '' : 'bad'));
+  }
+  box.append(chip(b.prev === ZERO ? 'GENESIS' : 'PREV ' + short(b.prev, 6, 4), 'info'));
+}
+root.querySelectorAll('[data-copy]').forEach(n => n.addEventListener('click', () => {
+  if (!shown) return; const m = { root: shown.root, sig: shown.sig, key: shown.key, pub: shown.pub, bh: shown.bh };
+  copy(m[n.dataset.copy], n.querySelector('b').textContent.split(' ')[0]);
+}));
+function lbcOnOpen() { missingBanner($('#nxd-lbc-ban'), LBC, 'SuperLBC.js'); if (lbcInit()) { renderLedger(); renderPub(); } }
+lin.addEventListener('input', () => { $('#nxd-lbc-cnt').textContent = lin.value.length + ' / 4000'; });
+
+async function seal() {
+  if (L.busy) return;
+  if (!lbcInit()) return setMsg(lmsg, 'SuperLBC.js belum termuat.', 'bad');
+  const text = lin.value.trim(); if (!text) return toast('Isi payload dulu', true);
+  const lib = LBC(); L.busy = true; sealBtn.disabled = true; setMsg(lmsg, 'Menyegel…');
+  const T0 = performance.now(); let key = null;
+  fxStart('lbc'); avSig({ type: 'scan', on: true, level: 1, col: SCAN.lbc });
+  try {
+    await nextFrame(); await sleep(reduce ? 0 : 450);         // beri animasi waktu menyala sebelum komputasi sinkron
+    if (!L.kp) { L.kp = lib.generateKeyPair(); renderPub(); }
+    const last = L.blocks[L.blocks.length - 1], h = L.blocks.length + 1, ts = Date.now(), prev = last ? last.bh : ZERO;
+    key = lib.sha256Hex(h + '|' + ts + '|' + text);
+    const value = JSON.stringify({ t: text, ts, pub: L.kp.publicKey });
+    const root = L.trie.putSync(key, value);                   // ← SuperLBC: MerklePatriciaTrie.putSync
+    const b = { h, ts, key, root, prev, sig: '', pub: L.kp.publicKey, bh: '' };
+    b.sig = lib.bytesToHex(lib.schnorrSign(L.kp.privateKey, blockMsg(b)));   // ← SuperLBC: schnorrSign (BIP-340)
+    b.bh = lib.sha256Hex(blockMsg(b) + '|' + b.sig);
+    const sigOk = lib.schnorrVerify(b.sig, blockMsg(b), b.pub);
+    const proof = L.trie.getProof(key), pv = lib.verifyMPTProof(root, proof);
+    const proofOk = pv.valid && pv.found && new TextDecoder().decode(pv.value) === value;
+    if (!sigOk || !proofOk) throw new Error('verifikasi internal gagal (sig=' + sigOk + ', proof=' + proofOk + ')');
+    L.blocks.push(b); lbcPersist();
+    const ms = Math.round(performance.now() - T0);
+    await sleep(reduce ? 0 : Math.max(0, 1500 - ms));
+    fxStop(true); avSig({ type: 'scan', on: false }); avSig({ type: 'ping' });
+    showBlock(b, { sig: sigOk, proof: proofOk, depth: proof.steps.length, ms }, true);
+    renderLedger(); setMsg(lmsg, 'Blok #' + h + ' tersegel & tersimpan.', 'ok'); lin.value = ''; lin.dispatchEvent(new Event('input'));
+  } catch (e) {
+    if (key) { try { L.trie.delete(key); } catch (x) {} }     // rollback: trie tidak boleh menyimpan entri tanpa blok
+    fxStop(false); avSig({ type: 'scan', on: false }); avSig({ type: 'glitch', level: .9, ms: 900 });
+    setMsg(lmsg, 'Gagal: ' + (e && e.message || e), 'bad');
+  } finally { L.busy = false; sealBtn.disabled = false; }
+}
+sealBtn.addEventListener('click', seal);
+lin.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); seal(); } });
+
+$('#nxd-newkey').addEventListener('click', () => {
+  const lib = LBC(); if (!lib) return; if (L.kp && !confirm('Buat kunci baru? Kunci lama hilang dari memori (blok lama tetap valid).')) return;
+  L.kp = lib.generateKeyPair(); renderPub(); setMsg(lmsg, 'Kunci baru dibuat (hanya di memori).', 'ok');
+});
+$('#nxd-impkey').addEventListener('click', () => {
+  const lib = LBC(); if (!lib) return; const v = (prompt('Tempel private key (64 karakter hex):') || '').trim().toLowerCase();
+  if (!v) return; if (!HEX64.test(v)) return setMsg(lmsg, 'Format harus 64 karakter hex.', 'bad');
+  try { L.kp = { privateKey: v, publicKey: lib.bytesToHex(lib.schnorrGetPublicKey(v)) }; renderPub(); setMsg(lmsg, 'Kunci diimpor (hanya di memori).', 'ok'); }
+  catch (e) { setMsg(lmsg, 'Private key tidak valid: ' + e.message, 'bad'); }
+});
+$('#nxd-cppub').addEventListener('click', () => L.kp ? copy(L.kp.publicKey, 'Public key') : toast('Belum ada kunci', true));
+$('#nxd-exppriv').addEventListener('click', () => {
+  if (!L.kp) return toast('Belum ada kunci', true);
+  if (confirm('Salin PRIVATE KEY ke clipboard?\nSiapa pun yang memilikinya dapat menandatangani atas nama Anda.')) copy(L.kp.privateKey, 'Private key');
+});
+$('#nxd-vchain').addEventListener('click', () => {
+  if (!lbcInit()) return; const lib = LBC(), issues = []; let prev = ZERO;
+  L.blocks.forEach(b => {
+    if (b.prev !== prev) issues.push('#' + b.h + ': tautan prev putus');
+    if (!lib.schnorrVerify(b.sig, blockMsg(b), b.pub)) issues.push('#' + b.h + ': signature tidak valid');
+    if (lib.sha256Hex(blockMsg(b) + '|' + b.sig) !== b.bh) issues.push('#' + b.h + ': block hash tidak cocok');
+    prev = b.bh;
+  });
+  if (L.blocks.length && L.blocks[L.blocks.length - 1].root !== L.trie.rootHashHex) issues.push('root blok terakhir ≠ root trie');
+  L.blocks.forEach(b => { const pv = lib.verifyMPTProof(L.trie.rootHashHex, L.trie.getProof(b.key)); if (!(pv.valid && pv.found)) issues.push('#' + b.h + ': bukti Merkle gagal'); });
+  setMsg(lmsg, issues.length ? '✗ ' + issues.length + ' masalah:\n' + issues.slice(0, 5).join('\n') : '✓ CHAIN VALID · ' + L.blocks.length + ' blok · signature, tautan, root & bukti Merkle konsisten.', issues.length ? 'bad' : 'ok');
+});
+$('#nxd-lst').addEventListener('click', async () => {
+  const lib = LBC(); if (!lib) return setMsg(lmsg, 'SuperLBC.js belum termuat.', 'bad'); setMsg(lmsg, 'Menjalankan self-test (termasuk vektor BIP-340)…');
+  try { const r = await lib.selfTest(), f = r.results.filter(x => !x.ok); setMsg(lmsg, r.ok ? '✓ Self-test lulus ' + r.results.length + '/' + r.results.length : '✗ Gagal: ' + f.map(x => x.name).join('; '), r.ok ? 'ok' : 'bad'); }
+  catch (e) { setMsg(lmsg, 'Self-test error: ' + e.message, 'bad'); }
+});
+$('#nxd-lreset').addEventListener('click', () => {
+  if (!confirm('Hapus seluruh ledger dari perangkat ini? Tindakan ini tidak dapat dibatalkan.')) return;
+  try { localStorage.removeItem(LKEY); } catch (e) {} L.ready = false; L.blocks = []; shown = null; $('#nxd-lbc-res').hidden = true; lbcInit(); renderLedger(); setMsg(lmsg, 'Ledger direset.');
+});
+
+/* ═════════════════════════ EADI VAULT ═════════════════════════ */
+const E = { file: null, url: null, img: null, resUrl: null, resImg: null, opts: null, busy: false };
+const drop = $('#nxd-drop'), fileIn = $('#nxd-file'), etxt = $('#nxd-e-text'), ekey = $('#nxd-e-key'), ered = $('#nxd-e-red');
+const embBtn = $('#nxd-embed'), extBtn = $('#nxd-extract'), emsg = $('#nxd-emsg');
+const eopts = () => { const o = { redundancy: +ered.value }; if (ekey.value) o.key = ekey.value; return o; };
+const PAYLOAD_HDR = 72;
+function eadiOnOpen() { missingBanner($('#nxd-eadi-ban'), EADI, 'SuperEADI.js'); updateCap(); }
+function loadImage(url) { return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('Gambar tidak dapat didekode')); im.src = url; }); }
+function toBlob(cv) { return new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('Gagal membuat PNG')), 'image/png')); }
+async function takeFile(f) {
+  if (!f) return;
+  if (!/^image\//.test(f.type)) return setMsg(emsg, 'Berkas harus gambar.', 'bad');
+  if (f.size > 40 * 1024 * 1024) return setMsg(emsg, 'Gambar terlalu besar (maks 40 MB).', 'bad');
+  const url = URL.createObjectURL(f);
+  try {
+    const im = await loadImage(url);
+    if (E.url) URL.revokeObjectURL(E.url);
+    E.file = f; E.url = url; E.img = im; $('#nxd-e-res').hidden = true; clearResult();
+    const inEl = $('#nxd-drop-in'); inEl.textContent = '';
+    const th = document.createElement('img'); th.src = url; th.alt = 'Pratinjau gambar pembawa';
+    const t = document.createElement('div'); t.className = 's'; t.textContent = f.name + ' · ' + im.naturalWidth + '×' + im.naturalHeight + ' · ketuk untuk mengganti';
+    inEl.append(th, t); $('#nxd-e-info').textContent = im.naturalWidth + '×' + im.naturalHeight;
+    embBtn.disabled = false; extBtn.disabled = false; setMsg(emsg, ''); updateCap();
+  } catch (e) { URL.revokeObjectURL(url); setMsg(emsg, e.message, 'bad'); }
+}
+fileIn.addEventListener('change', () => { takeFile(fileIn.files[0]); fileIn.value = ''; });
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => takeFile(e.dataTransfer && e.dataTransfer.files[0]));
+let capT = 0;
+function updateCap() {
+  clearTimeout(capT); capT = setTimeout(() => {
+    const lib = EADI(), cap = $('#nxd-e-cap'), m = $('#nxd-meter');
+    if (!lib || !E.img) { cap.textContent = 'kapasitas: —'; m.firstElementChild.style.width = '0'; return; }
+    try {
+      const c = lib.capacity(E.img, eopts()), need = PAYLOAD_HDR + new TextEncoder().encode(etxt.value).length * 8, pct = Math.min(100, need / c * 100);
+      cap.textContent = need + ' / ' + c + ' bit'; m.classList.toggle('over', need > c); m.firstElementChild.style.width = Math.max(2, pct) + '%';
+    } catch (e) { cap.textContent = 'kapasitas: ' + e.message; }
+  }, 200);
+}
+[etxt, ekey, ered].forEach(n => n.addEventListener('input', updateCap)); ered.addEventListener('change', updateCap);
+
+function clearResult() { if (E.resUrl) { URL.revokeObjectURL(E.resUrl); E.resUrl = null; } E.resImg = null; $('#nxd-diff').hidden = true; $('#nxd-cmp').hidden = false; }
+function verdict(p) {
+  if (!isFinite(p)) return ['∞', 'Tidak ada perubahan piksel.', 1];
+  if (p >= 45) return [p.toFixed(2), 'Selisih di bawah ambang persepsi mata — tak terbedakan.', 1];
+  if (p >= 40) return [p.toFixed(2), 'Nyaris tak terlihat secara visual.', .85];
+  if (p >= 35) return [p.toFixed(2), 'Kualitas baik; perubahan sangat halus.', .65];
+  if (p >= 30) return [p.toFixed(2), 'Perubahan tipis mungkin terlihat di area datar. Pertimbangkan redundansi lebih tinggi pada gambar besar.', .45];
+  return [p.toFixed(2), 'Perubahan dapat terlihat. Gunakan gambar lebih besar / pesan lebih pendek.', .25];
+}
+async function embed() {
+  if (E.busy) return;
+  const lib = EADI(); if (!lib) return setMsg(emsg, 'SuperEADI.js belum termuat.', 'bad');
+  const text = etxt.value; if (!text) return toast('Isi teks rahasia dulu', true); if (!E.img) return toast('Pilih gambar dulu', true);
+  E.busy = true; embBtn.disabled = true; setMsg(emsg, 'Menanam payload di domain DCT…');
+  const T0 = performance.now(), opts = eopts(); fxStart('eadi'); avSig({ type: 'scan', on: true, level: 1, col: SCAN.eadi });
+  try {
+    await nextFrame(); await sleep(reduce ? 0 : 400);
+    const canvas = lib.embedText(E.img, text, opts);                // ← SuperEADI: embedText
+    const rep = canvas.nexusReport, blob = await toBlob(canvas), url = URL.createObjectURL(blob);
+    const back = await loadImage(url);                              // verifikasi dari PNG yang benar-benar akan diunduh
+    const ex = lib.extractText(back, opts), verified = !!(ex.ok && ex.text === text);
+    clearResult(); E.resUrl = url; E.resImg = back; E.opts = opts;
+    const ms = Math.round(performance.now() - T0); await sleep(reduce ? 0 : Math.max(0, 1500 - ms));
+    fxStop(true); avSig({ type: 'scan', on: false }); avSig({ type: 'ping' });
+    renderEadiResult(rep, verified, ex, blob, ms);
+    setMsg(emsg, verified ? '✓ Selesai. Pesan terverifikasi dapat diekstrak kembali dari PNG hasil.' : '⚠ Tertanam, tetapi verifikasi balik GAGAL: ' + (ex.reason || 'teks tidak cocok'), verified ? 'ok' : 'bad');
+  } catch (e) {
+    fxStop(false); avSig({ type: 'scan', on: false }); avSig({ type: 'glitch', level: .9, ms: 900 }); setMsg(emsg, 'Gagal: ' + (e && e.message || e), 'bad');
+  } finally { E.busy = false; embBtn.disabled = !E.img; }
+}
+function renderEadiResult(rep, verified, ex, blob, ms) {
+  $('#nxd-e-res').hidden = false;
+  const cmp = $('#nxd-cmp'); cmp.style.aspectRatio = E.img.naturalWidth + ' / ' + E.img.naturalHeight; cmp.style.setProperty('--p', '50%'); $('#nxd-cr').value = 50;
+  $('#nxd-ca').src = E.url; $('#nxd-cb').src = E.resUrl;
+  const v = verdict(rep.psnr), rmse = isFinite(rep.psnr) ? 255 / Math.pow(10, rep.psnr / 20) : 0;
+  $('#nxd-ps-v').textContent = v[0]; $('#nxd-ps-t').textContent = v[1] + ' (PSNR mengukur selisih terhadap gambar asli; bukan "identik bit-per-bit".)';
+  $('#nxd-ps-bar').style.width = Math.round(v[2] * 100) + '%';
+  const st = $('#nxd-stats'); st.textContent = '';
+  [['BIT TERTANAM', rep.bits], ['KAPASITAS', Math.round(rep.bits / rep.capacity * 100) + '%'], ['RMSE', rmse.toFixed(2) + '/255'], ['DELTA', rep.delta], ['REDUNDANSI', rep.redundancy + '×'], ['BLOK LEMAH', rep.weakBlocks]]
+    .forEach(p => { const d = document.createElement('div'), b = document.createElement('b'), s = document.createElement('span'); b.textContent = p[0]; s.textContent = p[1]; d.append(b, s); st.appendChild(d); });
+  const ch = $('#nxd-e-chips'); ch.textContent = '';
+  ch.append(chip(verified ? 'ROUND-TRIP ✓ PESAN TERBACA' : 'ROUND-TRIP ✗', verified ? '' : 'bad'), chip(ex.ok ? 'CRC-32 ✓' : 'CRC-32 ✗', ex.ok ? '' : 'bad'), chip('PNG ' + (blob.size / 1024).toFixed(0) + ' KB', 'info'), chip(ms + ' ms', 'info'));
+  const base = (E.file.name || 'gambar').replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '_').slice(0, 60) || 'gambar';
+  const dl = $('#nxd-dl'); dl.href = E.resUrl; dl.download = base + '.nexus.png';
+}
+embBtn.addEventListener('click', embed);
+extBtn.addEventListener('click', () => {
+  const lib = EADI(); if (!lib || !E.img) return;
+  try {
+    const r = lib.extractText(E.img, eopts());
+    if (r.ok) { setMsg(emsg, '✓ Pesan ditemukan (' + r.length + ' byte, CRC OK):\n' + r.text, 'ok'); }
+    else setMsg(emsg, '✗ ' + (r.reason || 'Tidak ditemukan') + '\nPeriksa kunci sebar & redundansi — harus sama dengan saat embed.', 'bad');
+  } catch (e) { setMsg(emsg, 'Gagal ekstrak: ' + e.message, 'bad'); }
+});
+$('#nxd-est').addEventListener('click', () => {
+  const lib = EADI(); if (!lib) return setMsg(emsg, 'SuperEADI.js belum termuat.', 'bad');
+  try { const r = lib.selfTest(), f = r.results.filter(x => !x.ok); setMsg(emsg, r.ok ? '✓ Self-test lulus ' + r.results.length + '/' + r.results.length : '✗ Gagal: ' + f.map(x => x.name).join('; '), r.ok ? 'ok' : 'bad'); }
+  catch (e) { setMsg(emsg, 'Self-test error: ' + e.message, 'bad'); }
+});
+const cr = $('#nxd-cr'); cr.addEventListener('input', () => $('#nxd-cmp').style.setProperty('--p', cr.value + '%'));
+$('#nxd-difft').addEventListener('click', () => {
+  const dc = $('#nxd-diff'), cmp = $('#nxd-cmp');
+  if (!dc.hidden) { dc.hidden = true; cmp.hidden = false; return; }
+  if (!E.img || !E.resImg) return;
+  try {
+    const rd = im => { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(im, 0, 0); return x.getImageData(0, 0, c.width, c.height); };
+    const a = rd(E.img), b = rd(E.resImg); dc.width = a.width; dc.height = a.height;
+    const out = new ImageData(a.width, a.height), A = a.data, B = b.data, O = out.data;
+    for (let i = 0; i < A.length; i += 4) {
+      const d = Math.min(255, Math.max(Math.abs(A[i] - B[i]), Math.abs(A[i + 1] - B[i + 1]), Math.abs(A[i + 2] - B[i + 2])) * 12);
+      O[i] = d * .25; O[i + 1] = d; O[i + 2] = 40 + d * .8; O[i + 3] = 255;
+    }
+    dc.getContext('2d').putImageData(out, 0, 0); dc.hidden = false; cmp.hidden = true;
+  } catch (e) { setMsg(emsg, 'Peta selisih gagal: ' + e.message, 'bad'); }
+});
+
+/* integrasi ringan: jika modul tidak termuat, beri tahu di console (UI tetap aman) */
+window.addEventListener('load', () => {
+  if (!LBC()) console.warn('[NEXUS DECK] window.NexusLBC tidak ditemukan — periksa SuperLBC.js');
+  if (!EADI()) console.warn('[NEXUS DECK] window.NexusEADI tidak ditemukan — periksa SuperEADI.js');
+});
+window.NexusDeck = { open: setTab, version: '1.0.0' };
+} catch (err) { console.warn('[NEXUS DECK] gagal dimuat:', err); }
+})();
+</script>
+
 </body>
 </html>
