@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>NexusPharma · Lab In-Silico</title>
+<style>
+:root{--bg:#040c13;--pn:#0a1822;--pn2:#0e2230;--ln:#18384a;--tx:#d8f2f6;--mu:#7da4b2;--cy:#2be0cf;--vi:#9585ff;--am:#ffb454;--rd:#ff5d73;--gn:#5dff9c;--f:ui-sans-serif,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;--m:ui-monospace,"Cascadia Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,#0f3040 0,transparent 60%),var(--bg);color:var(--tx);font:14px/1.5 var(--f);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+svg.i{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.app{display:grid;grid-template-columns:76px 1fr;min-height:100%}
+nav{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px;padding:14px 8px;border-right:1px solid var(--ln);background:#06121a}
+.logo{display:grid;place-items:center;height:48px;color:var(--cy)}.logo svg{width:30px;height:30px}
+nav button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px;font:11px var(--f);color:var(--mu);background:none;border:1px solid transparent;border-radius:10px;cursor:pointer}
+nav button:hover{color:var(--tx)}nav button[aria-selected=true]{color:var(--cy);background:#0c2530;border-color:#1c4a5c;box-shadow:0 0 18px #2be0cf22}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--cy);outline-offset:2px}
+main{padding:20px 22px 40px;max-width:1280px;width:100%}
+h1{margin:0;font-size:22px;letter-spacing:.2px}h2{margin:0 0 10px;font-size:15px;color:var(--cy);font-weight:600}
+.sub{color:var(--mu);margin:2px 0 18px}
+section{display:none}section.on{display:block}
+.g{display:grid;gap:14px}.g2{grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}.g4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.c{background:linear-gradient(180deg,var(--pn2),var(--pn));border:1px solid var(--ln);border-radius:14px;padding:16px;position:relative}
+.t{padding:12px 14px}.t b{display:block;font:600 22px var(--m);color:var(--tx);margin-top:2px;word-break:break-all}.t span{color:var(--mu);font-size:12px}
+.ok{color:var(--gn)!important}.wn{color:var(--am)!important}.bd{color:var(--rd)!important}
+label{display:block;font-size:12px;color:var(--mu);margin:0 0 3px}
+input,select,textarea{width:100%;background:#061118;color:var(--tx);border:1px solid var(--ln);border-radius:8px;padding:8px 10px;font:13px var(--m)}
+textarea{min-height:120px;resize:vertical}
+.fr{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.b{display:inline-flex;align-items:center;gap:7px;background:#0d3340;color:var(--cy);border:1px solid #1f5a6c;border-radius:9px;padding:8px 14px;font:600 13px var(--f);cursor:pointer}
+.b:hover{background:#114556}.b.p{background:var(--cy);color:#032026;border-color:var(--cy)}.b.g2b{color:var(--mu);background:none}
+.chip{display:inline-block;padding:2px 9px;border-radius:99px;border:1px solid var(--ln);font-size:12px;margin:2px 4px 2px 0;color:var(--mu)}
+.chip.y{color:var(--gn);border-color:#1e6b46}.chip.n{color:var(--rd);border-color:#6b2433}
+canvas{width:100%;height:190px;display:block;border-radius:10px;background:#050f16;border:1px solid var(--ln)}
+canvas.tall{height:300px;cursor:grab;touch-action:none}
+.gauge{display:flex;align-items:center;gap:16px;flex-wrap:wrap}.gauge svg{width:120px;height:120px}
+.bar{height:7px;background:#06121a;border-radius:9px;overflow:hidden;margin:3px 0 9px}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--vi),var(--cy))}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:7px 8px;border-bottom:1px solid var(--ln);text-align:left}th{color:var(--mu);font-weight:500}
+.sc{overflow-x:auto}.mono{font-family:var(--m)}
+.err{background:#3a1019;border:1px solid #7a2436;color:#ffd0d6;padding:10px 14px;border-radius:10px;margin:0 0 14px;display:none}
+.log{max-height:340px;overflow:auto;font:12px var(--m)}.log div{padding:3px 0;border-bottom:1px dashed #12303f}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#0d3340;border:1px solid var(--cy);padding:9px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:9}#toast.s{opacity:1}
+@media(max-width:700px){.app{grid-template-columns:1fr}nav{position:fixed;bottom:0;left:0;right:0;top:auto;height:auto;flex-direction:row;justify-content:space-around;z-index:5;border:0;border-top:1px solid var(--ln);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}.logo{display:none}nav button{flex:1}main{padding:16px 14px 100px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-act" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+<symbol id="i-pill" viewBox="0 0 24 24"><path d="M10.5 3.5a5 5 0 0 1 7 7l-7 7a5 5 0 0 1-7-7z"/><path d="M8 8l8 8"/></symbol>
+<symbol id="i-tgt" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+<symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5.5 10a1.5 1.5 0 0 0 1.3 2h12.4a1.5 1.5 0 0 0 1.3-2L14 9V3"/><path d="M7.5 15h9"/></symbol>
+<symbol id="i-lay" viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></symbol>
+<symbol id="i-shd" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></symbol>
+<symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></symbol>
+<symbol id="i-add" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-del" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-hex" viewBox="0 0 24 24"><path d="M12 2l8.5 5v10L12 22l-8.5-5V7z"/><path d="M12 8l4 2.3v4.4L12 17l-4-2.3v-4.4z"/></symbol>
+</defs></svg>
+<div class="app">
+<nav role="tablist" aria-label="Menu">
+<div class="logo"><svg class="i"><use href="#i-hex"/></svg></div>
+<button role="tab" data-t="mon" aria-selected="true"><svg class="i"><use href="#i-act"/></svg>Monitor</button>
+<button role="tab" data-t="drug" aria-selected="false"><svg class="i"><use href="#i-pill"/></svg>Profil obat</button>
+<button role="tab" data-t="dock" aria-selected="false"><svg class="i"><use href="#i-tgt"/></svg>Docking</button>
+<button role="tab" data-t="aff" aria-selected="false"><svg class="i"><use href="#i-flask"/></svg>Afinitas</button>
+<button role="tab" data-t="lib" aria-selected="false"><svg class="i"><use href="#i-lay"/></svg>Pustaka</button>
+<button role="tab" data-t="tst" aria-selected="false"><svg class="i"><use href="#i-shd"/></svg>Uji</button>
+</nav>
+<main>
+<h1>NexusPharma · Lab In-Silico</h1>
+<p class="sub">Penemuan obat di browser: profil kemiripan obat, docking soft-core, afinitas, dan pustaka kandidat. Prototipe riset, bukan pengganti uji lab.</p>
+<div id="err" class="err" role="alert"></div>
+
+<section id="t-mon" class="on"><div class="g g4" id="tiles"></div>
+<div class="g g2" style="margin-top:14px">
+<div class="c"><h2>Latensi mesin (ms per docking uji)</h2><canvas id="cLat"></canvas></div>
+<div class="c"><h2>Frame per detik</h2><canvas id="cFps"></canvas></div></div>
+<div class="c" style="margin-top:14px"><h2>Konstanta fisika mesin</h2><div id="consts" class="mono"></div></div></section>
+
+<section id="t-drug"><div class="g g2">
+<div class="c"><h2>Parameter molekul</h2>
+<div class="row" style="margin:0 0 12px" id="presets"></div>
+<div class="fr">
+<div><label for="mw">MW (Da)</label><input id="mw" type="number" step="any" value="340"></div>
+<div><label for="lp">logP</label><input id="lp" type="number" step="any" value="2.1"></div>
+<div><label for="hbd">Donor H</label><input id="hbd" type="number" step="1" value="2"></div>
+<div><label for="hba">Akseptor H</label><input id="hba" type="number" step="1" value="5"></div>
+<div><label for="rb">Ikatan rotasi</label><input id="rb" type="number" step="1" value="6"></div>
+<div><label for="psa">PSA (Å²)</label><input id="psa" type="number" step="any" value="95"></div>
+<div><label for="ha">Atom berat</label><input id="ha" type="number" step="1" value="24"></div>
+<div><label for="pact">pAktivitas</label><input id="pact" type="number" step="any" value="8"></div>
+<div><label for="pka">pKa</label><input id="pka" type="number" step="any" placeholder="opsional"></div>
+<div><label for="ion">Tipe ion</label><select id="ion"><option value="">—</option><option value="acid">asam</option><option value="base">basa</option></select></div>
+<div><label for="ph">pH</label><input id="ph" type="number" step="any" value="7.4"></div></div>
+<div class="row"><button class="b p" id="runDrug"><svg class="i"><use href="#i-play"/></svg>Analisis</button></div></div>
+<div class="c" id="drugOut"><h2>Hasil</h2><p class="sub">Isi parameter lalu tekan Analisis.</p></div></div></section>
+
+<section id="t-dock"><div class="g g2">
+<div class="c"><h2>Atom ligan</h2><label for="lig">Per baris: x y z muatan [ε σ donor akseptor]</label><textarea id="lig" spellcheck="false"></textarea>
+<h2 style="margin-top:12px">Atom protein</h2><textarea id="pro" spellcheck="false"></textarea>
+<div class="fr" style="margin-top:10px">
+<div><label for="die">Dielektrik</label><input id="die" type="number" step="any" value="4"></div>
+<div><label for="cut">Cutoff kontak (Å)</label><input id="cut" type="number" step="any" value="4.5"></div></div>
+<div class="row"><label><input type="checkbox" id="soft" checked style="width:auto"> soft-core</label>
+<label><input type="checkbox" id="hb" checked style="width:auto"> ikatan hidrogen</label>
+<label><input type="checkbox" id="dd" style="width:auto"> dielektrik bergantung jarak</label></div>
+<div class="row"><button class="b p" id="runDock"><svg class="i"><use href="#i-play"/></svg>Jalankan docking</button><button class="b g2b" id="dockEx">Contoh</button></div>
+<div id="dockMsg" class="sub" style="margin:8px 0 0"></div></div>
+<div class="c"><h2>Pandangan 3D (seret untuk memutar)</h2><canvas id="view" class="tall"></canvas><div class="row" style="margin-top:8px"><span class="chip y">ligan</span><span class="chip" style="color:var(--vi)">protein</span><span class="chip">garis = kontak</span></div></div></div>
+<div class="g g4" id="dockTiles" style="margin-top:14px"></div>
+<div class="c" style="margin-top:14px"><h2>Kurva energi pasangan Lennard-Jones</h2>
+<div class="fr"><div><label for="ce">ε (kcal/mol)</label><input id="ce" type="number" step="any" value="0.15"></div><div><label for="cs">σ (Å)</label><input id="cs" type="number" step="any" value="3.5"></div>
+<div><label for="cq1">q1</label><input id="cq1" type="number" step="any" value="0.4"></div><div><label for="cq2">q2</label><input id="cq2" type="number" step="any" value="-0.4"></div></div>
+<canvas id="cCurve" style="margin-top:10px"></canvas></div></section>
+
+<section id="t-aff"><div class="g g2">
+<div class="c"><h2>Kd ⇄ ΔG</h2><div class="fr"><div><label for="kd">Kd (nM)</label><input id="kd" type="number" step="any" value="10"></div><div><label for="dgIn">ΔG (kcal/mol)</label><input id="dgIn" type="number" step="any" value="-10.9"></div><div><label for="tk">Suhu (K)</label><input id="tk" type="number" value="298.15"></div></div>
+<div class="row"><button class="b" id="bKd">Kd → ΔG</button><button class="b" id="bDg">ΔG → Ki</button></div><p id="oKd" class="mono"></p></div>
+<div class="c"><h2>Cheng–Prusoff</h2><div class="fr"><div><label for="ic">IC50</label><input id="ic" type="number" step="any" value="100"></div><div><label for="sc">[S]</label><input id="sc" type="number" step="any" value="5"></div><div><label for="km">Km</label><input id="km" type="number" step="any" value="5"></div></div>
+<div class="row"><button class="b" id="bCp">Hitung Ki</button></div><p id="oCp" class="mono"></p></div>
+<div class="c"><h2>logD (Henderson–Hasselbalch)</h2><div class="fr"><div><label for="dl">logP</label><input id="dl" type="number" step="any" value="3"></div><div><label for="dk">pKa</label><input id="dk" type="number" step="any" value="4.4"></div><div><label for="dh">pH</label><input id="dh" type="number" step="any" value="7.4"></div><div><label for="dt">Tipe</label><select id="dt"><option value="acid">asam</option><option value="base">basa</option></select></div></div>
+<div class="row"><button class="b" id="bLd">Hitung logD</button></div><p id="oLd" class="mono"></p></div>
+<div class="c"><h2>Efisiensi ligan</h2><div class="fr"><div><label for="ea">pAktivitas</label><input id="ea" type="number" step="any" value="9"></div><div><label for="eh">Atom berat</label><input id="eh" type="number" value="30"></div><div><label for="em">MW</label><input id="em" type="number" value="400"></div><div><label for="ep">PSA</label><input id="ep" type="number" value="80"></div><div><label for="el">logP</label><input id="el" type="number" step="any" value="3"></div></div>
+<div class="row"><button class="b" id="bLe">Hitung LE · BEI · SEI · LLE</button></div><p id="oLe" class="mono"></p></div></div></section>
+
+<section id="t-lib"><div class="c"><h2>Tambah kandidat</h2><div class="fr">
+<div><label for="ln">Nama</label><input id="ln" value="Kandidat baru"></div><div><label for="lmw">MW</label><input id="lmw" type="number" step="any"></div><div><label for="llp">logP</label><input id="llp" type="number" step="any"></div><div><label for="lhd">HBD</label><input id="lhd" type="number"></div><div><label for="lha">HBA</label><input id="lha" type="number"></div><div><label for="lrb">RotB</label><input id="lrb" type="number"></div><div><label for="lps">PSA</label><input id="lps" type="number" step="any"></div></div>
+<div class="row"><button class="b p" id="lAdd"><svg class="i"><use href="#i-add"/></svg>Tambah</button><button class="b" id="lCsv"><svg class="i"><use href="#i-dl"/></svg>CSV</button><button class="b" id="lJson"><svg class="i"><use href="#i-dl"/></svg>JSON</button><button class="b g2b" id="lReset">Kembalikan contoh</button></div></div>
+<div class="c sc" style="margin-top:14px"><h2>Peringkat (skor kemiripan obat)</h2><table><thead><tr><th>#</th><th>Nama</th><th>Skor</th><th>Status</th><th>Lipinski</th><th>QED-like</th><th></th></tr></thead><tbody id="lBody"></tbody></table></div></section>
+
+<section id="t-tst"><div class="c"><h2>Uji mandiri mesin</h2><div class="row" style="margin:0 0 10px"><button class="b p" id="runTest"><svg class="i"><use href="#i-play"/></svg>Jalankan uji</button><span id="tSum" class="mono"></span></div><div id="tLog" class="log"></div></div></section>
+</main></div><div id="toast" role="status"></div>
+<script src="NexusPharma.js"></script>
+<script>
+(()=>{'use strict';
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const f=(v,d=2)=>Number.isFinite(v)?(+v).toFixed(d):'—';
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=id=>{const v=$('#'+id).value;return v===''?NaN:parseFloat(v)};
+const cls=s=>/LULUS|^FAVORABLE|true/.test(s)?'ok':/MARGINAL|MODERATELY|WEAK/.test(s)?'wn':'bd';
+const showErr=m=>{const e=$('#err');e.textContent=m;e.style.display='block'};
+const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('s');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('s'),2200)};
+window.addEventListener('error',e=>showErr('Kesalahan: '+e.message));
+window.addEventListener('unhandledrejection',e=>showErr('Kesalahan: '+(e.reason&&e.reason.message||e.reason)));
+const P=window.NexusPharma;
+if(!P){showErr('NexusPharma.js tidak ditemukan. Letakkan NexusPharma.js di folder yang sama dengan file HTML ini, lalu muat ulang.');return}
+const tile=(l,v,c='')=>`<div class="c t"><span>${l}</span><b class="${c}">${v}</b></div>`;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+function fit(c){const d=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;if(c.width!==Math.round(w*d)||c.height!==Math.round(h*d)){c.width=Math.round(w*d);c.height=Math.round(h*d)}const g=c.getContext('2d');g.setTransform(d,0,0,d,0,0);return{g,w,h}}
+function line(g,pts,col,w,h,lo,hi,pad=8){g.beginPath();pts.forEach((v,i)=>{const x=pad+(w-2*pad)*i/Math.max(1,pts.length-1),y=h-pad-(h-2*pad)*(v-lo)/((hi-lo)||1);i?g.lineTo(x,y):g.moveTo(x,y)});g.strokeStyle=col;g.lineWidth=2;g.stroke()}
+function grid(g,w,h){g.strokeStyle='#12303f';g.lineWidth=1;for(let i=1;i<5;i++){g.beginPath();g.moveTo(0,h*i/5);g.lineTo(w,h*i/5);g.stroke()}}
+function spark(c,arr,col){const{g,w,h}=fit(c);g.clearRect(0,0,w,h);grid(g,w,h);if(arr.length<2)return;const hi=Math.max(...arr)*1.2||1;line(g,arr,col,w,h,0,hi);g.fillStyle='#7da4b2';g.font='11px ui-monospace,monospace';g.fillText('maks '+f(hi/1.2,1),8,14)}
+
+/* ---------- tab ---------- */
+const tabs=$$('nav [role=tab]');let cur='mon';
+function go(t){cur=t;tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));$$('section').forEach(s=>s.classList.toggle('on',s.id==='t-'+t));if(t==='dock'){drawCurve();drawView()}if(t==='mon')drawMon()}
+tabs.forEach(b=>b.onclick=()=>go(b.dataset.t));
+
+/* ---------- monitor ---------- */
+const t0=performance.now(),lat=[],fpsA=[];let frames=0,lastF=t0,fps=0,test=null,ppms=0;
+const rnd=(s=>()=>(s=(s*1664525+1013904223)>>>0)/4294967296)(7);
+const bl=Array.from({length:16},()=>({x:rnd()*8,y:rnd()*8,z:rnd()*8,charge:rnd()-.5}));
+const bp=Array.from({length:60},()=>({x:rnd()*14-3,y:rnd()*14-3,z:rnd()*14-3,charge:rnd()-.5}));
+function beat(){if(document.hidden)return;const a=performance.now();const r=P.simulateDockingAdvanced(bl,bp,{hydrogenBond:true});const ms=performance.now()-a;lat.push(ms);if(lat.length>60)lat.shift();ppms=r.pairCount/Math.max(ms,.001);tiles()}
+function runSelf(){try{test=P.selfTest(false)}catch(e){test={ok:false,passed:0,total:0,results:[{name:'selfTest melempar error',ok:false,detail:e.message}]}}return test}
+function tiles(){const avg=lat.reduce((a,b)=>a+b,0)/(lat.length||1),up=(performance.now()-t0)/1000,mem=performance.memory?f(performance.memory.usedJSHeapSize/1048576,1)+' MB':'n/a';
+$('#tiles').innerHTML=tile('Versi mesin',esc(P.version))+tile('Uji mandiri',test?`${test.passed}/${test.total}`:'…',test&&test.ok?'ok':'bd')+tile('Latensi rata-rata',f(avg,2)+' ms')+tile('Throughput',f(ppms,0)+' pasang/ms')+tile('FPS',f(fps,0),fps>=45?'ok':'wn')+tile('Waktu aktif',Math.floor(up/60)+'m '+Math.floor(up%60)+'s')+tile('Memori JS',mem)+tile('Inti CPU',navigator.hardwareConcurrency||'n/a');drawMon()}
+function drawMon(){if(cur!=='mon')return;spark($('#cLat'),lat,'#2be0cf');spark($('#cFps'),fpsA,'#9585ff')}
+$('#consts').innerHTML=Object.entries(P.constants).map(([k,v])=>`<span class="chip">${esc(k)} = ${esc(String(v))}</span>`).join('');
+setInterval(beat,1000);
+/* ---------- drug ---------- */
+const PRE={Aspirin:[180.16,1.3,1,3,3,63.6,13,5],Parasetamol:[151.16,.5,2,2,1,49.3,11,5.5],Ibuprofen:[206.28,3.5,1,2,4,37.3,15,5.2],Atorvastatin:[558.64,5.7,4,6,12,111.8,41,8]};
+$('#presets').innerHTML=Object.keys(PRE).map(k=>`<button class="b g2b" data-p="${k}">${k}</button>`).join('');
+$$('#presets button').forEach(b=>b.onclick=()=>{const v=PRE[b.dataset.p];['mw','lp','hbd','hba','rb','psa','ha','pact'].forEach((id,i)=>$('#'+id).value=v[i]);runDrug()});
+function runDrug(){const p={mw:num('mw'),logP:num('lp'),hbd:num('hbd'),hba:num('hba'),rotB:num('rb'),psa:num('psa')};
+const ha=num('ha'),pa=num('pact'),pk=num('pka'),ion=$('#ion').value,ph=Number.isFinite(num('ph'))?num('ph'):7.4;
+if(Number.isFinite(ha))p.heavyAtoms=ha;if(Number.isFinite(pa))p.pActivity=pa;if(Number.isFinite(pk)&&ion){p.pKa=pk;p.ionType=ion;p.pH=ph}
+const a=P.analyzeCandidate(p),d=a.drugLikeness,col=d.status==='LULUS'?'#5dff9c':d.status==='MARGINAL'?'#ffb454':'#ff5d73',C=2*Math.PI*52;
+const cns=P.cnsMPO({clogP:p.logP,clogD:a.logD?a.logD.logD:p.logP,mw:p.mw,tpsa:p.psa,hbd:p.hbd,pKa:ion==='base'&&Number.isFinite(pk)?pk:7});
+const ef=a.efficiency,x=a.extraFilters;
+const chip=(l,v)=>`<span class="chip ${v?'y':'n'}">${l}</span>`;
+$('#drugOut').innerHTML=`<h2>Hasil</h2><div class="gauge"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="#12303f" stroke-width="10"/><circle cx="60" cy="60" r="52" fill="none" stroke="${col}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${C*d.score/100} ${C}" transform="rotate(-90 60 60)"/><text x="60" y="66" text-anchor="middle" fill="#d8f2f6" font-size="26" font-family="ui-monospace,monospace">${d.score}</text></svg>
+<div><b class="${cls(d.status)}" style="font-size:20px">${esc(d.status)}</b><div class="sub" style="margin:2px 0">QED-like ${f(d.qedLike,3)}</div><div>${chip('Lipinski',a.lipinski.pass)}</div></div></div>
+<p style="margin:12px 0 4px"><b>Pelanggaran aturan</b></p>${d.violations.length?d.violations.map(v=>`<div class="chip n">${esc(v)}</div>`).join(''):'<span class="chip y">Tidak ada</span>'}
+${x?`<p style="margin:12px 0 4px"><b>Filter tambahan</b></p>${chip('Fragmen (Rule of 3)',x.ruleOfThree_fragment)}${chip('GSK 4/400',x.gsk_4_400_good)}${chip('Lead-like (Oprea)',x.leadLike_oprea)}${chip('Pfizer 3/75 aman',!x.pfizer_3_75_toxRisk)}`:''}
+${a.logD?`<p class="mono">logD(pH ${a.logD.pH}) = ${f(a.logD.logD,2)} · fraksi netral ${a.logD.neutralFraction.toExponential(2)}</p>`:''}
+${ef?`<p class="mono">LE ${f(ef.LE,3)} · BEI ${f(ef.BEI,1)} · SEI ${f(ef.SEI,1)} · LLE ${f(ef.LLE,2)} · ΔG ${f(ef.deltaG,2)}</p>`:''}
+${cns?`<p style="margin:12px 0 4px"><b>CNS MPO</b> <span class="${cns.desirable?'ok':'wn'} mono">${f(cns.score,2)}/6</span></p>${Object.entries(cns.parts).map(([k,v])=>`<div class="mono" style="font-size:12px">${k}</div><div class="bar"><i style="width:${v*100}%"></i></div>`).join('')}`:''}`}
+$('#runDrug').onclick=runDrug;
+/* ---------- docking ---------- */
+const EX_L='0 0 0 0.2 0.12 3.4 1 0\n1.4 0 0.2 -0.15 0.1 3.4 0 1\n2.6 1.1 0 0.1\n-1.2 1.0 0.3 -0.2 0.1 3.4 0 1';
+const EX_P='4.2 0.3 0 -0.3 0.1 3.6 0 1\n5.8 2.0 1.2 0.1\n3.9 -2.2 0.4 0.25 0.1 3.6 1 0\n6.5 -0.8 -1.6 -0.1\n2.8 2.9 -1.1 -0.2 0.1 3.6 0 1\n-3.1 -1.8 1.4 0.2';
+const sc={L:[],P:[],cut:4.5,rx:.5,ry:.6};
+function runDock(){const L=P.parseAtoms($('#lig').value),Q=P.parseAtoms($('#pro').value),m=$('#dockMsg');
+const er=[...L.errors.map(e=>'ligan baris '+e.line),...Q.errors.map(e=>'protein baris '+e.line)];m.textContent=er.length?'Baris dilewati: '+er.join(', '):'';
+sc.L=L.atoms;sc.P=Q.atoms;sc.cut=num('cut')||4.5;
+const r=P.simulateDockingAdvanced(L.atoms,Q.atoms,{dielectric:num('die'),contactCutoff:sc.cut,softCore:$('#soft').checked,hydrogenBond:$('#hb').checked,distanceDependent:$('#dd').checked});
+if(r.status==='ERROR'){$('#dockTiles').innerHTML=tile('Status','ERROR','bd')+tile('Pesan',esc(r.message),'wn');drawView();return}
+$('#dockTiles').innerHTML=tile('Status',esc(r.status),cls(r.status))+tile('Energi total',f(r.energy,3)+' kcal/mol')+tile('LJ',f(r.energyLJ,3))+tile('Coulomb',f(r.energyCoulomb,3))+tile('Ikatan H',f(r.energyHB,3))+tile('Jarak minimum',f(r.minDistance,3)+' Å')+tile('Kontak',r.contacts+' / '+r.pairCount)+tile('Ki perkiraan',r.estimatedKi_uM===null?'n/a':r.estimatedKi_uM.toExponential(2)+' µM')+tile('Efisiensi ligan',f(r.ligandEfficiency,3));drawView()}
+function drawCurve(){if(cur!=='dock')return;const c=$('#cCurve'),{g,w,h}=fit(c);g.clearRect(0,0,w,h);grid(g,w,h);
+const pts=P.ljCurve(num('ce'),num('cs'),2.5,10,120,{softCore:false,q1:num('cq1'),q2:num('cq2')});if(!pts.length)return;
+const all=pts.flatMap(p=>[p.lj,p.total]).filter(Number.isFinite),lo=Math.max(-1.5,Math.min(...all)*1.3),hi=Math.min(1.5,Math.max(0.6,lo*-.8));
+const cl=a=>a.map(v=>Math.max(lo,Math.min(hi,v)));const z=h-8-(h-16)*(0-lo)/(hi-lo);g.strokeStyle='#2c5568';g.beginPath();g.moveTo(0,z);g.lineTo(w,z);g.stroke();
+line(g,cl(pts.map(p=>p.lj)),'#2be0cf',w,h,lo,hi);line(g,cl(pts.map(p=>p.total)),'#ffb454',w,h,lo,hi);
+g.fillStyle='#7da4b2';g.font='11px ui-monospace,monospace';g.fillText('cyan: LJ · amber: LJ+Coulomb · r 2.5–10 Å · energi '+f(lo,1)+' s/d '+f(hi,1),8,14)}
+function drawView(){if(cur!=='dock')return;const c=$('#view'),{g,w,h}=fit(c);g.clearRect(0,0,w,h);const all=[...sc.L.map(a=>({a,k:0})),...sc.P.map(a=>({a,k:1}))];
+if(!all.length){g.fillStyle='#7da4b2';g.font='13px sans-serif';g.fillText('Jalankan docking untuk melihat atom.',16,28);return}
+const n=all.length,cx=all.reduce((s,o)=>s+o.a.x,0)/n,cy=all.reduce((s,o)=>s+o.a.y,0)/n,cz=all.reduce((s,o)=>s+o.a.z,0)/n;
+const R=Math.max(1,...all.map(o=>Math.hypot(o.a.x-cx,o.a.y-cy,o.a.z-cz))),S=Math.min(w,h)/(R*2.5),sy=Math.sin(sc.ry),cyy=Math.cos(sc.ry),sx=Math.sin(sc.rx),cxx=Math.cos(sc.rx);
+const pr=o=>{let x=o.a.x-cx,y=o.a.y-cy,z=o.a.z-cz,x1=x*cyy+z*sy,z1=-x*sy+z*cyy,y1=y*cxx-z1*sx,z2=y*sx+z1*cxx,k=1+z2/(R*7);return{X:w/2+x1*S*k,Y:h/2+y1*S*k,Z:z2,k:o.k,s:k,a:o.a}};
+const pp=all.map(pr);g.lineWidth=1;
+if(sc.L.length*sc.P.length<=4000){const A=pp.filter(p=>p.k===0),B=pp.filter(p=>p.k===1);for(const a of A)for(const b of B){const d=Math.hypot(a.a.x-b.a.x,a.a.y-b.a.y,a.a.z-b.a.z);if(d<sc.cut){g.strokeStyle=`rgba(255,180,84,${.5*(1-d/sc.cut)+.08})`;g.beginPath();g.moveTo(a.X,a.Y);g.lineTo(b.X,b.Y);g.stroke()}}}
+pp.sort((a,b)=>a.Z-b.Z).forEach(p=>{const r=(p.k?6:7)*p.s*Math.min(1.4,Math.max(.6,S/22));g.beginPath();g.arc(p.X,p.Y,r,0,7);g.fillStyle=p.k?'#9585ff':'#2be0cf';g.globalAlpha=.9;g.fill();g.globalAlpha=1;g.strokeStyle=p.a.charge>0?'#ff5d73':p.a.charge<0?'#5da8ff':'#335';g.lineWidth=1.5;g.stroke()})}
+(()=>{const c=$('#view');let d=null;c.addEventListener('pointerdown',e=>{d={x:e.clientX,y:e.clientY};c.setPointerCapture(e.pointerId);c.style.cursor='grabbing'});
+c.addEventListener('pointermove',e=>{if(!d)return;sc.ry+=(e.clientX-d.x)*.01;sc.rx+=(e.clientY-d.y)*.01;d={x:e.clientX,y:e.clientY};drawView()});
+const up=()=>{d=null;c.style.cursor='grab'};c.addEventListener('pointerup',up);c.addEventListener('pointercancel',up)})();
+$('#lig').value=EX_L;$('#pro').value=EX_P;
+$('#runDock').onclick=runDock;$('#dockEx').onclick=()=>{$('#lig').value=EX_L;$('#pro').value=EX_P;runDock()};
+['ce','cs','cq1','cq2'].forEach(id=>$('#'+id).oninput=drawCurve);
+/* ---------- afinitas ---------- */
+const T=()=>Number.isFinite(num('tk'))?num('tk'):298.15;
+$('#bKd').onclick=()=>{const g=P.kdToDeltaG(num('kd')*1e-9,T());$('#oKd').textContent=g===null?'Input tidak valid (Kd > 0, suhu > 0).':`ΔG = ${f(g,3)} kcal/mol`};
+$('#bDg').onclick=()=>{const r=P.estimateAffinity(num('dgIn'),T());$('#oKd').textContent=r.ki===null?'Di luar jangkauan atau input tidak valid.':`Ki = ${(r.ki*1e9).toExponential(3)} nM · pKi ${f(r.pKi,3)}`};
+$('#bCp').onclick=()=>{const k=P.chengPrusoff(num('ic'),num('sc'),num('km'));$('#oCp').textContent=k===null?'Input tidak valid (Km > 0, nilai ≥ 0).':`Ki = ${f(k,4)} (satuan sama dengan IC50)`};
+$('#bLd').onclick=()=>{const r=P.estimateLogD(num('dl'),num('dk'),num('dh'),$('#dt').value);$('#oLd').textContent=r?`logD = ${f(r.logD,3)} · fraksi netral ${r.neutralFraction.toExponential(3)}`:'Input tidak valid.'};
+$('#bLe').onclick=()=>{const r=P.ligandEfficiencyMetrics({pActivity:num('ea'),heavyAtoms:num('eh'),mw:num('em'),psa:num('ep'),logP:num('el')});$('#oLe').textContent=r?`LE ${f(r.LE,3)} · BEI ${f(r.BEI,2)} · SEI ${f(r.SEI,2)} · LLE ${f(r.LLE,2)} · LELP ${f(r.LELP,2)}`:'Input tidak valid (atom berat > 0).'};
+/* ---------- pustaka ---------- */
+const DEF=()=>Object.entries(PRE).map(([name,v])=>({name,mw:v[0],logP:v[1],hbd:v[2],hba:v[3],rotB:v[4],psa:v[5]}));
+let lib=DEF();const KEY='nexuspharma.lib.v1';
+try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(Array.isArray(s)&&s.length)lib=s.filter(x=>x&&typeof x.name==='string')}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(lib))}catch(e){}};
+function renderLib(){const r=P.screenLibrary(lib);$('#lBody').innerHTML=r.length?r.map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.name)}</td><td class="mono">${x.score}</td><td class="${cls(x.status)}">${esc(x.status)}</td><td class="${x.lipinski?'ok':'bd'}">${x.lipinski?'lulus':'gagal'}</td><td class="mono">${f(x.qedLike,3)}</td><td><button class="b g2b" data-d="${lib.findIndex(c=>c.name===x.name)}" aria-label="Hapus ${esc(x.name)}"><svg class="i"><use href="#i-del"/></svg></button></td></tr>`).join(''):'<tr><td colspan="7">Pustaka kosong. Tambahkan kandidat di atas.</td></tr>';
+$$('#lBody [data-d]').forEach(b=>b.onclick=()=>{lib.splice(+b.dataset.d,1);save();renderLib()})}
+$('#lAdd').onclick=()=>{const c={name:$('#ln').value.trim()||'Tanpa nama',mw:num('lmw'),logP:num('llp'),hbd:num('lhd'),hba:num('lha'),rotB:num('lrb'),psa:num('lps')};
+if(![c.mw,c.logP,c.hbd,c.hba,c.rotB,c.psa].every(Number.isFinite)){toast('Lengkapi semua angka dulu');return}lib.push(c);save();renderLib();toast('Ditambahkan: '+c.name)};
+$('#lReset').onclick=()=>{lib=DEF();save();renderLib()};
+function dl(name,text,type){const u=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
+$('#lJson').onclick=()=>dl('nexuspharma-pustaka.json',JSON.stringify(P.screenLibrary(lib).map(({report,...r})=>r),null,2),'application/json');
+$('#lCsv').onclick=()=>{const q=v=>'"'+String(v).replace(/"/g,'""')+'"';dl('nexuspharma-pustaka.csv','nama,skor,status,lipinski,qed_like\n'+P.screenLibrary(lib).map(x=>[q(x.name),x.score,x.status,x.lipinski,x.qedLike].join(',')).join('\n'),'text/csv')};
+/* ---------- uji ---------- */
+function showTest(){const r=test||runSelf();$('#tSum').innerHTML=`<span class="${r.ok?'ok':'bd'}">${r.passed}/${r.total} lulus</span> · v${esc(P.version)}`;$('#tLog').innerHTML=r.results.map(x=>`<div class="${x.ok?'ok':'bd'}">${x.ok?'✓':'✗'} ${esc(x.name)} ${x.ok?'':esc(x.detail||'')}</div>`).join('')}
+$('#runTest').onclick=()=>{runSelf();showTest();tiles()};
+/* ---------- init & loop ---------- */
+function loop(now){frames++;if(now-lastF>=1000){fps=frames*1000/(now-lastF);frames=0;lastF=now;fpsA.push(fps);if(fpsA.length>60)fpsA.shift()}
+if(cur==='dock'&&!reduce){sc.ry+=.004;drawView()}requestAnimationFrame(loop)}
+addEventListener('resize',()=>{drawMon();drawCurve();drawView()});
+runSelf();renderLib();showTest();beat();runDrug();runDock();requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
