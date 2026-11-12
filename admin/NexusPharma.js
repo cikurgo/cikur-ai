@@ -1,26 +1,6 @@
 /* ------------------------------------------------------------------
  * NexusPharma.js – In-Silico Drug Discovery Engine
  * Scientific-Grade Client-Side Prototype (v2.2)
- * ------------------------------------------------------------------
- * Komponen:
- *   1. Drug-likeness (Lipinski Rule of Five + Veber Rules)
- *   2. Docking energy evaluation
- *        • Lennard-Jones 12-6 (classic + distance floor)
- *        • Coulomb electrostatics dengan dielectric screening
- *
- * Batasan ilmiah (wajib dipahami):
- *   Model ini adalah potensial klasik yang sangat disederhanakan.
- *   Tidak mencakup:
- *     – sampling / optimasi pose
- *     – fleksibilitas protein
- *     – solvation (GB/SA atau eksplisit)
- *     – istilah entropi
- *     – polarisasi muatan
- *     – parameterisasi force-field atom-tipe yang akurat
- *   Energi yang dihasilkan bersifat relatif dan indikatif saja.
- *   Jangan digunakan sebagai pengganti AutoDock, Glide, GOLD,
- *   atau perangkat lunak docking profesional untuk keputusan
- *   penelitian maupun klinis.
  * ------------------------------------------------------------------ */
 
 (function (global) {
