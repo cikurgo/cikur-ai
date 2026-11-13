@@ -1336,7 +1336,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.3-titanium-nexus-future-robust initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.6-titanium-robust-render-nexuspharma initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -1430,8 +1430,13 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - Offline early-detect di guardedFetch
      - Anthropic default model stabil + xAI list expand
      - MAX_LIVE_SCENE3D 6→8 dengan notifikasi prune
+   10.0.6-titanium-robust-render-nexuspharma (Zero-Regression):
+     - Payload registry (storePayload/loadPayload) for large chart/HTML/3D data-* (no attr overflow)
+     - Event log capacity 80→160 so full self-test PASS lines remain visible
+     - Diagnostics expanded (>57 → ~75 asserts) covering render pipeline + NexusPharma golden + selfTest≥62
+     - Boot banner + APP_VERSION aligned; all prior golden values & Pharma physics unchanged
    ================================================================ */
-const APP_VERSION = '10.0.5-titanium-chart-loose-json';
+const APP_VERSION = '10.0.6-titanium-robust-render-nexuspharma';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -1440,6 +1445,48 @@ const MAX_CACHE = 30;
 const DEBOUNCE_MS = 260;
 const MAX_INPUT_CHARS = 14000;
 const MAX_LIVE_SCENE3D = 10;   // concurrent WebGL iframes — di atas ini LRU dihancurkan (visible preserved); v6.9.4: 6→8 + toast on prune
+const MAX_ATTR_PAYLOAD = 12000; // di atas ini pakai registry agar data-* tidak pecah di browser
+const __cgoPayloadReg = Object.create(null);
+let __cgoPayloadSeq = 0;
+function storePayload(s) {
+    const str = String(s == null ? '' : s);
+    if (str.length <= MAX_ATTR_PAYLOAD) {
+        try { return encodeURIComponent(str); } catch (e) { return ''; }
+    }
+    const id = 'p' + (++__cgoPayloadSeq) + '_' + (str.length.toString(36));
+    __cgoPayloadReg[id] = str;
+    // bersihkan entri lama agar tidak memory-leak (keep last ~80)
+    const keys = Object.keys(__cgoPayloadReg);
+    if (keys.length > 80) {
+        for (let i = 0; i < keys.length - 80; i++) delete __cgoPayloadReg[keys[i]];
+    }
+    return 'reg:' + id;
+}
+function loadPayload(raw) {
+    if (raw == null || raw === '') return '';
+    const s = String(raw);
+    if (s.indexOf('reg:') === 0) {
+        const id = s.slice(4);
+        return Object.prototype.hasOwnProperty.call(__cgoPayloadReg, id) ? (__cgoPayloadReg[id] || '') : '';
+    }
+    if (s.indexOf('%') === -1) {
+        if (s.indexOf('&') !== -1) {
+            try {
+                const t = document.createElement('textarea');
+                t.innerHTML = s;
+                return t.value;
+            } catch (z) { return s; }
+        }
+        return s;
+    }
+    try { return decodeURIComponent(s); } catch (e) {
+        try {
+            const t = document.createElement('textarea');
+            t.innerHTML = s;
+            return t.value;
+        } catch (z) { return s; }
+    }
+}
 
 /* ===================== ICON SYSTEM (SVG inline — tanpa emoji / glyph) ===================== */
 const ICON_PATHS = {
@@ -2177,7 +2224,7 @@ function logEvent(tag, message) {
     div.innerHTML = `<span class="ts">${ts}</span><span class="${tagClass}">[${tag}]</span> ${escapeHtml(message)}`;
     eventLogEl.appendChild(div);
     eventLogEl.scrollTop = eventLogEl.scrollHeight;
-    while (eventLogEl.children.length > 80) eventLogEl.removeChild(eventLogEl.firstChild);
+    while (eventLogEl.children.length > 160) eventLogEl.removeChild(eventLogEl.firstChild);
 }
 function escapeHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -2435,7 +2482,8 @@ function sanitizeHtml(h) { return hasPurify ? DOMPurify.sanitize(h) : escapeHtml
 function mdHtml(s, inline) { if (!hasMarked) return escapeHtml(s).replace(/\n/g, '<br>'); return sanitizeHtml(inline ? marked.parseInline(s) : marked.parse(s)); }
 function codeHtml(lang, code) { const l = (lang || '').replace(/[^a-z0-9+#-]/g, ''); return '<div class="ui-code" data-lang="' + l + '"><pre><code class="language-' + (l || 'plaintext') + '">' + escapeHtml(code) + '</code></pre></div>'; }
 function attrPayload(s) {
-    try { return encodeURIComponent(String(s == null ? '' : s)); } catch (e) { return ''; }
+    // v10.0.6: large payloads go to registry (reg:id) to avoid data-* attribute size / encode bloat crashes
+    return storePayload(s);
 }
 function readAttrPayload(el, key) {
     if (!el) return '';
@@ -2445,24 +2493,7 @@ function readAttrPayload(el, key) {
         try { raw = (el.dataset && el.dataset[key]) || ''; } catch (e) {}
     }
     if (!raw) return '';
-    // Payload baru: encodeURIComponent (ada %). Legacy: teks mentah / entity HTML.
-    if (raw.indexOf('%') === -1) {
-        if (raw.indexOf('&') !== -1) {
-            try {
-                const t = document.createElement('textarea');
-                t.innerHTML = raw;
-                return t.value;
-            } catch (z) { return raw; }
-        }
-        return raw;
-    }
-    try { return decodeURIComponent(raw); } catch (e) {
-        try {
-            const t = document.createElement('textarea');
-            t.innerHTML = raw;
-            return t.value;
-        } catch (z) { return raw; }
-    }
+    return loadPayload(raw);
 }
 function chartHtml(cfg) { return '<div class="ui-chart" data-cfg="' + attrPayload(String(cfg).trim()) + '"></div>'; }
 function htmlPreviewHtml(code) { return '<div class="ui-html" data-html="' + attrPayload(String(code).trim()) + '"></div>'; }
@@ -5038,6 +5069,46 @@ function runDiagnostics() {
     assert('Future: APP_VERSION nexus', typeof APP_VERSION === 'string' && /nexus|future|10\./.test(APP_VERSION));
     assert('Nexus Evolution (opsional): API utuh', !window.Nexus || (typeof window.Nexus.secureExec === 'function' && typeof window.Nexus.speak === 'function' && typeof window.Nexus.setHUD === 'function' && typeof window.NexusEvo === 'object'));
     try { if (window.Nexus && window.Nexus.secureExec) window.Nexus.secureExec('1 + 1', { timeoutMs: 3000 }).then(r => logEvent(r === 2 ? 'DIAG' : 'ERROR', 'Nexus sandbox 1+1 = ' + r)).catch(e => logEvent('ERROR', 'Nexus sandbox: ' + (e && e.message))); } catch (e) {}
+
+    // ---- v10.0.6 Robust Render + NexusPharma integrity (zero-regression expansion) ----
+    assert('Payload registry helpers', typeof storePayload === 'function' && typeof loadPayload === 'function');
+    assert('Payload small roundtrip', (function () {
+        const s = '{"type":"bar","data":{"labels":["A"],"datasets":[{"data":[1]}]}}';
+        const enc = storePayload(s);
+        return loadPayload(enc) === s && enc.indexOf('reg:') !== 0;
+    })());
+    assert('Payload large → registry', (function () {
+        const s = 'x'.repeat(MAX_ATTR_PAYLOAD + 50);
+        const enc = storePayload(s);
+        return enc.indexOf('reg:') === 0 && loadPayload(enc) === s;
+    })());
+    assert('chartHtml produces ui-chart', /ui-chart/.test(chartHtml('{"type":"bar"}')));
+    assert('htmlPreviewHtml produces ui-html', /ui-html/.test(htmlPreviewHtml('<p>ok</p>')));
+    assert('scene3dHtml produces ui-scene3d', /ui-scene3d/.test(scene3dHtml('// demo\nconst g = new THREE.BoxGeometry(1,1,1);')));
+    assert('looksLikeChartConfig detects bar', looksLikeChartConfig('{"type":"bar","data":{"labels":["a"],"datasets":[{"data":[1]}]}}'));
+    assert('looksLikeThreeCode detects Mesh', looksLikeThreeCode('const mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()); scene.add(mesh);'));
+    assert('isForce3d for scene3d lang', isForce3d({ lang: 'scene3d', code: 'scene.add(new THREE.Mesh())' }));
+    assert('looseJsonParse trailing comma', (function () {
+        try { const o = looseJsonParse('{ "type": "bar", "data": { "labels": ["a",], "datasets": [{ "data": [1,], },], }, }'); return o && o.type === 'bar'; } catch (e) { return false; }
+    })());
+    assert('NexusPharma engine present', typeof window.NexusPharma === 'object' && typeof window.NexusPharma.selfTest === 'function');
+    assert('NexusPharma version 3.2', window.NexusPharma && /^3\.2/.test(String(window.NexusPharma.version || '')));
+    assert('NexusPharma golden druglikeness', (function () {
+        if (!window.NexusPharma) return false;
+        const r = window.NexusPharma.evaluateDrugLikeness(340, 2.1, 2, 5, 6, 95);
+        return r && r.status === 'LULUS' && r.score === 85;
+    })());
+    assert('NexusPharma selfTest ≥62', (function () {
+        if (!window.NexusPharma) return false;
+        try {
+            const r = window.NexusPharma.selfTest(false);
+            return r && r.ok && r.total >= 62 && r.passed === r.total;
+        } catch (e) { return false; }
+    })());
+    assert('NexusPharmaLab integration', typeof window.NexusPharmaLab === 'object' && typeof window.NexusPharmaLab.run === 'function');
+    assert('__nxpFence callable', typeof window.__nxpFence === 'function');
+    assert('hydrate + buildChart + buildHtmlPreview', typeof hydrate === 'function' && typeof buildChart === 'function' && typeof buildHtmlPreview === 'function' && typeof buildScene3d === 'function');
+    assert('APP_VERSION 10.0.6 robust-render', /10\.0\.6|robust-render|nexuspharma/i.test(String(APP_VERSION)));
 
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
