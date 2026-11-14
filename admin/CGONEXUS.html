@@ -9356,17 +9356,26 @@ window.NexusDeck = { open: setTab, version: '1.0.0' };
       return '<div class="nxp-card"><div class="nxp-h"><b>NEXUSPHARMA</b><span>' + esc(op) + '</span><button type="button" class="nxp-open" data-nxp="' + id + '">Buka di Lab</button></div>' + body + '<div class="nxp-f">Prototipe riset in-silico · bukan pengganti uji lab</div></div>';
     }
     function err(m) { return '<div class="nxp-card nxp-err"><div class="nxp-h"><b>NEXUSPHARMA</b><span>galat</span></div><div class="nxp-body">' + esc(m) + '</div></div>'; }
-    window.__nxpFence = function (code) {
-      var raw = String(code || '').trim(), job;
-      try { job = raw ? JSON.parse(raw) : { op: 'selftest' }; } catch (e) { return err('Input tidak valid. Silakan gunakan perintah: profile, druglikeness, lipinski, dock, lj, affinity, screen, selftest. (JSON: ' + e.message + ')'); }
-      var list = Array.isArray(job) ? job : [job], out = '';
-      list.slice(0, 6).forEach(function (j) {
-        var op = String(j && j.op || '').toLowerCase();
-        if (!OPS[op]) { out += err('Input tidak valid. Silakan gunakan perintah: profile, druglikeness, lipinski, dock, lj, affinity, screen, selftest.' + (op ? ' (diterima: "' + op + '")' : '')); return; }
-        try { var res = OPS[op](j); out += card(op, j, res); } catch (e) { out += err(op + ': ' + (e && e.message || e)); }
-      });
-      return out;
-    };
+window.__nxpFence = function (code) {
+  var raw = String(code || '').trim(), job;
+  try { 
+    if (!raw) {
+      job = { op: 'selftest' };
+    } else {
+      // PERBAIKAN: Gunakan looseJsonParse agar tidak crash jika format JSON dari AI sedikit cacat
+      job = (typeof looseJsonParse === 'function') ? looseJsonParse(raw) : JSON.parse(raw);
+    }
+  } catch (e) { 
+    return err('Input tidak valid. Silakan gunakan perintah: profile, druglikeness, lipinski, dock, lj, affinity, screen, selftest. (JSON: ' + e.message + ')'); 
+  }
+  var list = Array.isArray(job) ? job : [job], out = '';
+  list.slice(0, 6).forEach(function (j) {
+    var op = String(j && j.op || '').toLowerCase();
+    if (!OPS[op]) { out += err('Input tidak valid. Silakan gunakan perintah: profile, druglikeness, lipinski, dock, lj, affinity, screen, selftest.' + (op ? ' (diterima: "' + op + '")' : '')); return; }
+    try { var res = OPS[op](j); out += card(op, j, res); } catch (e) { out += err(op + ': ' + (e && e.message || e)); }
+  });
+  return out;
+};
     document.addEventListener('click', function (e) {
       var b = e.target && e.target.closest ? e.target.closest('.nxp-open') : null; if (!b) return;
       var j = REG[b.getAttribute('data-nxp')]; if (j) open(TAB[j.op] || 'mon', j.op, j.args);
