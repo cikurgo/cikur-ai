@@ -1,185 +1,631 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nexus 3D Logo Test</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #000000; /* Latar hitam pekat */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-        }
-        #nexus-logo-container {
-            width: 100vw; /* Lebar penuh layar */
-            height: 100vh; /* Tinggi penuh layar */
-        }
-    </style>
-    <!-- Memuat Library Three.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>CGO NEXUS 3D Logo</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    html,
+    body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background:
+            radial-gradient(circle at center, #07131a 0%, #020609 55%, #000000 100%);
+    }
+
+    #nexus-logo-container {
+        width: 100vw;
+        height: 100vh;
+        position: relative;
+        overflow: hidden;
+    }
+
+    #nexus-logo-container canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+
+    .nexus-label {
+        position: absolute;
+        left: 50%;
+        bottom: 28px;
+        transform: translateX(-50%);
+        color: rgba(255,255,255,0.55);
+        font-family:
+            Arial,
+            Helvetica,
+            sans-serif;
+        font-size: 10px;
+        letter-spacing: 6px;
+        text-transform: uppercase;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+</style>
 </head>
+
 <body>
 
-    <!-- Wadah untuk merender 3D -->
-    <div id="nexus-logo-container"></div>
+<div id="nexus-logo-container"></div>
 
-    <script>
-        // --- ENGINE ANIMASI SEDERHANA (PENGGANTI onFrame) ---
-        let lastTime = performance.now();
-        function onFrame(callback) {
-            function loop(time) {
-                // Menghitung delta time (dt) dalam satuan detik
-                const dt = (time - lastTime) / 1000; 
-                // Waktu total (t) dalam satuan detik
-                const t = time / 1000; 
-                
-                lastTime = time;
-                
-                // Menjalankan fungsi callback (animasi)
-                callback(t, dt);
-                
-                // Meminta frame berikutnya
-                requestAnimationFrame(loop);
+<div class="nexus-label">
+    CGO NEXUS
+</div>
+
+<!-- Three.js -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<script>
+(function initNexus3DLogo() {
+
+    const container = document.getElementById('nexus-logo-container');
+
+    if (!container || typeof THREE === 'undefined') {
+        return;
+    }
+
+    /* ==========================================================
+       1. SCENE / CAMERA / RENDERER
+    ========================================================== */
+
+    const scene = new THREE.Scene();
+
+    const camera = new THREE.PerspectiveCamera(
+        45,
+        container.clientWidth / container.clientHeight,
+        0.1,
+        1000
+    );
+
+    camera.position.set(0, 0, 13);
+
+    const renderer = new THREE.WebGLRenderer({
+        alpha: true,
+        antialias: true
+    });
+
+    renderer.setSize(
+        container.clientWidth,
+        container.clientHeight
+    );
+
+    renderer.setPixelRatio(
+        Math.min(window.devicePixelRatio, 2)
+    );
+
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    container.appendChild(renderer.domElement);
+
+
+    /* ==========================================================
+       2. MATERIAL
+    ========================================================== */
+
+    const logoMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00FFFF,
+        transparent: true,
+        opacity: 0.82,
+        side: THREE.DoubleSide
+    });
+
+    const lineMaterial = new THREE.LineBasicMaterial({
+        color: 0xFFFFFF,
+        transparent: true,
+        opacity: 1.0
+    });
+
+
+    /* ==========================================================
+       3. LOGO GROUP
+       
+       BENTUK INI MENGIKUTI LOGO REFERENSI:
+
+       - DIAGONAL UTAMA
+       - SAYAP / BLOK KIRI BAWAH
+       - SAYAP / BLOK KANAN ATAS DENGAN NOTCH
+
+       Koordinat dibuat dari proporsi logo asli.
+    ========================================================== */
+
+    const logoGroup = new THREE.Group();
+
+    const extrudeSettings = {
+        depth: 0.55,
+        bevelEnabled: false,
+        curveSegments: 1,
+        steps: 1
+    };
+
+
+    /* ----------------------------------------------------------
+       A. DIAGONAL UTAMA
+
+       Bentuk parallelogram panjang dari kiri-atas
+       menuju kanan-bawah.
+    ---------------------------------------------------------- */
+
+    const shapeDiagonal = new THREE.Shape();
+
+    shapeDiagonal.moveTo(-4.0,  3.85);
+    shapeDiagonal.lineTo( 4.0, -2.05);
+    shapeDiagonal.lineTo( 4.0, -4.00);
+    shapeDiagonal.lineTo(-4.0,  1.95);
+    shapeDiagonal.closePath();
+
+
+    /* ----------------------------------------------------------
+       B. BAGIAN KIRI BAWAH
+
+       Bentuk segitiga/potongan seperti referensi.
+    ---------------------------------------------------------- */
+
+    const shapeLeft = new THREE.Shape();
+
+    shapeLeft.moveTo(-4.0,  1.45);
+    shapeLeft.lineTo(-1.25, -0.60);
+    shapeLeft.lineTo(-1.25, -1.10);
+    shapeLeft.lineTo(-4.0, -3.00);
+    shapeLeft.closePath();
+
+
+    /* ----------------------------------------------------------
+       C. BAGIAN KANAN ATAS
+
+       Bentuk vertikal dengan notch di bagian dalam.
+    ---------------------------------------------------------- */
+
+    const shapeRight = new THREE.Shape();
+
+    shapeRight.moveTo( 1.20,  1.90);
+    shapeRight.lineTo( 4.0,   3.85);
+    shapeRight.lineTo( 4.0,  -0.50);
+
+    // Masuk ke bagian notch
+    shapeRight.lineTo( 1.92,  1.12);
+    shapeRight.lineTo( 1.92,  0.05);
+    shapeRight.lineTo( 1.20,  0.60);
+
+    shapeRight.closePath();
+
+
+    /* ==========================================================
+       4. CREATE 3D GEOMETRY
+    ========================================================== */
+
+    [
+        shapeDiagonal,
+        shapeLeft,
+        shapeRight
+    ].forEach(function(shape) {
+
+        const geometry =
+            new THREE.ExtrudeGeometry(
+                shape,
+                extrudeSettings
+            );
+
+        geometry.computeVertexNormals();
+
+        /*
+         * SOLID LOGO
+         */
+        const mesh =
+            new THREE.Mesh(
+                geometry,
+                logoMaterial
+            );
+
+        logoGroup.add(mesh);
+
+
+        /*
+         * EDGE / OUTLINE
+         */
+        const edges =
+            new THREE.LineSegments(
+                new THREE.EdgesGeometry(geometry),
+                lineMaterial
+            );
+
+        logoGroup.add(edges);
+    });
+
+
+    /* ==========================================================
+       5. CENTERING
+    ========================================================== */
+
+    logoGroup.position.set(
+        0,
+        0,
+        0
+    );
+
+    /*
+     * Sedikit miring agar volume 3D terlihat.
+     * Bentuk depan tetap mengikuti logo referensi.
+     */
+    logoGroup.rotation.x = 0;
+    logoGroup.rotation.y = 0;
+
+    scene.add(logoGroup);
+
+
+    /* ==========================================================
+       6. PARTICLE ENERGY FIELD
+    ========================================================== */
+
+    const particleCount = 400;
+
+    const particleGeo =
+        new THREE.BufferGeometry();
+
+    const particlePos =
+        new Float32Array(
+            particleCount * 3
+        );
+
+    for (
+        let i = 0;
+        i < particleCount * 3;
+        i += 3
+    ) {
+
+        const r =
+            3.5 +
+            Math.random() * 4.0;
+
+        const theta =
+            Math.random() *
+            Math.PI *
+            2;
+
+        const phi =
+            Math.acos(
+                (Math.random() * 2) - 1
+            );
+
+        particlePos[i] =
+            r *
+            Math.sin(phi) *
+            Math.cos(theta);
+
+        particlePos[i + 1] =
+            r *
+            Math.sin(phi) *
+            Math.sin(theta);
+
+        particlePos[i + 2] =
+            r *
+            Math.cos(phi);
+    }
+
+    particleGeo.setAttribute(
+        'position',
+        new THREE.BufferAttribute(
+            particlePos,
+            3
+        )
+    );
+
+
+    const particleMat =
+        new THREE.PointsMaterial({
+
+            color: 0x00FFFF,
+
+            size: 0.045,
+
+            transparent: true,
+
+            opacity: 0.6,
+
+            blending:
+                THREE.AdditiveBlending,
+
+            depthWrite: false
+        });
+
+
+    const particles =
+        new THREE.Points(
+            particleGeo,
+            particleMat
+        );
+
+    scene.add(particles);
+
+
+    /* ==========================================================
+       7. SOFT LIGHT-LIKE BACK GLOW
+    ========================================================== */
+
+    const glowCanvas =
+        document.createElement('canvas');
+
+    glowCanvas.width = 256;
+    glowCanvas.height = 256;
+
+    const glowCtx =
+        glowCanvas.getContext('2d');
+
+    const gradient =
+        glowCtx.createRadialGradient(
+            128,
+            128,
+            5,
+            128,
+            128,
+            128
+        );
+
+    gradient.addColorStop(
+        0,
+        'rgba(0,255,255,0.16)'
+    );
+
+    gradient.addColorStop(
+        0.35,
+        'rgba(0,255,255,0.07)'
+    );
+
+    gradient.addColorStop(
+        1,
+        'rgba(0,255,255,0)'
+    );
+
+    glowCtx.fillStyle = gradient;
+
+    glowCtx.fillRect(
+        0,
+        0,
+        256,
+        256
+    );
+
+
+    const glowTexture =
+        new THREE.CanvasTexture(
+            glowCanvas
+        );
+
+    const glowMaterial =
+        new THREE.SpriteMaterial({
+            map: glowTexture,
+            transparent: true,
+            depthWrite: false,
+            blending:
+                THREE.AdditiveBlending
+        });
+
+    const glow =
+        new THREE.Sprite(
+            glowMaterial
+        );
+
+    glow.scale.set(
+        13,
+        13,
+        1
+    );
+
+    glow.position.z = -2;
+
+    scene.add(glow);
+
+
+    /* ==========================================================
+       8. FRAME LOOP
+    ========================================================== */
+
+    let previousTime =
+        performance.now() * 0.001;
+
+
+    function renderFrame() {
+
+        const now =
+            performance.now() * 0.001;
+
+        const dt =
+            Math.min(
+                now - previousTime,
+                0.05
+            );
+
+        previousTime = now;
+
+
+        /*
+         * ROTASI 3D SANGAT HALUS
+         */
+        logoGroup.rotation.y +=
+            dt * 0.12;
+
+        particles.rotation.y -=
+            dt * 0.15;
+
+        particles.rotation.x +=
+            dt * 0.05;
+
+
+        /*
+         * PULSE
+         */
+        const pulse =
+            Math.sin(now * 3) *
+            0.5 +
+            0.5;
+
+
+        logoMaterial.opacity =
+            0.55 +
+            pulse * 0.35;
+
+        lineMaterial.opacity =
+            0.72 +
+            pulse * 0.28;
+
+
+        /*
+         * BREATHING SCALE
+         */
+        const scale =
+            1 +
+            pulse * 0.025;
+
+        logoGroup.scale.set(
+            scale,
+            scale,
+            scale
+        );
+
+
+        /*
+         * PARTICLE PULSE
+         */
+        particleMat.opacity =
+            0.35 +
+            pulse * 0.35;
+
+
+        /*
+         * RENDER
+         */
+        renderer.render(
+            scene,
+            camera
+        );
+
+
+        requestAnimationFrame(
+            renderFrame
+        );
+    }
+
+
+    /* ==========================================================
+       9. COMPATIBILITY DENGAN onFrame ENGINE
+       
+       Jika engine CGONEXUS menyediakan onFrame,
+       tetap tersedia.
+    ========================================================== */
+
+    if (typeof onFrame === 'function') {
+
+        onFrame(function(t, dt) {
+
+            logoGroup.rotation.y +=
+                dt * 0.12;
+
+            particles.rotation.y -=
+                dt * 0.15;
+
+            particles.rotation.x +=
+                dt * 0.05;
+
+
+            const pulse =
+                Math.sin(t * 3) *
+                0.5 +
+                0.5;
+
+
+            logoMaterial.opacity =
+                0.55 +
+                pulse * 0.35;
+
+            lineMaterial.opacity =
+                0.72 +
+                pulse * 0.28;
+
+
+            const scale =
+                1 +
+                pulse * 0.025;
+
+            logoGroup.scale.set(
+                scale,
+                scale,
+                scale
+            );
+
+
+            particleMat.opacity =
+                0.35 +
+                pulse * 0.35;
+
+
+            renderer.render(
+                scene,
+                camera
+            );
+        });
+
+    } else {
+
+        /*
+         * Standalone fallback
+         */
+        renderFrame();
+    }
+
+
+    /* ==========================================================
+       10. RESPONSIVE RESIZE
+    ========================================================== */
+
+    window.addEventListener(
+        'resize',
+        function() {
+
+            const width =
+                container.clientWidth;
+
+            const height =
+                container.clientHeight;
+
+            if (
+                width === 0 ||
+                height === 0
+            ) {
+                return;
             }
-            requestAnimationFrame(loop);
+
+
+            camera.aspect =
+                width / height;
+
+            camera.updateProjectionMatrix();
+
+
+            renderer.setSize(
+                width,
+                height
+            );
+
+
+            renderer.setPixelRatio(
+                Math.min(
+                    window.devicePixelRatio,
+                    2
+                )
+            );
         }
+    );
 
-        // --- KODE DARI USER (DENGAN SEDIKIT PENYESUAIAN UKURAN) ---
-        (function initNexus3DLogo() {
-            const container = document.getElementById('nexus-logo-container');
-            if (!container || typeof THREE === 'undefined') return;
+})();
+</script>
 
-            // 1. Setup Scene, Camera, Renderer
-            const scene = new THREE.Scene();
-            // Aspect ratio disesuaikan dengan ukuran layar
-            const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-            camera.position.z = 15; // Digeser sedikit ke belakang agar pas di layar HP
-
-            const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-            renderer.setSize(container.clientWidth, container.clientHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            container.appendChild(renderer.domElement);
-
-            // 2. Material Setup (Neon Cyan & Glowing White Edges)
-            const logoMaterial = new THREE.MeshBasicMaterial({ 
-                color: 0x00FFFF, 
-                transparent: true, 
-                opacity: 0.8,
-                side: THREE.DoubleSide
-            });
-            const lineMaterial = new THREE.LineBasicMaterial({ 
-                color: 0xFFFFFF, 
-                transparent: true, 
-                opacity: 1.0 
-            });
-
-            // 3. Geometri Logo "N" (Presisi dari bentuk panah/perisai)
-            const logoGroup = new THREE.Group();
-            const extrudeSettings = { depth: 0.5, bevelEnabled: false, curveSegments: 1 };
-
-            // Bagian 1: Sayap Kiri (Segitiga)
-            const shapeLeft = new THREE.Shape();
-            shapeLeft.moveTo(-3, 4);
-            shapeLeft.lineTo(-3, -4);
-            shapeLeft.lineTo(0, -1);
-            shapeLeft.lineTo(-0.5, 4);
-            shapeLeft.lineTo(-3, 4);
-
-            // Bagian 2: Garis Diagonal Utama
-            const shapeDiag = new THREE.Shape();
-            shapeDiag.moveTo(-0.5, 4);
-            shapeDiag.lineTo(1.5, 4);
-            shapeDiag.lineTo(4, -4);
-            shapeDiag.lineTo(2, -4);
-            shapeDiag.lineTo(-0.5, 4);
-
-            // Bagian 3: Sayap Kanan (Dengan potongan/notch)
-            const shapeRight = new THREE.Shape();
-            shapeRight.moveTo(4, 4);
-            shapeRight.lineTo(4, -4);
-            shapeRight.lineTo(1.5, -1);
-            shapeRight.lineTo(2.5, -1);
-            shapeRight.lineTo(2.5, 1.5);
-            shapeRight.lineTo(4, 4);
-
-            // Gabungkan Shapes ke dalam Geometri 3D
-            [shapeLeft, shapeDiag, shapeRight].forEach(shape => {
-                const geo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-                
-                // Solid Mesh
-                const mesh = new THREE.Mesh(geo, logoMaterial);
-                logoGroup.add(mesh);
-                
-                // Glowing Edges
-                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), lineMaterial);
-                logoGroup.add(edges);
-            });
-
-            // Posisikan agar tepat di tengah
-            logoGroup.position.x = -0.5;
-            scene.add(logoGroup);
-
-            // 4. Efek Partikel Energi di Sekitar Logo
-            const particleCount = 400;
-            const particleGeo = new THREE.BufferGeometry();
-            const particlePos = new Float32Array(particleCount * 3);
-
-            for (let i = 0; i < particleCount * 3; i += 3) {
-                // Sebar partikel dalam radius bola
-                const r = 3 + Math.random() * 4;
-                const theta = Math.random() * Math.PI * 2;
-                const phi = Math.acos((Math.random() * 2) - 1);
-                
-                particlePos[i] = r * Math.sin(phi) * Math.cos(theta);
-                particlePos[i+1] = r * Math.sin(phi) * Math.sin(theta);
-                particlePos[i+2] = r * Math.cos(phi);
-            }
-
-            particleGeo.setAttribute('position', new THREE.BufferAttribute(particlePos, 3));
-            const particleMat = new THREE.PointsMaterial({ 
-                color: 0x00FFFF, 
-                size: 0.05, 
-                transparent: true, 
-                opacity: 0.6,
-                blending: THREE.AdditiveBlending
-            });
-            const particles = new THREE.Points(particleGeo, particleMat);
-            scene.add(particles);
-
-            // 5. Animasi Menggunakan Hook `onFrame`
-            onFrame((t, dt) => {
-                // Rotasi Konstan pada Sumbu Y
-                logoGroup.rotation.y += dt * 0.4;
-                particles.rotation.y -= dt * 0.15;
-                particles.rotation.x += dt * 0.05;
-
-                // Efek Pulsing Glow (Denyutan Opacity & Skala)
-                const pulse = Math.sin(t * 3) * 0.5 + 0.5; // Nilai 0 s/d 1
-                logoMaterial.opacity = 0.5 + (pulse * 0.5);
-                lineMaterial.opacity = 0.7 + (pulse * 0.3);
-                
-                // Skala sedikit membesar-mengecil untuk efek "bernafas"
-                const scale = 1 + (pulse * 0.03);
-                logoGroup.scale.set(scale, scale, scale);
-
-                // Render Scene
-                renderer.render(scene, camera);
-            });
-
-            // Handle Resize agar responsif
-            window.addEventListener('resize', () => {
-                if (container.clientWidth === 0) return;
-                camera.aspect = container.clientWidth / container.clientHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(container.clientWidth, container.clientHeight);
-            });
-
-        })();
-    </script>
 </body>
 </html>
