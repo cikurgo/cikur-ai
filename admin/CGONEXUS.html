@@ -9861,11 +9861,58 @@ window.__nxpFence = function (code) {
     }
     // ================================================================
 
-    if (!op) {
-      out += err('Entri #' + (idx + 1) + ': properti "op" tidak ada. ' +
-                 'Gunakan: ' + OPS_LIST + '.');
-      continue;
+    // ================================================================
+// [DETEKTIF OP] — Tebak op dari field yang ada jika AI lupa "op"
+// Prioritas: sinyal eksklusif → descriptor kimia → biarkan error
+// ================================================================
+if (!op) {
+  var has = function (k) { return j[k] != null; };
+
+  // --------------------------------------------------------------
+  // Lapis 1: sinyal eksklusif (hanya satu op yang memakai field ini)
+  // --------------------------------------------------------------
+  if (has('ligand') || has('protein')) {
+    // Atom struktural → hanya dock yang pakai
+    op = 'dock';
+  } else if (has('epsilon') || has('sigma')) {
+    // Parameter Lennard-Jones → hanya lj
+    op = 'lj';
+  } else if (has('kdNM') || has('deltaG') || has('ic50') ||
+             has('substrate') || has('km') || has('pKa') ||
+             has('ionType') || has('pActivity')) {
+    // Termodinamika/afinitas → hanya affinity
+    op = 'affinity';
+  } else if (j.list != null) {
+    // Array kandidat → hanya screen
+    op = 'screen';
+  }
+
+  // --------------------------------------------------------------
+  // Lapis 2: descriptor kimia (ambigu → pilih paling spesifik dulu)
+  // --------------------------------------------------------------
+  else if (has('mw') || has('logP') || has('hbd') || has('hba') ||
+           has('rotB') || has('psa') || has('heavyAtoms')) {
+
+    // Semua 6 descriptor lengkap → user jelas ingin druglikeness
+    if (has('mw') && has('logP') && has('hbd') && has('hba') &&
+        has('rotB') && has('psa')) {
+      op = 'druglikeness';
     }
+    // Persis 4 Lipinski (tanpa psa/rotB) → user ingin lipinski
+    else if (has('mw') && has('logP') && has('hbd') && has('hba') &&
+             !has('psa') && !has('rotB')) {
+      op = 'lipinski';
+    }
+    // Selain itu → profile (safe default, berlaku toleran dgn default 0)
+    else {
+      op = 'profile';
+    }
+  }
+
+  // Sinkronkan ke objek agar konsisten saat dipakai OPS & card
+  if (op) j.op = op;
+}
+// ================================================================
 
     // 3. Cek op valid — hasOwnProperty + fungsi
     if (!Object.prototype.hasOwnProperty.call(OPS, op) ||
