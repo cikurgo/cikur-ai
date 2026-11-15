@@ -8074,7 +8074,229 @@ function missingBanner(node, lib, file) {
   if (miss) { node.hidden = false; node.className = 'nxd-banner'; node.textContent = file + ' tidak termuat. Letakkan file itu di folder yang sama dengan CGONEXUS.html lalu muat ulang.'; }
   return !miss;
 }
+  
+window.SuperEnterprise = (function() {
+  'use strict';
 
+  const DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024;
+  const DEFAULT_CONCURRENCY =
+    Math.max(1, Math.min(8, globalThis.navigator?.hardwareConcurrency || 4));
+  const HASH_BYTES = 32;              // SHA-256
+  const LEAF_PREFIX = Uint8Array.of(0x00);
+  const NODE_PREFIX = Uint8Array.of(0x01);
+
+  // ---------- helpers ----------
+
+  function assertSha256() {
+    if (!window.NexusLBC || typeof window.NexusLBC.sha256 !== 'function') {
+      throw new Error('NexusLBC.sha256 is not available');
+    }
+  }
+
+  function toBytes(v, name) {
+    if (v instanceof Uint8Array) return v;
+    if (v instanceof ArrayBuffer) return new Uint8Array(v);
+    if (ArrayBuffer.isView(v)) return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+    throw new TypeError(`${name} must be Uint8Array / ArrayBuffer / ArrayBufferView`);
+  }
+
+  function throwIfAborted(signal) {
+    if (signal?.aborted) {
+      const err = new DOMException('Aborted', 'AbortError');
+      throw err;
+    }
+  }
+
+  /**
+   * Jalankan `worker` dengan batas konkurensi, mempertahankan urutan hasil.
+   */
+  function withConcurrency(items, limit, worker) {
+    return new Promise((resolve, reject) => {
+      const results = new Array(items.length);
+      let idx = 0, active = 0, rejected = false;
+
+      function pump() {
+        if (rejected) return;
+        if (idx >= items.length && active === 0) return resolve(results);
+
+        while (active < limit && idx < items.length) {
+          const i = idx++;
+          active++;
+          Promise.resolve()
+            .then(() => worker(items[i], i))
+            .then(r => {
+              results[i] = r;
+              active--;
+              if (!rejected) pump();
+            })
+            .catch(err => {
+              rejected = true;
+              reject(err);
+            });
+        }
+      }
+      pump();
+    });
+  }
+
+  function readChunkAsArrayBuffer(chunk, signal) {
+    throwIfAborted(signal);
+    // Jalur cepat: native arrayBuffer() bila abort tidak diperlukan
+    if (!signal && typeof chunk.arrayBuffer === 'function') {
+      return chunk.arrayBuffer();
+    }
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      let settled = false;
+
+      const finish = (fn, val) => {
+        if (settled) return;
+        settled = true;
+        signal?.removeEventListener('abort', onAbort);
+        fn(val);
+      };
+      const onAbort = () => {
+        if (settled) return;
+        try { reader.abort(); } catch (_) {}
+        finish(reject, new DOMException('Aborted', 'AbortError'));
+      };
+
+      reader.onload  = () => finish(resolve, reader.result);
+      reader.onerror = () => finish(reject, reader.error || new Error('FileReader error'));
+      reader.onabort = () => finish(reject, new DOMException('Aborted', 'AbortError'));
+
+      signal?.addEventListener('abort', onAbort, { once: true });
+      reader.readAsArrayBuffer(chunk);
+    });
+  }
+
+  async function sha256Concat(parts) {
+    let total = 0;
+    for (const p of parts) total += p.length;
+    const buf = new Uint8Array(total);
+    let off = 0;
+    for (const p of parts) { buf.set(p, off); off += p.length; }
+    const out = toBytes(await window.NexusLBC.sha256(buf), 'sha256 result');
+    if (out.length !== HASH_BYTES) {
+      throw new Error(`sha256 returned ${out.length} bytes, expected ${HASH_BYTES}`);
+    }
+    return out;
+  }
+
+  // ---------- public API ----------
+
+  async function chunkFile(file, chunkSize = DEFAULT_CHUNK_SIZE, options = {}) {
+    if (!(file instanceof Blob)) throw new TypeError('file must be a Blob/File');
+    if (!Number.isSafeInteger(chunkSize) || chunkSize <= 0) {
+      throw new RangeError('chunkSize must be a positive safe integer');
+    }
+    const { allowEmpty = false } = options;
+
+    if (file.size === 0) {
+      if (allowEmpty) return [];
+      throw new Error('Cannot chunk empty file (size 0)');
+    }
+
+    const count = Math.ceil(file.size / chunkSize);
+    const chunks = new Array(count);
+    for (let i = 0, offset = 0; offset < file.size; offset += chunkSize, i++) {
+      chunks[i] = file.slice(offset, Math.min(offset + chunkSize, file.size));
+    }
+    return chunks;
+  }
+
+  async function hashChunks(chunks, options = {}) {
+    assertSha256();
+    if (!Array.isArray(chunks)) throw new TypeError('chunks must be an array');
+    if (chunks.length === 0)       throw new Error('chunks must be a non-empty array');
+
+    const { concurrency = DEFAULT_CONCURRENCY, signal, onProgress } = options;
+    if (!Number.isSafeInteger(concurrency) || concurrency <= 0) {
+      throw new RangeError('concurrency must be a positive safe integer');
+    }
+
+    const total = chunks.length;
+    let done = 0;
+
+    return withConcurrency(chunks, concurrency, async (chunk, i) => {
+      if (!(chunk instanceof Blob)) {
+        throw new TypeError(`chunks[${i}] must be a Blob/File`);
+      }
+      throwIfAborted(signal);
+      const buf  = await readChunkAsArrayBuffer(chunk, signal);
+      const raw  = await window.NexusLBC.sha256(buf);
+      const hash = toBytes(raw, `hash of chunk ${i}`);
+      if (hash.length !== HASH_BYTES) {
+        throw new Error(`sha256 chunk ${i} returned ${hash.length} bytes, expected ${HASH_BYTES}`);
+      }
+      done++;
+      onProgress?.(done, total);
+      return hash;
+    });
+  }
+
+  async function buildMerkleTree(hashes, options = {}) {
+    assertSha256();
+    if (!Array.isArray(hashes))   throw new TypeError('hashes must be an array');
+    if (hashes.length === 0)      throw new Error('hashes must be a non-empty array');
+
+    const {
+      domainSeparation = true,      // set false untuk kompatibilitas legacy
+      oddStrategy = 'promote',      // 'promote' (RFC 6962) | 'duplicate' (legacy)
+      signal,
+    } = options;
+
+    for (let i = 0; i < hashes.length; i++) {
+      const h = hashes[i];
+      if (!(h instanceof Uint8Array))
+        throw new TypeError(`hashes[${i}] must be a Uint8Array`);
+      if (h.length !== HASH_BYTES)
+        throw new RangeError(`hashes[${i}] must be ${HASH_BYTES} bytes (got ${h.length})`);
+    }
+
+    throwIfAborted(signal);
+
+    // Level daun (opsional, tapi sangat direkomendasikan)
+    let current = domainSeparation
+      ? await Promise.all(hashes.map(h => sha256Concat([LEAF_PREFIX, h])))
+      : hashes.map(h => h.slice(0));
+
+    while (current.length > 1) {
+      throwIfAborted(signal);
+      const next = [];
+      for (let i = 0; i < current.length; i += 2) {
+        throwIfAborted(signal);
+        const left  = current[i];
+        const right = i + 1 < current.length ? current[i + 1] : null;
+
+        if (right === null) {
+          // Node ganjil
+          if (oddStrategy === 'promote') {
+            next.push(left); // aman jika ada domain separation
+          } else {
+            next.push(await sha256Concat(
+              domainSeparation ? [NODE_PREFIX, left, left] : [left, left]
+            ));
+          }
+        } else {
+          next.push(await sha256Concat(
+            domainSeparation ? [NODE_PREFIX, left, right] : [left, right]
+          ));
+        }
+      }
+      current = next;
+    }
+    return current[0];
+  }
+
+  return {
+    chunkFile,
+    hashChunks,
+    buildMerkleTree,
+    DEFAULT_CHUNK_SIZE,
+    HASH_BYTES,
+  };
+})();
 /* ═════════════════════════ LBC VAULT ═════════════════════════ */
 const LKEY = 'nxd.lbc.v1';
 const L = { trie: null, blocks: [], kp: null, busy: false, ready: false };
@@ -8339,6 +8561,147 @@ window.addEventListener('load', () => {
 window.NexusDeck = { open: setTab, version: '1.0.0' };
 } catch (err) { console.warn('[NEXUS DECK] gagal dimuat:', err); }
 })();
+  
+  // [PATCH v2] LBC File Upload Bridge — Hardened (Enterprise v2)
+document.addEventListener('DOMContentLoaded', () => {
+  'use strict';
+
+  const fileInput = document.getElementById('lbc-file-upload');
+  if (!fileInput) return;
+
+  const textarea = document.getElementById('nxd-lbc-in');
+  if (!textarea) return;
+
+  // --- state ---
+  let currentAbort = null;      // AbortController untuk batch aktif
+  let lastProgressTs = 0;       // throttle progress UI
+
+  // --- helpers ---
+
+  const formatBytes = (n) => {
+    if (!Number.isFinite(n) || n < 0) return '0 B';
+    if (n < 1024)                     return `${n} B`;
+    if (n < 1024 * 1024)              return `${(n / 1024).toFixed(1)} KB`;
+    if (n < 1024 * 1024 * 1024)       return `${(n / 1024 / 1024).toFixed(2)} MB`;
+    return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+  };
+
+  // "archive.tar.gz" -> "GZ"; "README" -> "BIN"; ".env" -> "BIN"
+  const fileExt = (name) => {
+    const i = name.lastIndexOf('.');
+    return i > 0 && i < name.length - 1
+      ? name.slice(i + 1).toUpperCase().slice(0, 8)
+      : 'BIN';
+  };
+
+  const toast = (msg, ms = 3000, isError = false) => {
+    try {
+      if (typeof showToast === 'function') showToast(msg, ms, isError);
+    } catch (_) { /* toast is best-effort */ }
+  };
+
+  const setText = (v) => {
+    textarea.value = v;
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
+  // --- main handler ---
+
+  fileInput.addEventListener('change', async (e) => {
+    const input = e.target;
+    const file  = input.files && input.files[0];
+
+    // Selalu reset supaya file yang sama bisa dipilih ulang
+    input.value = '';
+
+    if (!file) return;
+
+    // Batalkan batch sebelumnya (jika user spam upload)
+    if (currentAbort) { try { currentAbort.abort(); } catch (_) {} }
+    const ac = new AbortController();
+    currentAbort = ac;
+    const isStale = () => ac.signal.aborted;
+
+    const ext = fileExt(file.name);
+
+    try {
+      // --- pre-flight checks ---
+      if (!window.SuperEnterprise ||
+          typeof window.SuperEnterprise.chunkFile !== 'function' ||
+          typeof window.SuperEnterprise.hashChunks !== 'function' ||
+          typeof window.SuperEnterprise.buildMerkleTree !== 'function') {
+        throw new Error('Modul SuperEnterprise belum siap. Muat ulang halaman.');
+      }
+      if (file.size === 0) {
+        throw new Error('File kosong (0 byte) tidak dapat disegel.');
+      }
+
+      setText(`Membaca file ${ext} (${formatBytes(file.size)})...`);
+
+      // 1) Chunking
+      const chunks = await window.SuperEnterprise.chunkFile(file);
+      if (isStale()) return;
+
+      // 2) Hashing (throttled progress)
+      setText(`Menghitung hash (0/${chunks.length} potongan)...`);
+      lastProgressTs = 0;
+
+      const hashes = await window.SuperEnterprise.hashChunks(chunks, {
+        signal: ac.signal,
+        onProgress: (done, total) => {
+          if (isStale()) return;
+          const now = performance.now();
+          const isFinal = done >= total;
+          if (!isFinal && now - lastProgressTs < 100) return; // max ~10 update/detik
+          lastProgressTs = now;
+          const pct = total ? Math.round((done / total) * 100) : 100;
+          setText(`Menghitung hash (${done}/${total} potongan, ${pct}%)...\n\n[HASHING IN PROGRESS]`);
+        },
+      });
+      if (isStale()) return;
+
+      // 3) Merkle root (RFC 6962)
+      setText(`Menyusun Merkle Tree (${hashes.length} leaf)...`);
+      const root = await window.SuperEnterprise.buildMerkleTree(hashes, {
+        domainSeparation: true,
+        oddStrategy: 'promote',
+        signal: ac.signal,
+      });
+      if (isStale()) return;
+
+      const rootHex = Array.from(root, (b) => b.toString(16).padStart(2, '0')).join('');
+
+      // 4) Hasil akhir
+      setText(
+        `[FILE SECURED & SEALED]\n` +
+        `Nama File   : ${file.name}\n` +
+        `Tipe File   : .${ext} (Binary Data)\n` +
+        `Total Chunk : ${chunks.length} potongan\n` +
+        `Ukuran      : ${formatBytes(file.size)}\n` +
+        `Merkle Root : ${rootHex}\n` +
+        `Standar     : RFC 6962 (Domain Separated)`
+      );
+
+      toast(`File ${ext} berhasil disegel! Merkle Root siap.`, 3500);
+    } catch (err) {
+      // AbortError = normal (batch baru menggantikan batch lama) → diam saja
+      if (err && err.name === 'AbortError') return;
+
+      console.error('[LBC Upload]', err);
+      const msg = err && err.message ? err.message : String(err);
+      toast('Gagal memproses file: ' + msg, 3000, true);
+      if (!isStale()) setText(`[ERROR] ${msg}`);
+    } finally {
+      // identity check: jangan menimpa controller milik batch yang lebih baru
+      if (currentAbort === ac) currentAbort = null;
+    }
+  });
+
+  // Bersihkan bila halaman ditinggal / di-unload
+  window.addEventListener('pagehide', () => {
+    if (currentAbort) { try { currentAbort.abort(); } catch (_) {} }
+  });
+});
 </script>
 
 <script id="nxp-engine">
