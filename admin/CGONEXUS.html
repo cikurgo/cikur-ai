@@ -9264,51 +9264,266 @@ window.NexusDeck = { open: setTab, version: '1.0.0' };
     window.__nxpPrelude = function () { return engEl ? engEl.textContent : ''; };
 
     /* ---------- operasi yang bisa dipanggil Dewan ---------- */
-    var atoms = function (v) { if (typeof v === 'string') { var r = P.parseAtoms(v); if (r.errors.length && !r.atoms.length) throw new Error('Atom tidak valid: baris ' + r.errors[0].line + ' ' + r.errors[0].msg); return r.atoms; } if (Array.isArray(v)) return v; throw new Error('ligand/protein wajib berupa teks atau array atom'); };
-    var OPS = {
-  profile: function (a) { 
+    /* ================================================================
+ * Helper validasi & koersi — safe terhadap num() yang throw
+ * ================================================================ */
+function isNum(v) {
+  try { return Number.isFinite(num(v)); } catch (e) { return false; }
+}
+function numOr(v, d) {
+  try { var n = num(v); return Number.isFinite(n) ? n : d; }
+  catch (e) { return d; }
+}
+function asObj(a) {
+  return (a && typeof a === 'object' && !Array.isArray(a)) ? a : {};
+}
+function positiveNumOr(v, d) {
+  try { var n = num(v); return Number.isFinite(n) && n > 0 ? n : d; }
+  catch (e) { return d; }
+}
+function optNum(a, k, label) {
+  if (a[k] == null) return undefined;
+  if (!isNum(a[k])) throw new Error((label || 'parameter') + ': "' + k + '" harus angka');
+  return num(a[k]);
+}
+function needP(name) {
+  if (!P || typeof P[name] !== 'function') {
+    throw new Error('Modul P.' + name + ' tidak tersedia');
+  }
+}
+
+/* Koordinat default — HANYA dipakai saat input benar-benar null/undefined */
+var DEFAULT_LIGAND  = "0 0 0 0.2\n3.5 0 0 -0.1\n0 3.5 0 0.1";
+var DEFAULT_PROTEIN = "1.5 1.5 0 -0.3\n4.5 1.5 0 0.3\n1.5 4.5 0 -0.2";
+
+/* ================================================================
+ * Konversi ligand/protein → array atom
+ * ================================================================ */
+var atoms = function (v) {
+  if (typeof v === 'string') {
+    if (!P || typeof P.parseAtoms !== 'function') {
+      throw new Error('Parser atom (P.parseAtoms) tidak tersedia');
+    }
+    var r = P.parseAtoms(v);
+    if (!r || typeof r !== 'object') {
+      throw new Error('Parser atom mengembalikan hasil tidak valid');
+    }
+    var errs = Array.isArray(r.errors) ? r.errors : [];
+    var ats  = Array.isArray(r.atoms)  ? r.atoms  : [];
+    if (errs.length && !ats.length) {
+      var f = errs[0] || {};
+      throw new Error(
+        'Atom tidak valid: baris ' + (f.line != null ? f.line : '?') +
+        ' ' + (f.msg || 'kesalahan tidak diketahui')
+      );
+    }
+    if (!ats.length) throw new Error('Parser atom tidak menghasilkan atom apapun');
+    return ats;
+  }
+  if (Array.isArray(v)) {
+    var filtered = v.filter(function (x) {
+      return x && typeof x === 'object' && !Array.isArray(x);
+    });
+    if (filtered.length === 0) {
+      throw new Error('Array atom kosong atau tidak berisi objek valid');
+    }
+    return filtered;
+  }
+  throw new Error('ligand/protein wajib berupa teks atau array atom (diterima: ' + typeof v + ')');
+};
+
+/* ================================================================
+ * OPS — operasi farmakoforik
+ * ================================================================ */
+var OPS = {
+  profile: function (a) {
+    a = asObj(a);
     var safe = Object.assign({}, a);
-    if (!Number.isFinite(num(safe.hbd))) safe.hbd = 0;
-    if (!Number.isFinite(num(safe.hba))) safe.hba = 0;
-    if (!Number.isFinite(num(safe.rotB))) safe.rotB = 0;
-    if (!Number.isFinite(num(safe.mw))) safe.mw = 0;
-    if (!Number.isFinite(num(safe.logP))) safe.logP = 0;
-    if (!Number.isFinite(num(safe.psa))) safe.psa = 0;
-    return P.analyzeCandidate(safe); 
+    ['hbd', 'hba', 'rotB', 'mw', 'logP', 'psa'].forEach(function (k) {
+      if (!isNum(safe[k])) safe[k] = 0;
+    });
+    if (safe.heavyAtoms != null && !isNum(safe.heavyAtoms)) safe.heavyAtoms = 0;
+    return P.analyzeCandidate(safe);
   },
-  druglikeness: function (a) { 
-    var mw = Number.isFinite(num(a.mw)) ? num(a.mw) : 0;
-    var logP = Number.isFinite(num(a.logP)) ? num(a.logP) : 0;
-    var hbd = Number.isFinite(num(a.hbd)) ? num(a.hbd) : 0;
-    var hba = Number.isFinite(num(a.hba)) ? num(a.hba) : 0;
-    var rotB = Number.isFinite(num(a.rotB)) ? num(a.rotB) : 0;
-    var psa = Number.isFinite(num(a.psa)) ? num(a.psa) : 0;
-    return P.evaluateDrugLikeness(mw, logP, hbd, hba, rotB, psa, { heavyAtoms: a.heavyAtoms }); 
+
+  druglikeness: function (a) {
+    a = asObj(a);
+    return P.evaluateDrugLikeness(
+      numOr(a.mw,   0),
+      numOr(a.logP, 0),
+      numOr(a.hbd,  0),
+      numOr(a.hba,  0),
+      numOr(a.rotB, 0),
+      numOr(a.psa,  0),
+      { heavyAtoms: isNum(a.heavyAtoms) ? num(a.heavyAtoms) : undefined }
+    );
   },
-  lipinski: function (a) { 
-    var mw = Number.isFinite(num(a.mw)) ? num(a.mw) : 0;
-    var logP = Number.isFinite(num(a.logP)) ? num(a.logP) : 0;
-    var hbd = Number.isFinite(num(a.hbd)) ? num(a.hbd) : 0;
-    var hba = Number.isFinite(num(a.hba)) ? num(a.hba) : 0;
-    return { hasil: P.checkLipinski(mw, logP, hbd, hba) }; 
+
+  lipinski: function (a) {
+    a = asObj(a);
+    return {
+      hasil: P.checkLipinski(
+        numOr(a.mw,   0),
+        numOr(a.logP, 0),
+        numOr(a.hbd,  0),
+        numOr(a.hba,  0)
+      )
+    };
   },
-  dock: function (a) { return P.simulateDockingAdvanced(atoms(a.ligand), atoms(a.protein), a.options || {}); },
-  lj: function (a) { return P.ljCurve(a.epsilon, a.sigma, a.rMin, a.rMax, a.points, a.options || {}); },
+
+  dock: function (a) {
+    a = asObj(a);
+
+    // Fallback HANYA untuk null/undefined, TIDAK untuk nilai falsy lain.
+    // Hasil diberi flag transparan agar UI bisa menampilkan peringatan.
+    var ligandInput  = (a.ligand  == null) ? DEFAULT_LIGAND  : a.ligand;
+    var proteinInput = (a.protein == null) ? DEFAULT_PROTEIN : a.protein;
+
+    var missing = [];
+    if (a.ligand  == null) missing.push('ligand');
+    if (a.protein == null) missing.push('protein');
+
+    var result = P.simulateDockingAdvanced(
+      atoms(ligandInput),
+      atoms(proteinInput),
+      asObj(a.options)
+    );
+
+    // Suntikkan flag transparan ke hasil (jika hasil adalah objek)
+    if (missing.length && result && typeof result === 'object' && !Array.isArray(result)) {
+      result._fallback = true;
+      result._fallbackMsg =
+        'Parameter ' + missing.join(' & ') + ' tidak disuplai; ' +
+        'menggunakan koordinat default — hasil TIDAK mencerminkan molekul nyata.';
+    }
+    return result;
+  },
+
+  lj: function (a) {
+    a = asObj(a);
+    if (!isNum(a.epsilon)) throw new Error('lj butuh "epsilon" (angka)');
+    if (!isNum(a.sigma))   throw new Error('lj butuh "sigma" (angka)');
+
+    // Jika disuplai tapi invalid → tolak, JANGAN dibuang diam-diam
+    var rMin   = optNum(a, 'rMin',   'lj');
+    var rMax   = optNum(a, 'rMax',   'lj');
+    var points = optNum(a, 'points', 'lj');
+
+    return P.ljCurve(
+      num(a.epsilon),
+      num(a.sigma),
+      rMin, rMax, points,
+      asObj(a.options)
+    );
+  },
+
   affinity: function (a) {
-    var o = {}, dg = a.deltaG;
-    if (Number.isFinite(num(a.kdNM))) { dg = P.kdToDeltaG(num(a.kdNM) * 1e-9, a.temperatureK); o.deltaG_kcal_mol = dg; }
-    if (Number.isFinite(num(dg))) o.afinitas = P.estimateAffinity(num(dg), a.temperatureK);
-    if (Number.isFinite(num(a.ic50))) o.Ki = P.chengPrusoff(num(a.ic50), num(a.substrate), num(a.km));
-    if (a.pKa != null && a.ionType) o.logD = P.estimateLogD(num(a.logP), num(a.pKa), a.pH == null ? 7.4 : num(a.pH), a.ionType);
-    if (Number.isFinite(num(a.pActivity))) o.efisiensi = P.ligandEfficiencyMetrics({ pActivity: num(a.pActivity), heavyAtoms: num(a.heavyAtoms), mw: num(a.mw), psa: num(a.psa), logP: num(a.logP) });
-    if (!Object.keys(o).length) throw new Error('affinity butuh kdNM, deltaG, ic50+substrate+km, pKa+ionType+logP, atau pActivity+heavyAtoms');
+    a = asObj(a);
+    var o = {};
+
+    // 1. deltaG — kdNM wajib POSITIF
+    var dg = null;
+    var kdM = positiveNumOr(a.kdNM, null);
+    if (kdM != null) {
+      var temp = positiveNumOr(a.temperatureK, 298.15);
+      dg = P.kdToDeltaG(kdM * 1e-9, temp);
+      if (isNum(dg)) o.deltaG_kcal_mol = num(dg);
+      else dg = null;
+    } else if (isNum(a.deltaG)) {
+      dg = num(a.deltaG);
+    }
+
+    // 2. Afinitas dari deltaG
+    if (dg != null && isNum(dg)) {
+      var aff = P.estimateAffinity(num(dg), positiveNumOr(a.temperatureK, 298.15));
+      if (isNum(aff)) o.afinitas = num(aff);
+    }
+
+    // 3. Ki dari IC50 — semua harus positif
+    var ic50 = positiveNumOr(a.ic50, null);
+    var sub  = positiveNumOr(a.substrate, null);
+    var km   = positiveNumOr(a.km, null);
+    if (ic50 != null && sub != null && km != null) {
+      var ki = P.chengPrusoff(ic50, sub, km);
+      if (isNum(ki)) o.Ki = num(ki);
+    }
+
+    // 4. logD — pKa & ionType harus hadir BERSAMA, bukan salah satu
+    var hasPKa    = a.pKa    != null;
+    var hasIonType = a.ionType != null;
+    if (hasPKa !== hasIonType) {
+      throw new Error('affinity: "pKa" dan "ionType" harus diberikan bersamaan');
+    }
+    if (hasPKa) {
+      if (!isNum(a.pKa)) throw new Error('affinity: "pKa" harus angka');
+      if (typeof a.ionType !== 'string' || !a.ionType.trim()) {
+        throw new Error('affinity: "ionType" harus string non-kosong (mis. "acid"/"base")');
+      }
+      if (!isNum(a.logP)) throw new Error('affinity: pKa+ionType butuh "logP" (angka)');
+      var pH = a.pH == null ? 7.4 : numOr(a.pH, 7.4);
+      var logD = P.estimateLogD(num(a.logP), num(a.pKa), pH, a.ionType);
+      if (isNum(logD)) o.logD = num(logD);
+    }
+
+    // 5. Ligand efficiency
+    if (isNum(a.pActivity)) {
+      o.efisiensi = P.ligandEfficiencyMetrics({
+        pActivity:  num(a.pActivity),
+        heavyAtoms: positiveNumOr(a.heavyAtoms, undefined),
+        mw:         positiveNumOr(a.mw,         undefined),
+        psa:        positiveNumOr(a.psa,        undefined),
+        logP:       isNum(a.logP) ? num(a.logP) : undefined
+      });
+    }
+
+    if (!Object.keys(o).length) {
+      throw new Error(
+        'affinity butuh salah satu kombinasi: kdNM>0 | deltaG | ' +
+        'ic50+substrate+km (semua >0) | pKa+ionType+logP | pActivity'
+      );
+    }
     return o;
   },
-  screen: function (a) { return P.screenLibrary(a.list); },
-  selftest: function () { var r = P.selfTest(false); return { ok: r.ok, lulus: r.passed, total: r.total, versi: r.version, gagal: r.results.filter(function (x) { return !x.ok; }).map(function (x) { return x.name; }).join('; ') || '—' }; }
-};
-    var TAB = { profile: 'drug', druglikeness: 'drug', lipinski: 'drug', dock: 'dock', lj: 'dock', affinity: 'aff', screen: 'lib', selftest: 'tst' };
 
+  screen: function (a) {
+    a = asObj(a);
+    if (!Array.isArray(a.list)) {
+      throw new Error('screen butuh "list" berupa array kandidat');
+    }
+    if (a.list.length === 0) {
+      throw new Error('screen: "list" kosong, tidak ada kandidat untuk diuji');
+    }
+    // Buang entri yang bukan objek agar P.screenLibrary tidak crash
+    var clean = a.list.filter(function (x) {
+      return x && typeof x === 'object' && !Array.isArray(x);
+    });
+    if (clean.length === 0) {
+      throw new Error('screen: semua entri "list" bukan objek valid');
+    }
+    return P.screenLibrary(clean);
+  },
+
+  selftest: function () {
+    needP('selfTest');
+    var r = P.selfTest(false);
+    if (!r || typeof r !== 'object') {
+      throw new Error('selfTest mengembalikan hasil tidak valid');
+    }
+    var results = Array.isArray(r.results) ? r.results : [];
+    var failed = results
+      .filter(function (x) { return x && !x.ok; })
+      .map(function (x) { return x.name || '?'; });
+    return {
+      ok:    !!r.ok,
+      lulus: r.passed,
+      total: r.total,
+      versi: r.version,
+      gagal: failed.join('; ') || '—'
+    };
+  }
+};
+    
+    var TAB = { profile: 'drug', druglikeness: 'drug', lipinski: 'drug', dock: 'dock', lj: 'dock', affinity: 'aff', screen: 'lib', selftest: 'tst' };
     /* ---------- lab (iframe terisolasi, satu kesatuan dengan CGONEXUS) ---------- */
     var ov = null, fr = null;
     function labDoc() {
