@@ -2679,6 +2679,11 @@ function blockHTML(b) {
                 if (!b.done) return '<div class="ui-pending"></div>';
                 try { return window.__nxpFence(b.code); } catch (e) {}
             }
+            // NEXUS DECK: fence nexusdeck -> kartu hasil kontrol Dewan atas LBC/EADI (modul aditif)
+            if ((lang0 === 'nexusdeck' || lang0 === 'nxd') && window.__nxdFence) {
+                if (!b.done) return '<div class="ui-pending"></div>';
+                try { return window.__nxdFence(b.code); } catch (e) {}
+            }
             // Full HTML → langsung tayang di sandbox (bukan hanya tombol EXEC)
             if (lang0 === 'html' || lang0 === 'htm') {
                 if (!b.done) return '<div class="ui-pending"></div>';
@@ -3730,7 +3735,7 @@ function createStream(flow, silent) {
 const LYRIC_RISK = /risik|risk|celah|\bgap\b|counterexample|contoh tandingan|gagal|failure|error|kontradiks|contradict|\bflaw|vulnerab|\bbug\b|asumsi tersembunyi|hidden assum/i;
 const UI_HINT_ID = 'ANTARMUKA (opsional, hemat): kode -> [UI:CODE|bahasa]...[/UI:CODE] atau blok kode biasa; grafik -> [UI:CHART|{JSON Chart.js valid}] (satu tag, tanpa fungsi/komentar); risiko fatal atau kontradiksi serius -> [UI:ALERT|kalimat singkat] (maksimal 1x); catatan pendukung singkat -> [UI:NOTE]...[/UI:NOTE]. Jangan taruh tag di dalam blok kode.';
 const UI_HINT_EN = 'INTERFACE (optional, sparing): code -> [UI:CODE|language]...[/UI:CODE] or a normal code block; chart -> [UI:CHART|{valid Chart.js JSON}] (one tag, no functions/comments); fatal risk or serious contradiction -> [UI:ALERT|short sentence] (max once); short supporting note -> [UI:NOTE]...[/UI:NOTE]. Never put tags inside code blocks.';
-function uiHint() { return (settings.lang === 'en' ? UI_HINT_EN : UI_HINT_ID) + (window.__nxpHint ? (function () { try { return window.__nxpHint(settings.lang === 'en'); } catch (e) { return ''; } })() : ''); }
+function uiHint() { return (settings.lang === 'en' ? UI_HINT_EN : UI_HINT_ID) + (window.__nxpHint ? (function () { try { return window.__nxpHint(settings.lang === 'en'); } catch (e) { return ''; } })() : '') + (window.__nxdHint ? (function () { try { return window.__nxdHint(settings.lang === 'en'); } catch (e) { return ''; } })() : ''); }
 
 function getSystemPrompt() { return getSystemPromptBase() + '\n\n' + uiHint(); }
 function getSystemPromptBase() {
@@ -5134,6 +5139,7 @@ assert('NexusPharma golden druglikeness', (function () {
     })());
     assert('NexusPharmaLab integration', typeof window.NexusPharmaLab === 'object' && typeof window.NexusPharmaLab.run === 'function');
     assert('__nxpFence callable', typeof window.__nxpFence === 'function');
+    assert('NexusDeckAI (LBC/EADI Dewan control)', typeof window.NexusDeckAI === 'object' && typeof window.__nxdFence === 'function' && typeof window.__nxdHint === 'function');
     assert('hydrate + buildChart + buildHtmlPreview', typeof hydrate === 'function' && typeof buildChart === 'function' && typeof buildHtmlPreview === 'function' && typeof buildScene3d === 'function');
     assert('APP_VERSION 10.0.6 robust-render', /10\.0\.6|robust-render|nexuspharma/i.test(String(APP_VERSION)));
 
@@ -8702,6 +8708,959 @@ document.addEventListener('DOMContentLoaded', () => {
     if (currentAbort) { try { currentAbort.abort(); } catch (_) {} }
   });
 });
+</script>
+
+<style id="nxd2-css">
+/* ===== NXD2 (aditif): upgrade LBC Vault & EADI Vault — File Vault, Explorer, Dewan Autopilot. Prefix nxd2-/nxd-card ===== */
+.nxd2-sec{display:flex;flex-direction:column;gap:8px}
+.nxd2-hud{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.nxd2-hud div{padding:.42rem .5rem;border-radius:11px;border:1px solid rgba(var(--k),.2);background:linear-gradient(160deg,rgba(var(--k),.08),rgba(2,5,14,.35));min-width:0}
+.nxd2-hud b{display:block;font:400 .46rem var(--nxd-mono);letter-spacing:.16em;color:var(--nxd-dim);text-transform:uppercase}
+.nxd2-hud span{display:block;font:500 .72rem var(--nxd-mono);color:var(--nxd-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nxd2-hud span.ok{color:#34d399}.nxd2-hud span.bad{color:#f87171}
+.nxd2-dw{display:flex;align-items:center;gap:8px;padding:.45rem .6rem;border-radius:12px;border:1px solid rgba(var(--k),.32);background:linear-gradient(90deg,rgba(var(--k),.12),rgba(2,5,14,.3));position:relative;overflow:hidden}
+.nxd2-dw .dot{width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 10px #34d399;flex:none}
+.nxd2-dw[data-on="0"] .dot{background:#f59e0b;box-shadow:0 0 10px #f59e0b}
+.nxd2-dw[data-busy="1"] .dot{animation:nxd2Pulse .7s ease-in-out infinite}
+.nxd2-dw b{font:500 .58rem var(--nxd-mono);letter-spacing:.22em;color:rgb(var(--k))}
+.nxd2-dw .st{flex:1;min-width:0;font:400 .56rem var(--nxd-mono);color:var(--nxd-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nxd2-dw button{min-height:30px;padding:.2rem .55rem;border-radius:9px;border:1px solid rgba(var(--k),.35);background:rgba(var(--k),.08);color:var(--nxd-ink);font:500 .52rem var(--nxd-mono);letter-spacing:.12em;cursor:pointer}
+.nxd2-dw button[aria-pressed="true"]{border-color:rgb(var(--k));color:rgb(var(--k));box-shadow:0 0 14px -4px rgba(var(--k),.9)}
+@keyframes nxd2Pulse{50%{opacity:.25;transform:scale(.7)}}
+.nxd-tab.nxd2-live{animation:nxd2Glow 1s ease-in-out infinite}
+@keyframes nxd2Glow{50%{box-shadow:0 0 22px 0 rgba(var(--k),.95)}}
+.nxd2-drop{position:relative;display:grid;place-items:center;min-height:84px;padding:10px;border-radius:14px;border:1.5px dashed rgba(var(--k),.45);background:radial-gradient(ellipse at 50% 0,rgba(var(--k),.1),transparent 70%),rgba(2,5,14,.3);text-align:center;transition:.2s}
+.nxd2-drop:hover,.nxd2-drop.over{border-color:rgb(var(--k));box-shadow:0 0 28px -8px rgba(var(--k),.85)}
+.nxd2-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.nxd2-drop .t{font:500 .62rem var(--nxd-mono);letter-spacing:.14em;color:rgb(var(--k))}
+.nxd2-drop .s{font:400 .54rem var(--nxd-mono);color:var(--nxd-dim);margin-top:3px}
+.nxd2-tray{display:flex;flex-direction:column;gap:6px;max-height:34dvh;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}
+.nxd2-f{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:.45rem .55rem;border-radius:12px;border:1px solid rgba(var(--k),.18);background:rgba(2,5,14,.38)}
+.nxd2-f.err{border-color:rgba(239,68,68,.6)}
+.nxd2-f .ico{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:rgba(var(--k),.1);color:rgb(var(--k))}
+.nxd2-f .ico svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.nxd2-f .nm{font:500 .66rem var(--nxd-mono);color:var(--nxd-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nxd2-f .mt{font:400 .52rem var(--nxd-mono);color:var(--nxd-dim);word-break:break-all;margin-top:2px}
+.nxd2-f .bar{height:3px;border-radius:3px;background:rgba(var(--k),.15);overflow:hidden;margin-top:4px}
+.nxd2-f .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,rgb(var(--c)),rgb(var(--c2)));transition:width .15s}
+.nxd2-f .ac{display:flex;gap:4px}
+.nxd2-ib{width:30px;height:30px;border-radius:9px;border:1px solid rgba(var(--k),.28);background:rgba(var(--k),.06);color:var(--nxd-ink);cursor:pointer;display:grid;place-items:center;padding:0}
+.nxd2-ib svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nxd2-ib:hover{border-color:rgb(var(--k));color:rgb(var(--k))}
+.nxd2-sw{display:flex;gap:8px;align-items:center;font:400 .56rem var(--nxd-mono);color:var(--nxd-dim)}
+.nxd2-sw input{width:auto!important;margin:0;accent-color:rgb(var(--k))}
+.nxd2-sec select{width:100%;padding:.55rem .6rem;border-radius:12px;border:1px solid rgba(var(--k),.25);background:rgba(2,5,14,.5);color:var(--nxd-ink);font:400 .7rem var(--nxd-mono)}
+.nxd2-ex{position:fixed;inset:0;z-index:70;display:none;align-items:stretch;justify-content:center;background:rgba(2,4,10,.72);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.nxd2-ex.open{display:flex}
+.nxd2-ex-in{--k:var(--c);width:min(46rem,100%);margin:0 auto;display:flex;flex-direction:column;background:linear-gradient(160deg,rgba(10,18,42,.96),rgba(5,9,22,.96));border-left:1px solid rgba(var(--k),.3);border-right:1px solid rgba(var(--k),.3);padding-top:env(safe-area-inset-top)}
+.nxd2-ex-h{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(var(--k),.2)}
+.nxd2-ex-h .pt{font:500 .72rem var(--nxd-mono);letter-spacing:.3em;color:rgb(var(--k));text-shadow:0 0 14px rgba(var(--k),.7)}
+.nxd2-ex-t{padding:10px 14px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid rgba(var(--k),.12)}
+.nxd2-ex-l{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:10px 14px calc(14px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:7px}
+.nxd2-b{border-radius:12px;border:1px solid rgba(var(--k),.2);background:rgba(2,5,14,.42);overflow:hidden}
+.nxd2-b>button.hd{all:unset;box-sizing:border-box;width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:.55rem .65rem;cursor:pointer;font:400 .62rem var(--nxd-mono);color:var(--nxd-ink)}
+.nxd2-b>button.hd:focus-visible{outline:2px solid rgb(var(--k))}
+.nxd2-b .no{font-weight:600;color:rgb(var(--k))}
+.nxd2-b .tt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nxd2-b .tm{color:var(--nxd-dim);font-size:.54rem}
+.nxd2-b .dt{display:none;padding:.2rem .65rem .65rem;border-top:1px dashed rgba(var(--k),.18)}
+.nxd2-b.open .dt{display:block}
+.nxd2-pre{margin:6px 0 0;padding:.5rem .6rem;border-radius:10px;background:rgba(2,5,14,.55);border:1px solid rgba(var(--k),.14);font:400 .58rem/1.5 var(--nxd-mono);color:var(--nxd-ink);white-space:pre-wrap;word-break:break-all;max-height:22dvh;overflow:auto}
+.nxd-card{--k:61,236,255;margin:.6rem 0;border-radius:16px;border:1px solid rgba(var(--k),.38);background:linear-gradient(160deg,rgba(10,18,42,.7),rgba(5,9,22,.55));box-shadow:0 0 34px -16px rgba(var(--k),.7);overflow:hidden;font-family:var(--mono,ui-monospace,Menlo,Consolas,monospace)}
+.nxd-card[data-state="err"]{--k:239,68,68}.nxd-card[data-state="wait"]{--k:245,158,11}.nxd-card[data-state="restored"]{--k:139,92,246}
+.nxd-card .ch{display:flex;align-items:center;gap:8px;padding:.5rem .7rem;border-bottom:1px solid rgba(var(--k),.2);font-size:.62rem;letter-spacing:.14em}
+.nxd-card .ch b{color:rgb(var(--k))}.nxd-card .ch span{color:var(--dim,#9ab);flex:1}
+.nxd-card .ch i{font-style:normal;font-size:.54rem;padding:.12rem .45rem;border-radius:99px;border:1px solid rgba(var(--k),.5);color:rgb(var(--k))}
+.nxd-card .cb{padding:.55rem .7rem}
+.nxd-card table{width:100%;border-collapse:collapse;font-size:.64rem}
+.nxd-card th{text-align:left;font-weight:400;color:var(--dim,#9ab);padding:.2rem .5rem .2rem 0;white-space:nowrap;vertical-align:top}
+.nxd-card td{padding:.2rem 0;word-break:break-all;color:var(--ink,#e9edf5)}
+.nxd-card .cn{margin-top:.4rem;font-size:.6rem;color:var(--dim,#9ab);line-height:1.5}
+.nxd-card .ca{display:flex;flex-wrap:wrap;gap:6px;padding:0 .7rem .65rem}
+.nxd-card .nxd-act{min-height:34px;padding:.3rem .7rem;border-radius:10px;border:1px solid rgba(var(--k),.5);background:rgba(var(--k),.1);color:var(--ink,#e9edf5);font:500 .58rem var(--mono,monospace);letter-spacing:.1em;cursor:pointer}
+.nxd-card .nxd-act:hover{box-shadow:0 0 16px -4px rgba(var(--k),.9)}
+.nxd-card .sp{display:inline-block;width:10px;height:10px;border-radius:50%;border:2px solid rgba(var(--k),.3);border-top-color:rgb(var(--k));animation:nxd2Spin .8s linear infinite;vertical-align:-1px;margin-right:6px}
+@keyframes nxd2Spin{to{transform:rotate(360deg)}}
+body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,255,255,.97),rgba(238,241,246,.97));color:#0b1220}
+@media(max-width:520px){.nxd2-hud{grid-template-columns:repeat(2,1fr)}.nxd2-ex-in{border:0}}
+@media(prefers-reduced-motion:reduce){.nxd2-dw .dot,.nxd-tab.nxd2-live,.nxd-card .sp{animation:none}}
+.nxd2-ex .nxd-btn[aria-pressed="true"]{border-color:rgb(var(--k));color:rgb(var(--k));box-shadow:0 0 16px -6px rgba(var(--k),.9)}
+.nxd2-ex .nxd-btn{--b:var(--k)}
+.nxd2-xr{display:flex;flex-direction:column;gap:8px}
+.nxd2-xr img.pv{max-width:100%;max-height:34dvh;object-fit:contain;border-radius:12px;border:1px solid rgba(var(--k),.3);background:#02040a;display:block;margin:0 auto}
+</style>
+<script id="nxd2-js">
+/* ===== NXD2 · LBC VAULT & EADI VAULT UPGRADE (aditif, idempoten, terisolasi try/catch) =====
+   File Vault (upload semua jenis file, hash Merkle RFC 6962), LBC Explorer + Receipt, payload FILE untuk EADI,
+   anchor hasil EADI ke LBC, dan Dewan Autopilot (blok ```nexusdeck). Tidak mengubah/menimpa kode nxd-js.
+   Menyegel selalu lewat tombol SEAL milik nxd-js sehingga ledger/trie tetap satu sumber kebenaran. */
+(function () {
+  'use strict';
+  try {
+    var D = document, root = D.getElementById('nxd-root');
+    if (!root || window.NexusDeckAI) return;
+    var pL = D.getElementById('nxd-p-lbc'), pE = D.getElementById('nxd-p-eadi');
+    var bL = pL && pL.querySelector('.nxd-body'), bE = pE && pE.querySelector('.nxd-body');
+    if (!bL || !bE) return;
+
+    /* ───────── util ───────── */
+    var LKEY = 'nxd.lbc.v1', RKEY = 'nxd2.records.v1', AKEY = 'nxd2.auto', UKEY = 'nxd2.anchor', NKEY = 'nxd2.runs.v1';
+    var ZERO = new Array(65).join('0'), MAX_ITER = 100;
+    var LBC = function () { return window.NexusLBC; }, EADI = function () { return window.NexusEADI; }, SE = function () { return window.SuperEnterprise; };
+    var $ = function (s, r) { return (r || D).querySelector(s); };
+    var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+    var ls = function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } };
+    var lsSet = function (k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
+    var jparse = function (s, f) { try { var v = JSON.parse(s); return v == null ? f : v; } catch (e) { return f; } };
+    var toast = function (t, warn) { try { showToast(t, 2800, !!warn); } catch (e) {} };
+    var elog = function (m) { try { logEvent('SYSTEM', '[NEXUS-DECK] ' + m); } catch (e) {} };
+    var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+    var nextFrame = function () { return new Promise(function (r) { requestAnimationFrame(function () { r(); }); }); };
+    var reduce = (function () { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } })();
+    var short = function (h, a, b) { h = String(h || ''); return h.length > a + b + 1 ? h.slice(0, a) + '…' + h.slice(-b) : (h || '—'); };
+    var hex = function (u8) { var s = '', a = u8 instanceof Uint8Array ? u8 : new Uint8Array(u8); for (var i = 0; i < a.length; i++) s += (a[i] < 16 ? '0' : '') + a[i].toString(16); return s; };
+    var fmtBytes = function (n) { n = +n; if (!isFinite(n) || n < 0) return '0 B'; if (n < 1024) return n + ' B'; if (n < 1048576) return (n / 1024).toFixed(1) + ' KB'; if (n < 1073741824) return (n / 1048576).toFixed(2) + ' MB'; return (n / 1073741824).toFixed(2) + ' GB'; };
+    var tstr = function (ts) { try { return new Date(ts).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }); } catch (e) { return String(ts); } };
+    var mk = function (tag, cls, text) { var e = D.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+    var utf8len = function (s) { try { return new TextEncoder().encode(s).length; } catch (e) { return String(s).length; } };
+    function waitFor(fn, ms, step) {
+      return new Promise(function (res, rej) {
+        var t0 = Date.now();
+        (function tick() {
+          var v = null; try { v = fn(); } catch (e) {}
+          if (v) return res(v);
+          if (Date.now() - t0 > ms) return rej(new Error('Waktu habis menunggu proses selesai.'));
+          setTimeout(tick, step || 100);
+        })();
+      });
+    }
+    function saveFile(name, blob) {
+      var u = URL.createObjectURL(blob), a = D.createElement('a'); a.href = u; a.download = name; a.rel = 'noopener'; a.style.display = 'none';
+      D.body.appendChild(a); a.click(); setTimeout(function () { try { a.remove(); URL.revokeObjectURL(u); } catch (e) {} }, 4000);
+    }
+    function sha256Hex(bytes) { var lib = LBC(); return lib && lib.sha256Hex ? lib.sha256Hex(bytes) : ''; }
+    async function sha256Buf(buf) {
+      if (window.crypto && crypto.subtle) return hex(new Uint8Array(await crypto.subtle.digest('SHA-256', buf)));
+      var lib = LBC(); if (!lib) throw new Error('SuperLBC.js belum termuat');
+      return lib.sha256Hex(buf instanceof Uint8Array ? buf : new Uint8Array(buf));
+    }
+
+    var IC = {
+      image: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="1.7"/><path d="M3 17l5-4.5 4 3.5 3-2.5 6 5"/></svg>',
+      doc: '<svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/></svg>',
+      sheet: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M4 15h16M10 4v16"/></svg>',
+      code: '<svg viewBox="0 0 24 24"><path d="M9 8l-5 4 5 4M15 8l5 4-5 4M13.5 5l-3 14"/></svg>',
+      audio: '<svg viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/></svg>',
+      video: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="13" height="14" rx="2.5"/><path d="M16 10l5-3v10l-5-3"/></svg>',
+      archive: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10h14V9M10 13h4"/></svg>',
+      data: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>',
+      other: '<svg viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>',
+      copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
+      x: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+      dl: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 11l5 5 5-5M5 20h14"/></svg>'
+    };
+    var EXT = {
+      image: 'png jpg jpeg gif webp bmp svg avif heic tif tiff ico',
+      doc: 'pdf doc docx odt rtf txt md tex epub ppt pptx',
+      sheet: 'xls xlsx ods csv tsv',
+      code: 'js ts jsx tsx py java c cpp h cs go rs rb php html htm css json xml yml yaml sh sql ipynb',
+      audio: 'mp3 wav ogg flac m4a aac opus',
+      video: 'mp4 mkv webm mov avi m4v',
+      archive: 'zip rar 7z tar gz bz2 xz tgz',
+      data: 'bin dat db sqlite parquet pkl npy hdf5 fasta fa pdb sdf mol2 smi cif gb'
+    };
+    function extOf(n) { var i = String(n).lastIndexOf('.'); return i > 0 && i < n.length - 1 ? n.slice(i + 1).toLowerCase().slice(0, 10) : ''; }
+    function catOf(name, type) {
+      type = String(type || '');
+      if (/^image\//.test(type)) return 'image'; if (/^audio\//.test(type)) return 'audio'; if (/^video\//.test(type)) return 'video';
+      var e = extOf(name);
+      for (var k in EXT) if (EXT[k].split(' ').indexOf(e) >= 0) return k;
+      if (/^text\//.test(type)) return 'doc';
+      return 'other';
+    }
+
+    /* ───────── state ───────── */
+    var S = { auto: ls(AKEY) !== '0', anchor: ls(UKEY) === '1', tray: [], seq: 0, X: null, XE: null, pend: null, q: 0, busy: '', last: [], hashing: false };
+    var REC = jparse(ls(RKEY) || '[]', []); if (!Array.isArray(REC)) REC = [];
+    var RUNS = jparse(ls(NKEY) || '{}', {}); if (!RUNS || typeof RUNS !== 'object' || Array.isArray(RUNS)) RUNS = {};
+
+    /* ───────── ledger + records ───────── */
+    var blockMsg = function (b) { return 'NEXUS-LBC/v1|' + b.h + '|' + b.prev + '|' + b.key + '|' + b.root; };
+    function ledger() { var o = jparse(ls(LKEY) || 'null', null); return o && Array.isArray(o.blocks) ? o.blocks : []; }
+    function recSave() {
+      for (var i = 0; i < MAX_ITER; i++) { var s = JSON.stringify(REC); if (s.length < 2500000 || REC.length < 2) { lsSet(RKEY, s); return; } REC.shift(); }
+    }
+    function recByKey(k) { for (var i = 0; i < REC.length; i++) if (REC[i].key === k) return REC[i]; return null; }
+    function addRecord(r) {
+      if (!r || !r.key) return;
+      var o = recByKey(r.key);
+      if (o) { for (var k in r) if (r[k] != null) o[k] = r[k]; } else REC.push(r);
+      if (REC.length > 300) REC.splice(0, REC.length - 300);
+      recSave();
+    }
+    function verifyBlock(b, prevHash, rec) {
+      var lib = LBC(), r = { sig: false, bh: false, link: null, key: null };
+      if (!lib) return r;
+      try { r.sig = !!lib.schnorrVerify(b.sig, blockMsg(b), b.pub); } catch (e) {}
+      try { r.bh = lib.sha256Hex(blockMsg(b) + '|' + b.sig) === b.bh; } catch (e) {}
+      if (prevHash !== undefined) r.link = b.prev === prevHash;
+      if (rec && typeof rec.text === 'string') { try { r.key = lib.sha256Hex(b.h + '|' + b.ts + '|' + rec.text) === b.key; } catch (e) {} }
+      r.ok = r.sig && r.bh && r.link !== false && r.key !== false;
+      return r;
+    }
+    async function chainCheck(blocks) {
+      var issues = [], prev = ZERO, lib = LBC();
+      if (!lib) return { ok: false, issues: ['SuperLBC.js belum termuat'], n: 0 };
+      for (var i = 0; i < blocks.length && i < 500; i++) {
+        var b = blocks[i], v = verifyBlock(b, prev, recByKey(b.key));
+        if (!v.sig) issues.push('#' + b.h + ': signature tidak valid');
+        if (!v.bh) issues.push('#' + b.h + ': block hash tidak cocok');
+        if (v.link === false) issues.push('#' + b.h + ': tautan prev putus');
+        if (v.key === false) issues.push('#' + b.h + ': isi payload tidak cocok dengan key');
+        prev = b.bh; if (i % 4 === 3) await sleep(0);
+      }
+      return { ok: !issues.length, issues: issues, n: blocks.length };
+    }
+    function buildReceipt(b) {
+      var rec = recByKey(b.key);
+      return {
+        format: 'NEXUS-LBC-RECEIPT/1', exportedAt: new Date().toISOString(),
+        block: { h: b.h, ts: b.ts, key: b.key, root: b.root, prev: b.prev, sig: b.sig, pub: b.pub, bh: b.bh },
+        kind: rec ? rec.kind : null, title: rec ? rec.title : null, payload: rec && typeof rec.text === 'string' ? rec.text : null, files: rec && rec.files ? rec.files : null,
+        verify: ['key = sha256(h|ts|payload)', 'msg = "NEXUS-LBC/v1|h|prev|key|root"', 'Schnorr BIP-340 verify(sig, msg, pub)', 'bh = sha256(msg|sig)']
+      };
+    }
+
+    /* ───────── antrian (mutex) + indikator Dewan ───────── */
+    var Q = { p: Promise.resolve(), n: 0, run: function (fn) {
+      Q.n++; paintDewan();
+      var r = Q.p.then(function () { return fn(); });
+      Q.p = r.then(function () { Q.n = Math.max(0, Q.n - 1); paintDewan(); }, function () { Q.n = Math.max(0, Q.n - 1); paintDewan(); });
+      return r;
+    } };
+    function pushLast(s) { S.last.unshift(s); if (S.last.length > 8) S.last.length = 8; paintDewan(); }
+
+    /* ───────── Dewan bar (indikator + autopilot) ───────── */
+    var bars = [];
+    function mkDewan() {
+      var w = mk('div', 'nxd2-dw'), st = mk('span', 'st', 'siaga · menunggu perintah Dewan'), tg = mk('button', null, 'AUTOPILOT ON');
+      tg.type = 'button'; tg.title = 'Autopilot ON: perintah Dewan (blok nexusdeck) dijalankan otomatis. OFF: Dewan harus minta izin lewat tombol.';
+      tg.addEventListener('click', function () { setAuto(!S.auto); });
+      w.appendChild(mk('span', 'dot')); w.appendChild(mk('b', null, 'DEWAN')); w.appendChild(st); w.appendChild(tg);
+      w._st = st; w._tg = tg; bars.push(w); return w;
+    }
+    function setAuto(v) { S.auto = !!v; lsSet(AKEY, S.auto ? '1' : '0'); paintDewan(); toast('Autopilot Dewan ' + (S.auto ? 'AKTIF' : 'NONAKTIF — Dewan meminta izin dulu')); }
+    function paintDewan() {
+      var busy = !!(S.busy || Q.n);
+      bars.forEach(function (w) {
+        w.dataset.on = S.auto ? '1' : '0'; w.dataset.busy = busy ? '1' : '0';
+        w._tg.setAttribute('aria-pressed', S.auto ? 'true' : 'false'); w._tg.textContent = 'AUTOPILOT ' + (S.auto ? 'ON' : 'OFF');
+        w._st.textContent = S.busy ? '⚙ ' + S.busy + (Q.n > 1 ? ' · antrian ' + (Q.n - 1) : '') : (S.last[0] || 'siaga · menunggu perintah Dewan');
+      });
+      try { root.querySelectorAll('.nxd-tab[data-tab="lbc"],.nxd-tab[data-tab="eadi"]').forEach(function (t) { t.classList.toggle('nxd2-live', busy); }); } catch (e) {}
+      try { refreshStats(); } catch (e) {}
+    }
+
+    /* ───────── File Vault: tray + hashing ───────── */
+    var CH = 1048576, WHOLE_MAX = 64 * 1048576, FILE_MAX = 256 * 1048576, TRAY_MAX = 30;
+    async function hashFile(f, onp) {
+      var se = SE(); if (!se || typeof se.buildMerkleTree !== 'function') throw new Error('Modul SuperEnterprise belum siap — muat ulang halaman.');
+      var n = Math.max(1, Math.ceil(f.size / CH)), leaves = [], whole = null, buf = null;
+      if (f.size <= WHOLE_MAX) { buf = await f.arrayBuffer(); whole = await sha256Buf(buf); }
+      for (var i = 0; i < n && i < 300; i++) {
+        var a = i * CH, b = Math.min(f.size, a + CH), part;
+        if (buf) part = new Uint8Array(buf, a, b - a); else part = await f.slice(a, b).arrayBuffer();
+        leaves.push(new Uint8Array(window.crypto && crypto.subtle ? await crypto.subtle.digest('SHA-256', part) : LBC().sha256(part instanceof Uint8Array ? part : new Uint8Array(part))));
+        if (onp) onp((i + 1) / n);
+        if (i % 4 === 3) await sleep(0);
+      }
+      var rootB = await se.buildMerkleTree(leaves, { domainSeparation: true, oddStrategy: 'promote' });
+      return { sha256: whole, merkle: hex(rootB), chunks: n };
+    }
+    function findTray(name) {
+      if (name == null) return null; var q = String(name).toLowerCase();
+      for (var i = 0; i < S.tray.length; i++) if (S.tray[i].name.toLowerCase() === q || S.tray[i].id === q) return S.tray[i];
+      for (var j = 0; j < S.tray.length; j++) if (S.tray[j].name.toLowerCase().indexOf(q) >= 0) return S.tray[j];
+      return null;
+    }
+    var isReady = function (e) { return e && e.state === 'ready'; };
+    function addFiles(list) {
+      var arr = [].slice.call(list || []), added = 0;
+      for (var i = 0; i < arr.length && i < 60; i++) {
+        var f = arr[i];
+        if (S.tray.length >= TRAY_MAX) { toast('Tray penuh (maks ' + TRAY_MAX + ' file).', true); break; }
+        if (!f || !f.size) { toast((f && f.name || 'File') + ': kosong (0 byte) dilewati.', true); continue; }
+        if (f.size > FILE_MAX) { toast(f.name + ': melebihi ' + fmtBytes(FILE_MAX) + ', dilewati.', true); continue; }
+        S.tray.push({ id: 'f' + (++S.seq), file: f, name: String(f.name || 'file').slice(0, 120), size: f.size, type: f.type || '', ext: extOf(f.name || ''), cat: catOf(f.name || '', f.type), state: 'queued', prog: 0, sha256: null, merkle: null, chunks: 0, err: '', dup: false });
+        added++;
+      }
+      renderTray(); pumpTray(); return added;
+    }
+    async function pumpTray() {
+      if (S.hashing) return; S.hashing = true;
+      try {
+        for (var g = 0; g < MAX_ITER * 3; g++) {
+          var e = null; for (var i = 0; i < S.tray.length; i++) if (S.tray[i].state === 'queued') { e = S.tray[i]; break; }
+          if (!e) break;
+          e.state = 'hashing'; var lastP = 0; renderTray();
+          try {
+            var r = await hashFile(e.file, function (p) { e.prog = p; if (p - lastP > .04 || p >= 1) { lastP = p; renderTrayProg(e); } });
+            e.sha256 = r.sha256; e.merkle = r.merkle; e.chunks = r.chunks; e.state = 'ready'; e.prog = 1;
+            e.dup = S.tray.some(function (o) { return o !== e && isReady(o) && ((o.sha256 && o.sha256 === e.sha256) || (o.merkle === e.merkle && o.size === e.size)); });
+          } catch (err) { e.state = 'error'; e.err = (err && err.message) || String(err); }
+          renderTray();
+        }
+      } finally { S.hashing = false; renderTray(); fillEadiSelect(); refreshStats(); }
+    }
+    function removeFile(id) { S.tray = S.tray.filter(function (e) { return e.id !== id; }); renderTray(); fillEadiSelect(); refreshStats(); }
+    var trayEl = mk('div', 'nxd2-tray'), trayMsg = mk('div', 'nxd-msg'); trayMsg.setAttribute('aria-live', 'polite');
+    function setTrayMsg(t, kind) { trayMsg.textContent = t || ''; trayMsg.className = 'nxd-msg' + (kind ? ' ' + kind : ''); }
+    function renderTrayProg(e) { var n = trayEl.querySelector('[data-fid="' + e.id + '"] .bar i'); if (n) n.style.width = Math.round(e.prog * 100) + '%'; }
+    function renderTray() {
+      trayEl.textContent = '';
+      if (!S.tray.length) { trayEl.appendChild(mk('div', 'nxd-note', 'Tray kosong. Unggah file apa pun — hash SHA-256 + Merkle root dihitung di perangkat, tanpa mengirim isi file ke mana pun.')); return; }
+      S.tray.forEach(function (e) {
+        var row = mk('div', 'nxd2-f' + (e.state === 'error' ? ' err' : '')); row.dataset.fid = e.id;
+        var ico = mk('div', 'ico'); ico.innerHTML = IC[e.cat] || IC.other;
+        var mid = mk('div'), nm = mk('div', 'nm', e.name), mt = mk('div', 'mt');
+        mid.appendChild(nm);
+        if (e.state === 'ready') mt.textContent = fmtBytes(e.size) + ' · ' + (e.ext ? '.' + e.ext : 'bin') + ' · ' + e.chunks + ' chunk\nSHA ' + (e.sha256 ? short(e.sha256, 10, 6) : 'n/a (>64MB)') + '\nMERKLE ' + short(e.merkle, 10, 6) + (e.dup ? '\n⚠ duplikat isi dengan file lain di tray' : '');
+        else if (e.state === 'error') mt.textContent = '✗ ' + e.err;
+        else mt.textContent = fmtBytes(e.size) + ' · ' + (e.state === 'hashing' ? 'menghitung hash…' : 'antre');
+        mt.style.whiteSpace = 'pre-line'; mid.appendChild(mt);
+        if (e.state === 'hashing' || e.state === 'queued') { var bar = mk('div', 'bar'), bi = mk('i'); bi.style.width = Math.round(e.prog * 100) + '%'; bar.appendChild(bi); mid.appendChild(bar); }
+        var ac = mk('div', 'ac');
+        if (e.state === 'ready') { var cp = mk('button', 'nxd2-ib'); cp.type = 'button'; cp.title = 'Salin SHA-256 / Merkle'; cp.setAttribute('aria-label', 'Salin hash ' + e.name); cp.innerHTML = IC.copy; cp.addEventListener('click', function () { copyTxt(e.sha256 || e.merkle, 'Hash'); }); ac.appendChild(cp); }
+        var rm = mk('button', 'nxd2-ib'); rm.type = 'button'; rm.title = 'Hapus dari tray'; rm.setAttribute('aria-label', 'Hapus ' + e.name); rm.innerHTML = IC.x; rm.addEventListener('click', function () { removeFile(e.id); }); ac.appendChild(rm);
+        row.appendChild(ico); row.appendChild(mid); row.appendChild(ac); trayEl.appendChild(row);
+      });
+    }
+    async function copyTxt(t, label) { try { await navigator.clipboard.writeText(t); toast((label || 'Teks') + ' disalin'); } catch (e) { toast('Clipboard ditolak browser', true); } }
+
+    /* ───────── menyegel lewat tombol SEAL milik nxd-js ───────── */
+    function showPanel(tab) { try { if (window.NexusDeck && window.NexusDeck.open) window.NexusDeck.open(tab); } catch (e) {} }
+    function sealText(text, meta) {
+      meta = meta || {};
+      return Q.run(async function () {
+        var sealBtn = $('#nxd-seal'), lin = $('#nxd-lbc-in'), lmsg = $('#nxd-lmsg');
+        if (!LBC()) throw new Error('SuperLBC.js belum termuat (letakkan di folder yang sama dengan CGONEXUS.html).');
+        if (!sealBtn || !lin) throw new Error('Panel LBC tidak ditemukan.');
+        text = String(text == null ? '' : text).trim(); if (!text) throw new Error('Payload kosong.');
+        S.busy = meta.busy || 'menyegel ke LBC…'; paintDewan();
+        try {
+          await waitFor(function () { return !sealBtn.disabled; }, 60000, 150);
+          var draft = lin.value, before = ledger().length;
+          lin.value = text; lin.dispatchEvent(new Event('input', { bubbles: true }));
+          sealBtn.click();
+          if (!sealBtn.disabled) { lin.value = draft; lin.dispatchEvent(new Event('input', { bubbles: true })); throw new Error((lmsg && lmsg.textContent) || 'SEAL ditolak.'); }
+          await waitFor(function () { return !sealBtn.disabled; }, 90000, 100);
+          var blocks = ledger(); lin.value = draft; lin.dispatchEvent(new Event('input', { bubbles: true }));
+          if (blocks.length <= before) throw new Error((lmsg && lmsg.textContent) || 'SEAL gagal.');
+          var b = blocks[blocks.length - 1];
+          if (sha256Hex(b.h + '|' + b.ts + '|' + text) !== b.key) throw new Error('Key blok tidak cocok dengan payload (anomali).');
+          addRecord({ key: b.key, h: b.h, ts: b.ts, kind: meta.kind || 'text', title: String(meta.title || text.split('\n')[0] || 'Catatan').slice(0, 90), text: text, files: meta.files || null, extra: meta.extra || null, by: meta.by || 'user' });
+          S.pend = null; renderLedgerSafe(); refreshStats();
+          return b;
+        } finally { S.busy = ''; paintDewan(); }
+      });
+    }
+    function renderLedgerSafe() { try { if (typeof refreshExplorer === 'function') refreshExplorer(); } catch (e) {} }
+    async function sealFiles(opts) {
+      opts = opts || {};
+      var names = opts.files, list;
+      if (!names || names === 'all' || (Array.isArray(names) && names.indexOf('all') >= 0)) list = S.tray.filter(isReady);
+      else list = [].concat(names).map(findTray).filter(isReady);
+      if (!list.length) throw new Error('Tidak ada file siap di tray. Unggah file di LBC Vault › FILE VAULT dan tunggu hash selesai.');
+      var mkEntry = function (e) { return { n: e.name.slice(0, 80), s: e.size, t: (e.type || e.ext || 'bin').slice(0, 40), h: e.sha256, m: e.merkle, c: e.chunks }; };
+      var batches = [], cur = [];
+      list.forEach(function (e) {
+        var test = cur.concat([mkEntry(e)]);
+        if (cur.length && JSON.stringify({ nexus: 'files/1', note: String(opts.note || '').slice(0, 200), part: '99/99', files: test }).length > 3700) { batches.push(cur); cur = []; }
+        cur.push(mkEntry(e));
+      });
+      if (cur.length) batches.push(cur);
+      var out = [];
+      for (var i = 0; i < batches.length && i < 20; i++) {
+        var manifest = JSON.stringify({ nexus: 'files/1', note: String(opts.note || '').slice(0, 200), part: (i + 1) + '/' + batches.length, files: batches[i] });
+        var b = await sealText(manifest, { kind: 'file', title: (opts.title || 'File Vault') + ' · ' + batches[i].length + ' file' + (batches.length > 1 ? ' (' + (i + 1) + '/' + batches.length + ')' : ''), files: batches[i], by: opts.by || 'user', busy: 'menyegel manifest file ' + (i + 1) + '/' + batches.length });
+        out.push(b);
+      }
+      return out;
+    }
+
+    /* ───────── UI LBC: HUD + Dewan + File Vault ───────── */
+    var HEX64 = /^[0-9a-f]{64}$/, HEX128 = /^[0-9a-f]{128}$/;
+    function tile(label) { var d = mk('div'), b = mk('b', null, label), v = mk('span', null, '—'); d.appendChild(b); d.appendChild(v); return { box: d, val: v }; }
+    var hudL = mk('div', 'nxd2-hud'), tBlk = tile('BLOK'), tFile = tile('FILE TERSEGEL'), tChain = tile('TAUTAN'), tTray = tile('TRAY');
+    [tBlk, tFile, tChain, tTray].forEach(function (t) { hudL.appendChild(t.box); });
+    var topL = mk('div', 'nxd2-sec'); topL.appendChild(hudL); topL.appendChild(mkDewan());
+    var banL = $('#nxd-lbc-ban', pL); bL.insertBefore(topL, banL ? banL.nextSibling : bL.firstChild);
+
+    var lin0 = $('#nxd-lbc-in'), payloadSec = lin0 && lin0.parentNode;
+    var fv = mk('div', 'nxd2-sec'); fv.id = 'nxd2-fv';
+    fv.innerHTML = '<div class="nxd-lab">File Vault <i>semua jenis file · hash di perangkat</i></div>' +
+      '<label class="nxd2-drop" id="nxd2-drop"><input type="file" id="nxd2-file" multiple aria-label="Pilih file untuk File Vault"><div><div class="t">DROP FILE APA PUN</div><div class="s">PDF · gambar · dokumen · FASTA/PDB/SDF · ZIP · audio/video · maks 256 MB per file</div></div></label>';
+    fv.appendChild(trayEl);
+    var noteIn = mk('input'); noteIn.type = 'text'; noteIn.id = 'nxd2-note'; noteIn.maxLength = 160; noteIn.placeholder = 'Catatan manifest (opsional)'; noteIn.setAttribute('aria-label', 'Catatan manifest');
+    fv.appendChild(noteIn);
+    var sealFilesBtn = mk('button', 'nxd-btn pri', 'SEAL FILES TO BLOCKCHAIN'); sealFilesBtn.type = 'button'; sealFilesBtn.id = 'nxd2-sealfiles'; fv.appendChild(sealFilesBtn);
+    var rowF = mk('div', 'nxd-row');
+    var vfBtn = mk('button', 'nxd-btn sm', 'Verifikasi file'), clrBtn = mk('button', 'nxd-btn sm', 'Kosongkan tray'), exBtn = mk('button', 'nxd-btn sm', 'LBC Explorer');
+    [vfBtn, clrBtn, exBtn].forEach(function (b) { b.type = 'button'; rowF.appendChild(b); });
+    fv.appendChild(rowF); fv.appendChild(trayMsg);
+    var vfIn = mk('input'); vfIn.type = 'file'; vfIn.hidden = true; vfIn.id = 'nxd2-vfile'; fv.appendChild(vfIn);
+    if (payloadSec) bL.insertBefore(fv, payloadSec); else bL.appendChild(fv);
+    renderTray();
+
+    var dropEl = $('#nxd2-drop'), fileEl = $('#nxd2-file');
+    fileEl.addEventListener('change', function () { var n = addFiles(fileEl.files); fileEl.value = ''; if (n) setTrayMsg(n + ' file masuk tray, menghitung hash…'); });
+    ['dragenter', 'dragover'].forEach(function (ev) { dropEl.addEventListener(ev, function (e) { e.preventDefault(); dropEl.classList.add('over'); }); });
+    ['dragleave', 'drop'].forEach(function (ev) { dropEl.addEventListener(ev, function (e) { e.preventDefault(); dropEl.classList.remove('over'); }); });
+    dropEl.addEventListener('drop', function (e) { var n = addFiles(e.dataTransfer && e.dataTransfer.files); if (n) setTrayMsg(n + ' file masuk tray, menghitung hash…'); });
+    clrBtn.addEventListener('click', function () { if (!S.tray.length) return; S.tray = []; renderTray(); fillEadiSelect(); refreshStats(); setTrayMsg('Tray dikosongkan.'); });
+    sealFilesBtn.addEventListener('click', async function () {
+      if (sealFilesBtn.disabled) return;
+      if (S.tray.some(function (e) { return e.state === 'queued' || e.state === 'hashing'; })) return setTrayMsg('Tunggu hash selesai dulu.', 'bad');
+      sealFilesBtn.disabled = true; setTrayMsg('Menyegel manifest file…');
+      try {
+        var bl = await sealFiles({ note: noteIn.value, by: 'user' });
+        setTrayMsg('✓ ' + bl.length + ' blok tersegel (#' + bl.map(function (b) { return b.h; }).join(', #') + '). Buka LBC Explorer untuk receipt.', 'ok'); noteIn.value = '';
+      } catch (e) { setTrayMsg('Gagal: ' + (e && e.message || e), 'bad'); }
+      finally { sealFilesBtn.disabled = false; }
+    });
+    vfBtn.addEventListener('click', function () { vfIn.click(); });
+    vfIn.addEventListener('change', async function () {
+      var f = vfIn.files && vfIn.files[0]; vfIn.value = ''; if (!f) return;
+      if (!f.size) return setTrayMsg('File kosong.', 'bad'); if (f.size > FILE_MAX) return setTrayMsg('File terlalu besar (maks 256 MB).', 'bad');
+      setTrayMsg('Menghitung hash ' + f.name + '…');
+      try { var h = await hashFile(f, null); setTrayMsg(describeLocate(f.name, h.sha256, h.merkle, f.size), locate(h.sha256, h.merkle, f.size).length ? 'ok' : 'bad'); }
+      catch (e) { setTrayMsg('Gagal: ' + (e && e.message || e), 'bad'); }
+    });
+    exBtn.addEventListener('click', function () { openExplorer(); });
+
+    function locate(sha, merkle, size) {
+      var hits = [];
+      REC.forEach(function (r) { (r.files || []).forEach(function (f) { if ((sha && f.h === sha) || (merkle && f.m === merkle && (!size || f.s === size))) hits.push({ rec: r, f: f }); }); });
+      return hits;
+    }
+    function hitStatus(hit) {
+      var bl = ledger(), idx = -1;
+      for (var i = 0; i < bl.length; i++) if (bl[i].key === hit.rec.key) { idx = i; break; }
+      if (idx < 0) return { found: false, h: hit.rec.h };
+      var v = verifyBlock(bl[idx], idx ? bl[idx - 1].bh : ZERO, hit.rec);
+      return { found: true, block: bl[idx], v: v, h: bl[idx].h };
+    }
+    function describeLocate(name, sha, merkle, size) {
+      var hits = locate(sha, merkle, size);
+      if (!hits.length) return '✗ ' + name + ' — TIDAK ditemukan di ledger perangkat ini.\nSHA ' + short(sha || merkle, 12, 8) + '\n(Hanya ledger & riwayat di perangkat ini yang dicek.)';
+      var lines = ['✓ ' + name + ' — TERSEGEL (' + hits.length + ' catatan)'];
+      hits.slice(0, 4).forEach(function (h) {
+        var st = hitStatus(h);
+        lines.push(st.found ? ('Blok #' + st.h + ' · ' + tstr(st.block.ts) + ' · ' + (st.v.ok ? 'SCHNORR ✓ KEY ✓ TAUTAN ✓' : 'VERIFIKASI GAGAL (sig=' + st.v.sig + ', key=' + st.v.key + ', link=' + st.v.link + ')')) : ('Catatan #' + st.h + ' ada, tetapi bloknya tidak ada di ledger (ledger direset?)'));
+      });
+      return lines.join('\n');
+    }
+
+    /* ───────── statistik + sinkronisasi catatan ───────── */
+    var lcountEl = $('#nxd-lcount');
+    function quickChain(bl) {
+      var prev = ZERO, lib = LBC(); if (!lib) return null;
+      for (var i = 0; i < bl.length && i < 500; i++) {
+        var b = bl[i]; if (b.prev !== prev) return false;
+        try { if (lib.sha256Hex(blockMsg(b) + '|' + b.sig) !== b.bh) return false; } catch (e) { return false; }
+        prev = b.bh;
+      }
+      if (bl.length) { try { var l = bl[bl.length - 1]; if (!lib.schnorrVerify(l.sig, blockMsg(l), l.pub)) return false; } catch (e) { return false; } }
+      return true;
+    }
+    function syncRecords() {
+      var bl = ledger(), lib = LBC(); if (!lib) return;
+      for (var i = Math.max(0, bl.length - 5); i < bl.length; i++) {
+        var b = bl[i]; if (recByKey(b.key)) continue;
+        if (S.pend != null && sha256Hex(b.h + '|' + b.ts + '|' + S.pend) === b.key) { addRecord({ key: b.key, h: b.h, ts: b.ts, kind: 'text', title: String(S.pend.split('\n')[0] || 'Catatan').slice(0, 90), text: S.pend, by: 'user' }); S.pend = null; }
+      }
+    }
+    function refreshStats() {
+      var bl = ledger(), fcount = 0, keys = {};
+      bl.forEach(function (b) { keys[b.key] = 1; });
+      REC.forEach(function (r) { if (keys[r.key] && r.files) fcount += r.files.length; });
+      tBlk.val.textContent = String(bl.length);
+      tFile.val.textContent = String(fcount);
+      var qc = bl.length ? quickChain(bl) : null;
+      tChain.val.textContent = qc === null ? '—' : (qc ? 'OK' : 'RUSAK'); tChain.val.className = qc === null ? '' : (qc ? 'ok' : 'bad');
+      var rd = S.tray.filter(isReady).length; tTray.val.textContent = rd + '/' + S.tray.length;
+      try { eHudRefresh(); } catch (e) {}
+    }
+    if (lcountEl) { try { new MutationObserver(function () { syncRecords(); refreshStats(); refreshExplorerSafe(); }).observe(lcountEl, { childList: true, characterData: true, subtree: true }); } catch (e) {} }
+    pL.addEventListener('click', function (e) { try { if (e.target && e.target.closest && e.target.closest('#nxd-seal')) { var l = $('#nxd-lbc-in'); S.pend = l ? l.value.trim() : null; } } catch (x) {} }, true);
+    pL.addEventListener('keydown', function (e) { try { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && e.target && e.target.id === 'nxd-lbc-in') S.pend = e.target.value.trim(); } catch (x) {} }, true);
+    function refreshExplorerSafe() { try { if (typeof refreshExplorer === 'function') refreshExplorer(); } catch (e) {} }
+
+    /* ───────── LBC Explorer ───────── */
+    var EX = { el: null, q: '', kind: 'all', limit: 60, list: null, msg: null, cnt: null };
+    var KIND_LABEL = { file: 'FILE', text: 'TEKS', eadi: 'EADI' };
+    function kvBox(label, val) {
+      var d = mk('div', 'nxd-kv'), b = mk('b', null, label), c = mk('code', null, val == null ? '—' : String(val));
+      d.appendChild(b); d.appendChild(c); d.addEventListener('click', function () { copyTxt(String(val), label); }); return d;
+    }
+    function chipEl(text, bad, info) { return mk('span', 'nxd-chip' + (bad ? ' bad' : info ? ' info' : ''), text); }
+    function matchBlock(b, rec, q) {
+      var hay = [b.h, b.key, b.root, b.bh, b.pub, rec && rec.title, rec && rec.text, rec && rec.kind];
+      if (rec && rec.files) rec.files.forEach(function (f) { hay.push(f.n, f.h, f.m); });
+      return hay.join(' ').toLowerCase().indexOf(q) >= 0;
+    }
+    function receiptFile(b) { var blob = new Blob([JSON.stringify(buildReceipt(b), null, 2)], { type: 'application/json' }); saveFile('nexus-receipt-blok' + b.h + '.json', blob); }
+    function buildDetail(dt, b, rec) {
+      var all = ledger(), idx = -1; for (var i = 0; i < all.length; i++) if (all[i].key === b.key) { idx = i; break; }
+      var v = verifyBlock(b, idx > 0 ? all[idx - 1].bh : (idx === 0 ? ZERO : undefined), rec), chips = mk('div', 'nxd-chips');
+      chips.appendChild(chipEl(v.sig ? 'SCHNORR ✓' : 'SCHNORR ✗', !v.sig)); chips.appendChild(chipEl(v.bh ? 'BLOCK HASH ✓' : 'BLOCK HASH ✗', !v.bh));
+      if (v.link !== null) chips.appendChild(chipEl(v.link ? 'TAUTAN PREV ✓' : 'TAUTAN PREV ✗', !v.link));
+      if (v.key !== null) chips.appendChild(chipEl(v.key ? 'PAYLOAD↔KEY ✓' : 'PAYLOAD↔KEY ✗', !v.key)); else chips.appendChild(chipEl('PAYLOAD TIDAK TERSIMPAN DI PERANGKAT', false, true));
+      dt.appendChild(chips);
+      [['Root hash', b.root], ['Signature', b.sig], ['Key (SHA-256 isi)', b.key], ['Signer', b.pub], ['Block hash', b.bh], ['Prev', b.prev === ZERO ? 'GENESIS' : b.prev]].forEach(function (p) { dt.appendChild(kvBox(p[0], p[1])); });
+      if (rec && rec.files && rec.files.length) {
+        var lab = mk('div', 'nxd-lab', 'File dalam blok'); dt.appendChild(lab);
+        rec.files.forEach(function (f) { var p = mk('div', 'nxd2-pre', f.n + '\n' + fmtBytes(f.s) + ' · ' + f.t + ' · ' + f.c + ' chunk\nSHA ' + (f.h || 'n/a') + '\nMERKLE ' + f.m); dt.appendChild(p); });
+      } else if (rec && typeof rec.text === 'string') { dt.appendChild(mk('div', 'nxd-lab', 'Payload')); dt.appendChild(mk('div', 'nxd2-pre', rec.text)); }
+      var row = mk('div', 'nxd-row'), r1 = mk('button', 'nxd-btn sm', 'Unduh receipt'), r2 = mk('button', 'nxd-btn sm', 'Salin block hash');
+      r1.type = r2.type = 'button'; r1.addEventListener('click', function () { receiptFile(b); }); r2.addEventListener('click', function () { copyTxt(b.bh, 'Block hash'); });
+      row.appendChild(r1); row.appendChild(r2); dt.appendChild(row);
+    }
+    function blockItem(b, rec) {
+      var box = mk('div', 'nxd2-b'), hd = mk('button', 'hd'), dt = mk('div', 'dt');
+      hd.type = 'button'; hd.setAttribute('aria-expanded', 'false');
+      var kind = rec ? rec.kind : null, title = rec ? rec.title : short(b.root, 12, 6);
+      hd.appendChild(mk('span', 'no', '#' + b.h)); hd.appendChild(mk('span', 'tt', title)); hd.appendChild(mk('span', 'tm', (KIND_LABEL[kind] || 'HASH') + ' · ' + tstr(b.ts)));
+      hd.addEventListener('click', function () {
+        var o = box.classList.toggle('open'); hd.setAttribute('aria-expanded', o ? 'true' : 'false');
+        if (o && !dt._b) { dt._b = 1; try { buildDetail(dt, b, rec); } catch (e) { dt.appendChild(mk('div', 'nxd-msg bad', 'Gagal memuat detail: ' + e.message)); } }
+      });
+      box.appendChild(hd); box.appendChild(dt); return box;
+    }
+    function renderExplorer() {
+      if (!EX.el) return;
+      var bl = ledger().slice().reverse(), q = EX.q.trim().toLowerCase(), n = 0, more = false; EX.list.textContent = '';
+      for (var i = 0; i < bl.length; i++) {
+        var b = bl[i], rec = recByKey(b.key), kind = rec ? rec.kind : 'hash';
+        if (EX.kind !== 'all' && kind !== EX.kind) continue;
+        if (q && !matchBlock(b, rec, q)) continue;
+        if (n >= EX.limit) { more = true; break; }
+        EX.list.appendChild(blockItem(b, rec)); n++;
+      }
+      if (!n) EX.list.appendChild(mk('div', 'nxd-note', bl.length ? 'Tidak ada blok yang cocok dengan filter.' : 'Ledger masih kosong. Segel teks, file, atau hasil EADI terlebih dulu.'));
+      if (more) { var mb = mk('button', 'nxd-btn sm', 'Muat lebih banyak'); mb.type = 'button'; mb.addEventListener('click', function () { EX.limit += 60; renderExplorer(); }); EX.list.appendChild(mb); }
+      EX.cnt.textContent = bl.length + ' blok · ' + n + ' ditampilkan';
+    }
+    function refreshExplorer() { if (EX.el && EX.el.classList.contains('open')) renderExplorer(); }
+    function exMsg(t, kind) { EX.msg.textContent = t || ''; EX.msg.className = 'nxd-msg' + (kind ? ' ' + kind : ''); }
+    function buildExplorer() {
+      if (EX.el) return;
+      var ov = mk('div', 'nxd2-ex'), inn = mk('div', 'nxd2-ex-in'); ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true'); ov.setAttribute('aria-label', 'LBC Explorer');
+      var h = mk('div', 'nxd2-ex-h'), pt = mk('div'), t1 = mk('div', 'pt', 'LBC EXPLORER'), cnt = mk('div', 'nxd-ps'), x = mk('button', 'nxd-x', '×'); x.type = 'button'; x.setAttribute('aria-label', 'Tutup Explorer');
+      pt.appendChild(t1); pt.appendChild(cnt); h.appendChild(pt); h.appendChild(x);
+      var tools = mk('div', 'nxd2-ex-t'), q = mk('input'); q.type = 'text'; q.placeholder = 'Cari: judul, isi, nama file, hash, nomor blok…'; q.setAttribute('aria-label', 'Cari blok');
+      var chipsRow = mk('div', 'nxd-row'), kinds = [['all', 'Semua'], ['text', 'Teks'], ['file', 'File'], ['eadi', 'EADI']];
+      kinds.forEach(function (k) { var b = mk('button', 'nxd-btn sm', k[1]); b.type = 'button'; b.setAttribute('aria-pressed', k[0] === 'all' ? 'true' : 'false'); b.addEventListener('click', function () { EX.kind = k[0]; EX.limit = 60; [].forEach.call(chipsRow.querySelectorAll('[aria-pressed]'), function (n) { n.setAttribute('aria-pressed', n === b ? 'true' : 'false'); }); renderExplorer(); }); chipsRow.appendChild(b); });
+      var act = mk('div', 'nxd-row'), vb = mk('button', 'nxd-btn sm', 'Verifikasi chain'), eb = mk('button', 'nxd-btn sm', 'Export ledger'), rb = mk('button', 'nxd-btn sm', 'Cek receipt…'), rf = mk('input');
+      [vb, eb, rb].forEach(function (b) { b.type = 'button'; act.appendChild(b); }); rf.type = 'file'; rf.accept = '.json,application/json'; rf.hidden = true; act.appendChild(rf);
+      var msg = mk('div', 'nxd-msg'); msg.setAttribute('aria-live', 'polite');
+      tools.appendChild(q); tools.appendChild(chipsRow); tools.appendChild(act); tools.appendChild(msg);
+      var list = mk('div', 'nxd2-ex-l'); inn.appendChild(h); inn.appendChild(tools); inn.appendChild(list); ov.appendChild(inn); root.appendChild(ov);
+      EX.el = ov; EX.list = list; EX.msg = msg; EX.cnt = cnt;
+      x.addEventListener('click', closeExplorer);
+      ov.addEventListener('click', function (e) { if (e.target === ov) closeExplorer(); });
+      var qt = 0; q.addEventListener('input', function () { clearTimeout(qt); qt = setTimeout(function () { EX.q = q.value; EX.limit = 60; renderExplorer(); }, 160); });
+      vb.addEventListener('click', async function () { vb.disabled = true; exMsg('Memverifikasi chain (signature, tautan, payload)…'); try { var r = await chainCheck(ledger()); exMsg(r.ok ? '✓ CHAIN VALID · ' + r.n + ' blok.' : '✗ ' + r.issues.length + ' masalah:\n' + r.issues.slice(0, 6).join('\n'), r.ok ? 'ok' : 'bad'); } catch (e) { exMsg('Gagal: ' + e.message, 'bad'); } finally { vb.disabled = false; } });
+      eb.addEventListener('click', function () { exportLedger(); exMsg('Ledger diekspor (tanpa kunci privat).', 'ok'); });
+      rb.addEventListener('click', function () { rf.click(); });
+      rf.addEventListener('change', async function () { var f = rf.files && rf.files[0]; rf.value = ''; if (!f) return; try { var r = await checkReceipt(f); exMsg(r.text, r.ok ? 'ok' : 'bad'); } catch (e) { exMsg('Gagal: ' + e.message, 'bad'); } });
+      D.addEventListener('keydown', function (e) { if (e.key === 'Escape' && EX.el.classList.contains('open')) { e.stopPropagation(); closeExplorer(); } }, true);
+    }
+    function openExplorer() { buildExplorer(); EX.el.classList.add('open'); renderExplorer(); }
+    function closeExplorer() { if (EX.el) EX.el.classList.remove('open'); }
+    function exportLedger() {
+      var bl = ledger(), keys = {}; bl.forEach(function (b) { keys[b.key] = 1; });
+      var o = { format: 'NEXUS-LBC-LEDGER/1', exportedAt: new Date().toISOString(), blocks: bl, records: REC.filter(function (r) { return keys[r.key]; }) };
+      saveFile('nexus-ledger-' + new Date().toISOString().slice(0, 10) + '.json', new Blob([JSON.stringify(o, null, 2)], { type: 'application/json' })); return o;
+    }
+    async function checkReceipt(file) {
+      if (file.size > 2000000) throw new Error('File receipt terlalu besar.');
+      var o = jparse(await file.text(), null), b = o && o.block;
+      if (!o || o.format !== 'NEXUS-LBC-RECEIPT/1' || !b) return { ok: false, text: '✗ Bukan receipt NEXUS-LBC yang valid.' };
+      var okFmt = Number.isInteger(b.h) && b.h > 0 && isFinite(b.ts) && ['key', 'root', 'prev', 'pub', 'bh'].every(function (k) { return typeof b[k] === 'string' && HEX64.test(b[k]); }) && typeof b.sig === 'string' && HEX128.test(b.sig);
+      if (!okFmt) return { ok: false, text: '✗ Field blok receipt tidak valid.' };
+      var blk = { h: b.h, ts: b.ts, key: b.key, root: b.root, prev: b.prev, sig: b.sig, pub: b.pub, bh: b.bh };
+      var v = verifyBlock(blk, undefined, typeof o.payload === 'string' ? { text: o.payload } : null), local = ledger().some(function (x) { return x.key === blk.key && x.bh === blk.bh; });
+      var lines = [v.ok ? '✓ RECEIPT VALID — blok #' + blk.h : '✗ RECEIPT TIDAK VALID', 'Schnorr: ' + (v.sig ? '✓' : '✗') + ' · Block hash: ' + (v.bh ? '✓' : '✗') + ' · Payload↔key: ' + (v.key === null ? 'tidak ada payload' : v.key ? '✓' : '✗'), 'Tercatat di ledger perangkat ini: ' + (local ? 'ya' : 'tidak'), 'Waktu segel: ' + tstr(blk.ts)];
+      return { ok: v.ok, text: lines.join('\n') };
+    }
+
+    /* ───────── EADI: payload FILE, anchor, extract ───────── */
+    var tCar = tile('PEMBAWA'), tCap = tile('KAPASITAS'), tPay = tile('PAYLOAD'), tRes = tile('HASIL');
+    var hudE = mk('div', 'nxd2-hud'); [tCar, tCap, tPay, tRes].forEach(function (t) { hudE.appendChild(t.box); });
+    var topE = mk('div', 'nxd2-sec'); topE.appendChild(hudE); topE.appendChild(mkDewan());
+    var banE = $('#nxd-eadi-ban', pE); bE.insertBefore(topE, banE ? banE.nextSibling : bE.firstChild);
+
+    var etxt0 = $('#nxd-e-text'), etxtSec = etxt0 && etxt0.parentNode;
+    var es = mk('div', 'nxd2-sec'); es.id = 'nxd2-es';
+    es.innerHTML = '<div class="nxd-lab">Payload file <i id="nxd2-e-fcap">kapasitas: —</i></div>' +
+      '<select id="nxd2-e-file" aria-label="Pilih file payload dari tray"><option value="">— pilih file dari tray —</option></select>' +
+      '<div class="nxd-meter" id="nxd2-meter"><i></i></div>' +
+      '<div class="nxd-row"><button type="button" class="nxd-btn sm" id="nxd2-addf">Tambah file…</button><button type="button" class="nxd-btn sm" id="nxd2-anchor-t">Anchor hasil teks ke LBC</button></div>' +
+      '<label class="nxd2-sw"><input type="checkbox" id="nxd2-auto-anchor"> Anchor otomatis hasil EMBED ke LBC (blok baru berisi SHA-256 PNG)</label>' +
+      '<button type="button" class="nxd-btn pri" id="nxd2-embed-f" disabled>EMBED FILE &amp; SECURE</button>' +
+      '<div class="nxd-row"><button type="button" class="nxd-btn sm" id="nxd2-extract-f" disabled>Extract file/teks dari pembawa</button></div>' +
+      '<div class="nxd-msg" id="nxd2-emsg" aria-live="polite"></div>' +
+      '<div class="nxd2-xr" id="nxd2-xres" hidden></div>' +
+      '<input type="file" id="nxd2-add-in" multiple hidden>';
+    if (etxtSec) bE.insertBefore(es, etxtSec.nextSibling); else bE.appendChild(es);
+    var selF = $('#nxd2-e-file'), embF = $('#nxd2-embed-f'), extF = $('#nxd2-extract-f'), emsg2 = $('#nxd2-emsg'), xres = $('#nxd2-xres'), chkA = $('#nxd2-auto-anchor'), addIn = $('#nxd2-add-in');
+    chkA.checked = S.anchor;
+    function setEMsg(t, kind) { emsg2.textContent = t || ''; emsg2.className = 'nxd-msg' + (kind ? ' ' + kind : ''); }
+    var loadImg = function (url) { return new Promise(function (res, rej) { var im = new Image(); im.onload = function () { res(im); }; im.onerror = function () { rej(new Error('Gambar tidak dapat didekode')); }; im.src = url; }); };
+    var toPng = function (cv) { return new Promise(function (res, rej) { cv.toBlob(function (b) { b ? res(b) : rej(new Error('Gagal membuat PNG')); }, 'image/png'); }); };
+    var carrierImgEl = function () { return $('#nxd-drop-in img'); };
+    function carrierName() { var s = $('#nxd-drop-in .s'), img = carrierImgEl(); return img && s ? String(s.textContent).split(' · ')[0] : ''; }
+    async function getCarrier() { var im = carrierImgEl(); if (!im || !im.src) return null; return await loadImg(im.src); }
+    function eopts(red) { var k = $('#nxd-e-key'), r = $('#nxd-e-red'), o = { redundancy: +(red || (r && r.value) || 1) }; if (k && k.value) o.key = k.value; return o; }
+
+    function packFrame(name, type, data) {
+      var te = new TextEncoder(), nb = te.encode(String(name)).slice(0, 255), tb = te.encode(String(type || '')).slice(0, 100);
+      var out = new Uint8Array(4 + 2 + nb.length + 2 + tb.length + data.length), dv = new DataView(out.buffer), o = 4;
+      out.set([0x4e, 0x58, 0x46, 0x31], 0); dv.setUint16(o, nb.length); o += 2; out.set(nb, o); o += nb.length; dv.setUint16(o, tb.length); o += 2; out.set(tb, o); o += tb.length; out.set(data, o);
+      return out;
+    }
+    function unpackFrame(u8) {
+      if (!u8 || u8.length < 8 || u8[0] !== 0x4e || u8[1] !== 0x58 || u8[2] !== 0x46 || u8[3] !== 0x31) return null;
+      var dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength), o = 4, nl = dv.getUint16(o), td = new TextDecoder(); o += 2;
+      if (o + nl + 2 > u8.length) return null; var name = td.decode(u8.subarray(o, o + nl)); o += nl;
+      var tl = dv.getUint16(o); o += 2; if (o + tl > u8.length) return null; var type = td.decode(u8.subarray(o, o + tl)); o += tl;
+      return { name: name, type: type, data: u8.subarray(o) };
+    }
+    var safeName = function (n) { return String(n || '').replace(/[\\\/:*?"<>|\u0000-\u001f]/g, '_').slice(0, 120) || 'extracted.bin'; };
+    var verdictOf = function (p) { if (!isFinite(p)) return 'tak ada perubahan'; if (p >= 45) return 'tak terbedakan'; if (p >= 40) return 'nyaris tak terlihat'; if (p >= 35) return 'baik'; if (p >= 30) return 'tipis terlihat'; return 'dapat terlihat'; };
+
+    function fillEadiSelect() {
+      if (!selF) return; var cur = selF.value; selF.textContent = '';
+      var o0 = mk('option', null, '— pilih file dari tray —'); o0.value = ''; selF.appendChild(o0);
+      S.tray.filter(isReady).forEach(function (e) { var o = mk('option', null, e.name + ' (' + fmtBytes(e.size) + ')'); o.value = e.id; selF.appendChild(o); });
+      if (cur && S.tray.some(function (e) { return e.id === cur; })) selF.value = cur;
+      updateFileCap();
+    }
+    var capCache = { bits: 0 };
+    function updateFileCap() {
+      var cap = $('#nxd2-e-fcap'), m = $('#nxd2-meter'), lib = EADI(), img = carrierImgEl(), e = findTray(selF.value);
+      embF.disabled = !(lib && img && e && isReady(e)); extF.disabled = !(lib && img);
+      if (!lib || !img) { cap.textContent = 'kapasitas: pilih gambar pembawa'; m.firstElementChild.style.width = '0'; capCache.bits = 0; return; }
+      loadImg(img.src).then(function (im) {
+        try {
+          var bits = lib.capacity(im, eopts()); capCache.bits = bits;
+          var need = e ? 72 + (packFrame(e.name, e.type, new Uint8Array(e.size)).length) * 8 : 0;
+          cap.textContent = e ? need + ' / ' + bits + ' bit' : 'maks ≈ ' + fmtBytes(Math.max(0, Math.floor((bits - 72) / 8) - 120));
+          m.classList.toggle('over', !!e && need > bits); m.firstElementChild.style.width = e ? Math.max(2, Math.min(100, need / bits * 100)) + '%' : '0';
+          embF.disabled = !(e && isReady(e)) || need > bits;
+        } catch (err) { cap.textContent = 'kapasitas: ' + err.message; }
+        eHudRefresh();
+      }, function () { cap.textContent = 'kapasitas: gambar tidak terbaca'; });
+    }
+    function eHudRefresh() {
+      var info = $('#nxd-e-info'), img = carrierImgEl();
+      tCar.val.textContent = img && info ? info.textContent : '—';
+      tCap.val.textContent = capCache.bits ? '≈' + fmtBytes(Math.max(0, Math.floor((capCache.bits - 72) / 8))) : '—';
+      tPay.val.textContent = selF && selF.value ? 'FILE' : 'TEKS';
+      tRes.val.textContent = S.X ? (isFinite(S.X.rep.psnr) ? S.X.rep.psnr.toFixed(1) + ' dB' : '∞') : '—'; tRes.val.className = S.X ? (S.X.verified ? 'ok' : 'bad') : '';
+    }
+    selF.addEventListener('change', updateFileCap);
+    ['nxd-e-key', 'nxd-e-red'].forEach(function (id) { var n = $('#' + id); if (n) { n.addEventListener('input', updateFileCap); n.addEventListener('change', updateFileCap); } });
+    try { var di = $('#nxd-drop-in'); if (di) new MutationObserver(function () { updateFileCap(); }).observe(di, { childList: true, subtree: true }); } catch (e) {}
+    $('#nxd2-addf').addEventListener('click', function () { addIn.click(); });
+    addIn.addEventListener('change', function () { var n = addFiles(addIn.files); addIn.value = ''; if (n) setEMsg(n + ' file ditambahkan ke tray (hash dihitung).'); });
+    chkA.addEventListener('change', function () { S.anchor = chkA.checked; lsSet(UKEY, S.anchor ? '1' : '0'); });
+
+    async function sha256Blob(blob) { return await sha256Buf(await blob.arrayBuffer()); }
+    async function doEmbed(j) {
+      var lib = EADI(); if (!lib) throw new Error('SuperEADI.js belum termuat (letakkan di folder yang sama).');
+      if (j.carrier) { var ce = findTray(j.carrier); if (!ce || ce.cat !== 'image') throw new Error('Pembawa "' + j.carrier + '" tidak ada di tray atau bukan gambar.'); await setCarrier(ce); }
+      var img = await getCarrier(); if (!img) throw new Error('Belum ada gambar pembawa. Unggah gambar di panel EADI (atau minta Dewan memakai gambar dari tray).');
+      var opts = eopts(j.redundancy && [1, 3, 5].indexOf(+j.redundancy) >= 0 ? +j.redundancy : 0), kind, label, frame = null, plainText = null, payloadSize;
+      if (j.file) {
+        var fe = findTray(j.file); if (!fe || !isReady(fe)) throw new Error('File "' + j.file + '" tidak ada di tray / hash belum selesai.');
+        var data = new Uint8Array(await fe.file.arrayBuffer()); frame = packFrame(fe.name, fe.type, data); kind = 'file'; label = fe.name; payloadSize = fe.size;
+        if (frame.length > 65535) throw new Error('Payload file terlalu besar untuk EADI (maks ≈64 KB termasuk header).');
+      } else if (typeof j.text === 'string' && j.text) { kind = 'text'; plainText = j.text; label = 'teks'; payloadSize = utf8len(j.text); }
+      else throw new Error('Tentukan "text" atau "file" untuk di-embed.');
+      var cap = lib.capacity(img, opts), need = 72 + (frame ? frame.length : utf8len(plainText)) * 8;
+      if (need > cap) throw new Error('Payload (' + need + ' bit) melebihi kapasitas gambar (' + cap + ' bit). Pakai gambar lebih besar / redundansi 1×.');
+      S.busy = 'EADI: menanam payload di domain DCT…'; paintDewan();
+      try {
+        await nextFrame(); await sleep(reduce ? 0 : 250);
+        var T0 = performance.now(), canvas = frame ? lib.embedBytes(img, frame, opts) : lib.embedText(img, plainText, opts), rep = canvas.nexusReport || {};
+        var blob = await toPng(canvas), url = URL.createObjectURL(blob), back = await loadImg(url), verified = false, rex;
+        if (frame) { rex = lib.extractBytes(back, opts); verified = !!(rex.ok && rex.bytes && rex.bytes.length === frame.length && rex.bytes.every(function (v, i) { return v === frame[i]; })); }
+        else { rex = lib.extractText(back, opts); verified = !!(rex.ok && rex.text === plainText); }
+        var sha = await sha256Blob(blob);
+        if (S.X && S.X.url) { try { URL.revokeObjectURL(S.X.url); } catch (e) {} }
+        S.X = { blob: blob, url: url, rep: rep, verified: verified, sha: sha, kind: kind, label: label, payloadSize: payloadSize, carrier: carrierName(), redundancy: opts.redundancy, keyed: !!opts.key, w: img.naturalWidth, h: img.naturalHeight, ms: Math.round(performance.now() - T0), anchor: null };
+        paintX(); eHudRefresh();
+        return S.X;
+      } finally { S.busy = ''; paintDewan(); }
+    }
+    async function anchorX(by) {
+      if (!S.X) throw new Error('Belum ada hasil EMBED untuk di-anchor.');
+      var x = S.X, manifest = JSON.stringify({ nexus: 'eadi-anchor/1', png: x.sha, bytes: x.blob.size, w: x.w, h: x.h, payload: { kind: x.kind, name: x.kind === 'file' ? String(x.label).slice(0, 80) : undefined, size: x.payloadSize }, psnr: isFinite(x.rep.psnr) ? +x.rep.psnr.toFixed(2) : null, rep: x.redundancy, keyed: x.keyed, verified: x.verified });
+      var b = await sealText(manifest, { kind: 'eadi', title: 'EADI anchor · ' + (x.kind === 'file' ? x.label : 'teks') + ' · PNG ' + short(x.sha, 8, 4), extra: { png: x.sha }, by: by || 'user', busy: 'meng-anchor hasil EADI ke LBC…' });
+      x.anchor = b; paintX(); return b;
+    }
+    async function anchorBlobUrl(href, by) {
+      var blob = await (await fetch(href)).blob(), sha = await sha256Blob(blob);
+      var im = await loadImg(href), manifest = JSON.stringify({ nexus: 'eadi-anchor/1', png: sha, bytes: blob.size, w: im.naturalWidth, h: im.naturalHeight, payload: { kind: 'text' } });
+      return await sealText(manifest, { kind: 'eadi', title: 'EADI anchor · teks · PNG ' + short(sha, 8, 4), extra: { png: sha }, by: by || 'user', busy: 'meng-anchor hasil EADI ke LBC…' });
+    }
+    function paintX() {
+      var x = S.X; xres.textContent = ''; if (!x) { xres.hidden = true; return; } xres.hidden = false;
+      var hl = mk('div', 'nxd-lab', 'Hasil payload file/teks '); hl.appendChild(mk('i', null, 'dari modul NXD2')); xres.appendChild(hl);
+      var pv = mk('img', 'pv'); pv.src = x.url; pv.alt = 'Gambar hasil embed'; xres.appendChild(pv);
+      var chips = mk('div', 'nxd-chips'); chips.appendChild(chipEl(x.verified ? 'ROUND-TRIP ✓' : 'ROUND-TRIP ✗', !x.verified)); chips.appendChild(chipEl((isFinite(x.rep.psnr) ? x.rep.psnr.toFixed(2) : '∞') + ' dB · ' + verdictOf(x.rep.psnr), false, true));
+      chips.appendChild(chipEl((x.kind === 'file' ? 'FILE ' : 'TEKS ') + fmtBytes(x.payloadSize), false, true)); chips.appendChild(chipEl('PNG ' + fmtBytes(x.blob.size), false, true));
+      if (x.anchor) chips.appendChild(chipEl('ANCHOR LBC #' + x.anchor.h, false)); xres.appendChild(chips);
+      xres.appendChild(kvBox('SHA-256 PNG', x.sha));
+      var row = mk('div', 'nxd-row'), dl = mk('button', 'nxd-btn sm', 'Unduh PNG'), an = mk('button', 'nxd-btn sm', x.anchor ? 'Receipt anchor' : 'Anchor ke LBC'), xr = mk('button', 'nxd-btn sm', 'Ekstrak dari hasil');
+      dl.type = an.type = xr.type = 'button'; row.appendChild(dl); row.appendChild(an); row.appendChild(xr); xres.appendChild(row);
+      xr.addEventListener('click', function () { extractFlow({ from: 'result' }, xr); });
+      xres.appendChild(mk('div', 'nxd-note', 'Simpan & kirim sebagai PNG. Kompresi JPEG/aplikasi chat dapat merusak watermark.'));
+      dl.addEventListener('click', function () { saveFile((String(x.label).replace(/\.[^.]+$/, '') || 'nexus') + '.nexus.png', x.blob); });
+      an.addEventListener('click', async function () { an.disabled = true; try { if (x.anchor) receiptFile(x.anchor); else { await anchorX('user'); setEMsg('✓ Hasil di-anchor ke LBC (blok #' + x.anchor.h + ').', 'ok'); } } catch (e) { setEMsg('Gagal anchor: ' + (e && e.message || e), 'bad'); } finally { an.disabled = false; } });
+    }
+    async function setCarrier(entry) {
+      var inp = $('#nxd-file'); if (!inp) throw new Error('Input pembawa tidak ditemukan.');
+      if (typeof DataTransfer === 'undefined') throw new Error('Browser tidak mendukung pemilihan otomatis — pilih gambar pembawa manual.');
+      var dt = new DataTransfer(); dt.items.add(entry.file); inp.files = dt.files; inp.dispatchEvent(new Event('change', { bubbles: true }));
+      await waitFor(function () { return carrierName() === entry.name || (carrierImgEl() && String((($('#nxd-drop-in .s') || {}).textContent) || '').indexOf(entry.name) === 0); }, 8000, 120);
+    }
+    async function doExtract(j) {
+      j = j || {}; var lib = EADI(); if (!lib) throw new Error('SuperEADI.js belum termuat.');
+      var fromRes = j.from === 'result' && S.X, img = fromRes ? await loadImg(S.X.url) : await getCarrier();
+      if (!img) throw new Error(j.from === 'result' ? 'Belum ada hasil EMBED untuk diekstrak.' : 'Belum ada gambar pembawa di panel EADI.');
+      var r = lib.extractBytes(img, eopts(fromRes ? S.X.redundancy : 0));
+      if (!r.ok) return { ok: false, reason: r.reason || 'Tidak ditemukan' };
+      var fr = unpackFrame(r.bytes), out;
+      if (fr) { out = { ok: true, kind: 'file', name: safeName(fr.name), type: fr.type, size: fr.data.length, blob: new Blob([fr.data], { type: fr.type || 'application/octet-stream' }) }; }
+      else { var txt = ''; try { txt = new TextDecoder('utf-8', { fatal: false }).decode(r.bytes); } catch (e) {} out = { ok: true, kind: 'text', size: r.bytes.length, text: txt }; }
+      S.XE = out; return out;
+    }
+    embF.addEventListener('click', async function () {
+      if (embF.disabled) return; embF.disabled = true; setEMsg('Menanam file di domain DCT…');
+      try { var fe = findTray(selF.value); var x = await Q.run(function () { return doEmbed({ file: fe && fe.name, by: 'user' }); }); if (S.anchor) await anchorX('user'); setEMsg(x.verified ? '✓ Selesai. File terverifikasi dapat diekstrak kembali dari PNG hasil.' : '⚠ Tertanam, tetapi verifikasi balik GAGAL.', x.verified ? 'ok' : 'bad'); }
+      catch (e) { setEMsg('Gagal: ' + (e && e.message || e), 'bad'); } finally { updateFileCap(); }
+    });
+    async function extractFlow(j, btn) {
+      if (btn) btn.disabled = true; setEMsg('Mengekstrak…');
+      try {
+        var r = await doExtract(j);
+        if (!r.ok) setEMsg('✗ ' + r.reason + '\nPeriksa kunci sebar & redundansi — harus sama dengan saat embed.', 'bad');
+        else if (r.kind === 'file') {
+          setEMsg('✓ File ditemukan: ' + r.name + ' (' + fmtBytes(r.size) + '). Mengunduh…', 'ok'); saveFile(r.name, r.blob);
+        } else setEMsg('✓ Teks ditemukan (' + r.size + ' byte):\n' + r.text, 'ok');
+      } catch (e) { setEMsg('Gagal: ' + (e && e.message || e), 'bad'); } finally { if (btn) btn.disabled = false; updateFileCap(); }
+    }
+    extF.addEventListener('click', function () { extractFlow({}, extF); });
+    $('#nxd2-anchor-t').addEventListener('click', async function () {
+      var res = $('#nxd-e-res'), dl = $('#nxd-dl');
+      if (!res || res.hidden || !dl || !dl.href || dl.href.slice(-1) === '#') return setEMsg('Belum ada hasil EMBED teks di panel ini.', 'bad');
+      try { var b = await anchorBlobUrl(dl.href, 'user'); setEMsg('✓ Hasil teks di-anchor ke LBC (blok #' + b.h + ').', 'ok'); } catch (e) { setEMsg('Gagal anchor: ' + (e && e.message || e), 'bad'); }
+    });
+    try { var eres = $('#nxd-e-res'); if (eres) new MutationObserver(function () {
+      var dl = $('#nxd-dl'); if (!S.anchor || eres.hidden || !dl || !dl.href || dl.href === S.lastAnch || dl.href.slice(-1) === '#') return;
+      S.lastAnch = dl.href; anchorBlobUrl(dl.href, 'user').then(function (b) { setEMsg('✓ Hasil teks otomatis di-anchor ke LBC (blok #' + b.h + ').', 'ok'); }, function (e) { setEMsg('Auto-anchor gagal: ' + (e && e.message || e), 'bad'); });
+    }).observe(eres, { attributes: true, attributeFilter: ['hidden'] }); } catch (e) {}
+    fillEadiSelect();
+
+    /* ───────── operasi yang dapat dijalankan Dewan ───────── */
+    var OPS = {}, MUT = { seal: 1, seal_files: 1, embed: 1, anchor: 1 };
+    var blockRows = function (b) { return [['Blok', '#' + b.h], ['Waktu', tstr(b.ts)], ['Root', short(b.root, 14, 8)], ['Key', short(b.key, 14, 8)], ['Signature', short(b.sig, 16, 8)], ['Block hash', short(b.bh, 14, 8)]]; };
+    var receiptEntry = function (b) { return { label: 'Receipt blok #' + b.h, name: 'nexus-receipt-blok' + b.h + '.json', blob: new Blob([JSON.stringify(buildReceipt(b), null, 2)], { type: 'application/json' }) }; };
+    function autoSave(files, j) { if (j && j.save && S.auto) (files || []).slice(0, 3).forEach(function (f) { try { saveFile(f.name, f.blob); } catch (e) {} }); }
+    OPS.status = async function () {
+      var bl = ledger(), last = bl[bl.length - 1], qc = bl.length ? quickChain(bl) : null;
+      return { ok: true, title: 'Status Deck', summary: 'status', rows: [['LBC', LBC() ? 'v' + LBC().version : 'TIDAK TERMUAT'], ['EADI', EADI() ? 'v' + EADI().version : 'TIDAK TERMUAT'], ['Blok', bl.length], ['Root terakhir', last ? short(last.root, 14, 8) : '—'], ['Tautan chain', qc === null ? '—' : qc ? 'OK' : 'RUSAK'], ['Tray file', S.tray.filter(isReady).length + ' siap / ' + S.tray.length], ['Pembawa EADI', carrierName() || 'belum ada'], ['Hasil embed', S.X ? (S.X.verified ? 'terverifikasi' : 'gagal verifikasi') : '—'], ['Autopilot', S.auto ? 'ON' : 'OFF']], actions: [{ act: 'open', tab: 'lbc', label: 'Buka LBC' }, { act: 'open', tab: 'eadi', label: 'Buka EADI' }] };
+    };
+    OPS.seal = async function (j) {
+      showPanel('lbc');
+      var text = String(j.text == null ? '' : j.text).trim(); if (!text) throw new Error('"text" wajib diisi.');
+      if (text.length > 3500) throw new Error('Teks maks 3500 karakter. Untuk dokumen besar, minta user mengunggah file lalu pakai seal_files.');
+      var b = await sealText(text, { kind: 'text', title: j.title, by: 'dewan', busy: 'Dewan menyegel catatan…' }), files = [receiptEntry(b)]; autoSave(files, j);
+      return { ok: true, title: 'Tersegel · blok #' + b.h, summary: 'seal → blok #' + b.h, rows: blockRows(b), files: files, actions: [{ act: 'open', tab: 'lbc', label: 'Buka LBC' }, { act: 'explorer', label: 'Explorer' }] };
+    };
+    OPS.seal_files = async function (j) {
+      showPanel('lbc');
+      var bl = await sealFiles({ files: j.files, note: j.note, title: j.title, by: 'dewan' }), rows = [], files = [];
+      bl.forEach(function (b) { rows.push(['Blok #' + b.h, short(b.root, 14, 8)]); var rc = recByKey(b.key); if (rc && rc.files) rc.files.forEach(function (f) { rows.push(['  file', f.n + ' · ' + fmtBytes(f.s) + ' · SHA ' + (f.h ? short(f.h, 8, 4) : 'merkle ' + short(f.m, 8, 4))]); }); files.push(receiptEntry(b)); });
+      autoSave(files, j);
+      return { ok: true, title: bl.length + ' blok manifest file tersegel', summary: 'seal_files → ' + bl.map(function (b) { return '#' + b.h; }).join(','), rows: rows, files: files, actions: [{ act: 'open', tab: 'lbc', label: 'Buka LBC' }, { act: 'explorer', label: 'Explorer' }] };
+    };
+    OPS.verify_chain = async function () {
+      var r = await chainCheck(ledger());
+      return { ok: r.ok, title: r.ok ? 'CHAIN VALID' : 'CHAIN BERMASALAH', summary: 'verify_chain ' + (r.ok ? 'valid' : 'gagal'), rows: [['Blok', r.n]].concat(r.issues.slice(0, 8).map(function (s) { return ['masalah', s]; })), actions: [{ act: 'explorer', label: 'Explorer' }] };
+    };
+    OPS.verify_file = async function (j) {
+      var e = findTray(j.name || j.file); if (!e) throw new Error('File tidak ada di tray.'); if (!isReady(e)) throw new Error('Hash file belum selesai / gagal.');
+      var lines = describeLocate(e.name, e.sha256, e.merkle, e.size).split('\n'), ok = lines[0].charAt(0) === '✓';
+      return { ok: true, title: ok ? 'File TERSEGEL' : 'File belum tersegel', summary: 'verify_file ' + (ok ? 'ada' : 'tidak ada'), rows: lines.map(function (l, i) { return [i ? '' : 'Hasil', l]; }), actions: [{ act: 'explorer', label: 'Explorer' }] };
+    };
+    OPS.find = async function (j) {
+      var rows = [], q;
+      if (j.name) { var e = findTray(j.name); if (!e || !isReady(e)) throw new Error('File tidak ada di tray / belum selesai di-hash.'); describeLocate(e.name, e.sha256, e.merkle, e.size).split('\n').forEach(function (l) { rows.push(['', l]); }); }
+      else if (j.sha256) { q = String(j.sha256).toLowerCase(); var hits = locate(q, q, 0); rows.push(['Cocok', hits.length + ' catatan']); hits.slice(0, 6).forEach(function (h) { var st = hitStatus(h); rows.push(['Blok', st.found ? '#' + st.h + ' · ' + (st.v.ok ? 'valid' : 'GAGAL') : 'tidak ada di ledger']); }); }
+      else if (j.q) { q = String(j.q).toLowerCase(); var bl = ledger(), n = 0; for (var i = bl.length - 1; i >= 0 && n < 8; i--) { var rc = recByKey(bl[i].key); if (matchBlock(bl[i], rc, q)) { rows.push(['#' + bl[i].h, (rc ? rc.title : short(bl[i].root, 12, 6))]); n++; } } if (!n) rows.push(['Hasil', 'tidak ada blok cocok']); }
+      else throw new Error('Isi salah satu: name, sha256, atau q.');
+      return { ok: true, title: 'Hasil pencarian', summary: 'find', rows: rows, actions: [{ act: 'explorer', label: 'Explorer' }] };
+    };
+    OPS.embed = async function (j) {
+      showPanel('eadi');
+      var x = await Q.run(function () { return doEmbed(j); }), files = [{ label: 'PNG hasil', name: (String(x.label).replace(/\.[^.]+$/, '') || 'nexus') + '.nexus.png', blob: x.blob }], anchored = null;
+      if (j.anchor) { anchored = await anchorX('dewan'); files.push(receiptEntry(anchored)); }
+      autoSave(files, j);
+      return { ok: x.verified, title: x.verified ? 'EMBED berhasil & terverifikasi' : 'EMBED selesai tetapi verifikasi balik GAGAL', summary: 'embed ' + x.kind + (anchored ? ' + anchor #' + anchored.h : ''), rows: [['Payload', (x.kind === 'file' ? 'FILE ' : 'TEKS ') + fmtBytes(x.payloadSize)], ['Pembawa', x.carrier + ' (' + x.w + '×' + x.h + ')'], ['PSNR', (isFinite(x.rep.psnr) ? x.rep.psnr.toFixed(2) : '∞') + ' dB · ' + verdictOf(x.rep.psnr)], ['Redundansi', x.redundancy + '×' + (x.keyed ? ' · kunci sebar aktif' : '')], ['Round-trip', x.verified ? 'OK' : 'GAGAL'], ['SHA-256 PNG', short(x.sha, 14, 8)]].concat(anchored ? [['Anchor LBC', 'blok #' + anchored.h]] : []), files: files, actions: [{ act: 'open', tab: 'eadi', label: 'Buka EADI' }] };
+    };
+    OPS.extract = async function (j) {
+      showPanel('eadi');
+      var r = await Q.run(function () { return doExtract(j); });
+      if (!r.ok) return { ok: false, title: 'Tidak ada payload terbaca', summary: 'extract gagal', rows: [['Alasan', r.reason]], note: 'Periksa gambar pembawa, kunci sebar & redundansi — harus sama dengan saat embed.' };
+      var files = r.kind === 'file' ? [{ label: 'File hasil ekstrak', name: r.name, blob: r.blob }] : []; autoSave(files, j);
+      return { ok: true, title: r.kind === 'file' ? 'File berhasil diekstrak' : 'Teks berhasil diekstrak', summary: 'extract ' + r.kind, rows: r.kind === 'file' ? [['Nama', r.name], ['Ukuran', fmtBytes(r.size)], ['Tipe', r.type || '—']] : [['Panjang', r.size + ' byte'], ['Teks', String(r.text).slice(0, 600)]], files: files, actions: [{ act: 'open', tab: 'eadi', label: 'Buka EADI' }] };
+    };
+    OPS.anchor = async function (j) {
+      showPanel('lbc');
+      var b = await anchorX('dewan'), files = [receiptEntry(b)]; autoSave(files, j);
+      return { ok: true, title: 'Hasil EADI di-anchor · blok #' + b.h, summary: 'anchor → #' + b.h, rows: blockRows(b), files: files, actions: [{ act: 'open', tab: 'lbc', label: 'Buka LBC' }] };
+    };
+    OPS.export = async function (j) {
+      var what = String(j.what || 'ledger').toLowerCase(), files = [], rows = [], bl = ledger();
+      if (what === 'receipt') {
+        if (!bl.length) throw new Error('Ledger kosong.');
+        var h = j.h == null ? bl[bl.length - 1].h : +j.h, b = null; for (var i = 0; i < bl.length; i++) if (bl[i].h === h) b = bl[i];
+        if (!b) throw new Error('Blok #' + h + ' tidak ditemukan.'); files.push(receiptEntry(b)); rows.push(['Receipt', 'blok #' + b.h]);
+      } else {
+        var keys = {}; bl.forEach(function (b2) { keys[b2.key] = 1; });
+        files.push({ label: 'Ledger JSON', name: 'nexus-ledger-' + new Date().toISOString().slice(0, 10) + '.json', blob: new Blob([JSON.stringify({ format: 'NEXUS-LBC-LEDGER/1', exportedAt: new Date().toISOString(), blocks: bl, records: REC.filter(function (r) { return keys[r.key]; }) }, null, 2)], { type: 'application/json' }) });
+        rows.push(['Ledger', bl.length + ' blok (tanpa kunci privat)']);
+      }
+      autoSave(files, j);
+      return { ok: true, title: 'Siap diunduh', summary: 'export ' + what, rows: rows, files: files };
+    };
+    OPS.selftest = async function (j) {
+      var t = String(j.target || 'all').toLowerCase(), rows = [], ok = true;
+      if (t === 'all' || t === 'lbc') { try { var r = await LBC().selfTest(); rows.push(['LBC', r.ok ? 'lulus ' + r.results.length + '/' + r.results.length : 'GAGAL: ' + r.results.filter(function (x) { return !x.ok; }).map(function (x) { return x.name; }).join('; ')]); ok = ok && r.ok; } catch (e) { rows.push(['LBC', 'error: ' + e.message]); ok = false; } }
+      if (t === 'all' || t === 'eadi') { try { var r2 = EADI().selfTest(); rows.push(['EADI', r2.ok ? 'lulus ' + r2.results.length + '/' + r2.results.length : 'GAGAL: ' + r2.results.filter(function (x) { return !x.ok; }).map(function (x) { return x.name; }).join('; ')]); ok = ok && r2.ok; } catch (e) { rows.push(['EADI', 'error: ' + e.message]); ok = false; } }
+      if (!rows.length) throw new Error('target harus lbc, eadi, atau all.');
+      return { ok: ok, title: ok ? 'Self-test lulus' : 'Self-test gagal', summary: 'selftest ' + (ok ? 'lulus' : 'gagal'), rows: rows };
+    };
+    OPS.open = async function (j) {
+      var t = String(j.tab || 'lbc').toLowerCase(); if (['lbc', 'eadi', 'council'].indexOf(t) < 0) throw new Error('tab harus lbc, eadi, atau council.');
+      showPanel(t); if (t === 'lbc' || t === 'eadi') refreshStats();
+      return { ok: true, title: 'Panel dibuka: ' + t.toUpperCase(), summary: 'open ' + t, rows: [] };
+    };
+    var ALIAS = { sealfiles: 'seal_files', seal_file: 'seal_files', sealfile: 'seal_files', verifychain: 'verify_chain', verifyfile: 'verify_file', embed_file: 'embed', embed_text: 'embed', hash: 'find', search: 'find', test: 'selftest', status_deck: 'status' };
+    function normOp(op) { op = String(op == null ? '' : op).toLowerCase().trim().replace(/[\s-]+/g, '_'); return ALIAS[op] || op; }
+    async function runJob(job) {
+      var op = normOp(job && job.op); if (!OPS[op]) throw new Error('op tidak dikenal: "' + op + '". Gunakan: ' + Object.keys(OPS).join(', '));
+      return await OPS[op](job || {});
+    }
+
+    /* ───────── fence ```nexusdeck → kartu hasil di chat ───────── */
+    var RUN = {}, BYID = {}, seqRun = 0;
+    var fnv = function (s) { var h = 0x811c9dc5; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(36); };
+    var STATE_LABEL = { run: 'MEMPROSES', wait: 'MENUNGGU IZIN', done: 'SELESAI', err: 'GAGAL', restored: 'RIWAYAT' };
+    function cardInner(r) {
+      var h = '<div class="ch"><b>NEXUS DECK</b><span>' + esc(r.op) + '</span><i>' + (STATE_LABEL[r.state] || '') + '</i></div>', btn = function (act, label, extra) { return '<button type="button" class="nxd-act" data-act="' + act + '" data-id="' + r.id + '"' + (extra || '') + '>' + esc(label) + '</button>'; };
+      if (r.state === 'run' || r.state === 'init') return h + '<div class="cb"><span class="sp"></span>Dewan sedang menjalankan <b>' + esc(r.op) + '</b>…</div>';
+      if (r.state === 'wait') return h + '<div class="cb">Dewan meminta izin menjalankan <b>' + esc(r.op) + '</b>.<div class="cn">' + esc(JSON.stringify(r.job).slice(0, 240)) + '</div></div><div class="ca">' + btn('allow', 'IZINKAN & JALANKAN') + '</div>';
+      if (r.state === 'restored') return h + '<div class="cb">Perintah ini sudah dijalankan pada ' + esc(tstr(r.saved && r.saved.ts)) + ': <b>' + esc(r.saved && r.saved.sum || r.op) + '</b>.<div class="cn">Tidak dijalankan ulang otomatis agar tidak menggandakan blok.</div></div><div class="ca">' + btn('again', 'JALANKAN ULANG') + '</div>';
+      var res = r.res || {}, rows = (res.rows || []).map(function (p) { return '<tr><th>' + esc(p[0]) + '</th><td>' + esc(p[1]) + '</td></tr>'; }).join('');
+      var acts = (res.files || []).map(function (f, i) { return btn('dl', 'Unduh · ' + f.label, ' data-i="' + i + '"'); }).concat((res.actions || []).map(function (a) { return btn(a.act, a.label, a.tab ? ' data-tab="' + esc(a.tab) + '"' : ''); }));
+      if (MUT[r.op] || r.state === 'err') acts.push(btn('again', 'Ulangi'));
+      return h + '<div class="cb"><b>' + esc(res.title || '') + '</b>' + (rows ? '<table>' + rows + '</table>' : '') + (res.note ? '<div class="cn">' + esc(res.note) + '</div>' : '') + '</div>' + (acts.length ? '<div class="ca">' + acts.join('') + '</div>' : '');
+    }
+    var cardHtml = function (r) { return '<div class="nxd-card" data-nxd-card="' + r.id + '" data-state="' + r.state + '">' + cardInner(r) + '</div>'; };
+    function paintCard(r) { [].forEach.call(D.querySelectorAll('[data-nxd-card="' + r.id + '"]'), function (n) { n.setAttribute('data-state', r.state); n.innerHTML = cardInner(r); }); }
+    var errCard = function (msg) { return '<div class="nxd-card" data-state="err"><div class="ch"><b>NEXUS DECK</b><span>error</span><i>GAGAL</i></div><div class="cb">' + esc(msg) + '</div></div>'; };
+    function persistRun(r) {
+      if (!MUT[r.op] || r.state !== 'done') return;
+      RUNS[r.key] = { ts: Date.now(), op: r.op, sum: (r.res && r.res.summary) || r.op };
+      var ks = Object.keys(RUNS); if (ks.length > 200) { ks.sort(function (a, b) { return RUNS[a].ts - RUNS[b].ts; }).slice(0, ks.length - 200).forEach(function (k) { delete RUNS[k]; }); }
+      lsSet(NKEY, JSON.stringify(RUNS));
+    }
+    function startRun(r) {
+      r.state = 'run'; r.res = null; paintCard(r);
+      Promise.resolve().then(function () { return runJob(r.job); }).then(function (res) { r.res = res; r.state = res && res.ok === false ? 'err' : 'done'; }, function (err) { r.res = { ok: false, title: 'Gagal', rows: [], note: String(err && err.message || err) }; r.state = 'err'; })
+        .then(function () { persistRun(r); pushLast(r.op + ' → ' + (r.state === 'done' ? (r.res.summary || 'ok') : 'gagal: ' + String(r.res && (r.res.note || r.res.title) || '').slice(0, 60))); paintCard(r); elog('Dewan: ' + r.op + ' → ' + r.state); });
+    }
+    /* kartu yang masuk DOM setelah operasi selesai tetap disinkronkan ke status akhir */
+    function settle(r) {
+      var n = 0; (function tick() { if (r.state !== 'run' && r.state !== 'init') { paintCard(r); return; } if (++n > 400) return; setTimeout(tick, 300); })();
+    }
+    function parseJobs(raw) {
+      if (!raw) return [{ op: 'status' }]; var v;
+      try { v = typeof window.looseJsonParse === 'function' ? window.looseJsonParse(raw) : JSON.parse(raw); } catch (e) { v = JSON.parse(raw); }
+      return Array.isArray(v) ? v : [v];
+    }
+    window.__nxdFence = function (code) {
+      var raw = String(code == null ? '' : code).trim(), jobs;
+      try { jobs = parseJobs(raw); } catch (e) { return errCard('JSON nexusdeck tidak valid: ' + (e && e.message || e)); }
+      var out = '', n = Math.min(jobs.length, 6);
+      for (var i = 0; i < n; i++) {
+        var j = jobs[i]; if (!j || typeof j !== 'object') { out += errCard('Perintah #' + (i + 1) + ' harus berupa objek JSON.'); continue; }
+        var op = normOp(j.op); if (!OPS[op]) { out += errCard('op tidak dikenal: "' + op + '". Gunakan: ' + Object.keys(OPS).join(', ')); continue; }
+        var key = fnv(op + '|' + JSON.stringify(j)), r = RUN[key];
+        if (!r) {
+          r = RUN[key] = { id: 'nxd' + (++seqRun), key: key, op: op, job: j, state: 'init', res: null, saved: null }; BYID[r.id] = r;
+          if (MUT[op] && RUNS[key]) { r.state = 'restored'; r.saved = RUNS[key]; }
+          else if (MUT[op] && !S.auto) r.state = 'wait';
+          else (function (rr) { rr.state = 'run'; setTimeout(function () { startRun(rr); }, 0); })(r);
+        }
+        if (r.state === 'run' || r.state === 'init') settle(r);
+        out += cardHtml(r);
+      }
+      return out || errCard('Tidak ada perintah untuk dijalankan.');
+    };
+    D.addEventListener('click', function (e) {
+      var b = e.target && e.target.closest && e.target.closest('.nxd-act'); if (!b || !b.dataset.act) return;
+      e.preventDefault(); var act = b.dataset.act, r = BYID[b.dataset.id];
+      try {
+        if (act === 'open') showPanel(b.dataset.tab || 'lbc');
+        else if (act === 'explorer') openExplorer();
+        else if (act === 'dl' && r && r.res && r.res.files) { var f = r.res.files[+b.dataset.i]; if (f) saveFile(f.name, f.blob); }
+        else if ((act === 'allow' || act === 'again') && r) startRun(r);
+      } catch (x) { toast('Aksi gagal: ' + (x && x.message || x), true); }
+    });
+
+    /* ───────── status untuk Dewan + petunjuk prompt ───────── */
+    function deckState() {
+      var bl = ledger(), last = bl[bl.length - 1];
+      var tray = S.tray.slice(0, 6).map(function (e) { return e.name.slice(0, 40) + '(' + fmtBytes(e.size) + (isReady(e) ? ',sha:' + String(e.sha256 || e.merkle).slice(0, 8) : ',' + e.state) + ')'; }).join('; ');
+      var s = '[DECK] blok:' + bl.length + (last ? ' root:' + last.root.slice(0, 8) : '') + ' tray:[' + (tray || 'kosong') + ']' + (S.tray.length > 6 ? '+' + (S.tray.length - 6) : '') + ' pembawa:' + (carrierName().slice(0, 40) || '-') + ' hasil_embed:' + (S.X ? (S.X.verified ? 'ok' : 'gagal') + (S.X.anchor ? '+anchor' : '') : '-') + ' autopilot:' + (S.auto ? 'on' : 'off') + (S.last.length ? ' terakhir:[' + S.last.slice(0, 3).join(' | ') + ']' : '');
+      return s.slice(0, 700);
+    }
+    window.__nxdHint = function (en) {
+      var ops = 'status | seal{text,title?,save?} | seal_files{files?:[nama]|"all",note?,save?} | verify_chain | verify_file{name} | find{name|sha256|q} | embed{text|file:nama,carrier?:nama,redundancy?:1|3|5,anchor?,save?} | extract{from?:"result",save?} | anchor | export{what:"ledger"|"receipt",h?} | selftest{target?:"lbc"|"eadi"|"all"} | open{tab:"lbc"|"eadi"}';
+      return en
+        ? '\n\nNEXUS DECK (council has full autopilot control of LBC Vault & EADI Vault): run via a ```nexusdeck block with JSON {"op":...} or an array [{...},{...}] (max 6, no other text inside). Give each command a unique "id" field so it is not treated as a duplicate. ops: ' + ops + '. Files: only those the user already uploaded to the Vault tray (you cannot read other files). The private key, ledger reset and spread key stay with the user. Results render as a card automatically; never invent results — use the [DECK] state below. save:true downloads the result automatically. ' + deckState()
+        : '\n\nNEXUS DECK (Dewan memegang kontrol penuh autopilot atas LBC Vault & EADI Vault): jalankan lewat blok ```nexusdeck berisi JSON {"op":...} atau array [{...},{...}] (maks 6, tanpa teks lain di dalam blok). Beri tiap perintah field "id" unik agar tidak dianggap duplikat. op: ' + ops + '. File: hanya yang sudah diunggah user ke tray Vault (kamu tidak bisa membaca file lain). Kunci privat, reset ledger, dan kunci sebar tetap dipegang user. Hasil tampil otomatis sebagai kartu; jangan mengarang hasil — pakai status [DECK] di bawah. save:true = hasil diunduh otomatis. ' + deckState();
+    };
+
+    window.NexusDeckAI = {
+      version: '1.0.0', ops: Object.keys(OPS),
+      run: function (job) { return runJob(job); },
+      autopilot: function (v) { if (v === undefined) return S.auto; setAuto(v); return S.auto; },
+      state: deckState,
+      tray: function () { return S.tray.map(function (e) { return { id: e.id, name: e.name, size: e.size, state: e.state, sha256: e.sha256, merkle: e.merkle }; }); },
+      explorer: openExplorer
+    };
+    [].forEach.call(root.querySelectorAll('.nxd-tab'), function (t) { t.addEventListener('click', function () { setTimeout(function () { refreshStats(); updateFileCap(); }, 0); }); });
+    refreshStats(); paintDewan(); updateFileCap();
+    elog('Deck LBC/EADI terhubung ke Dewan (autopilot ' + (S.auto ? 'ON' : 'OFF') + ').');
+  } catch (err) { console.warn('[NXD2] modul gagal dimuat:', err); }
+})();
 </script>
 
 <script id="nxp-engine">
