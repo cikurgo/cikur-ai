@@ -8427,95 +8427,215 @@ window.NexusDeck = { open: setTab, version: '1.0.0' };
    *
    * @returns {object} status, score (0-100), violations[], details, qedLike
    */
-  function evaluateDrugLikeness(mw, logP, hBondDonors, hBondAcceptors, rotatableBonds, polarSurfaceArea, options = {}) {
-    options = opt(options);
-    const heavyAtoms = options.heavyAtoms; // optional
+  function evaluateDrugLikeness(mw, logP, hBondDonors, hBondAcceptors, rotatableBonds, polarSurfaceArea, options) {
+  // ================================================================
+  // 0. Guard helper — tidak pernah throw
+  // ================================================================
+  var _isFinite = (typeof isFiniteNumber === 'function')
+    ? function (v) { try { return isFiniteNumber(v); } catch (e) { return false; } }
+    : function (v) { return typeof v === 'number' && isFinite(v); };
 
-    // Strict validation
-    if (!isFiniteNumber(mw) || mw < 0 ||
-        !isFiniteNumber(logP) ||
-        !isFiniteNumber(hBondDonors) || hBondDonors < 0 ||
-        !isFiniteNumber(hBondAcceptors) || hBondAcceptors < 0 ||
-        !isFiniteNumber(rotatableBonds) || rotatableBonds < 0 ||
-        !isFiniteNumber(polarSurfaceArea) || polarSurfaceArea < 0) {
-      return {
-        status: 'GAGAL',
-        score: 0,
-        violations: ['Input tidak valid: semua parameter harus finite; MW, HBD, HBA, rotB, PSA ≥ 0'],
-        details: { mw, logP, hBondDonors, hBondAcceptors, rotatableBonds, polarSurfaceArea },
-        qedLike: 0
-      };
+  var opts = {};
+  try {
+    if (typeof opt === 'function') {
+      var o = opt(options);
+      if (o && typeof o === 'object' && !Array.isArray(o)) opts = o;
+    } else if (options && typeof options === 'object' && !Array.isArray(options)) {
+      opts = options;
     }
+  } catch (e) { opts = {}; }
 
-    const rules = [
-      // Lipinski
-      { id: 'lipinski_mw',   pass: mw <= 500,          weight: 1.0, msg: `MW ${mw.toFixed(1)} > 500 Da` },
-      { id: 'lipinski_logP', pass: logP <= 5,          weight: 1.0, msg: `logP ${logP.toFixed(2)} > 5` },
-      { id: 'lipinski_hbd',  pass: hBondDonors <= 5,   weight: 1.0, msg: `HBD ${hBondDonors} > 5` },
-      { id: 'lipinski_hba',  pass: hBondAcceptors <= 10,weight: 1.0, msg: `HBA ${hBondAcceptors} > 10` },
-      // Veber
-      { id: 'veber_rot',     pass: rotatableBonds <= 10, weight: 0.9, msg: `RotB ${rotatableBonds} > 10` },
-      { id: 'veber_psa',     pass: polarSurfaceArea <= 140, weight: 0.9, msg: `PSA ${polarSurfaceArea.toFixed(1)} > 140 Å²` },
-      // Ghose (simplified)
-      { id: 'ghose_mw',      pass: mw >= 160 && mw <= 480, weight: 0.7, msg: `MW ${mw.toFixed(1)} outside 160–480 (Ghose)` },
-      { id: 'ghose_logP',    pass: logP >= -0.4 && logP <= 5.6, weight: 0.7, msg: `logP ${logP.toFixed(2)} outside −0.4–5.6 (Ghose)` },
-      // Egan
-      { id: 'egan_psa',      pass: polarSurfaceArea <= 131.6, weight: 0.8, msg: `PSA ${polarSurfaceArea.toFixed(1)} > 131.6 (Egan)` },
-      { id: 'egan_logP',     pass: logP <= 5.88, weight: 0.8, msg: `logP ${logP.toFixed(2)} > 5.88 (Egan)` },
-      // Muegge (partial)
-      { id: 'muegge_mw',     pass: mw >= 200 && mw <= 600, weight: 0.6, msg: `MW ${mw.toFixed(1)} outside 200–600 (Muegge)` },
-      { id: 'muegge_logP',   pass: logP >= -2 && logP <= 5, weight: 0.6, msg: `logP ${logP.toFixed(2)} outside −2–5 (Muegge)` }
-    ];
+  var _heavyRaw = opts.heavyAtoms;
+  var heavyAtoms = (typeof _heavyRaw === 'number' && isFinite(_heavyRaw) && _heavyRaw > 0)
+    ? _heavyRaw : null;
 
-    const violations = [];
-    let weightedPass = 0;
-    let totalWeight = 0;
+  // ================================================================
+  // 1. Validasi input — kumpulkan SEMUA alasan
+  // ================================================================
+  var badInputs = [];
+  if (!_isFinite(mw)               || mw               < 0) badInputs.push('mw');
+  if (!_isFinite(logP))                                      badInputs.push('logP');
+  if (!_isFinite(hBondDonors)      || hBondDonors      < 0) badInputs.push('hBondDonors');
+  if (!_isFinite(hBondAcceptors)   || hBondAcceptors   < 0) badInputs.push('hBondAcceptors');
+  if (!_isFinite(rotatableBonds)   || rotatableBonds   < 0) badInputs.push('rotatableBonds');
+  if (!_isFinite(polarSurfaceArea) || polarSurfaceArea < 0) badInputs.push('polarSurfaceArea');
 
-    for (const r of rules) {
-      totalWeight += r.weight;
-      if (r.pass) {
-        weightedPass += r.weight;
+  // Builder return — SATU schema untuk sukses & gagal (anti-crash card)
+  function _result(fields) {
+    var base = {
+      status: 'GAGAL', score: 0, continuousScore: 0, lipinskiScore: 0,
+      violations: [], breakdown: { mw: 0, logP: 0, hbd: 0, hba: 0, rotB: 0, psa: 0 },
+      hardFail: false, hardReason: '', qedLike: 0,
+      details: {
+        mw: mw, logP: logP, hBondDonors: hBondDonors,
+        hBondAcceptors: hBondAcceptors, rotatableBonds: rotatableBonds,
+        polarSurfaceArea: polarSurfaceArea, heavyAtoms: heavyAtoms,
+        passedWeight: 0, totalWeight: 4, rulesEvaluated: 4,
+        lipinskiViolations: 0, softPenalties: 0
+      }
+    };
+    for (var k in fields) {
+      if (!Object.prototype.hasOwnProperty.call(fields, k)) continue;
+      if (k === 'details' && fields.details && typeof fields.details === 'object') {
+        for (var dk in fields.details) {
+          if (Object.prototype.hasOwnProperty.call(fields.details, dk)) {
+            base.details[dk] = fields.details[dk];
+          }
+        }
       } else {
-        violations.push(r.msg);
+        base[k] = fields[k];
       }
     }
-
-    // Continuous desirability (simple product of sigmoid-like terms – QED inspired)
-    // Ideal centers: MW≈350, logP≈2.5, HBD≈1.5, HBA≈4, rotB≈4, PSA≈70
-    function desirability(x, ideal, width, direction = 'both') {
-      const z = (x - ideal) / width;
-      if (direction === 'upper') return 1 / (1 + Math.exp(z));
-      if (direction === 'lower') return 1 / (1 + Math.exp(-z));
-      return Math.exp(-0.5 * z * z); // Gaussian-like
-    }
-
-    const dMW   = desirability(mw, 340, 140);
-    const dLogP = desirability(logP, 2.5, 2.2);
-    const dHBD  = desirability(hBondDonors, 1.5, 2.2, 'upper');
-    const dHBA  = desirability(hBondAcceptors, 4.5, 4.0, 'upper');
-    const dRot  = desirability(rotatableBonds, 5.0, 5.0, 'upper');
-    const dPSA  = desirability(polarSurfaceArea, 80, 50, 'upper');
-
-    const qedLike = Math.pow(dMW * dLogP * dHBD * dHBA * dRot * dPSA, 1 / 6);
-    const score = Math.round((weightedPass / totalWeight) * 65 + qedLike * 35); // hybrid 0-100
-
-    const status = violations.length === 0 ? 'LULUS' :
-                   violations.length <= 2 ? 'MARGINAL' : 'GAGAL';
-
-    return {
-      status,
-      score: clamp(score, 0, 100),
-      violations,
-      details: {
-        passedWeight: roundTo(weightedPass, 2),
-        totalWeight: roundTo(totalWeight, 2),
-        rulesEvaluated: rules.length,
-        mw, logP, hBondDonors, hBondAcceptors, rotatableBonds, polarSurfaceArea,
-        heavyAtoms: heavyAtoms ?? null
-      },
-      qedLike: roundTo(qedLike, 4)
-    };
+    return base;
   }
+
+  if (badInputs.length > 0) {
+    return _result({
+      violations: ['Input tidak valid: ' + badInputs.join(', ') +
+                   ' harus finite (dan ≥ 0 untuk semua selain logP)'],
+      hardFail: true,
+      hardReason: 'Input tidak valid: ' + badInputs.join(', ')
+    });
+  }
+
+  // ================================================================
+  // 2. Nilai sudah valid (tidak perlu _safeNum lagi)
+  // ================================================================
+  var _mw   = mw,  _logP = logP;
+  var _hbd  = hBondDonors, _hba = hBondAcceptors;
+  var _rotB = rotatableBonds, _psa = polarSurfaceArea;
+
+  // ================================================================
+  // 3. Tabel referensi asymmetric
+  // ================================================================
+  var ref = {
+    mw:   { mu: 300, sigma: 100, badAbove: 400, badBelow: 100,  hardMax: 500, weight: 1.0 },
+    logP: { mu: 2.5, sigma: 1.5, badAbove: 4.0, badBelow: -2.0, hardMax: 5.0, weight: 1.5 },
+    hbd:  { mu: 2,   sigma: 1.5, badAbove: 3.5, badBelow: null, hardMax: 5,   weight: 1.0 },
+    hba:  { mu: 4,   sigma: 2,   badAbove: 6,   badBelow: null, hardMax: 10,  weight: 1.0 },
+    rotB: { mu: 5,   sigma: 3,   badAbove: 8,   badBelow: null, hardMax: 10,  weight: 1.0 },
+    psa:  { mu: 80,  sigma: 30,  badAbove: 110, badBelow: 20,   hardMax: 140, weight: 1.2 }
+  };
+
+  function _sidePenalty(val, cfg) {
+    var p = 0;
+    if (cfg.hardMax != null && val > cfg.hardMax) {
+      p += 3 + (val - cfg.hardMax) / Math.max(1, cfg.sigma);
+    } else if (cfg.badAbove != null && val > cfg.badAbove) {
+      p += (val - cfg.badAbove) / Math.max(1, cfg.sigma);
+    }
+    if (cfg.badBelow != null && val < cfg.badBelow) {
+      p += (cfg.badBelow - val) / Math.max(1, cfg.sigma);
+    }
+    return p * cfg.weight;
+  }
+
+  var breakdown = {
+    mw:   _sidePenalty(_mw,   ref.mw),
+    logP: _sidePenalty(_logP, ref.logP),
+    hbd:  _sidePenalty(_hbd,  ref.hbd),
+    hba:  _sidePenalty(_hba,  ref.hba),
+    rotB: _sidePenalty(_rotB, ref.rotB),
+    psa:  _sidePenalty(_psa,  ref.psa)
+  };
+
+  var rawPenalty = breakdown.mw + breakdown.logP + breakdown.hbd +
+                   breakdown.hba + breakdown.rotB + breakdown.psa;
+
+  // ================================================================
+  // 4. Continuous score (soft-saturating)
+  // ================================================================
+  var _SAT = 8;
+  var continuousScore = Math.round(100 / (1 + rawPenalty / _SAT));
+  continuousScore = Math.max(0, Math.min(100, continuousScore));
+
+  // ================================================================
+  // 5. Lipinski — kumpulkan alasan sekaligus
+  // ================================================================
+  var lipinskiViolations = 0;
+  var lipinskiReasons = [];
+  if (_mw > 500) { lipinskiViolations++; lipinskiReasons.push('MW > 500'); }
+  if (_logP > 5) { lipinskiViolations++; lipinskiReasons.push('logP > 5'); }
+  if (_hbd > 5)  { lipinskiViolations++; lipinskiReasons.push('HBD > 5'); }
+  if (_hba > 10) { lipinskiViolations++; lipinskiReasons.push('HBA > 10'); }
+
+  var lipinskiNorm = Math.max(0, 100 - (lipinskiViolations * 25));
+
+  // ================================================================
+  // 6. Skor gabungan
+  // ================================================================
+  var finalScore = Math.round(lipinskiNorm * 0.6 + continuousScore * 0.4);
+  finalScore = Math.max(0, Math.min(100, finalScore));
+
+  // ================================================================
+  // 7. Hard-fail — laporkan SEMUA alasan
+  // ================================================================
+  var hardFailReasons = [];
+  if (_mw > 500)   hardFailReasons.push('MW > 500');
+  if (_logP > 5)   hardFailReasons.push('logP > 5');
+  if (_hbd > 5)    hardFailReasons.push('HBD > 5');
+  if (_hba > 10)   hardFailReasons.push('HBA > 10');
+  if (_psa > 140)  hardFailReasons.push('PSA > 140');
+
+  var hardFail = hardFailReasons.length > 0;
+
+  // ================================================================
+  // 8. Status
+  // ================================================================
+  var status;
+  if (hardFail)              status = 'GAGAL';
+  else if (finalScore >= 80) status = 'LULUS';
+  else if (finalScore >= 60) status = 'MARGINAL';
+  else                       status = 'GAGAL';
+
+  // ================================================================
+  // 9. Violations: hard-fail dulu, lalu soft sorted by severity
+  // ================================================================
+  var violations = [];
+  hardFailReasons.forEach(function (r) { violations.push('Hard fail: ' + r); });
+  if (!hardFail) {
+    lipinskiReasons.forEach(function (r) { violations.push('Lipinski: ' + r); });
+  }
+
+  var softEntries = [];
+  ['mw', 'logP', 'hbd', 'hba', 'rotB', 'psa'].forEach(function (k) {
+    if (breakdown[k] > 0.5) softEntries.push({ key: k, val: breakdown[k] });
+  });
+  softEntries.sort(function (a, b) { return b.val - a.val; });
+  softEntries.forEach(function (e) {
+    violations.push(e.key + ' penalty: +' + e.val.toFixed(2));
+  });
+
+  if (violations.length === 0) violations.push('Tidak ada pelanggaran berat');
+
+  // ================================================================
+  // 10. QED-like proxy — range 0-1, JELAS bukan QED asli
+  // ================================================================
+  var qedLike = Math.round((finalScore / 100) * 1000) / 1000;
+  qedLike = Math.max(0, Math.min(1, qedLike));
+
+  // ================================================================
+  // 11. Return — schema lengkap & konsisten
+  // ================================================================
+  return _result({
+    status: status,
+    score: finalScore,
+    continuousScore: continuousScore,
+    lipinskiScore: lipinskiNorm,
+    violations: violations,
+    breakdown: breakdown,
+    hardFail: hardFail,
+    hardReason: hardFailReasons.join('; '),
+    qedLike: qedLike,
+    details: {
+      passedWeight: 4 - lipinskiViolations,
+      totalWeight: 4,
+      rulesEvaluated: 4,
+      lipinskiViolations: lipinskiViolations,
+      softPenalties: softEntries.length
+    }
+  });
+    }
 
   // ------------------------------------------------------------------
   // 2. Soft-core Lennard-Jones 12-6
