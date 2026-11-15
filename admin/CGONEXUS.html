@@ -9383,26 +9383,172 @@ window.NexusDeck = { open: setTab, version: '1.0.0' };
       else { var rows = []; flat(res, '', rows, 0); body = '<table class="nxp-t">' + rows.map(function (r) { return '<tr><th>' + esc(r[0] || 'hasil') + '</th><td>' + esc(r[1]) + '</td></tr>'; }).join('') + '</table>'; }
       return '<div class="nxp-card"><div class="nxp-h"><b>NEXUSPHARMA</b><span>' + esc(op) + '</span><button type="button" class="nxp-open" data-nxp="' + id + '">Buka di Lab</button></div>' + body + '<div class="nxp-f">Prototipe riset in-silico · bukan pengganti uji lab</div></div>';
     }
-    function err(m) { return '<div class="nxp-card nxp-err"><div class="nxp-h"><b>NEXUSPHARMA</b><span>galat</span></div><div class="nxp-body">' + esc(m) + '</div></div>'; }
-window.__nxpFence = function (code) {
-  var raw = String(code || '').trim(), job;
-  try { 
-    if (!raw) {
-      job = { op: 'selftest' };
-    } else {
-      // PERBAIKAN: Gunakan looseJsonParse agar tidak crash jika format JSON dari AI sedikit cacat
-      job = (typeof looseJsonParse === 'function') ? looseJsonParse(raw) : JSON.parse(raw);
-    }
-  } catch (e) { 
-    return err('Input tidak valid. Silakan gunakan perintah: profile, druglikeness, lipinski, dock, lj, affinity, screen, selftest. (JSON: ' + e.message + ')'); 
+/* ================================================================
+ * NEXUSPHARMA — Robust Error Renderer
+ * ================================================================ */
+function err(m) {
+  // 1. Koersi aman ke string
+  var msg = (m === null || m === undefined)
+    ? 'Terjadi kesalahan yang tidak diketahui.'
+    : (typeof m === 'string' ? m : String(m));
+
+  // 2. Fallback esc jika tidak tersedia / bukan fungsi
+  var safe;
+  if (typeof esc === 'function') {
+    safe = esc(msg);
+  } else {
+    safe = msg.replace(/[&<>"']/g, function (c) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c];
+    });
   }
-  var list = Array.isArray(job) ? job : [job], out = '';
-  list.slice(0, 6).forEach(function (j) {
-    var op = String(j && j.op || '').toLowerCase();
-    if (!OPS[op]) { out += err('Input tidak valid. Silakan gunakan perintah: profile, druglikeness, lipinski, dock, lj, affinity, screen, selftest.' + (op ? ' (diterima: "' + op + '")' : '')); return; }
-    try { var res = OPS[op](j); out += card(op, j, res); } catch (e) { out += err(op + ': ' + (e && e.message || e)); }
-  });
-  return out;
+
+  // 3. role="alert" + pre-wrap untuk pesan multi-baris
+  return '<div class="nxp-card nxp-err" role="alert">'
+       +   '<div class="nxp-h"><b>NEXUSPHARMA</b><span>galat</span></div>'
+       +   '<div class="nxp-body" style="white-space:pre-wrap">' + safe + '</div>'
+       + '</div>';
+}
+
+/* ================================================================
+ * NEXUSPHARMA — Main Fence (Robust Edition)
+ * ================================================================ */
+window.__nxpFence = function (code) {
+  var raw = (code == null ? '' : String(code)).trim();
+  var OPS_LIST = 'profile, druglikeness, lipinski, dock, lj, affinity, screen, selftest';
+
+  // ----------------------------------------------------------------
+  // AUTO-REPAIR: state-machine, escape-aware, stack-based
+  // ----------------------------------------------------------------
+  function autoRepairJson(input) {
+    if (typeof input !== 'string' || !input) return input;
+
+    var out = '';
+    var stack = [];          // tumpukan penutup yang diharapkan: '}' atau ']'
+    var inString = false;
+    var escapeNext = false;
+    var n = input.length;
+
+    for (var i = 0; i < n; i++) {
+      var ch = input.charAt(i);
+
+      // --- Di dalam string ---
+      if (inString) {
+        out += ch;
+        if (escapeNext)       { escapeNext = false; }
+        else if (ch === '\\') { escapeNext = true;  }
+        else if (ch === '"')  { inString = false;   }
+        continue;
+      }
+
+      // --- Bukan string ---
+      if (ch === '"')  { inString = true; out += ch; continue; }
+      if (ch === '\\') { continue; }               // stray backslash di luar string → buang
+
+      if (ch === '{')  { stack.push('}'); out += ch; continue; }
+      if (ch === '[')  { stack.push(']'); out += ch; continue; }
+
+      if (ch === '}' || ch === ']') {
+        // Tutup paksa sampai menemukan pasangan yang cocok
+        while (stack.length && stack[stack.length - 1] !== ch) {
+          out += stack.pop();
+        }
+        if (stack.length) { stack.pop(); out += ch; }
+        // jika tidak ada yang bisa ditutup → closer liar, dibuang
+        continue;
+      }
+
+      // Trailing comma: `,` sebelum `}` / `]` / EOF → skip
+      if (ch === ',') {
+        var j = i + 1;
+        while (j < n && /\s/.test(input.charAt(j))) j++;
+        var next = j < n ? input.charAt(j) : '';
+        if (next === '' || next === '}' || next === ']') continue;
+        out += ch;
+        continue;
+      }
+
+      out += ch;
+    }
+
+    // String menggantung di akhir → tutup (bersihkan escape lepas)
+    if (inString) {
+      if (escapeNext) out = out.replace(/\\$/, '');
+      out += '"';
+    }
+    // Tutup semua bracket/brace yang tersisa (urutan terbalik otomatis)
+    while (stack.length) out += stack.pop();
+
+    return out;
+  }
+
+  // Parser berlapis: looseJsonParse → JSON.parse
+  function tryParse(str) {
+    if (typeof looseJsonParse === 'function') {
+      try { return looseJsonParse(str); } catch (e) { /* fallback */ }
+    }
+    return JSON.parse(str);
+  }
+
+  // ----------------------------------------------------------------
+  // Parsing utama + auto-repair
+  // ----------------------------------------------------------------
+  var job;
+  if (!raw) {
+    job = { op: 'selftest' };
+  } else {
+    try {
+      job = tryParse(raw);
+    } catch (firstErr) {
+      try {
+        var repaired = autoRepairJson(raw);
+        job = tryParse(repaired);
+      } catch (repairErr) {
+        return err(
+          'Gagal memproses JSON. Input tidak valid dan tidak dapat diperbaiki otomatis. ' +
+          '(Error: ' + ((firstErr && firstErr.message) || String(firstErr)) + ')'
+        );
+      }
+    }
+  }
+
+  if (job === null || job === undefined) {
+    return err('Data JSON kosong atau tidak dapat dibaca.');
+  }
+
+  var list = Array.isArray(job) ? job : [job];
+  if (list.length === 0) {
+    return err('Array JSON kosong. Tidak ada operasi untuk dijalankan.');
+  }
+
+  // ----------------------------------------------------------------
+  // Eksekusi operasi
+  // ----------------------------------------------------------------
+  var out = '';
+  var limit = Math.min(list.length, 6);
+  for (var idx = 0; idx < limit; idx++) {
+    var j = list[idx];
+
+    if (j === null || typeof j !== 'object' || Array.isArray(j)) {
+      out += err('Entri #' + (idx + 1) + ' bukan objek yang valid.');
+      continue;
+    }
+    var op = String(j.op || '').toLowerCase();
+    if (!OPS[op]) {
+      out += err(
+        'Input tidak valid. Silakan gunakan perintah: ' + OPS_LIST + '.' +
+        (op ? ' (diterima: "' + op + '")' : '')
+      );
+      continue;
+    }
+    try {
+      var res = OPS[op](j);
+      out += card(op, j, res);
+    } catch (e) {
+      // ✅ SELALU string — tidak pernah mengoper objek Error ke err()
+      out += err(op + ': ' + ((e && e.message) ? e.message : String(e)));
+    }
+  }
+  return out || err('Tidak ada hasil yang dapat ditampilkan.');
 };
     document.addEventListener('click', function (e) {
       var b = e.target && e.target.closest ? e.target.closest('.nxp-open') : null; if (!b) return;
