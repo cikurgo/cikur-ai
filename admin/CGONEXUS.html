@@ -9739,36 +9739,231 @@ window.__nxpFence = function (code) {
   // Eksekusi operasi
   // ----------------------------------------------------------------
   var out = '';
+
+  // ================================================================
+  // Healer untuk "profile{mw:340,name:'Aspirin: 500mg'}"
+  // String-aware: TIDAK merusak ':' di dalam nilai string
+  // ================================================================
+  function healLooseObject(s) {
+    var o = '', i = 0, n = s.length;
+    var inStr = false, quoteChar = '', esc = false;
+
+    while (i < n) {
+      var c = s.charAt(i);
+
+      // --- Dalam string ---
+      if (inStr) {
+        if (esc)                            { o += c; esc = false; i++; continue; }
+        if (c === '\\')                     { o += c; esc = true;  i++; continue; }
+        if (c === quoteChar)                { inStr = false; o += '"'; i++; continue; }
+        if (c === '\n')                     { o += '\\n'; i++; continue; }
+        if (c === '\r')                     { o += '\\r'; i++; continue; }
+        if (c === '\t')                     { o += '\\t'; i++; continue; }
+        if (c === '"' && quoteChar !== '"') { o += '\\"'; i++; continue; }
+        o += c; i++; continue;
+      }
+
+      // --- Buka string (single/double quote → normalisasi ke double) ---
+      if (c === '"' || c === "'") {
+        inStr = true; quoteChar = c; o += '"'; i++; continue;
+      }
+
+      // --- Bare KEY: identifier diikuti ':' ---
+      var km = /^([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/.exec(s.slice(i));
+      if (km) {
+        var prevK = o.replace(/\s+$/, '').slice(-1);
+        if (prevK === '{' || prevK === ',' || o.trim() === '') {
+          o += '"' + km[1] + '":';
+          i += km[0].length;
+          continue;
+        }
+      }
+
+      // --- Bare VALUE setelah ':' ---
+      if (o.replace(/\s+$/, '').slice(-1) === ':') {
+        var first = s.charAt(i);
+        if (first !== '{' && first !== '[' && first !== '"' && first !== "'") {
+          var vm = /^([^\s,}\]]+)/.exec(s.slice(i));
+          if (vm) {
+            var v = vm[0];
+            if (/^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(v) ||
+                v === 'true' || v === 'false' || v === 'null') {
+              o += v;
+            } else {
+              o += '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+            }
+            i += v.length;
+            continue;
+          }
+        }
+      }
+
+      o += c; i++;
+    }
+    return o;
+  }
+
+  // Guard global sekali, di luar loop
+  if (typeof OPS !== 'object' || OPS === null) {
+    return err('Sistem OPS tidak tersedia. Tidak dapat menjalankan operasi.');
+  }
+  if (typeof card !== 'function') {
+    return err('Fungsi card() tidak tersedia. Tidak dapat merender hasil.');
+  }
+
   var limit = Math.min(list.length, 6);
   for (var idx = 0; idx < limit; idx++) {
     var j = list[idx];
 
+    // 1. Validasi entri
     if (j === null || typeof j !== 'object' || Array.isArray(j)) {
       out += err('Entri #' + (idx + 1) + ' bukan objek yang valid.');
       continue;
     }
-    var op = String(j.op || '').toLowerCase();
-    if (!OPS[op]) {
-      out += err(
-        'Input tidak valid. Silakan gunakan perintah: ' + OPS_LIST + '.' +
-        (op ? ' (diterima: "' + op + '")' : '')
-      );
+
+    // 2. Ambil op dengan aman
+    var op = '';
+    try { op = String(j.op || '').toLowerCase(); }
+    catch (e) {
+      out += err('Entri #' + (idx + 1) + ': properti "op" tidak dapat dibaca.');
       continue;
     }
-    try {
-      var res = OPS[op](j);
-      out += card(op, j, res);
-    } catch (e) {
-      // ✅ SELALU string — tidak pernah mengoper objek Error ke err()
-      out += err(op + ': ' + ((e && e.message) ? e.message : String(e)));
+
+    // ================================================================
+    // [PENYEMBUH FORMAT AI] — Anti "profile{mw:340,...}"
+    // 3 lapis: (1) parse langsung, (2) healer, (3) fallback gagal bersih
+    // ================================================================
+    if (op.indexOf('{') !== -1) {
+      var customMatch = op.match(/^([a-zA-Z0-9_]+)\s*\{([\s\S]*)\}$/);
+      if (customMatch) {
+        var realOp = customMatch[1].toLowerCase();
+        var inner  = customMatch[2];
+        var parsedInner = null;
+
+        // Lapis 1: coba parse langsung (mungkin sudah JSON valid)
+        try { parsedInner = tryParse('{' + inner + '}'); }
+        catch (e1) { /* lanjut lapis 2 */ }
+
+        // Lapis 2: healer string-aware
+        if (!parsedInner || typeof parsedInner !== 'object') {
+          try {
+            parsedInner = tryParse('{' + healLooseObject(inner) + '}');
+          } catch (e2) { /* lanjut gagal bersih */ }
+        }
+
+        if (parsedInner && typeof parsedInner === 'object' && !Array.isArray(parsedInner)) {
+          Object.assign(j, parsedInner);
+          op = realOp;
+          j.op = realOp;
+        }
+        // Gagal → biarkan ditolak oleh validasi OPS di bawah (no crash)
+      }
     }
+    // ================================================================
+
+    if (!op) {
+      out += err('Entri #' + (idx + 1) + ': properti "op" tidak ada. ' +
+                 'Gunakan: ' + OPS_LIST + '.');
+      continue;
+    }
+
+    // 3. Cek op valid — hasOwnProperty + fungsi
+    if (!Object.prototype.hasOwnProperty.call(OPS, op) ||
+        typeof OPS[op] !== 'function') {
+      out += err('Input tidak valid. Silakan gunakan perintah: ' + OPS_LIST +
+                 '. (diterima: "' + op + '")');
+      continue;
+    }
+
+    // 4. Jalankan operasi — try terpisah dari rendering
+    var res;
+    try {
+      res = OPS[op](j);
+    } catch (e) {
+      out += err(op + ': ' + ((e && e.message) ? e.message : String(e)));
+      continue;
+    }
+
+    // 5. Render kartu — try terpisah, pesan error berbeda
+    var html;
+    try {
+      html = card(op, j, res);
+    } catch (e) {
+      out += err(op + ': operasi berhasil tetapi gagal dirender — ' +
+                 ((e && e.message) ? e.message : String(e)));
+      continue;
+    }
+
+    if (typeof html !== 'string') {
+      out += err(op + ': card() mengembalikan bukan string (tipe: ' + typeof html + ').');
+      continue;
+    }
+    out += html;
   }
+
   return out || err('Tidak ada hasil yang dapat ditampilkan.');
 };
-    document.addEventListener('click', function (e) {
-      var b = e.target && e.target.closest ? e.target.closest('.nxp-open') : null; if (!b) return;
-      var j = REG[b.getAttribute('data-nxp')]; if (j) open(TAB[j.op] || 'mon', j.op, j.args);
-    });
+
+// ================================================================
+// Click delegation
+// ================================================================
+(function () {
+  if (window.__nxpClickBound) return;
+  window.__nxpClickBound = true;
+
+  document.addEventListener('click', function (e) {
+    try {
+      var target = e && e.target;
+      if (!target || typeof target.closest !== 'function') return;
+
+      var btn = target.closest('.nxp-open');
+      if (!btn) return;
+
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+
+      var key = (typeof btn.getAttribute === 'function')
+        ? btn.getAttribute('data-nxp')
+        : null;
+      if (key == null || key === '') {
+        console.warn('[nxp] Tombol tidak punya data-nxp.');
+        return;
+      }
+
+      if (typeof REG === 'undefined' || !REG || typeof REG !== 'object') {
+        console.warn('[nxp] REG tidak tersedia.');
+        return;
+      }
+      var job = REG[key];
+      if (!job || typeof job !== 'object') {
+        console.warn('[nxp] Job tidak ditemukan untuk key:', key);
+        return;
+      }
+
+      var op = '';
+      try { op = String(job.op || '').toLowerCase(); } catch (err) { op = ''; }
+
+      // Fallback ke job itu sendiri jika card() menyimpan objek asli
+      var args = (job.args !== undefined) ? job.args : job;
+
+      var tabKey = 'mon';
+      try {
+        if (typeof TAB === 'object' && TAB !== null && op && TAB[op]) {
+          tabKey = TAB[op];
+        }
+      } catch (err) { /* biarkan default 'mon' */ }
+
+      if (typeof open !== 'function') {
+        console.warn('[nxp] Fungsi open() tidak tersedia.');
+        return;
+      }
+
+      try { open(tabKey, op, args); }
+      catch (err) { console.warn('[nxp] open() gagal:', (err && err.message) || err); }
+    } catch (fatal) {
+      console.warn('[nxp] Click handler fatal:', (fatal && fatal.message) || fatal);
+    }
+  }, false);
+})();
 
     /* ---------- petunjuk untuk Dewan (disuntik lewat uiHint) ---------- */
     window.__nxpHint = function (en) {
