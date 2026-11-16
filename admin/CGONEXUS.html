@@ -728,6 +728,339 @@ window.NexusConfig = { hud: (function () { try { return localStorage.getItem('cg
 
 </script>
 
+<!-- ===== NEXUS RARE CODE (v2.0) — high-entropy generator, inlined ===== -->
+<script id="nexus-rare-js">
+/* ────────────────────────────────────────────────────────────────────────
+ *  File: nexus.rare.js  (v2.0 — Bulletproof Edition)
+ *
+ *  Nexus Rare Code — robust, high-entropy, sync & async code generator.
+ *
+ *  Design goals
+ *  ────────────
+ *   • 128-bit cryptographic nonce (crypto.getRandomValues → 4× uint32)
+ *   • Strong avalanche mixing  (MurmurHash3 finalizer)
+ *   • Logistic-map chaos diffusion (R=3.99, 2 inner passes × 4 words)
+ *   • Sync and Async paths are byte-for-byte identical algorithms
+ *   • Defensive fallbacks: crypto → timing + counter + Math.random
+ *   • No leaked workers, no leaked Blob URLs, no unhandled rejections
+ *   • Works in browser (main + worker), Node, Deno, Bun, globalThis
+ *   • Every failure mode has an explicit recovery path
+ * ──────────────────────────────────────────────────────────────────────── */
+(() => {
+  'use strict';
+
+  /* ─── Config ────────────────────────────────────────────────────────── */
+  const LOGISTIC_R        = 3.99;        // edge-of-chaos
+  const ITERATIONS        = 4;           // number of 32-bit output words
+  const INNER_ITER        = 2;           // logistic steps per word
+  const UINT32_MAX        = 0xFFFFFFFF;
+  const HEX_SIZE          = 8;           // hex chars per word  (4×8 = 32 total)
+  const NONCE_WORDS       = 4;           // 4×32 = 128-bit nonce
+  const WORKER_TIMEOUT_MS = 5000;
+
+  /* ─── Global reference (works everywhere) ──────────────────────────── */
+  const G = (typeof globalThis !== 'undefined') ? globalThis
+          : (typeof self       !== 'undefined') ? self
+          : (typeof window     !== 'undefined') ? window
+          : (typeof global     !== 'undefined') ? global
+          : {};
+
+  /* ─── Mixing primitives (MurmurHash3 finalizer — strong avalanche) ── */
+  const mix32 = (h) => {
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+    return (h ^ (h >>> 16)) >>> 0;
+  };
+  const mix = (a, b) => mix32(((a >>> 0) + (b >>> 0)) >>> 0);
+
+  /* ─── Entropy collectors ───────────────────────────────────────────── */
+  let _counter = 0;
+
+  const nowUint32 = () => {
+    try {
+      if (typeof performance !== 'undefined'
+       && typeof performance.now === 'function') {
+        return Math.floor(performance.now() * 1000) >>> 0;
+      }
+    } catch (_) { /* ignore */ }
+    return Date.now() >>> 0;
+  };
+
+  const weakRandomUint32 = () => {
+    try { return Math.floor(Math.random() * 0x100000000) >>> 0; }
+    catch (_) { return 0; }
+  };
+
+  /** Returns a Uint32Array of length NONCE_WORDS (4 = 128 bits). */
+  const collectNonce = () => {
+    // Preferred: 128-bit cryptographically-secure nonce
+    try {
+      const c = G.crypto || (typeof crypto !== 'undefined' ? crypto : null);
+      if (c && typeof c.getRandomValues === 'function') {
+        const buf = new Uint32Array(NONCE_WORDS);
+        c.getRandomValues(buf);
+        return buf;
+      }
+    } catch (_) { /* fall through to weak fallback */ }
+
+    // Fallback: timing jitter + monotonic counter + weak PRNG
+    const ctr = (++_counter) >>> 0;
+    const t1  = nowUint32();
+    const t2  = nowUint32();
+    const r1  = weakRandomUint32();
+    const r2  = weakRandomUint32();
+    return new Uint32Array([
+      mix(t1, ctr),
+      mix(t2, r1),
+      mix(ctr, r2),
+      mix(t1 ^ t2, r1 ^ r2),
+    ]);
+  };
+
+  /* ─── Seed normalisation ───────────────────────────────────────────── */
+  const normalizeSeed = (seed) => {
+    const n = (typeof seed === 'number') ? seed : Number(seed);
+    if (!Number.isFinite(n)) {
+      throw new TypeError('NexusRareCode: seed must be a finite number');
+    }
+    return n >>> 0;
+  };
+
+  /* ─── Core generator (single source of truth) ──────────────────────── */
+  const generateCore = (seedUint32, nonce) => {
+    const parts = new Array(ITERATIONS);
+    for (let i = 0; i < ITERATIONS; i++) {
+      // Fold seed + one nonce word + index → 32-bit chain state
+      let state = mix(seedUint32, mix(nonce[i], i));
+      // x ∈ (0, 1)
+      let x = (state >>> 1) / 0x80000000;
+      if (!(x > 0) || x >= 1) x = 0.123456;
+      // Chaos diffusion
+      for (let j = 0; j < INNER_ITER; j++) {
+        x = LOGISTIC_R * x * (1 - x);
+      }
+      const raw = Math.floor(x * UINT32_MAX) >>> 0;
+      const out = mix32((state ^ raw) >>> 0);
+      parts[i] = out.toString(16).slice(-HEX_SIZE).padStart(HEX_SIZE, '0');
+    }
+    return parts.join('');
+  };
+
+  /* ─── Sync public API ──────────────────────────────────────────────── */
+  const generate = (seed) => generateCore(normalizeSeed(seed), collectNonce());
+
+  /* ─── Worker source (byte-for-byte mirrors generateCore) ───────────── */
+  const WORKER_SRC = `
+    'use strict';
+    const LOGISTIC_R = ${LOGISTIC_R};
+    const ITERATIONS = ${ITERATIONS};
+    const INNER_ITER = ${INNER_ITER};
+    const UINT32_MAX = ${UINT32_MAX};
+    const HEX_SIZE   = ${HEX_SIZE};
+    const mix32 = (h) => {
+      h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
+      h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+      return (h ^ (h >>> 16)) >>> 0;
+    };
+    const mix = (a, b) => mix32(((a >>> 0) + (b >>> 0)) >>> 0);
+    self.onmessage = (e) => {
+      const id = e.data && e.data.id;
+      try {
+        const seedUint32 = e.data.seedUint32 >>> 0;
+        const nonce      = e.data.nonce;
+        const parts = new Array(ITERATIONS);
+        for (let i = 0; i < ITERATIONS; i++) {
+          let state = mix(seedUint32, mix(nonce[i], i));
+          let x = (state >>> 1) / 0x80000000;
+          if (!(x > 0) || x >= 1) x = 0.123456;
+          for (let j = 0; j < INNER_ITER; j++) {
+            x = LOGISTIC_R * x * (1 - x);
+          }
+          const raw = Math.floor(x * UINT32_MAX) >>> 0;
+          const out = mix32((state ^ raw) >>> 0);
+          parts[i] = out.toString(16).slice(-HEX_SIZE).padStart(HEX_SIZE, '0');
+        }
+        self.postMessage({ id, ok: true, value: parts.join('') });
+      } catch (err) {
+        self.postMessage({ id, ok: false, error: String((err && err.message) || err) });
+      }
+    };
+  `;
+
+  /* ─── Worker lifecycle ─────────────────────────────────────────────── */
+  let   _worker       = null;
+  let   _workerUrl    = null;
+  let   _workerBroken = false;
+  let   _msgSeq       = 0;
+  const _pending      = new Map();   // id → { resolve, reject, timer }
+
+  const workerSupported = () => {
+    try {
+      return typeof Worker    !== 'undefined'
+          && typeof Blob      !== 'undefined'
+          && typeof URL       !== 'undefined'
+          && typeof URL.createObjectURL === 'function';
+    } catch (_) { return false; }
+  };
+
+  const rejectAll = (reason) => {
+    for (const { reject, timer } of _pending.values()) {
+      try { clearTimeout(timer); } catch (_) {}
+      try { reject(reason); }      catch (_) {}
+    }
+    _pending.clear();
+  };
+
+  const destroyWorker = () => {
+    if (_worker)    { try { _worker.terminate(); }    catch (_) {} _worker = null; }
+    if (_workerUrl) { try { URL.revokeObjectURL(_workerUrl); } catch (_) {} _workerUrl = null; }
+  };
+
+  const teardownWorker = () => {
+    destroyWorker();
+    rejectAll(new Error('NexusRareCode: worker torn down'));
+  };
+
+  const failWorker = (reason) => {
+    _workerBroken = true;
+    destroyWorker();
+    rejectAll(reason);
+  };
+
+  const spawnWorker = () => {
+    if (_worker) return _worker;
+    if (_workerBroken || !workerSupported()) return null;
+    try {
+      const blob   = new Blob([WORKER_SRC], { type: 'application/javascript' });
+      _workerUrl   = URL.createObjectURL(blob);
+      const w      = new Worker(_workerUrl);
+
+      w.onmessage = (e) => {
+        const data = e && e.data;
+        if (!data || data.id == null) return;
+        const slot = _pending.get(data.id);
+        if (!slot) return;                          // already timed-out
+        _pending.delete(data.id);
+        try { clearTimeout(slot.timer); } catch (_) {}
+        if (data.ok) slot.resolve(data.value);
+        else         slot.reject(new Error(data.error || 'worker error'));
+      };
+      w.onerror = (ev) => {
+        failWorker(new Error(
+          'NexusRareCode worker error: ' + ((ev && ev.message) || 'unknown')));
+      };
+      w.onmessageerror = () => {
+        failWorker(new Error('NexusRareCode: worker message error'));
+      };
+
+      _worker = w;
+      return w;
+    } catch (_) {
+      _workerBroken = true;
+      if (_workerUrl) { try { URL.revokeObjectURL(_workerUrl); } catch (_) {} _workerUrl = null; }
+      return null;
+    }
+  };
+
+  /* ─── Async public API (Worker + transparent sync fallback) ────────── */
+  const generateAsync = (seed) => new Promise((resolve, reject) => {
+    let s;
+    try { s = normalizeSeed(seed); }
+    catch (err) { reject(err); return; }
+
+    const nonce = collectNonce();
+    const w     = spawnWorker();
+
+    // No worker available → generate synchronously (same algorithm, same quality)
+    if (!w) {
+      try { resolve(generateCore(s, nonce)); }
+      catch (err) { reject(err); }
+      return;
+    }
+
+    const id = (++_msgSeq) >>> 0;
+
+    const timer = setTimeout(() => {
+      if (_pending.has(id)) {
+        _pending.delete(id);
+        try { reject(new Error('NexusRareCode: worker timeout')); } catch (_) {}
+        failWorker(new Error('NexusRareCode: worker timeout'));
+      }
+    }, WORKER_TIMEOUT_MS);
+
+    _pending.set(id, { resolve, reject, timer });
+
+    try {
+      w.postMessage({ id, seedUint32: s, nonce });
+    } catch (_) {
+      // postMessage failed (worker just died) → sync fallback
+      _pending.delete(id);
+      try { clearTimeout(timer); } catch (_) {}
+      try { resolve(generateCore(s, nonce)); }
+      catch (err) { reject(err); }
+    }
+  });
+
+  /* ─── Cleanup on page unload (idempotent) ─────────────────────────── */
+  try {
+    const add = (typeof G.addEventListener === 'function')
+      ? G.addEventListener.bind(G)
+      : (typeof addEventListener === 'function' ? addEventListener : null);
+    if (add) {
+      add('pagehide',     teardownWorker);
+      add('beforeunload', teardownWorker);
+    }
+  } catch (_) { /* ignore */ }
+
+  /* ─── Public export (frozen) ──────────────────────────────────────── */
+  const exporter = Object.freeze({
+    generate,                     // sync
+    generateSync: generate,       // alias
+    generateAsync,                // async (Web Worker w/ fallback)
+    workerSupported,              // diagnostics helper
+    VERSION: '2.0.0',
+  });
+
+  try { G.NexusRareCode = exporter; } catch (_) {}
+})();
+
+</script>
+<script id="nexus-rare-prelude-boot">
+/* Combined prelude for sandboxed html/js: Pharma engine + Rare Code (idempotent) */
+(function () {
+  'use strict';
+  function rareSrc() {
+    try {
+      var el = document.getElementById('nexus-rare-js');
+      return el ? el.textContent : '';
+    } catch (e) { return ''; }
+  }
+  window.__nxrPrelude = function () {
+    // Minimal boot that re-runs the rare IIFE inside sandbox (it attaches to globalThis)
+    return rareSrc();
+  };
+  // Preserve existing __nxpPrelude; wrap so both engines load in sandbox
+  var _prevP = window.__nxpPrelude;
+  // Defer wrap until pharma sets __nxpPrelude (later). Use getter-style combiner at call time.
+  window.__cgoPrelude = function () {
+    var parts = [];
+    try {
+      if (typeof window.__nxpPrelude === 'function') {
+        var p = window.__nxpPrelude();
+        if (p) parts.push(p);
+      }
+    } catch (e) {}
+    try {
+      if (typeof window.__nxrPrelude === 'function') {
+        var r = window.__nxrPrelude();
+        if (r) parts.push(r);
+      }
+    } catch (e) {}
+    return parts.join('\n;\n');
+  };
+})();
+</script>
+
 <style>
 :root{--void:#04070d;--ink:#e9edf5;--dim:rgba(196,208,232,.52);--accent:#38bdf8;--danger:#ef4444;--success:#10b981;--warning:#f59e0b;
 --c-role:#10b981;--c-context:#ec4899;--c-rules:#f59e0b;--c-objective:#8b5cf6;--c-validation:#3b82f6;--text-main:#e9edf5;--text-muted:#cbd5e1;--text-dim:rgba(196,208,232,.52);--border-color:#1e293b;
@@ -2839,6 +3172,11 @@ function blockHTML(b) {
                 if (!b.done) return '<div class="ui-pending"></div>';
                 try { return window.__nxdFence(b.code); } catch (e) {}
             }
+            // NEXUS RARE: fence nexusrare / rare / nxr -> kartu kode langka (modul aditif)
+            if ((lang0 === 'nexusrare' || lang0 === 'rare' || lang0 === 'nxr') && window.__nxrFence) {
+                if (!b.done) return '<div class="ui-pending"></div>';
+                try { return window.__nxrFence(b.code); } catch (e) {}
+            }
             // Full HTML → langsung tayang di sandbox (bukan hanya tombol EXEC)
             if (lang0 === 'html' || lang0 === 'htm') {
                 if (!b.done) return '<div class="ui-pending"></div>';
@@ -3664,7 +4002,7 @@ function execCode(p, lang, code) {
     frame.setAttribute('referrerpolicy', 'no-referrer');
     frame.className = 'exec-frame';
     if (lang === 'html') {
-        frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data: blob:; script-src \'unsafe-inline\'">' + (window.__nxpPrelude ? '<script>' + window.__nxpPrelude() + '<\/script>' : '') + code;
+        frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data: blob:; script-src \'unsafe-inline\'">' + (window.__cgoPrelude ? '<script>' + window.__cgoPrelude() + '<\/script>' : (window.__nxpPrelude ? '<script>' + window.__nxpPrelude() + '<\/script>' : '')) + code;
         out.appendChild(frame); return;
     }
     const id = 'x' + Math.random().toString(36).slice(2), safe = s => JSON.stringify(s).replace(/</g, '\\u003c');
@@ -3682,7 +4020,7 @@ function execCode(p, lang, code) {
     const runner = 'const __id=' + safe(id) + ';const send=(k,v)=>{try{parent.postMessage({__cgo:__id,k:k,v:v},"*")}catch(e){}};' +
         'const fmt=a=>a.map(x=>{try{return typeof x==="string"?x:JSON.stringify(x)}catch(e){return String(x)}}).join(" ");' +
         '["log","info","warn","error"].forEach(m=>{console[m]=(...a)=>send(m,fmt(a))});window.onerror=(m)=>{send("error",String(m));};' +
-        (window.__nxpPrelude ? 'try{(0,eval)(' + safe(window.__nxpPrelude()) + ')}catch(e){};' : '') + 'try{const r=(0,eval)(' + safe(code) + ');if(r!==undefined)send("result",fmt([r]))}catch(e){send("error",String(e))}send("done","")';
+        (window.__cgoPrelude ? 'try{(0,eval)(' + safe(window.__cgoPrelude()) + ')}catch(e){};' : (window.__nxpPrelude ? 'try{(0,eval)(' + safe(window.__nxpPrelude()) + ')}catch(e){};' : '')) + 'try{const r=(0,eval)(' + safe(code) + ');if(r!==undefined)send("result",fmt([r]))}catch(e){send("error",String(e))}send("done","")';
     frame.srcdoc = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; script-src \'unsafe-inline\' \'unsafe-eval\'"><script>' + runner + '<\/script>';
     out.appendChild(frame);
 }
@@ -3723,7 +4061,7 @@ function buildHtmlPreview(el) {
     frame.title = 'HTML preview';
     // CSP longgar-sedang: izinkan inline + gambar data/https agar demo HTML berguna, tanpa navigasi parent
     const csp = "default-src 'none'; style-src 'unsafe-inline' https: data:; img-src data: blob: https: http:; media-src data: blob: https:; font-src data: https:; script-src 'unsafe-inline' 'unsafe-eval' https:; connect-src https: http:; frame-src data: blob:;";
-    const doc = '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + csp + '"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;min-height:100%;background:#fff;color:#111;font:14px/1.5 system-ui,sans-serif}img,video{max-width:100%}</style>' + (window.__nxpPrelude ? '<script>' + window.__nxpPrelude() + '<\/script>' : '') + '</head><body>' + code + '</body></html>';
+    const doc = '<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + csp + '"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html,body{margin:0;padding:0;min-height:100%;background:#fff;color:#111;font:14px/1.5 system-ui,sans-serif}img,video{max-width:100%}</style>' + (window.__cgoPrelude ? '<script>' + window.__cgoPrelude() + '<\/script>' : (window.__nxpPrelude ? '<script>' + window.__nxpPrelude() + '<\/script>' : '')) + '</head><body>' + code + '</body></html>';
     try {
         frame.srcdoc = doc;
         st.textContent = 'HTML LIVE';
@@ -3897,7 +4235,7 @@ function createStream(flow, silent) {
 const LYRIC_RISK = /risik|risk|celah|\bgap\b|counterexample|contoh tandingan|gagal|failure|error|kontradiks|contradict|\bflaw|vulnerab|\bbug\b|asumsi tersembunyi|hidden assum/i;
 const UI_HINT_ID = 'ANTARMUKA (opsional, hemat): kode -> [UI:CODE|bahasa]...[/UI:CODE] atau blok kode biasa; grafik -> [UI:CHART|{JSON Chart.js valid}] (satu tag, tanpa fungsi/komentar); risiko fatal atau kontradiksi serius -> [UI:ALERT|kalimat singkat] (maksimal 1x); catatan pendukung singkat -> [UI:NOTE]...[/UI:NOTE]. Jangan taruh tag di dalam blok kode.';
 const UI_HINT_EN = 'INTERFACE (optional, sparing): code -> [UI:CODE|language]...[/UI:CODE] or a normal code block; chart -> [UI:CHART|{valid Chart.js JSON}] (one tag, no functions/comments); fatal risk or serious contradiction -> [UI:ALERT|short sentence] (max once); short supporting note -> [UI:NOTE]...[/UI:NOTE]. Never put tags inside code blocks.';
-function uiHint() { return (settings.lang === 'en' ? UI_HINT_EN : UI_HINT_ID) + (window.__nxpHint ? (function () { try { return window.__nxpHint(settings.lang === 'en'); } catch (e) { return ''; } })() : '') + (window.__nxdHint ? (function () { try { return window.__nxdHint(settings.lang === 'en'); } catch (e) { return ''; } })() : ''); }
+function uiHint() { return (settings.lang === 'en' ? UI_HINT_EN : UI_HINT_ID) + (window.__nxpHint ? (function () { try { return window.__nxpHint(settings.lang === 'en'); } catch (e) { return ''; } })() : '') + (window.__nxdHint ? (function () { try { return window.__nxdHint(settings.lang === 'en'); } catch (e) { return ''; } })() : '') + (window.__nxrHint ? (function () { try { return window.__nxrHint(settings.lang === 'en'); } catch (e) { return ''; } })() : ''); }
 
 function getSystemPrompt() { return getSystemPromptBase() + '\n\n' + uiHint(); }
 function getSystemPromptBase() {
@@ -5302,6 +5640,11 @@ assert('NexusPharma golden druglikeness', (function () {
     assert('NexusPharmaLab integration', typeof window.NexusPharmaLab === 'object' && typeof window.NexusPharmaLab.run === 'function');
     assert('__nxpFence callable', typeof window.__nxpFence === 'function');
     assert('NexusDeckAI (LBC/EADI Dewan control)', typeof window.NexusDeckAI === 'object' && typeof window.__nxdFence === 'function' && typeof window.__nxdHint === 'function');
+    assert('NexusRareCode engine present', typeof window.NexusRareCode === 'object' && typeof window.NexusRareCode.generate === 'function' && typeof window.NexusRareCode.generateAsync === 'function');
+    assert('NexusRareCode version 2.x', window.NexusRareCode && /^2\./.test(String(window.NexusRareCode.VERSION || '')));
+    assert('__nxrFence callable', typeof window.__nxrFence === 'function');
+    assert('NexusRare.selfTest', typeof window.NexusRare === 'object' && typeof window.NexusRare.selfTest === 'function' && window.NexusRare.selfTest().ok);
+    assert('Rare prelude / combined', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
     assert('hydrate + buildChart + buildHtmlPreview', typeof hydrate === 'function' && typeof buildChart === 'function' && typeof buildHtmlPreview === 'function' && typeof buildScene3d === 'function');
     assert('APP_VERSION 10.0.6 robust-render', /10\.0\.6|robust-render|nexuspharma/i.test(String(APP_VERSION)));
 
@@ -6457,6 +6800,29 @@ function importBackup(file) {
         ['Nexus: uji sandbox (1 + 1)', () => window.NexusEvo && window.NexusEvo.test(), 'shield'],
         ['Nexus: tes suara + lip-sync', () => window.NexusEvo && window.NexusEvo.say('Halo. Modul Nexus Evolution aktif dan siap.'), 'volume'],
         ['Nexus: hentikan suara', () => window.NexusEvo && window.NexusEvo.stop(), 'stop'],
+        ['Nexus Rare: generate kode langka (sync)', () => {
+            try {
+                if (!window.NexusRareCode) return showToast('NexusRareCode tidak termuat', 2500, true);
+                const seed = (Date.now() ^ (Math.random() * 0x100000000)) >>> 0;
+                const v = window.NexusRareCode.generate(seed);
+                const msg = '**NEXUS RARE** · seed `' + seed + '`\n\n```\n' + v + '\n```';
+                if (typeof addMessageToUI === 'function') addMessageToUI('ai', msg);
+                else showToast(v, 4000);
+                try { navigator.clipboard && navigator.clipboard.writeText(v); } catch (e) {}
+            } catch (e) { showToast(String(e && e.message || e), 3000, true); }
+        }, 'shield'],
+        ['Nexus Rare: generate async (Worker)', async () => {
+            try {
+                if (!window.NexusRareCode) return showToast('NexusRareCode tidak termuat', 2500, true);
+                const seed = (Date.now() ^ (Math.random() * 0x100000000)) >>> 0;
+                showToast('Rare async… seed ' + seed, 1500);
+                const v = await window.NexusRareCode.generateAsync(seed);
+                const msg = '**NEXUS RARE** (async) · seed `' + seed + '`\n\n```\n' + v + '\n```';
+                if (typeof addMessageToUI === 'function') addMessageToUI('ai', msg);
+                else showToast(v, 4000);
+                try { navigator.clipboard && navigator.clipboard.writeText(v); } catch (e) {}
+            } catch (e) { showToast(String(e && e.message || e), 3000, true); }
+        }, 'shield'],
         ['Bersihkan riwayat', () => clearBtn.click(), 'trash']
     ];
     const pal = document.createElement('div'); pal.id = 'palette';
@@ -11848,5 +12214,298 @@ if (!op) {
 })();
 
 </script>
+
+<script id="nexus-rare-integration">
+/* ===== NEXUS RARE · integrasi arsitektur penuh (prelude · fence · hint · palette · cortex ID · diag) ===== */
+(function () {
+  'use strict';
+  try {
+    if (window.__nxrBound) return;
+    window.__nxrBound = 1;
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+      });
+    }
+
+    function safeParseLoose(raw) {
+      var s = String(raw == null ? '' : raw).trim();
+      if (!s) return {};
+      // strip optional outer fences residual
+      s = s.replace(/^```\w*\s*/i, '').replace(/\s*```$/i, '').trim();
+      try {
+        if (typeof window.safeParse === 'function') return window.safeParse(s);
+      } catch (e) {}
+      try {
+        if (typeof window.nxSafeParse === 'function') {
+          var p = window.nxSafeParse(s, null);
+          if (p != null) return p;
+        }
+      } catch (e) {}
+      try { return JSON.parse(s); } catch (e) {}
+      if (/^-?\d+(\.\d+)?$/.test(s)) return { seed: Number(s) };
+      var o = {};
+      s.split(/[\n,;]+/).forEach(function (line) {
+        var m = /^\s*([a-zA-Z_][\w]*)\s*[:=]\s*(.+?)\s*$/.exec(line);
+        if (!m) return;
+        var k = m[1], v = m[2];
+        if (/^(true|false)$/i.test(v)) o[k] = /^true$/i.test(v);
+        else if (/^-?\d+(\.\d+)?$/.test(v)) o[k] = Number(v);
+        else o[k] = v.replace(/^["']|["']$/g, '');
+      });
+      return o;
+    }
+
+    function card(htmlBody, meta) {
+      meta = meta || {};
+      return '<div class="nxp-card nxp-rare" role="status" data-nxr="1">' +
+        '<div class="nxp-h"><b>NEXUS RARE</b><span>' + esc(meta.mode || 'generate') + '</span>' +
+        (meta.seed != null ? '<span style="opacity:.65;margin-left:.4rem">seed ' + esc(meta.seed) + '</span>' : '') +
+        '<button type="button" class="nxp-open nxp-rare-copy" data-nxr-copy="' + esc(meta.copy || '') + '" title="Salin kode">Salin</button>' +
+        '</div>' +
+        '<div class="nxp-body" style="font:400 .88rem/1.65 var(--mono,ui-monospace,monospace);letter-spacing:.05em;word-break:break-all">' +
+        htmlBody +
+        '</div>' +
+        '<div class="nxp-f">128-bit crypto nonce · Murmur avalanche · logistic R=3.99 · v' +
+        esc((window.NexusRareCode && window.NexusRareCode.VERSION) || '2.0.0') +
+        ' · entropy riset · bukan CSPRNG produksi</div></div>';
+    }
+
+    function errCard(msg) {
+      return '<div class="nxp-card nxp-err" role="alert" data-nxr="1">' +
+        '<div class="nxp-h"><b>NEXUS RARE</b><span>galat</span></div>' +
+        '<div class="nxp-body" style="white-space:pre-wrap">' + esc(msg) + '</div></div>';
+    }
+
+    window.__nxrFence = function (code) {
+      if (!window.NexusRareCode || typeof window.NexusRareCode.generate !== 'function') {
+        return errCard('NexusRareCode belum dimuat. Skrip nexus.rare.js harus ter-inline di host.');
+      }
+      var job = {};
+      try { job = safeParseLoose(code); } catch (e) {
+        return errCard('Gagal parse input: ' + ((e && e.message) || e));
+      }
+      if (job == null || typeof job !== 'object' || Array.isArray(job)) job = {};
+
+      var seed = job.seed;
+      if (seed == null || seed === '') {
+        seed = (Date.now() ^ Math.floor(Math.random() * 0x100000000)) >>> 0;
+      }
+      var n = Number(seed);
+      if (!Number.isFinite(n)) {
+        return errCard('seed harus angka finite (diterima: ' + String(seed) + ')');
+      }
+      seed = n >>> 0;
+
+      var mode = String(job.mode || job.op || 'sync').toLowerCase();
+      var count = Math.max(1, Math.min(8, parseInt(job.count || job.n || 1, 10) || 1));
+      var asyncWanted = mode === 'async' || mode === 'generateasync' || job.async === true;
+
+      try {
+        if (asyncWanted && typeof window.NexusRareCode.generateAsync === 'function') {
+          var id = 'nxr' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+          var parts = [];
+          for (var i = 0; i < count; i++) {
+            parts.push('<code id="' + id + '-' + i + '" class="nxr-code" style="display:block;margin:.25em 0">…generating…</code>');
+          }
+          var html = card(parts.join(''), { mode: 'async×' + count, seed: seed, copy: '' });
+          (function (baseId, baseSeed, nCount) {
+            var acc = [];
+            var chain = Promise.resolve();
+            for (var j = 0; j < nCount; j++) {
+              (function (idx) {
+                chain = chain.then(function () {
+                  return window.NexusRareCode.generateAsync((baseSeed + idx) >>> 0);
+                }).then(function (val) {
+                  acc[idx] = val;
+                  var el = document.getElementById(baseId + '-' + idx);
+                  if (el) el.textContent = val;
+                  var btn = document.querySelector('[data-nxr-copy=""]');
+                  // update nearest card copy payload when all done
+                }).catch(function (err) {
+                  var el = document.getElementById(baseId + '-' + idx);
+                  if (el) el.textContent = 'ERR: ' + ((err && err.message) || err);
+                });
+              })(j);
+            }
+            chain.then(function () {
+              try {
+                var joined = acc.filter(Boolean).join('\\n');
+                var codes = document.querySelectorAll('[id^="' + baseId + '-"]');
+                if (codes.length) {
+                  var cardEl = codes[0].closest('.nxp-rare');
+                  if (cardEl) {
+                    var b = cardEl.querySelector('.nxp-rare-copy');
+                    if (b) b.setAttribute('data-nxr-copy', joined);
+                  }
+                }
+              } catch (e) {}
+            });
+          })(id, seed, count);
+          return html;
+        }
+
+        var lines = [];
+        var all = [];
+        for (var k = 0; k < count; k++) {
+          var v = window.NexusRareCode.generate((seed + k) >>> 0);
+          all.push(v);
+          lines.push('<code class="nxr-code" style="display:block;margin:.25em 0">' + esc(v) + '</code>');
+        }
+        return card(lines.join(''), { mode: count > 1 ? 'sync×' + count : 'sync', seed: seed, copy: all.join('\\n') });
+      } catch (e) {
+        return errCard((e && e.message) || String(e));
+      }
+    };
+
+    window.__nxrHint = function (en) {
+      if (en) {
+        return '\\n\\nNEXUS RARE (full council access, active): generate high-entropy 128-bit rare codes with a ```nexusrare (or ```rare / ```nxr) block. Body = JSON {"seed":12345,"count":1,"mode":"sync"|"async"} or a bare number, or empty (time-derived seed). In html/js sandbox blocks the global NexusRareCode is preloaded via prelude (generate / generateAsync / workerSupported). Also: window.NexusRareCode / window.NexusRare. Research entropy tool — not a production CSPRNG for key material.';
+      }
+      return '\\n\\nNEXUS RARE (akses penuh Dewan, aktif): hasilkan kode langka 128-bit ber-entropi tinggi lewat blok ```nexusrare (atau ```rare / ```nxr). Isi = JSON {"seed":12345,"count":1,"mode":"sync"|"async"} atau angka seed, atau kosong (seed dari waktu). Di blok html/js sandbox, global NexusRareCode sudah di-preload (generate / generateAsync / workerSupported). Juga: window.NexusRareCode / window.NexusRare. Alat riset entropy — bukan CSPRNG produksi untuk material kunci.';
+    };
+
+    // Click: salin dari kartu
+    if (!window.__nxrClickBound) {
+      window.__nxrClickBound = true;
+      document.addEventListener('click', function (e) {
+        try {
+          var t = e && e.target;
+          if (!t || !t.closest) return;
+          var btn = t.closest('.nxp-rare-copy');
+          if (!btn) return;
+          e.preventDefault();
+          var payload = btn.getAttribute('data-nxr-copy') || '';
+          if (!payload) {
+            var cardEl = btn.closest('.nxp-rare');
+            if (cardEl) {
+              var codes = cardEl.querySelectorAll('.nxr-code');
+              payload = Array.prototype.map.call(codes, function (c) { return c.textContent; }).filter(Boolean).join('\\n');
+            }
+          }
+          if (!payload || payload.indexOf('…') === 0) {
+            if (typeof showToast === 'function') showToast('Belum ada kode untuk disalin', 2000, true);
+            return;
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(payload).then(function () {
+              if (typeof showToast === 'function') showToast('Rare code disalin', 1800);
+            }, function () {
+              if (typeof showToast === 'function') showToast('Gagal menyalin', 2000, true);
+            });
+          }
+        } catch (err) {}
+      }, false);
+    }
+
+    // Optional: rare-backed id helper for cortex-style unique ids (non-breaking)
+    window.nxRareId = function (label) {
+      try {
+        var seed = (Date.now() ^ (label ? fnvish(label) : 0) ^ Math.floor(Math.random() * 0x100000000)) >>> 0;
+        if (window.NexusRareCode && window.NexusRareCode.generate) {
+          return 'nr_' + window.NexusRareCode.generate(seed).slice(0, 16);
+        }
+      } catch (e) {}
+      return 'nr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    };
+    function fnvish(s) {
+      var h = 0x811c9dc5;
+      s = String(s || '');
+      for (var i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0;
+      return h;
+    }
+
+    window.NexusRare = Object.freeze({
+      version: (window.NexusRareCode && window.NexusRareCode.VERSION) || '2.0.0',
+      generate: function (seed) {
+        if (!window.NexusRareCode) throw new Error('NexusRareCode missing');
+        return window.NexusRareCode.generate(seed);
+      },
+      generateAsync: function (seed) {
+        if (!window.NexusRareCode) return Promise.reject(new Error('NexusRareCode missing'));
+        return window.NexusRareCode.generateAsync(seed);
+      },
+      workerSupported: function () {
+        return !!(window.NexusRareCode && typeof window.NexusRareCode.workerSupported === 'function' && window.NexusRareCode.workerSupported());
+      },
+      fence: function (code) { return window.__nxrFence(code); },
+      hint: function (en) { return window.__nxrHint(en); },
+      id: window.nxRareId,
+      selfTest: function () {
+        var r = { ok: true, checks: [] };
+        function chk(name, pass, detail) {
+          r.checks.push({ name: name, ok: !!pass, detail: detail || '' });
+          if (!pass) r.ok = false;
+        }
+        chk('engine', !!(window.NexusRareCode && window.NexusRareCode.generate));
+        chk('version', !!(window.NexusRareCode && /^2\\./.test(String(window.NexusRareCode.VERSION || ''))));
+        try {
+          var a = window.NexusRareCode.generate(1);
+          var b = window.NexusRareCode.generate(1);
+          chk('hex32', typeof a === 'string' && /^[0-9a-f]{32}$/.test(a), a);
+          // same seed still varies due to nonce — both valid hex
+          chk('nonce-varies-or-valid', /^[0-9a-f]{32}$/.test(b), b);
+        } catch (e) {
+          chk('generate', false, String(e && e.message || e));
+        }
+        chk('fence', typeof window.__nxrFence === 'function');
+        chk('hint', typeof window.__nxrHint === 'function');
+        chk('prelude', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
+        return r;
+      }
+    });
+
+    // Header button (next to nxp / avatar if present)
+    try {
+      var av = document.getElementById('avatar-btn') || document.getElementById('nxp-btn');
+      if (av && av.parentNode && !document.getElementById('nxr-btn')) {
+        var hb = document.createElement('button');
+        hb.type = 'button';
+        hb.className = 'btn-icon';
+        hb.id = 'nxr-btn';
+        hb.title = 'Nexus Rare — generate kode langka';
+        hb.setAttribute('aria-label', 'Nexus Rare generate');
+        hb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/><circle cx="12" cy="12" r="3.2"/></svg>';
+        hb.onclick = function () {
+          try {
+            if (!window.NexusRareCode) return showToast && showToast('NexusRareCode offline', 2000, true);
+            var seed = (Date.now() ^ Math.floor(Math.random() * 0x100000000)) >>> 0;
+            var v = window.NexusRareCode.generate(seed);
+            if (typeof addMessageToUI === 'function') {
+              addMessageToUI('ai', '**NEXUS RARE** · seed `' + seed + '`\\n\\n```\\n' + v + '\\n```');
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(v);
+            if (typeof showToast === 'function') showToast('Rare · ' + v.slice(0, 12) + '…', 2200);
+          } catch (e) {
+            if (typeof showToast === 'function') showToast(String(e && e.message || e), 2500, true);
+          }
+        };
+        av.parentNode.insertBefore(hb, av.nextSibling);
+      }
+    } catch (e) {}
+
+    // Shortcut Ctrl+Shift+R
+    document.addEventListener('keydown', function (e) {
+      if (e.ctrlKey && e.shiftKey && (e.code === 'KeyR' || e.key === 'R')) {
+        var btn = document.getElementById('nxr-btn');
+        if (btn) { e.preventDefault(); btn.click(); }
+      }
+    });
+
+    try {
+      if (typeof logEvent === 'function') {
+        var w = window.NexusRare.workerSupported();
+        logEvent('SYSTEM', '[NEXUS RARE] Online · v' + window.NexusRare.version + ' · worker=' + (w ? 'yes' : 'fallback-sync') + ' · prelude=' + (typeof window.__cgoPrelude === 'function' ? 'combined' : 'solo') + ' · Ctrl+Shift+R');
+      } else {
+        console.log('[NEXUS RARE] Online · v' + ((window.NexusRareCode && window.NexusRareCode.VERSION) || '?'));
+      }
+    } catch (e) {}
+  } catch (err) {
+    console.warn('[NEXUS RARE] modul integrasi gagal (inti NEXUS tetap aman):', err);
+  }
+})();
+</script>
+
 </body>
 </html>
