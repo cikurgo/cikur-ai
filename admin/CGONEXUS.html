@@ -1280,11 +1280,14 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
 .artifact-actions button:hover { color: var(--text-main); border-color: var(--accent); }
 
 .event-log {
-    background: #000; border-radius: 6px; padding: 7px 9px; height: 130px; overflow-y: auto;
+    background: #000; border-radius: 6px; padding: 7px 9px;
+    /* Taller viewport: show ~80–120+ lines; grows with panel, caps for usability */
+    height: auto; min-height: 220px; max-height: min(52vh, 480px);
+    overflow-y: auto; overscroll-behavior: contain;
     font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; line-height: 1.5;
     border: 1px solid rgba(255,255,255,0.07);
 }
-.event-log::-webkit-scrollbar { width: 3px; } .event-log::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+.event-log::-webkit-scrollbar { width: 5px; } .event-log::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; } .event-log::-webkit-scrollbar-track { background: transparent; }
 .log-line { white-space: pre-wrap; word-break: break-word; color: var(--text-muted); }
 .log-line .ts { color: #475569; margin-right: 3px; }
 .spec-label{letter-spacing:0}
@@ -1698,8 +1701,8 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
                 </div>
             </div>
 
-            <div class="tele-section" style="border-bottom:none;">
-                <div class="tele-title">NEURAL TRACE LOG</div>
+            <div class="tele-section" style="border-bottom:none;display:flex;flex-direction:column;min-height:0;">
+                <div class="tele-title">NEURAL TRACE LOG <span class="hud-tag" style="opacity:.7">scroll · max 400</span></div>
                 <div class="event-log" id="event-log">
                     <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.6-titanium-robust-render-nexuspharma initialized. Awaiting intent.</div>
                 </div>
@@ -2588,14 +2591,17 @@ function getCacheStats() {
 
 /* ===================== TELEMETRY ===================== */
 function logEvent(tag, message) {
-    const ts = new Date().toTimeString().slice(0, 8);
-    const tagClass = { SYSTEM:'tag-sys', PARSER:'tag-pars', VALIDATOR:'tag-val', COMPILER:'tag-comp', ERROR:'tag-err', OK:'tag-ok', CACHE:'tag-ok', DIAG:'tag-sys', PROVIDER:'tag-sys', AGENT:'tag-pars', SWARM:'tag-pars', SEQUENCE:'tag-comp' }[tag] || 'tag-sys';
-    const div = document.createElement('div');
-    div.className = 'log-line';
-    div.innerHTML = `<span class="ts">${ts}</span><span class="${tagClass}">[${tag}]</span> ${escapeHtml(message)}`;
-    eventLogEl.appendChild(div);
-    eventLogEl.scrollTop = eventLogEl.scrollHeight;
-    while (eventLogEl.children.length > 160) eventLogEl.removeChild(eventLogEl.firstChild);
+    try {
+        if (!eventLogEl) return;
+        const ts = new Date().toTimeString().slice(0, 8);
+        const tagClass = { SYSTEM:'tag-sys', PARSER:'tag-pars', VALIDATOR:'tag-val', COMPILER:'tag-comp', ERROR:'tag-err', OK:'tag-ok', CACHE:'tag-ok', DIAG:'tag-sys', PROVIDER:'tag-sys', AGENT:'tag-pars', SWARM:'tag-pars', SEQUENCE:'tag-comp' }[tag] || 'tag-sys';
+        const div = document.createElement('div');
+        div.className = 'log-line';
+        div.innerHTML = `<span class="ts">${ts}</span><span class="${tagClass}">[${tag}]</span> ${escapeHtml(message)}`;
+        eventLogEl.appendChild(div);
+        eventLogEl.scrollTop = eventLogEl.scrollHeight;
+        while (eventLogEl.children.length > 400) eventLogEl.removeChild(eventLogEl.firstChild);
+    } catch (e) { try { console.warn('[logEvent]', e); } catch (z) {} }
 }
 function escapeHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -5645,13 +5651,26 @@ assert('NexusPharma golden druglikeness', (function () {
     assert('__nxrFence callable', typeof window.__nxrFence === 'function');
     assert('NexusRare.selfTest', (function () {
         try {
-            if (typeof window.NexusRare !== 'object' || typeof window.NexusRare.selfTest !== 'function') return false;
+            if (typeof window.NexusRare !== 'object' || typeof window.NexusRare.selfTest !== 'function') {
+                try { logEvent('DIAG', 'NexusRare.selfTest: API missing'); } catch (z) {}
+                return false;
+            }
             var r = window.NexusRare.selfTest();
             if (!r || typeof r !== 'object') return false;
-            // engine + hex output are critical; version/prelude already covered by sibling asserts
+            // engine + hex output + fence are critical; version/prelude covered by sibling asserts
             var crit = (r.checks || []).filter(function (c) { return c && (c.name === 'engine' || c.name === 'hex32' || c.name === 'fence'); });
-            return crit.length > 0 && crit.every(function (c) { return c.ok; });
-        } catch (e) { return false; }
+            var ok = crit.length >= 3 && crit.every(function (c) { return c.ok; });
+            if (!ok) {
+                try {
+                    var bad = (r.checks || []).filter(function (c) { return c && !c.ok; }).map(function (c) { return c.name + (c.detail ? '=' + c.detail : ''); });
+                    logEvent('DIAG', 'NexusRare.selfTest detail: ' + (bad.length ? bad.join(', ') : 'incomplete checks'));
+                } catch (z) {}
+            }
+            return ok;
+        } catch (e) {
+            try { logEvent('DIAG', 'NexusRare.selfTest threw: ' + ((e && e.message) || e)); } catch (z) {}
+            return false;
+        }
     })());
     assert('Rare prelude / combined', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
     assert('hydrate + buildChart + buildHtmlPreview', typeof hydrate === 'function' && typeof buildChart === 'function' && typeof buildHtmlPreview === 'function' && typeof buildScene3d === 'function');
@@ -12444,23 +12463,38 @@ if (!op) {
       selfTest: function () {
         var r = { ok: true, checks: [] };
         function chk(name, pass, detail) {
-          r.checks.push({ name: name, ok: !!pass, detail: detail || '' });
+          r.checks.push({ name: name, ok: !!pass, detail: detail == null ? '' : String(detail).slice(0, 96) });
           if (!pass) r.ok = false;
         }
-        chk('engine', !!(window.NexusRareCode && window.NexusRareCode.generate));
-        chk('version', !!(window.NexusRareCode && /^2\./.test(String(window.NexusRareCode.VERSION || ''))));
         try {
-          var a = window.NexusRareCode.generate(1);
-          var b = window.NexusRareCode.generate(1);
-          chk('hex32', typeof a === 'string' && /^[0-9a-f]{32}$/.test(a), a);
-          // same seed still varies due to nonce — both valid hex
-          chk('nonce-varies-or-valid', /^[0-9a-f]{32}$/.test(b), b);
+          var eng = !!(window.NexusRareCode && typeof window.NexusRareCode.generate === 'function');
+          chk('engine', eng);
+          chk('version', !!(window.NexusRareCode && /^2\./.test(String(window.NexusRareCode.VERSION || ''))));
+          var a = null, b = null;
+          if (eng) {
+            try {
+              a = window.NexusRareCode.generate(1);
+              b = window.NexusRareCode.generate(1);
+            } catch (ge) {
+              chk('generate', false, (ge && ge.message) || ge);
+            }
+          }
+          var hexOk = typeof a === 'string' && /^[0-9a-f]{32}$/i.test(a);
+          chk('hex32', hexOk, a);
+          // nonce may collide rarely; both must still be valid 32-hex when generation succeeded
+          if (a != null || b != null) {
+            chk('nonce-varies-or-valid', typeof b === 'string' && /^[0-9a-f]{32}$/i.test(b), b);
+          } else {
+            chk('nonce-varies-or-valid', false, 'no output');
+          }
+          chk('fence', typeof window.__nxrFence === 'function');
+          chk('hint', typeof window.__nxrHint === 'function');
+          chk('prelude', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
         } catch (e) {
-          chk('generate', false, String(e && e.message || e));
+          chk('engine', false, (e && e.message) || e);
+          chk('hex32', false, 'selfTest crashed');
+          chk('fence', typeof window.__nxrFence === 'function');
         }
-        chk('fence', typeof window.__nxrFence === 'function');
-        chk('hint', typeof window.__nxrHint === 'function');
-        chk('prelude', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
         return r;
       }
     });
