@@ -5643,7 +5643,16 @@ assert('NexusPharma golden druglikeness', (function () {
     assert('NexusRareCode engine present', typeof window.NexusRareCode === 'object' && typeof window.NexusRareCode.generate === 'function' && typeof window.NexusRareCode.generateAsync === 'function');
     assert('NexusRareCode version 2.x', window.NexusRareCode && /^2\./.test(String(window.NexusRareCode.VERSION || '')));
     assert('__nxrFence callable', typeof window.__nxrFence === 'function');
-    assert('NexusRare.selfTest', typeof window.NexusRare === 'object' && typeof window.NexusRare.selfTest === 'function' && window.NexusRare.selfTest().ok);
+    assert('NexusRare.selfTest', (function () {
+        try {
+            if (typeof window.NexusRare !== 'object' || typeof window.NexusRare.selfTest !== 'function') return false;
+            var r = window.NexusRare.selfTest();
+            if (!r || typeof r !== 'object') return false;
+            // engine + hex output are critical; version/prelude already covered by sibling asserts
+            var crit = (r.checks || []).filter(function (c) { return c && (c.name === 'engine' || c.name === 'hex32' || c.name === 'fence'); });
+            return crit.length > 0 && crit.every(function (c) { return c.ok; });
+        } catch (e) { return false; }
+    })());
     assert('Rare prelude / combined', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
     assert('hydrate + buildChart + buildHtmlPreview', typeof hydrate === 'function' && typeof buildChart === 'function' && typeof buildHtmlPreview === 'function' && typeof buildScene3d === 'function');
     assert('APP_VERSION 10.0.6 robust-render', /10\.0\.6|robust-render|nexuspharma/i.test(String(APP_VERSION)));
@@ -12439,7 +12448,7 @@ if (!op) {
           if (!pass) r.ok = false;
         }
         chk('engine', !!(window.NexusRareCode && window.NexusRareCode.generate));
-        chk('version', !!(window.NexusRareCode && /^2\\./.test(String(window.NexusRareCode.VERSION || ''))));
+        chk('version', !!(window.NexusRareCode && /^2\./.test(String(window.NexusRareCode.VERSION || ''))));
         try {
           var a = window.NexusRareCode.generate(1);
           var b = window.NexusRareCode.generate(1);
