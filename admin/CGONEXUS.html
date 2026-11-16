@@ -1243,7 +1243,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
     <button id="core-hint" type="button" aria-label="Buka menu"><span class="status-dot" id="status-dot"></span></button>
     <div id="nx11-brand" role="note">NEXUS - DEWA KEDAULATAN DATA MANUSIA (Sovereign God of Human Data)</div>
     <header id="dock">
-        <div class="hud-title">cgo · research nexus · titanium</div>
+        <div class="hud-title">NEXUS — SOVEREIGN DEFENSE · TITANIUM</div>
         <div class="hud-tag" id="nx11-hdr-tag">NEXUS - DEWA KEDAULATAN DATA MANUSIA (Sovereign God of Human Data)</div>
         <div class="header-right">
             <div class="system-badge" id="engine-badge">PROVIDER: —</div>
@@ -2424,27 +2424,171 @@ function scanJson(s, i) {
     return -1;
 }
 function stripFence(s) { return s.replace(/^\s*\n/, '').replace(/^```[^\n]*\n/, '').replace(/\n?```\s*$/, '').replace(/\s+$/, ''); }
-/* Vulcan Forge: [FORGE: nama | kode] — pemindai kurung seimbang (kode boleh memuat ']'). end>0 = selesai, -1 = belum lengkap, null = bukan forge */
-function scanForge(s, i, final) {
-    const bar = s.indexOf('|', i + 7), nl = s.indexOf('\n', i + 7);
-    if (bar < 0) return nl >= 0 ? null : { end: -1 };
-    if (nl >= 0 && nl < bar) return null;
-    const name = s.slice(i + 7, bar).trim();
-    if (!name || name.length > 80) return null;
-    let d = 0, q = null, esc = false, end = -1;
-    for (let k = bar + 1; k < s.length; k++) {
-        const c = s[k];
-        if (q) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === q) q = null; continue; }
-        if (c === '"' || c === "'" || c === '`') { q = c; continue; }
-        if (c === '(' || c === '[' || c === '{') d++;
-        else if (c === ')' || c === '}') d--;
-        else if (c === ']') { if (d <= 0) { end = k; break; } d--; }
-    }
-    if (end < 0 && final) { const e2 = s.indexOf(']', bar + 1); if (e2 > 0) end = e2; }   // cadangan: ']' pertama (format lama)
-    if (end < 0) return { end: -1 };
-    const code = s.slice(bar + 1, end).trim().replace(/^```[a-z]*\s*/i, '').replace(/\s*```$/, '').trim();
-    return code ? { end: end + 1, name, code } : null;
+/**
+ * ────────────────────────────────────────────────────────────────
+ * 1. extractCodeBlock
+ *    Ekstrak fenced-code block Markdown dari `s`.
+ *
+ *    Layout yang diasumsikan:
+ *
+ *      <7-char marker><name>|<body>]
+ *      ^i                  ^bar   ^end
+ *
+ *    - `name`  : teks antara i+7 dan bar
+ *    - `body`  : teks antara bar+1 dan end
+ *    - body boleh fenced (```lang\n…\n```) atau polos
+ *    - body fenced diambil VERBATIM (whitespace-sensitive safe)
+ *
+ *    @returns {{end:number, name:string, code:string} | null}
+ * ────────────────────────────────────────────────────────────────
+ */
+function extractCodeBlock(s, i, bar, end) {
+  // ── 0. Validasi input ──────────────────────────────────────
+  if (typeof s !== 'string') return null;
+  if (!Number.isInteger(i) || !Number.isInteger(bar) || !Number.isInteger(end)) return null;
+  if (i < 0 || bar < i + 7 || bar >= end) return null;
+  // Pastikan bar menunjuk `|` dan end menunjuk `]` (defensif — caller
+  // wajib memberi nilai ini, tapi kita tetap verifikasi supaya aman).
+  if (s[bar] !== '|' || s[end] !== ']') return null;
+
+  // ── 1. Nama ────────────────────────────────────────────────
+  //    Strip pembungkus markdown yang berpasangan (**, *, __, _, `)
+  //    supaya asterisk/underscore di dalam nama tetap utuh
+  //    (mis. `a*b.js`, `_private.py`).
+  let name = s.slice(i + 7, bar).trim();
+  name = name
+    .replace(/^\*\*(.+?)\*\*$/, '$1')
+    .replace(/^\*(.+?)\*$/,     '$1')
+    .replace(/^__(.+?)__$/,     '$1')
+    .replace(/^_(.+?)_$/,       '$1')
+    .replace(/^`(.+?)`$/,       '$1')
+    .trim();
+  // Fallback: bersihkan asterisk yatim (tak berpasangan) di tepi.
+  name = name.replace(/^\*+|\*+$/g, '').trim();
+
+  // ── 2. Body mentah ─────────────────────────────────────────
+  //    - Trim DULU supaya asterisk pembungkus dikenali meski ada
+  //      spasi di depannya (`" **```js … ```** "`).
+  //    - Buang `*` hanya yang bersebelahan langsung dengan fence
+  //      (kasus `**```js … ```**`), jangan sentuh body.
+  const raw = s.slice(bar + 1, end)
+    .trim()
+    .replace(/^\*+(?=\s*```)/, '')
+    .replace(/(```)\s*\*+$/,   '$1')
+    .trim();
+
+  // ── 3. Deteksi fenced block multi-line ─────────────────────
+  //    Pola:  ```<info>\r?\n  <body>  \r?\n  ```  (akhir)
+  //    - `[^\n]*` toleran info-string apa pun: js, c++, c#, python3,
+  //      objective-c, tsx, dst.
+  //    - `\r?\n` toleran CRLF (Windows).
+  //    - `[\s\S]*?` lazy: ambil fence pembuka/penutup TERLUAR.
+  //    - `(?:\r?\n)?` opsional: mendukung body KOSONG (```lang\n```)
+  //      yang secara spesifik di-handle sebagai invalid di bawah.
+  const fenced = raw.match(/^```[^\n]*\r?\n([\s\S]*?)(?:\r?\n)?```\s*$/);
+
+  // Fenced  → body verbatim (indentasi baris pertama dipertahankan).
+  // Non-fenced → sudah di-trim, pakai langsung.
+  const code = fenced ? fenced[1] : raw;
+
+  // Body kosong / hanya whitespace → bukan blok valid.
+  if (!code.trim()) return null;
+
+  return { end: end + 1, name, code };
 }
+
+/**
+ * ────────────────────────────────────────────────────────────────
+ * 2. scanForge
+ *    Scan satu blok `forge` dari `s` mulai di `i`.
+ *
+ *    Return:
+ *      { end, name, code }  → blok valid, `end` = posisi sesudah `]`
+ *      { end: -1 }          → belum lengkap, tunggu input lagi
+ *                             (hanya saat `final === false`)
+ *      null                 → bukan forge / malformed permanen
+ *
+ *    Bracket `[` `]` di dalam string ("…", '…', `…`) dan di dalam
+ *    escape sequence diabaikan. Kurung lain ( ) { } TIDAK
+ *    memengaruhi depth — yang menutup blok adalah `]`.
+ *
+ *    @param {string}  s
+ *    @param {number}  i
+ *    @param {boolean} final true jika stream sudah selesai
+ * ────────────────────────────────────────────────────────────────
+ */
+function scanForge(s, i, final) {
+  // ── 0. Validasi input ──────────────────────────────────────
+  if (typeof s !== 'string') return null;
+  if (!Number.isInteger(i) || i < 0) return null;
+
+  // ── 1. Header: `|` sebelum line-terminator apa pun ────────
+  //    Header adalah SATU baris. Line-terminator `\r`, `\n`, atau `\r\n`
+  //    sebelum `|` berarti header melanggar aturan.
+  //    (Sebelumnya hanya `\n` dicek — bare-CR `\r` lolos.)
+  const bar = s.indexOf('|', i + 7);
+  const cr  = s.indexOf('\r', i + 7);
+  const lf  = s.indexOf('\n', i + 7);
+  const nl  = (cr < 0) ? lf : (lf < 0 ? cr : Math.min(cr, lf));
+
+  if (bar < 0) {
+    // Belum ada `|`.
+    // - Kalau sudah ganti baris → bukan forge (header satu baris).
+    // - Kalau final → malformed permanen, jangan menggantung caller.
+    if (nl >= 0) return null;
+    return final ? null : { end: -1 };
+  }
+  // `|` ditemukan, tapi ada line-break lebih dulu → header tidak valid.
+  if (nl >= 0 && nl < bar) return null;
+
+  // ── 2. Cari `]` penutup pada depth 0 (quote & escape aware) ─
+  let d = 0, q = null, esc = false, end = -1;
+  for (let k = bar + 1; k < s.length; k++) {
+    const c = s[k];
+
+    if (q) {
+      if (esc)           esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === q)  q = null;
+      continue;
+    }
+
+    if (c === '"' || c === "'" || c === '`') { q = c; continue; }
+
+    if (c === '[') d++;
+    else if (c === ']') {
+      if (d === 0) { end = k; break; }
+      d--;
+    }
+  }
+
+  // ── 3. Fallback saat stream final tapi terpotong ───────────
+  //    Kasus umum: string literal TAK TERTUTUP karena input di-cut
+  //    di tengah `"..."` — terdeteksi `q !== null` di akhir scan.
+  //    Jika semua string sudah tertutup (`q === null`) tapi `]` tak
+  //    ditemukan, itu malformed PERMANEN (bukan truncation), jadi
+  //    JANGAN coba fallback — nanti memotong body di tengah string.
+  if (end < 0 && final && q !== null) {
+    let d2 = 0, best = -1;
+    for (let k = bar + 1; k < s.length; k++) {
+      const c = s[k];
+      if (c === '[') d2++;
+      else if (c === ']') {
+        if (d2 > 0) d2--;
+        else best = k;
+      }
+    }
+    if (best > bar) end = best;
+  }
+
+  // ── 4. Tidak ketemu akhir ──────────────────────────────────
+  //    - final=false → minta tunggu
+  //    - final=true  → malformed permanen → null
+  if (end < 0) return final ? null : { end: -1 };
+
+  // ── 5. Ekstraksi ───────────────────────────────────────────
+  return extractCodeBlock(s, i, bar, end);
+  }
 function tokenize(text, final) {
     const out = [], n = text.length;
     let i = 0, from = 0;
