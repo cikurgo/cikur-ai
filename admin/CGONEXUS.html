@@ -41,6 +41,7 @@ return fetch(url,init).then(function(res){['arrayBuffer','blob','json','text','f
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;800&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
 <script>
 /* NexusEvolution · konfigurasi host (dibaca modul saat dimuat). HUD default MATI agar tampilan lama identik; nyalakan via Ctrl+K. */
 window.NexusConfig = { hud: (function () { try { return localStorage.getItem('cgo_nx_hud') === '1'; } catch (e) { return false; } })(), hudTop: '72px', hudRight: '10px', hudZ: 29 };
@@ -1701,7 +1702,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.7-titanium-chart-harden-zero-reg initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.9-titanium-aegis-omni-live initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -1804,8 +1805,13 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - buildChart: whitelist Chart.js controllers; map AI-invented types (pipeline/flow/diagram/alir/…) → bar/line/doughnut/radar
      - Strip unsafe plugin objects & invalid scale types that cascade into "not a registered controller"
      - Coerce bubble/scatter numeric arrays; friendlier ID error text; no change to Pharma / 3D / Rare / core paths
+   10.0.8-titanium-omni-sentinel-zero-reg (Zero-Regression):
+     - NexusOmniCore v2 minimal stub (safe, no eval) + OmniCore V3.2.1 full static analyzer
+     - OMNI SENTINEL live top bar: STANDBY / SCANNING / ALERT — code-only threat monitor
+     - Auto non-blocking scan of AI code fences; never inspects network/device/hotspot
+     - Additive only: existing Sentinel Deck v9, Pharma, Rare, Chart, 3D, Consensus untouched
    ================================================================ */
-const APP_VERSION = '10.0.7-titanium-chart-harden-zero-reg';
+const APP_VERSION = '10.0.9-titanium-aegis-omni-live';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -3546,7 +3552,9 @@ if(d.cmd==='rec'){
   } catch(x) { send('state', 'REC tidak didukung'); }
 }});
 loop()}
-})();<\/script></body></html>`;
+})();<\/script>
+
+</body></html>`;
 }
 function whenIdle(fn, n = 120) { if (!isGenerating) return fn(); if (n > 0) setTimeout(() => whenIdle(fn, n - 1), 500); }
 function healScene3d(msg, code) {
@@ -5719,7 +5727,7 @@ assert('NexusPharma golden druglikeness', (function () {
     })());
     assert('Rare prelude / combined', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
     assert('hydrate + buildChart + buildHtmlPreview', typeof hydrate === 'function' && typeof buildChart === 'function' && typeof buildHtmlPreview === 'function' && typeof buildScene3d === 'function');
-    assert('APP_VERSION 10.0.7 chart-harden', /10\.0\.7|chart-harden|robust-render|nexuspharma|titanium/i.test(String(APP_VERSION)));
+    assert('APP_VERSION 10.0.8 omni-sentinel', /10\.0\.8|omni-sentinel|chart-harden|robust-render|nexuspharma|titanium/i.test(String(APP_VERSION)));
 
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
@@ -12289,6 +12297,109 @@ if (!op) {
 @media(prefers-reduced-motion:reduce){#nx11-cons .nx11-bar i,#nx11-cons .nx11-ag .m i,#nx11-cons .nx11-h svg{transition:none}}
 
 </style>
+
+<style id="nx-omni-css">
+/* ===== OMNI GUARD · AEGIS MONITOR (live, code-only) ===== */
+#nx-omni{
+  --o-ok:#3decff;--o-good:#5dffb0;--o-warn:#ffc24a;--o-bad:#ff3b6b;
+  position:fixed;left:10px;right:10px;top:calc(env(safe-area-inset-top,0px) + 56px);
+  margin:0 auto;max-width:34rem;z-index:47;
+  font:400 .62rem/1.35 var(--mono,ui-monospace,monospace);letter-spacing:.04em;
+  color:var(--dim,#8aa);pointer-events:auto;user-select:none;-webkit-user-select:none;
+}
+#nx-omni[data-st="alert"]{--o-ok:#ffc24a}
+#nx-omni[data-st="crit"]{--o-ok:#ff3b6b}
+#nx-omni .nxo-bar{
+  all:unset;box-sizing:border-box;position:relative;width:100%;display:flex;align-items:center;gap:.6rem;
+  padding:.34rem .7rem .42rem .4rem;border-radius:14px;overflow:hidden;cursor:pointer;
+  background:linear-gradient(100deg,rgba(6,14,30,.86),rgba(8,22,44,.74));
+  box-shadow:0 0 0 1px rgba(61,236,255,.28),0 0 26px -10px var(--o-ok),0 12px 28px -16px #000;
+  -webkit-backdrop-filter:blur(14px) saturate(1.5);backdrop-filter:blur(14px) saturate(1.5);
+  transition:box-shadow .25s;
+}
+#nx-omni .nxo-bar:hover,#nx-omni[data-open="1"] .nxo-bar{box-shadow:0 0 0 1px var(--o-ok),0 0 30px -8px var(--o-ok),0 12px 28px -16px #000}
+#nx-omni .nxo-bar:focus-visible{outline:2px solid var(--o-ok);outline-offset:2px}
+#nx-omni .nxo-bar::before{ /* sapuan cahaya terus-menerus */
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(100deg,transparent 35%,rgba(61,236,255,.16) 50%,transparent 65%);
+  transform:translateX(-100%);animation:nxo-sweep 3.2s linear infinite;
+}
+#nx-omni[data-st="standby"] .nxo-bar::before{animation:none;opacity:0}
+#nx-omni .nxo-ring{position:relative;flex:none;width:28px;height:28px;border-radius:50%;
+  background:conic-gradient(from 0deg,transparent 0 62%,var(--o-ok) 100%);
+  -webkit-mask:radial-gradient(circle,transparent 9px,#000 10px);mask:radial-gradient(circle,transparent 9px,#000 10px);
+  animation:nxo-spin 1.6s linear infinite;opacity:.95}
+#nx-omni[data-st="standby"] .nxo-ring{animation:none;opacity:.35}
+#nx-omni[data-st="alert"] .nxo-ring{animation-duration:.9s}
+#nx-omni[data-st="crit"] .nxo-ring{animation-duration:.55s}
+#nx-omni .nxo-core{position:absolute;left:0;top:0;width:28px;height:28px;display:grid;place-items:center;pointer-events:none}
+#nx-omni .nxo-dot{width:8px;height:8px;border-radius:50%;background:var(--o-ok);box-shadow:0 0 10px var(--o-ok);animation:nxo-pulse 1.2s ease-in-out infinite}
+#nx-omni[data-st="alert"] .nxo-dot{animation-duration:.6s}
+#nx-omni[data-st="crit"] .nxo-dot{animation-duration:.4s}
+#nx-omni[data-st="standby"] .nxo-dot{animation:none;opacity:.45}
+#nx-omni .nxo-txt{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+#nx-omni .nxo-label{font:600 .62rem var(--hud,var(--mono));letter-spacing:.26em;color:var(--ink,#e8f4ff)}
+#nx-omni .nxo-meta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.82;font-size:.56rem}
+#nx-omni .nxo-tsi{flex:none;font-variant-numeric:tabular-nums;color:var(--ink,#e8f4ff);font-weight:600;letter-spacing:.08em;padding:.12rem .45rem;border-radius:8px;background:rgba(61,236,255,.1);box-shadow:inset 0 0 0 1px rgba(61,236,255,.25)}
+#nx-omni .nxo-chev{flex:none;width:14px;height:14px;opacity:.7;transition:transform .25s}
+#nx-omni[data-open="1"] .nxo-chev{transform:rotate(180deg)}
+#nx-omni .nxo-chev svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#nx-omni .nxo-prog{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(61,236,255,.12);pointer-events:none}
+#nx-omni .nxo-prog u{display:block;height:100%;width:0;background:linear-gradient(90deg,#8b5cf6,var(--o-ok));box-shadow:0 0 8px var(--o-ok);transition:width .25s}
+#nx-omni .nxo-panel{
+  display:none;position:absolute;left:0;right:0;top:calc(100% + 8px);
+  max-height:calc(100dvh - env(safe-area-inset-top,0px) - 130px);overflow-y:auto;overscroll-behavior:contain;
+  padding:.8rem .85rem .75rem;border-radius:18px;
+  background:linear-gradient(170deg,rgba(6,14,32,.94),rgba(4,9,22,.92));
+  box-shadow:0 0 0 1px rgba(61,236,255,.3),0 0 60px -20px var(--o-ok),0 28px 60px -24px #000;
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);scrollbar-width:thin;
+}
+#nx-omni[data-open="1"] .nxo-panel{display:block;animation:nxo-in .28s cubic-bezier(.2,.8,.2,1)}
+#nx-omni .nxo-h{display:flex;align-items:center;gap:.5rem;margin-bottom:.6rem;color:var(--o-ok);font:600 .6rem var(--hud,var(--mono));letter-spacing:.24em}
+#nx-omni .nxo-h b{margin-left:auto;font-weight:600;color:var(--ink,#e8f4ff);padding:.12rem .5rem;border-radius:99px;box-shadow:inset 0 0 0 1px var(--o-ok);letter-spacing:.14em}
+#nx-omni .nxo-top{display:flex;gap:.8rem;align-items:center;margin-bottom:.55rem}
+#nx-omni .nxo-radar{flex:none;width:104px;height:104px;border-radius:50%;background:radial-gradient(circle,rgba(61,236,255,.08),transparent 70%);box-shadow:0 0 0 1px rgba(61,236,255,.22),0 0 30px -10px var(--o-ok)}
+#nx-omni .nxo-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:.32rem .6rem;margin:0}
+#nx-omni .nxo-grid dt{color:var(--dim,#8aa);font-size:.5rem;letter-spacing:.14em;text-transform:uppercase}
+#nx-omni .nxo-grid dd{margin:0;color:var(--ink,#e8f4ff);font-variant-numeric:tabular-nums;font-size:.74rem;font-weight:500}
+#nx-omni .nxo-mini{display:grid;grid-template-columns:repeat(4,1fr);gap:.3rem;margin:0 0 .55rem}
+#nx-omni .nxo-mini div{padding:.28rem .35rem;border-radius:9px;background:rgba(61,236,255,.05);box-shadow:inset 0 0 0 1px rgba(61,236,255,.12)}
+#nx-omni .nxo-mini dt{color:var(--dim,#8aa);font-size:.46rem;letter-spacing:.12em;text-transform:uppercase}
+#nx-omni .nxo-mini dd{margin:0;color:var(--ink,#e8f4ff);font-variant-numeric:tabular-nums;font-size:.7rem}
+#nx-omni .nxo-cur{display:flex;gap:.4rem;align-items:center;margin:0 0 .5rem;padding:.3rem .5rem;border-radius:9px;background:rgba(0,0,0,.28);color:var(--o-ok);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#nx-omni .nxo-cur::before{content:"";flex:none;width:6px;height:6px;border-radius:50%;background:var(--o-ok);box-shadow:0 0 8px var(--o-ok);animation:nxo-pulse 1s ease-in-out infinite}
+#nx-omni .nxo-cov{list-style:none;margin:0 0 .55rem;padding:0;display:grid;gap:.26rem}
+#nx-omni .nxo-cov li{display:grid;grid-template-columns:4.6rem 1fr 3.1rem 8px;align-items:center;gap:.45rem}
+#nx-omni .nxo-cov .k{color:var(--ink,#e8f4ff);letter-spacing:.1em;font-size:.54rem}
+#nx-omni .nxo-cov .b{height:4px;border-radius:2px;background:rgba(61,236,255,.12);overflow:hidden}
+#nx-omni .nxo-cov .b i{display:block;height:100%;width:0;background:linear-gradient(90deg,#8b5cf6,var(--o-good));transition:width .3s}
+#nx-omni .nxo-cov em{font-style:normal;text-align:right;font-variant-numeric:tabular-nums;color:var(--dim,#8aa);font-size:.54rem}
+#nx-omni .nxo-cov s{width:7px;height:7px;border-radius:50%;background:var(--o-good);box-shadow:0 0 8px var(--o-good);text-decoration:none}
+#nx-omni .nxo-cov li[data-l="warn"] s{background:var(--o-warn);box-shadow:0 0 8px var(--o-warn)}
+#nx-omni .nxo-cov li[data-l="bad"] s{background:var(--o-bad);box-shadow:0 0 8px var(--o-bad)}
+#nx-omni .nxo-cov li.run .b i{background:linear-gradient(90deg,#8b5cf6,var(--o-ok))}
+#nx-omni .nxo-hb{margin:0 0 .35rem;color:var(--o-good);font-size:.56rem;letter-spacing:.06em}
+#nx-omni .nxo-stream{list-style:none;margin:0;padding:0;display:grid;gap:.26rem;max-height:9.5rem;overflow-y:auto;scrollbar-width:thin}
+#nx-omni .nxo-stream li{display:grid;grid-template-columns:auto 1fr;gap:.5rem;padding:.2rem .35rem;border-radius:7px;background:rgba(255,255,255,.035)}
+#nx-omni .nxo-stream .t{color:var(--dim,#8aa);font-variant-numeric:tabular-nums}
+#nx-omni .nxo-stream .m{color:var(--ink,#e8f4ff);word-break:break-word}
+#nx-omni .nxo-stream li[data-lvl="warn"]{background:rgba(255,194,74,.12)}
+#nx-omni .nxo-stream li[data-lvl="bad"]{background:rgba(255,59,107,.14)}
+#nx-omni .nxo-stream li[data-lvl="crit"]{background:rgba(255,45,85,.22)}
+#nx-omni .nxo-stream li[data-lvl="ok"] .m{color:var(--o-good)}
+#nx-omni .nxo-acts{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.6rem}
+#nx-omni .nxo-acts button{all:unset;box-sizing:border-box;cursor:pointer;padding:.34rem .62rem;border-radius:99px;font:500 .56rem var(--mono);letter-spacing:.06em;color:var(--ink,#e8f4ff);box-shadow:inset 0 0 0 1px rgba(61,236,255,.28);background:rgba(61,236,255,.06);transition:.2s}
+#nx-omni .nxo-acts button:hover{color:#02040a;background:var(--o-ok);box-shadow:0 0 16px -2px var(--o-ok)}
+#nx-omni .nxo-acts button:focus-visible{outline:2px solid var(--o-ok);outline-offset:2px}
+#nx-omni .nxo-note{margin-top:.5rem;font-size:.5rem;color:var(--dim,#8aa);opacity:.85;line-height:1.45}
+@keyframes nxo-spin{to{transform:rotate(360deg)}}
+@keyframes nxo-sweep{to{transform:translateX(100%)}}
+@keyframes nxo-pulse{50%{opacity:.35;transform:scale(.8)}}
+@keyframes nxo-in{from{opacity:0;transform:translateY(-8px)}}
+@media(prefers-reduced-motion:reduce){#nx-omni .nxo-ring,#nx-omni .nxo-dot,#nx-omni .nxo-bar::before,#nx-omni .nxo-cur::before{animation:none!important}#nx-omni .nxo-panel{animation:none!important}}
+@media print{#nx-omni{display:none!important}}
+</style>
+
 <script id="nx11-module">
 /* ===== NX11 · CONSENSUS BAR + DR. CORTEX PARTICLE FACE (aditif, idempoten, terisolasi try/catch) ===== */
 (function () {
@@ -12747,6 +12858,1566 @@ if (!op) {
   } catch (err) {
     console.warn('[NEXUS RARE] modul integrasi gagal (inti NEXUS tetap aman):', err);
   }
+})();
+</script>
+
+<script id="nx-omni-core-stub">
+/* ===== NexusOmniCore v2 MINIMAL STUB (aditif, aman, NO eval) ===== */
+(function () {
+  'use strict';
+  try {
+    if (window.NexusOmniCore && window.NexusOmniCore.analyzeAndNeutralize) return;
+    function analyzeAndNeutralize(threatType, payload) {
+      var findings = [];
+      var s = String(payload || '');
+      var add = function (tag, weight, cwe, severity) {
+        findings.push({ category: 'BASE', tag: tag, cwe: cwe || '', severity: severity || 'low', count: 1, weight: weight || 1, samples: [] });
+      };
+      if (/\beval\s*\(/.test(s)) add('eval_call', 9, 'CWE-95', 'critical');
+      if (/\bnew\s+Function\s*\(|\bFunction\s*\(\s*['"]/.test(s)) add('function_ctor', 9, 'CWE-95', 'critical');
+      if (/\.innerHTML\s*=/.test(s)) add('innerHTML_assign', 6, 'CWE-79', 'high');
+      if (/\bdocument\s*\.\s*cookie\s*=/.test(s)) add('cookie_assign', 5, 'CWE-539', 'medium');
+      if (/\bfetch\s*\(/.test(s)) add('fetch', 2, 'CWE-201', 'low');
+      var score = findings.reduce(function (a, f) { return a + (f.weight || 1); }, 0);
+      var TSI = Math.min(100, score * 8);
+      var status = TSI >= 70 ? 'MALICIOUS' : TSI >= 40 ? 'SUSPICIOUS' : TSI >= 20 ? 'LOW_RISK' : 'CLEAN';
+      return {
+        TSI: TSI, status: status, confidence: 50,
+        vectorBreakdown: { OI: TSI * 0.4, EI: TSI * 0.2, NE: TSI * 0.2, SM: TSI * 0.2 },
+        findings: findings, neutralizationProtocol: [], iocs: [],
+        VERSION: '2.0-minimal-stub'
+      };
+    }
+    window.NexusOmniCore = Object.freeze({
+      analyzeAndNeutralize: analyzeAndNeutralize,
+      VERSION: '2.0-minimal-stub',
+      analyze: function (t, p) { return analyzeAndNeutralize(t, p); }
+    });
+  } catch (e) { console.warn('[OmniCore stub]', e); }
+})();
+</script>
+<script id="nx-omni-core-v3">
+// nexus.omni-core.v3.js — HARDENED EDITION v3.2.1 (FINAL)
+// NO eval, NO Function, NO execution of analyzed code.
+// ---------------------------------------------------------------
+(() => {
+  'use strict';
+
+  // =====================================================
+  // [0] CONSTANTS
+  // =====================================================
+  const V3              = '3.2.1-ULTIMATE-HARDENED-FINAL';
+  const MAX_DEPTH       = 12;
+  const MAX_BYTES       = 512 * 1024;
+  const MAX_RECURS      = 2;
+  const MIN_ENC_LEN     = 48;
+  const HIGH_ENT        = 4.5;
+  const MAX_CONCAT_ITER = 20;
+  const MAX_NESTED      = 6;
+
+  const CORE = (typeof window !== 'undefined' && window.NexusOmniCore)
+             || (typeof globalThis !== 'undefined' && globalThis.NexusOmniCore);
+  if (!CORE) throw new Error('NexusOmniCore v2.0 required');
+
+  // =====================================================
+  // [1] UTILITIES
+  // =====================================================
+  const ESC_IN = { n:'\n', t:'\t', r:'\r', '0':'\0', b:'\b', f:'\f', v:'\v',
+                   '\\':'\\', "'":"'", '"':'"', '`':'`' };
+
+  function decodeEsc(s) {
+    if (typeof s !== 'string') return '';
+    return s.replace(/\\(x[\da-f]{2}|u\{[\da-f]+\}|u[\da-f]{4}|[\s\S])/gi, (m, c) => {
+      const h = c[0];
+      if (h === 'x' && c.length === 3) return String.fromCharCode(parseInt(c.slice(1), 16));
+      if (h === 'u') {
+        if (c[1] === '{') {
+          const n = parseInt(c.slice(2, -1), 16);
+          return (Number.isFinite(n) && n <= 0x10FFFF) ? String.fromCodePoint(n) : m;
+        }
+        if (c.length === 5) return String.fromCharCode(parseInt(c.slice(1), 16));
+      }
+      return ESC_IN[c] !== undefined ? ESC_IN[c] : c;
+    });
+  }
+
+  const quote = (s) => JSON.stringify(String(s));
+
+  function shannonEntropy(s) {
+    if (!s || typeof s !== 'string') return 0;
+    const f = new Map();
+    for (const c of s) f.set(c, (f.get(c) || 0) + 1);
+    let h = 0;
+    const n = s.length;
+    for (const v of f.values()) { const p = v / n; h -= p * Math.log2(p); }
+    return h;
+  }
+
+  function hashStr(s) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) h = ((h ^ s.charCodeAt(i)) * 16777619) | 0;
+    return h >>> 0;
+  }
+
+  function deepFreeze(o, seen) {
+    seen = seen || new WeakSet();
+    if (o === null || typeof o !== 'object' || seen.has(o)) return o;
+    seen.add(o);
+    try { Object.freeze(o); } catch (_) { return o; }
+    for (const k of Object.keys(o)) { try { deepFreeze(o[k], seen); } catch (_) {} }
+    return o;
+  }
+
+  // FIX #4 (v3.2): pad base64url properly for atob
+  function decodeBase64(b64) {
+    let s = b64.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = s.length % 4;
+    if (pad === 2) s += '==';
+    else if (pad === 3) s += '=';
+    else if (pad === 1) return null;
+    return s;
+  }
+
+  // =====================================================
+  // [2] REGEX BANK
+  // =====================================================
+  const RE = {
+    BRACKET_DOT: /\b(window|globalThis|self|document|Object|Function|Array|RegExp|String|Number|JSON|Reflect|eval|atob|btoa|fetch|Symbol|Promise|Math|Date|console|setTimeout|setInterval|XMLHttpRequest|WebSocket|Worker|EventSource|RTCPeerConnection|localStorage|sessionStorage|Image)\s*\[\s*(['"])([\w$]+)\2\s*\]/g,
+
+    // Lookahead (?!\1) — opposite quote allowed inside
+    STR_CONCAT:     /(['"])((?:(?!\1)[^\\]|\\.){0,2048}?)\1\s*\+\s*(['"])((?:(?!\3)[^\\]|\\.){0,2048}?)\3/g,
+    FROM_CHARCODE:  /\bString\s*\.\s*fromCharCode\s*\(\s*((?:0x[\da-f]+|\d+)(?:\s*,\s*(?:0x[\da-f]+|\d+))*)\s*\)/gi,
+    FROM_CODEPOINT: /\bString\s*\.\s*fromCodePoint\s*\(\s*((?:0x[\da-f]+|\d+)(?:\s*,\s*(?:0x[\da-f]+|\d+))*)\s*\)/gi,
+    HEX_ESC:        /(['"])((?:(?!\1)[^\\]|\\.)+)\1/g,
+
+    // FIX #10: {2,} → decode even 1-char
+    ATOB_LIT:       /\batob\s*\(\s*(['"])([A-Za-z0-9+/_-]{2,}={0,2})\1\s*\)/g,
+    BTOA_LIT:       /\bbtoa\s*\(\s*(['"])((?:(?!\1)[^\\]|\\.){4,})\1\s*\)/g,
+    PARSEINT_RADIX: /\bparseInt\s*\(\s*(['"])([0-9a-fA-F]+)\1\s*,\s*(16|2|8)\s*\)/g,
+    ARRAY_JOIN:     /\[\s*((?:'[^']*'|"[^"]*")\s*(?:,\s*(?:'[^']*'|"[^"]*")\s*)*)\]\s*\.\s*join\s*\(\s*(['"])([^'"]*)\2\s*\)/g,
+    REVERSE_JOIN:   /(['"])((?:[^\\'"]|\\.)*)\1\s*\.\s*split\s*\(\s*(['"])\s*\3\s*\)\s*\.\s*reverse\s*\(\s*\)\s*\.\s*join\s*\(\s*(['"])\s*\4\s*\)/g,
+    UNESCAPE:       /\bunescape\s*\(\s*(['"])((?:[^\\'"]|\\.)*)\1\s*\)/g,
+    DECODE_URI:     /\bdecodeURIComponent\s*\(\s*(['"])((?:[^\\'"]|\\.)*)\1\s*\)/g,
+
+    // FIX #1 (regresi v3.2): fromCodePoint restored; backrefs verified
+    XOR_SPLIT_MAP:  /(['"])((?:\d{1,5}\s*,\s*){2,}\d{1,5})\1\s*\.\s*split\s*\(\s*(['"])\s*,\s*\3\s*\)\s*\.\s*map\s*\(\s*(?:function\s*\(\s*(\w+)\s*\)\s*\{?\s*return|\(?\s*(\w+)\s*\)?\s*=>)\s*String\s*\.\s*from(?:CharCode|CodePoint)\s*\(\s*(\w+)\s*\^\s*(0x[\da-f]+|\d+)\s*\)\s*\)(?:\s*\.\s*join\s*\(\s*(['"])([^'"]*)\8\s*\))?/gi,
+
+    XOR_ARRAY_MAP:  /\[\s*((?:\d{1,5}\s*,\s*)+\d{1,5})\s*\]\s*\.\s*map\s*\(\s*(?:function\s*\(\s*(\w+)\s*\)\s*\{?\s*return|\(?\s*(\w+)\s*\)?\s*=>)\s*String\s*\.\s*from(?:CharCode|CodePoint)\s*\(\s*(\w+)\s*\^\s*(0x[\da-f]+|\d+)\s*\)\s*\)(?:\s*\.\s*join\s*\(\s*(['"])([^'"]*)\6\s*\))?/gi,
+  };
+
+  // =====================================================
+  // [3] DEOBFUSCATION RULES
+  // =====================================================
+  const RULES = [
+    { name: 'bracket_dot',
+      apply: s => s.replace(RE.BRACKET_DOT, '$1.$3') },
+
+    { name: 'string_concat',
+      apply: function(s) {
+        let prev, safety = 0;
+        do {
+          prev = s;
+          s = s.replace(RE.STR_CONCAT,
+            (_m, _q1, a, _q2, b) => quote(decodeEsc(a) + decodeEsc(b)));
+        } while (s !== prev && ++safety < MAX_CONCAT_ITER);
+        return s;
+      } },
+
+    { name: 'from_charcode',
+      apply: s => s.replace(RE.FROM_CHARCODE, (m, args) => {
+        try {
+          const nums = args.split(',').map(x => {
+            x = x.trim();
+            return x.startsWith('0x') ? parseInt(x, 16) : parseInt(x, 10);
+          });
+          if (nums.some(n => !Number.isFinite(n) || n < 0 || n > 0xFFFF)) return m;
+          return quote(String.fromCharCode(...nums));
+        } catch { return m; }
+      }) },
+
+    { name: 'from_codepoint',
+      apply: s => s.replace(RE.FROM_CODEPOINT, (m, args) => {
+        try {
+          const nums = args.split(',').map(x => {
+            x = x.trim();
+            return x.startsWith('0x') ? parseInt(x, 16) : parseInt(x, 10);
+          });
+          if (nums.some(n => !Number.isFinite(n) || n < 0 || n > 0x10FFFF)) return m;
+          return quote(String.fromCodePoint(...nums));
+        } catch { return m; }
+      }) },
+
+    { name: 'hex_unicode_escapes',
+      apply: s => s.replace(RE.HEX_ESC, (m, q, content) =>
+        /\\[xu]/.test(content) ? q + JSON.stringify(decodeEsc(content)).slice(1, -1) + q : m) },
+
+    { name: 'atob_literal',
+      apply: s => s.replace(RE.ATOB_LIT, (m, _q, b64) => {
+        try {
+          const padded = decodeBase64(b64);
+          if (padded === null) return m;
+          const dec = atob(padded);
+          if (!/^[\x20-\x7e\s]*$/.test(dec)) return m;
+          return '/*[DECODED_B64]*/' + quote(dec);
+        } catch { return m; }
+      }) },
+
+    { name: 'btoa_literal',
+      apply: s => s.replace(RE.BTOA_LIT, (m, _q, content) => {
+        try {
+          const b64 = btoa(decodeEsc(content));
+          return '/*[ENCODED_B64]*/' + quote(b64);
+        } catch { return m; }
+      }) },
+
+    { name: 'parseint_radix',
+      apply: s => s.replace(RE.PARSEINT_RADIX, (m, _q, num, radix) => {
+        const v = parseInt(num, parseInt(radix, 10));
+        return Number.isFinite(v) ? String(v) : m;
+      }) },
+
+    { name: 'array_join_literal',
+      apply: s => s.replace(RE.ARRAY_JOIN, (m, arr, _jq, sep) => {
+        try {
+          const parts = arr.match(/(['"])((?:[^\\'"]|\\.)*)\1/g);
+          if (!parts) return m;
+          const joined = parts
+            .map(p => decodeEsc(p.slice(1, -1)))
+            .join(decodeEsc(sep || ''));
+          return '/*[DEOBF:arrayJoin]*/' + quote(joined);
+        } catch { return m; }
+      }) },
+
+    { name: 'reverse_join',
+      apply: s => s.replace(RE.REVERSE_JOIN, (m, _q, content) => {
+        try { return quote([...decodeEsc(content)].reverse().join('')); }
+        catch { return m; }
+      }) },
+
+    { name: 'unescape_literal',
+      apply: s => s.replace(RE.UNESCAPE, (m, _q, content) => {
+        try {
+          const dec = decodeEsc(content).replace(/%u([\da-f]{4})|%([\da-f]{2})/gi,
+            (_x, u, h) => String.fromCharCode(parseInt(u || h, 16)));
+          return '/*[DECODED_UNESCAPE]*/' + quote(dec);
+        } catch { return m; }
+      }) },
+
+    { name: 'decode_uri_component',
+      apply: s => s.replace(RE.DECODE_URI, (m, _q, content) => {
+        try { return quote(decodeURIComponent(decodeEsc(content))); }
+        catch { return m; }
+      }) },
+
+    { name: 'xor_split_map',
+      apply: s => s.replace(RE.XOR_SPLIT_MAP,
+        (m, _q, csv, _sq, argF, argA, fromArg, key, _jq, joinSep) => {
+          if (fromArg !== (argF || argA)) return m;
+          try {
+            const k = key.toLowerCase().startsWith('0x') ? parseInt(key, 16) : parseInt(key, 10);
+            const sep = joinSep !== undefined ? decodeEsc(joinSep) : '';
+            const chars = csv.split(',')
+              .map(n => String.fromCharCode(parseInt(n.trim(), 10) ^ k));
+            const dec = chars.join(sep);
+            if (!/^[\x20-\x7e\s]*$/.test(dec)) return m;
+            return '/*[DECODED_XOR:k=' + k + ']*/' + quote(dec);
+          } catch { return m; }
+        }) },
+
+    { name: 'xor_array_map',
+      apply: s => s.replace(RE.XOR_ARRAY_MAP,
+        (m, csv, argF, argA, fromArg, key, _jq, joinSep) => {
+          if (fromArg !== (argF || argA)) return m;
+          try {
+            const k = key.toLowerCase().startsWith('0x') ? parseInt(key, 16) : parseInt(key, 10);
+            const sep = joinSep !== undefined ? decodeEsc(joinSep) : '';
+            const chars = csv.split(',')
+              .map(n => String.fromCharCode(parseInt(n.trim(), 10) ^ k));
+            const dec = chars.join(sep);
+            if (!/^[\x20-\x7e\s]*$/.test(dec)) return m;
+            return '/*[DECODED_XOR:k=' + k + ']*/' + quote(dec);
+          } catch { return m; }
+        }) },
+  ];
+
+  // =====================================================
+  // [4] DEOBFUSCATION LOOP
+  // =====================================================
+  function deobfuscate(code, failures) {
+    failures = failures || [];
+    const history = [{ depth: 0, changes: [], length: code.length }];
+    const visited = new Set([hashStr(code)]);
+    let current = code;
+    for (let depth = 1; depth <= MAX_DEPTH; depth++) {
+      let next = current;
+      const changes = [];
+      for (const rule of RULES) {
+        try {
+          const before = next;
+          next = rule.apply(next);
+          if (next !== before) changes.push(rule.name);
+        } catch (e) {
+          failures.push({ stage: 'rule:' + rule.name, error: String((e && e.message) || e) });
+        }
+      }
+      if (!changes.length) break;
+      if (next.length > MAX_BYTES) {
+        history.push({ depth, changes: [...changes, 'SIZE_CAP'], length: next.length });
+        break;
+      }
+      const h = hashStr(next);
+      if (visited.has(h)) {
+        history.push({ depth, changes: [...changes, 'CYCLE_DETECTED'], length: next.length });
+        break;
+      }
+      visited.add(h);
+      history.push({ depth, changes, length: next.length });
+      current = next;
+    }
+    return { original: code, deobfuscated: current, history };
+  }
+
+  // =====================================================
+  // [5] ENCODED-PAYLOAD DETECTOR
+  //     FIX #5: lookahead — allow opposite quote inside strings
+  // =====================================================
+  function detectEncodedPayloads(code) {
+    const out = [];
+    const re = /(['"])((?:(?!\1)[^\\]|\\.){20,})\1/g;
+    let m;
+    while ((m = re.exec(code)) !== null) {
+      let content;
+      try { content = decodeEsc(m[2]); } catch { continue; }
+      if (content.length < MIN_ENC_LEN) continue;
+      const H = shannonEntropy(content);
+      if (H < HIGH_ENT) continue;
+      out.push({
+        length: content.length,
+        entropy: +H.toFixed(2),
+        kind: H > 5.5 ? 'likely_encrypted' : 'likely_encoded',
+        preview: content.slice(0, 40).replace(/[^\x20-\x7e]/g, '.') + '…',
+      });
+      if (out.length >= 10) break;
+    }
+    return out;
+  }
+
+  // =====================================================
+  // [6] NESTED PAYLOAD EXTRACTOR
+  //     FIX #4: lookahead — allow opposite quote inside strings
+  // =====================================================
+  function extractNestedPayloads(code) {
+    const out = [];
+
+    const reEval = /\b(?:eval|execScript)\s*\(\s*(['"])((?:(?!\1)[^\\]|\\.){20,})\1\s*\)/g;
+    for (const m of code.matchAll(reEval)) {
+      try { out.push({ kind: 'eval_string', payload: decodeEsc(m[2]) }); } catch (_) {}
+    }
+
+    const reTimer = /\bset(?:Timeout|Interval)\s*\(\s*(['"])((?:(?!\1)[^\\]|\\.){20,})\1\s*[,)]/g;
+    for (const m of code.matchAll(reTimer)) {
+      try { out.push({ kind: 'timer_string', payload: decodeEsc(m[2]) }); } catch (_) {}
+    }
+
+    const reFn = /\b(?:new\s+)?Function\s*\(([^)]*)\)/g;
+    for (const m of code.matchAll(reFn)) {
+      const parts = m[1].match(/(['"])((?:(?!\1)[^\\]|\\.)*)\1/g);
+      if (parts && parts.length) {
+        try {
+          const last = parts[parts.length - 1];
+          out.push({ kind: 'function_body', payload: decodeEsc(last.slice(1, -1)) });
+        } catch (_) {}
+      }
+    }
+
+    return out
+      .filter(x => x.payload && x.payload.length >= 20 && x.payload.length <= MAX_BYTES)
+      .slice(0, MAX_NESTED);
+  }
+
+  // =====================================================
+  // [7] EXTRA TAG DETECTOR
+  //     FIX #2, #3: assignment regex with = (?!=) and operator support
+  // =====================================================
+  function detectExtraTags(code) {
+    const findings = [];
+    const add = (tag, weight, cwe, severity, source, flags) => {
+      try {
+        const re = new RegExp(source, flags || 'gi');
+        const m = code.match(re);
+        if (m && m.length) {
+          findings.push({
+            category: 'V3', tag, cwe, severity, count: m.length,
+            samples: m.slice(0, 3).map(v => ({ value: String(v).slice(0, 100), index: 0 })),
+            weight,
+          });
+        }
+      } catch (_) {}
+    };
+
+    // ASG = assignment (= but not ==, ===) with optional operator
+    const ASG = String.raw`\s*(?:[+\-*/%&|^]|<<|>>|\*\*)?=(?!=)`;
+
+    // --- Keystroke / form / clipboard ---
+    add('keypress_hook', 10, 'CWE-359', 'high',
+      String.raw`\.addEventListener\s*\(\s*['"]key(?:down|press|up)['"]`);
+    add('keylogger', 10, 'CWE-359', 'high',
+      String.raw`(?:key(?:down|press|up)|keyCode|which)[^;]{0,80}(?:fetch|XMLHttpRequest|sendBeacon|socket\.send)`);
+    add('form_access', 6, 'CWE-200', 'medium',
+      String.raw`\bdocument\s*\.\s*forms\b|\.querySelector(?:All)?\s*\(\s*['"][^'"]*input`);
+    add('input_read', 7, 'CWE-200', 'high',
+      String.raw`(?:input|password|user|email|card|cvv|pin)[^;]{0,80}\.value\b`);
+    add('clipboard_read', 8, 'CWE-359', 'high',
+      String.raw`\bnavigator\s*\.\s*clipboard\s*\.\s*read(?:Text)?\b`);
+    add('clipboard_api', 5, 'CWE-359', 'medium',
+      String.raw`\bnavigator\s*\.\s*clipboard\b`);
+
+    // --- Storage / egress (FIX #2) ---
+    add('cookie_assign', 6, 'CWE-539', 'medium',
+      String.raw`\bdocument\s*\.\s*cookie` + ASG);
+    add('cookie_read', 4, 'CWE-539', 'low',
+      String.raw`\bdocument\s*\.\s*cookie\b(?!\s*(?:[+\-*/%&|^]|<<|>>|\*\*)?=(?!=))`);
+    add('localstorage_write', 5, 'CWE-922', 'medium',
+      String.raw`\blocalStorage\s*\.\s*setItem\b|\blocalStorage\s*\[`);
+    add('sessionstorage_write', 5, 'CWE-922', 'medium',
+      String.raw`\bsessionStorage\s*\.\s*setItem\b|\bsessionStorage\s*\[`);
+    add('fetch', 3, 'CWE-201', 'low',
+      String.raw`\bfetch\s*\(`);
+    add('xhr_new', 4, 'CWE-201', 'medium',
+      String.raw`new\s+XMLHttpRequest\b|\bnew\s+ActiveXObject\s*\(\s*['"]MSXML`);
+    add('websocket', 5, 'CWE-201', 'medium',
+      String.raw`new\s+WebSocket\s*\(`);
+    add('beacon', 6, 'CWE-201', 'high',
+      String.raw`\bnavigator\s*\.\s*sendBeacon\s*\(`);
+    add('image_beacon', 6, 'CWE-201', 'high',
+      String.raw`new\s+Image\s*\([^)]*\)[^;]{0,40}\.src\s*=`);
+
+    // --- Dynamic code ---
+    add('eval_call', 9, 'CWE-95', 'critical',
+      String.raw`\beval\s*\(`);
+    add('function_ctor', 9, 'CWE-95', 'critical',
+      String.raw`\bnew\s+Function\s*\(|\bFunction\s*\(\s*['"]`);
+    add('constructor_constructor', 10, 'CWE-95', 'critical',
+      String.raw`\.constructor\s*\.\s*constructor\b`);
+    add('timer_string_exec', 7, 'CWE-95', 'high',
+      String.raw`\bset(?:Timeout|Interval)\s*\(\s*['"]`);
+
+    // --- DOM injection (FIX #3) ---
+    add('innerHTML_assign', 7, 'CWE-79', 'high',
+      String.raw`\.innerHTML` + ASG);
+    add('outerHTML_assign', 7, 'CWE-79', 'high',
+      String.raw`\.outerHTML` + ASG);
+    add('insertAdjacentHTML', 7, 'CWE-79', 'high',
+      String.raw`\.insertAdjacentHTML\s*\(`);
+    add('document_write', 6, 'CWE-79', 'medium',
+      String.raw`\bdocument\s*\.\s*write(?:ln)?\s*\(`);
+    add('script_injection', 9, 'CWE-79', 'critical',
+      String.raw`createElement\s*\(\s*['"]script['"]\s*\)`);
+
+    // --- Proto pollution ---
+    add('proto_assign', 8, 'CWE-1321', 'high',
+      String.raw`\b__proto__\s*[=.]|\.prototype\s*\[`);
+    add('proto_dunder', 9, 'CWE-1321', 'high',
+      String.raw`\b__proto__\b|\bconstructor\s*\.\s*prototype\b`);
+    add('symbol_primitive', 8, 'CWE-1321', 'high',
+      String.raw`Symbol\s*\.\s*toPrimitive`);
+
+    // --- WebRTC ---
+    add('webrtc', 7, 'CWE-201', 'high',
+      String.raw`RTCPeerConnection`);
+    add('conn_probe', 5, 'CWE-200', 'medium',
+      String.raw`createDataChannel|createOffer|localDescription`);
+
+    // --- Service worker / cache / WASM ---
+    add('service_worker_register', 9, 'CWE-829', 'high',
+      String.raw`\bserviceWorker\s*\.\s*register\s*\(`);
+    add('caches_open', 6, 'CWE-829', 'medium',
+      String.raw`\bcaches\s*\.\s*open\s*\(`);
+    add('cache_storage', 5, 'CWE-829', 'medium',
+      String.raw`\bCacheStorage\b|\bcaches\b`);
+    add('wasm_instantiate', 10, 'CWE-829', 'high',
+      String.raw`WebAssembly\s*\.\s*(?:instantiate|instantiateStreaming|compile|compileStreaming)\b`);
+    add('webassembly_module', 7, 'CWE-829', 'medium',
+      String.raw`\bWebAssembly\b`);
+    add('worker_new', 6, 'CWE-829', 'medium',
+      String.raw`\bnew\s+(?:Shared)?Worker\s*\(`);
+
+    // --- Crypto / geo ---
+    add('crypto_subtle', 7, 'CWE-327', 'medium',
+      String.raw`\bcrypto\s*\.\s*subtle\s*\.\s*(?:encrypt|decrypt|importKey|deriveKey|sign|verify)\b`);
+    add('subtle_encrypt', 7, 'CWE-327', 'medium',
+      String.raw`\bsubtle\s*\.\s*encrypt\s*\(`);
+    add('geolocation_get', 7, 'CWE-359', 'high',
+      String.raw`\bnavigator\s*\.\s*geolocation\s*\.\s*getCurrentPosition\b`);
+
+    return findings;
+  }
+
+  // =====================================================
+  // [8] BEHAVIORAL CHAIN ANALYZER
+  //     FIX #6: proto_exfil_gadget requires actual proto tamper
+  //     FIX #9: null-safe findings iteration
+  // =====================================================
+  function analyzeChains(findings, syntheticTags) {
+    const tags = new Set();
+    for (const f of findings) {
+      if (!f || typeof f !== 'object') continue;              // FIX #9
+      if (typeof f.tag === 'string') tags.add(f.tag);
+      if (Array.isArray(f.tags)) for (const t of f.tags) tags.add(t);
+    }
+    if (syntheticTags) for (const t of syntheticTags) tags.add(t);
+
+    const has = (...t) => t.some(x => tags.has(x));
+    const chains = [];
+    const add = (chain, severity, meaning) => chains.push({ chain, severity, meaning });
+
+    if (has('atob','eval_call') && has('from_charcode','hex_escape_run'))
+      add('layered_dropper', 10, 'Multi-layer encoding + dynamic exec');
+
+    if (has('fetch','xhr_new','websocket','beacon') &&
+        has('cookie_assign','localstorage_write','sessionstorage_write'))
+      add('credential_exfil', 10, 'Storage/cookie access + egress');
+
+    if (has('proto_assign','proto_dunder','symbol_primitive') &&
+        has('document_write','innerHTML_assign','outerHTML_assign','insertAdjacentHTML'))
+      add('dom_proto_pollution', 9, 'Prototype tamper → DOM inject');
+
+    if (has('beacon','image_beacon') && has('atob','high_entropy_base64'))
+      add('stealth_exfil', 9, 'Obfuscated + beacon-based exfil');
+
+    if (has('webrtc','conn_probe') && has('cookie_assign','localstorage_write'))
+      add('p2p_credential_theft', 10, 'P2P exfil of credentials');
+
+    if (has('script_injection') && has('timer_string_exec'))
+      add('delayed_injection', 8, 'Delayed script exec via timer');
+
+    if (has('keylogger','keypress_hook') && has('fetch','xhr_new','beacon'))
+      add('keylogger_exfil', 10, 'Keystroke capture + exfil');
+
+    if (has('form_access','input_read') && has('fetch','xhr_new'))
+      add('form_harvest', 9, 'Form scraping + exfil');
+
+    if (has('clipboard_read','clipboard_api') && has('fetch','xhr_new'))
+      add('clipboard_theft', 8, 'Clipboard access + exfil');
+
+    if (has('service_worker_register') && has('caches_open','cache_storage'))
+      add('sw_persistence', 9, 'Service-worker persistence');
+
+    if (has('wasm_instantiate','webassembly_module') && has('worker_new'))
+      add('wasm_worker_payload', 9, 'WASM payload in worker');
+
+    if (has('crypto_subtle','subtle_encrypt') && has('atob','high_entropy_base64'))
+      add('encrypted_stager', 8, 'Crypto + encoded stager');
+
+    if (has('geolocation_get') && has('fetch','beacon'))
+      add('geo_tracking', 7, 'Geolocation exfiltration');
+
+    if (has('constructor_constructor') && has('atob','hex_escape_run'))
+      add('obfuscated_eval', 10, 'Indirect eval via constructor chain');
+
+    // FIX #6: require actual proto tamper — Symbol.toPrimitive alone is legit
+    if (has('symbol_primitive') &&
+        has('proto_assign','proto_dunder','constructor_constructor') &&
+        has('fetch','xhr_new','beacon'))
+      add('proto_exfil_gadget', 9, 'Prototype coercion → exfil');
+
+    return chains;
+  }
+
+  // =====================================================
+  // [9] EXTERNAL DEPENDENCY DETECTOR
+  // =====================================================
+  function detectExternalDeps(code) {
+    const urls = [...new Set(code.match(/https?:\/\/[^\s'"`<>()]{4,2048}/gi) || [])].slice(0, 20);
+
+    const dynamicLoads = [];
+    for (const m of code.matchAll(/\bimport\s*\(\s*(['"])([^'"]+)\1\s*\)/g))
+      dynamicLoads.push({ kind: 'dynamic_import', url: m[2] });
+    for (const m of code.matchAll(/new\s+(?:Shared)?Worker\s*\(\s*(['"])([^'"]+)\1/g))
+      dynamicLoads.push({ kind: 'worker_load', url: m[2] });
+    for (const m of code.matchAll(/\.src\s*=\s*(['"])([^'"]+\.js[^'"]*)\1/g))
+      dynamicLoads.push({ kind: 'script_src', url: m[2] });
+    for (const m of code.matchAll(/\bimportScripts\s*\(\s*(['"])([^'"]+)\1/g))
+      dynamicLoads.push({ kind: 'import_scripts', url: m[2] });
+    for (const m of code.matchAll(/\bserviceWorker\s*\.\s*register\s*\(\s*(['"])([^'"]+)\1/g))
+      dynamicLoads.push({ kind: 'sw_register', url: m[2] });
+    for (const m of code.matchAll(/\.(?:href|action|src)\s*=\s*(['"])([^'"]+)\1/g)) {
+      if (/^(https?:|\/\/|data:|blob:)/i.test(m[2]))
+        dynamicLoads.push({ kind: 'dom_redirect', url: m[2] });
+    }
+
+    const hasWasm = /\.wasm\b|WebAssembly\s*\.\s*(?:instantiate|compile|Module|Instance)/i.test(code);
+
+    const gates = [];
+    if (/\blocation\s*\.\s*(?:hostname|href|origin|pathname)\b/i.test(code)) gates.push('location_gate');
+    if (/\bnavigator\s*\.\s*(?:userAgent|platform|language|vendor)\b/i.test(code)) gates.push('useragent_gate');
+    if (/\bDate\s*\.\s*now|\bnew\s+Date\b/i.test(code) && /\bif\s*\([^)]*Date/i.test(code)) gates.push('time_gate');
+    if (/\bdocument\s*\.\s*cookie\b/i.test(code)) gates.push('cookie_gate');
+    if (/\bscreen\s*\.\s*(?:width|height|availWidth|availHeight)\b/i.test(code)) gates.push('screen_gate');
+    if (/\bperformance\s*\.\s*(?:now|timing)\b/i.test(code) && /\bif\s*\([^)]*performance/i.test(code)) gates.push('perf_gate');
+    if (/\bdebugger\b/.test(code)) gates.push('debugger_gate');
+
+    return {
+      urls, dynamicLoads, hasWasm,
+      conditionalGates: gates,
+      remotePayloads: dynamicLoads.filter(d => !/^(data|blob|javascript):/i.test(d.url)),
+    };
+  }
+
+  // =====================================================
+  // [10] RECURSIVE NESTED ANALYSIS
+  // =====================================================
+  function analyzeRecursive(payload, depth, acc, report, failures, threatType) {
+    if (depth > MAX_RECURS) return acc;
+    if (typeof payload !== 'string' || payload.length > MAX_BYTES) return acc;
+
+    const deobf = deobfuscate(payload, failures);
+    const nested = extractNestedPayloads(deobf.deobfuscated);
+
+    for (const n of nested) {
+      const r = report(threatType, n.payload);
+      acc.push({
+        depth, kind: n.kind, length: n.payload.length,
+        preview: n.payload.slice(0, 120),
+        status: r ? r.status : 'CLEAN',
+        TSI: r ? r.TSI : 0,
+      });
+      if (r && (r.status === 'SUSPICIOUS' ||
+                r.status === 'MALICIOUS'  ||
+                r.status === 'CRITICAL')) {
+        analyzeRecursive(n.payload, depth + 1, acc, report, failures, threatType);
+      }
+    }
+    return acc;
+  }
+
+  // =====================================================
+  // [11] MAIN PIPELINE
+  // =====================================================
+  function analyzeV3(threatType, payload) {
+    if (typeof threatType !== 'string' || typeof payload !== 'string')
+      throw new TypeError('analyzeV3(threatType: string, payload: string)');
+
+    const t0 = (typeof performance !== 'undefined' && performance.now)
+             ? performance.now() : Date.now();
+
+    const failures = [];
+    const report = (type, p) => {
+      try {
+        const r = CORE.analyzeAndNeutralize(type, p);
+        if (r && typeof r === 'object') return r;
+      } catch (e) {
+        failures.push({ stage: 'safeReport', error: String((e && e.message) || e) });
+      }
+      return {
+        TSI: 0, status: 'CLEAN',
+        vectorBreakdown: { OI: 0, EI: 0, NE: 0, SM: 0 },
+        findings: [], neutralizationProtocol: [], iocs: [],
+      };
+    };
+
+    // Stage 1 — deobfuscate
+    const deobf = deobfuscate(payload, failures);
+    const wasObfuscated = deobf.deobfuscated !== payload;
+
+    // Stage 2 — dual scan
+    const origReport = report(threatType, payload);
+    const deobReport = wasObfuscated ? report(threatType, deobf.deobfuscated) : origReport;
+
+    // Stage 3 — merge vectors
+    const vb = (r) => (r.vectorBreakdown && {
+      OI: +r.vectorBreakdown.OI || 0, EI: +r.vectorBreakdown.EI || 0,
+      NE: +r.vectorBreakdown.NE || 0, SM: +r.vectorBreakdown.SM || 0,
+    }) || { OI: 0, EI: 0, NE: 0, SM: 0 };
+
+    const o = vb(origReport), d = vb(deobReport);
+    const vectors = {
+      OI: Math.max(o.OI, d.OI), EI: Math.max(o.EI, d.EI),
+      NE: Math.max(o.NE, d.NE), SM: Math.max(o.SM, d.SM),
+    };
+    const TSI = Math.round(
+      vectors.OI * 0.30 + vectors.EI * 0.25 +
+      vectors.NE * 0.25 + vectors.SM * 0.20
+    );
+    const origTSI = +origReport.TSI || 0;
+
+    // Stage 4 — enrich findings
+    // FIX #8: dedupe by (category, tag)
+    const rawFindings = [
+      ...(origReport.findings || []),
+      ...(wasObfuscated ? (deobReport.findings || []) : []),
+    ];
+    const extraFindings = detectExtraTags(wasObfuscated ? deobf.deobfuscated : payload);
+
+    const seen = new Set();
+    const allFindings = [...rawFindings, ...extraFindings].filter(f => {
+      if (!f || typeof f !== 'object') return false;
+      const k = (f.category || '') + ':' + (f.tag || '');
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+
+    const encoded      = detectEncodedPayloads(wasObfuscated ? deobf.deobfuscated : payload);
+    const externalDeps = detectExternalDeps(payload);
+
+    // Stage 5 — recursive nested analysis
+    const nestedAcc = [];
+    analyzeRecursive(payload, 1, nestedAcc, report, failures, threatType);
+
+    const syntheticTags = new Set();
+    if (encoded.length) syntheticTags.add('high_entropy_base64');
+    if (nestedAcc.some(n => n.kind === 'eval_string' || n.kind === 'function_body'))
+      syntheticTags.add('eval_call');
+    if (nestedAcc.some(n => n.kind === 'timer_string'))
+      syntheticTags.add('timer_string_exec');
+
+    const chains = analyzeChains(allFindings, syntheticTags);
+
+    // Stage 6 — status
+    let status = TSI >= 70 ? 'MALICIOUS'
+               : TSI >= 40 ? 'SUSPICIOUS'
+               : TSI >= 20 ? 'LOW_RISK'
+               :             'CLEAN';
+
+    if (wasObfuscated && TSI >= 40 && (TSI - origTSI) > 15) status = 'CRITICAL';
+    if (chains.some(c => c.severity >= 9) && status !== 'CRITICAL') status = 'MALICIOUS';
+
+    const rank = { CLEAN: 0, LOW_RISK: 1, SUSPICIOUS: 2, MALICIOUS: 3, CRITICAL: 4 };
+    const worstNested = nestedAcc.reduce(
+      (acc, n) => (rank[n.status] || 0) > (rank[acc] || 0) ? n.status : acc, 'CLEAN'
+    );
+    if (worstNested === 'CRITICAL') status = 'CRITICAL';
+    else if (worstNested === 'MALICIOUS' && status !== 'CRITICAL') status = 'MALICIOUS';
+    else if (worstNested === 'SUSPICIOUS' && (status === 'CLEAN' || status === 'LOW_RISK'))
+      status = 'SUSPICIOUS';
+
+    if ((status === 'CLEAN' || status === 'LOW_RISK') && externalDeps.remotePayloads.length)
+      status = 'NEEDS_FETCH';
+    if ((status === 'CLEAN' || status === 'LOW_RISK') && externalDeps.hasWasm)
+      status = 'NEEDS_DYNAMIC';
+
+    // Stage 7 — confidence
+    // FIX #7: weight TSI so single-signal high-TSI gets fair confidence
+    const confidence = status === 'CLEAN'
+      ? Math.max(0, 90 - TSI - allFindings.length * 2)
+      : Math.min(100,
+          40 + allFindings.length * 4 + chains.length * 15
+          + (wasObfuscated ? 20 : 0)
+          + (encoded.length ? 10 : 0)
+          + (nestedAcc.length ? 10 : 0)
+          + Math.min(Math.round(TSI * 0.3), 20));
+
+    // Stage 8 — protocols
+    const protocols = [...(origReport.neutralizationProtocol || [])];
+
+    if (wasObfuscated) {
+      protocols.push({
+        priority: 'P0',
+        action: `Static deobfuscation: ${deobf.history.length - 1} pass(es) — ` +
+                `${[...new Set(deobf.history.map(h => h.changes).flat())].join(', ')}.`,
+        trigger: 'deobfuscation',
+      });
+    }
+    for (const c of chains) {
+      protocols.push({
+        priority: 'P0',
+        action: `Behavioral chain [${c.chain}] sev=${c.severity}: ${c.meaning}`,
+        trigger: 'behavioral_chain',
+      });
+    }
+    if (encoded.length) {
+      protocols.push({
+        priority: 'P1',
+        action: `High-entropy literal(s) detected (${encoded.length}) — ` +
+                `likely encoded/encrypted payload; route to decoder.`,
+        trigger: 'entropy',
+      });
+    }
+    for (const n of nestedAcc) {
+      if (n.status === 'MALICIOUS' || n.status === 'CRITICAL') {
+        protocols.push({
+          priority: 'P0',
+          action: `Nested payload depth=${n.depth} [${n.kind}] verdict=${n.status} TSI=${n.TSI}`,
+          trigger: 'nested_payload',
+        });
+      }
+    }
+    if (externalDeps.remotePayloads.length) {
+      protocols.push({
+        priority: 'P1',
+        action: `Fetch & re-analyze ${externalDeps.remotePayloads.length} remote payload(s): ` +
+                externalDeps.remotePayloads.slice(0, 3).map(dp => dp.url).join(', '),
+        trigger: 'external_dependency',
+      });
+    }
+    if (externalDeps.conditionalGates.length) {
+      protocols.push({
+        priority: 'P1',
+        action: `Execute in sandbox under monitored gates: ` +
+                externalDeps.conditionalGates.join(', '),
+        trigger: 'conditional_gate',
+      });
+    }
+    if (externalDeps.hasWasm) {
+      protocols.push({
+        priority: 'P1',
+        action: 'Route WebAssembly binary to WASM-specific analyzer.',
+        trigger: 'wasm',
+      });
+    }
+
+    const t1 = (typeof performance !== 'undefined' && performance.now)
+             ? performance.now() : Date.now();
+
+    const result = {
+      version: V3,
+      threatType, TSI, confidence, status,
+      vectorBreakdown: vectors,
+      originalStatus: origReport.status,
+      originalTSI: origTSI,
+      deobfuscation: {
+        wasObfuscated,
+        layers: deobf.history.length - 1,
+        transformations: [...new Set(deobf.history.map(h => h.changes).flat())],
+        deobfuscatedPreview: wasObfuscated ? deobf.deobfuscated.slice(0, 800) : null,
+        sizeChange: deobf.deobfuscated.length - payload.length,
+      },
+      behavioralChains: chains,
+      externalDependencies: externalDeps,
+      encodedPayloads: encoded,
+      nestedPayloads: nestedAcc,
+      findings: allFindings,
+      neutralizationProtocol: protocols,
+      iocs: origReport.iocs || [],
+      failures: failures.slice(0, 20),
+      stats: {
+        bytes: payload.length,
+        findings: allFindings.length,
+        chains: chains.length,
+        nested: nestedAcc.length,
+        layersUnpacked: deobf.history.length - 1,
+        analysisMs: +(t1 - t0).toFixed(2),
+      },
+    };
+
+    return deepFreeze(result);
+  }
+
+  // =====================================================
+  // [12] PUBLIC API
+  // =====================================================
+  const nexusV3 = Object.freeze({
+    analyze: analyzeV3,
+    deobfuscate,
+    detectExternalDeps,
+    detectEncodedPayloads,
+    extractNestedPayloads,
+    detectExtraTags,
+    analyzeChains,
+    VERSION: V3,
+    BASE_VERSION: CORE.VERSION || '2.0',
+    _rules: Object.freeze(RULES.map(r => r.name)),
+    _regex: Object.freeze(RE),
+  });
+
+  if (typeof window !== 'undefined') {
+    Object.defineProperty(window, 'NexusOmniCoreV3', {
+      value: nexusV3, writable: false, enumerable: true, configurable: false,
+    });
+  } else if (typeof globalThis !== 'undefined') {
+    globalThis.NexusOmniCoreV3 = nexusV3;
+  }
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = nexusV3;
+})();
+
+</script>
+<script id="nx-omni-sentinel">
+/* ===== OMNI SENTINEL v2 · AEGIS — pemindaian sistem NEXUS TANPA HENTI (aditif, zero-regresi) =====
+   Cakupan: SKRIP (analisis statis Omni v3) · INTEGRITAS (hash FNV-1a vs baseline) · DOM · STORAGE · JARINGAN (host) · CHAT.
+   Batas jujur: hanya menganalisis konten kode & integritas di dalam NEXUS. Tidak memeriksa jaringan/hotspot/perangkat/User-Agent perangkat kamu.
+   API publik lama dipertahankan: NexusOmniGuard.scan/scanText/getLastReport/getEvents/open/close/isReady. */
+(function () {
+  'use strict';
+  try {
+    if (window.__nxOmniBound || document.getElementById('nx-omni')) return;
+    window.__nxOmniBound = 1;
+
+    var MAX_EVENTS = 40, SLICE = 16000, TICK = 80, COOL = 2500, DOM_CHUNK = 500;
+    var MODS = [['script', 'SKRIP'], ['integrity', 'INTEGRITAS'], ['dom', 'DOM'], ['storage', 'STORAGE'], ['net', 'JARINGAN'], ['chat', 'CHAT AI']];
+    var ALLOW = /(^|\.)(jsdelivr\.net|cloudflare\.com|googleapis\.com|gstatic\.com|unpkg\.com|esm\.run|esm\.sh|github\.io|githubusercontent\.com|pollinations\.ai|openai\.com|anthropic\.com|x\.ai|deepseek\.com|openrouter\.ai|huggingface\.co|hf\.co|mlc\.ai|google\.com|googleusercontent\.com)$/i;
+    var RANK = { CLEAN: 0, LOW_RISK: 1, SUSPICIOUS: 2, MALICIOUS: 3, CRITICAL: 4 };
+
+    var events = [], lastReport = null, state = 'scan', open = false, userPaused = false, hidden = false;
+    var reduce = false; try { reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+    var S = { sweeps: 0, lastMs: 0, lastAt: '—', dev: 0, tsi: 0, startedAt: Date.now(), running: false, learning: true,
+      mods: {}, known: 0, baseScripts: 0, baseSlices: 0, mutChecks: 0, cur: '—', total: 0, done: 0 };
+    MODS.forEach(function (m) { S.mods[m[0]] = { done: 0, total: 0, lvl: 'ok' }; });
+    var BASE = { slices: {}, sig: {}, scripts: {}, dom: {}, store: {}, hosts: {}, chat: '' };
+    var Q = [], qi = 0, sweepT0 = 0, sweepDev = 0, sweepRank = 0, sweepTSI = 0, timer = 0, blips = [], stickyRank = 0, stickyTSI = 0;
+    var netQ = [], netObs = null;
+
+    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+    function p2(n) { return String(n).padStart(2, '0'); }
+    function ts() { var d = new Date(); return p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()); }
+    function toast(m, w) { try { if (typeof showToast === 'function') showToast(m, 2400, !!w); } catch (e) {} }
+    function logSys(m) { try { if (typeof logEvent === 'function') logEvent('SYSTEM', '[OMNI] ' + m); } catch (e) {} }
+    function fnv(s) { var h = 0x811c9dc5; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(16); }
+    function host(u) { try { return new URL(u, location.href).hostname; } catch (e) { return ''; } }
+    function engine(code) {
+      var eng = window.NexusOmniCoreV3;
+      if (eng && typeof eng.analyze === 'function') return eng.analyze('js', code);
+      var c = window.NexusOmniCore;
+      if (c && typeof c.analyzeAndNeutralize === 'function') return c.analyzeAndNeutralize('js', code);
+      return null;
+    }
+    function sig(r) { return r ? (r.status + '/' + (+r.TSI || 0) + '/' + ((r.findings || []).length) + '/' + ((r.behavioralChains || []).length)) : 'na'; }
+    function slices(s, max) {
+      var out = [], i = 0;
+      while (i < s.length) { var j = Math.min(s.length, i + max); if (j < s.length) { var k = s.lastIndexOf('\n', j); if (k > i) j = k; } out.push(s.slice(i, j)); i = j; }
+      return out.length ? out : [''];
+    }
+    function lvlOf(status) { var r = RANK[status] || 0; return r >= 4 ? 'crit' : r >= 3 ? 'bad' : r >= 2 ? 'warn' : 'info'; }
+
+    /* ---------- UI ---------- */
+    var root = document.createElement('section');
+    root.id = 'nx-omni';
+    root.setAttribute('data-st', 'scan');
+    root.setAttribute('data-open', '0');
+    root.setAttribute('aria-label', 'Omni Guard — pemindai keamanan sistem NEXUS');
+    root.innerHTML =
+      '<button type="button" class="nxo-bar" aria-expanded="false" aria-controls="nx-omni-panel" title="Omni Guard (ketuk untuk monitor · Alt+O)">' +
+      '<span class="nxo-ring" aria-hidden="true"></span><span class="nxo-core" aria-hidden="true"><i class="nxo-dot"></i></span>' +
+      '<span class="nxo-txt"><b class="nxo-label">OMNI GUARD</b><span class="nxo-meta" id="nxo-meta">AKTIF · menyiapkan pemindaian…</span></span>' +
+      '<span class="nxo-tsi" id="nxo-tsi">TSI 0</span>' +
+      '<span class="nxo-chev" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></span>' +
+      '<i class="nxo-prog" aria-hidden="true"><u id="nxo-prog"></u></i></button>' +
+      '<div class="nxo-panel" id="nx-omni-panel" role="region" aria-label="Monitor Omni Guard">' +
+      '<div class="nxo-h"><span>SENTINEL LIVE</span><b id="nxo-status">SCANNING</b></div>' +
+      '<div class="nxo-top"><canvas class="nxo-radar" id="nxo-radar" width="208" height="208" aria-hidden="true"></canvas>' +
+      '<dl class="nxo-grid">' +
+      '<div><dt>Status</dt><dd id="nxo-st">CLEAN</dd></div><div><dt>Sapuan</dt><dd id="nxo-sw">0</dd></div>' +
+      '<div><dt>Confidence</dt><dd id="nxo-cf">—</dd></div><div><dt>Siklus</dt><dd id="nxo-ms">—</dd></div>' +
+      '<div><dt>Deviasi</dt><dd id="nxo-dv">0</dd></div><div><dt>Dikenal</dt><dd id="nxo-kn">0</dd></div>' +
+      '</dl></div>' +
+      '<dl class="nxo-mini"><div><dt>Chains</dt><dd id="nxo-ch">0</dd></div><div><dt>Layers</dt><dd id="nxo-ly">0</dd></div><div><dt>Nested</dt><dd id="nxo-ne">0</dd></div><div><dt>Findings</dt><dd id="nxo-fi">0</dd></div></dl>' +
+      '<div class="nxo-cur" id="nxo-cur">target: —</div>' +
+      '<ul class="nxo-cov" id="nxo-cov">' + MODS.map(function (m) {
+        return '<li data-m="' + m[0] + '" data-l="ok"><span class="k">' + m[1] + '</span><span class="b"><i></i></span><em>0/0</em><s></s></li>';
+      }).join('') + '</ul>' +
+      '<div class="nxo-hb" id="nxo-hb">Menunggu sapuan pertama…</div>' +
+      '<ul class="nxo-stream" id="nxo-stream" aria-live="polite"></ul>' +
+      '<div class="nxo-acts">' +
+      '<button type="button" data-a="now">Scan sekarang</button>' +
+      '<button type="button" data-a="pause" id="nxo-pause">Jeda</button>' +
+      '<button type="button" data-a="scan">Scan teks terakhir</button>' +
+      '<button type="button" data-a="self">Self-check</button>' +
+      '<button type="button" data-a="clear">Bersihkan log</button></div>' +
+      '<div class="nxo-note">Memindai konten kode &amp; integritas <b>di dalam NEXUS</b> secara berkelanjutan (jeda otomatis saat tab tersembunyi). Tidak memeriksa jaringan, hotspot, perangkat, atau User-Agent kamu.</div>' +
+      '</div>';
+    document.body.appendChild(root);
+
+    var $ = function (id) { return root.querySelector(id); };
+    var bar = $('.nxo-bar'), metaEl = $('#nxo-meta'), tsiEl = $('#nxo-tsi'), statusEl = $('#nxo-status'), progEl = $('#nxo-prog');
+    var stEl = $('#nxo-st'), cfEl = $('#nxo-cf'), chEl = $('#nxo-ch'), lyEl = $('#nxo-ly'), neEl = $('#nxo-ne'), fiEl = $('#nxo-fi');
+    var swEl = $('#nxo-sw'), msEl = $('#nxo-ms'), dvEl = $('#nxo-dv'), knEl = $('#nxo-kn'), curEl = $('#nxo-cur'), hbEl = $('#nxo-hb');
+    var streamEl = $('#nxo-stream'), pauseBtn = $('#nxo-pause'), cov = {};
+    MODS.forEach(function (m) { var li = root.querySelector('.nxo-cov li[data-m="' + m[0] + '"]'); cov[m[0]] = { li: li, bar: li.querySelector('.b i'), em: li.querySelector('em') }; });
+
+    function setState(st) { state = st; root.setAttribute('data-st', st); }
+    function pushEvent(msg, lvl) {
+      events.unshift({ t: ts(), m: String(msg).slice(0, 170), lvl: lvl || 'info' });
+      if (events.length > MAX_EVENTS) events.length = MAX_EVENTS;
+      renderStream();
+    }
+    function renderStream() {
+      if (!streamEl) return;
+      if (!events.length) { streamEl.innerHTML = '<li><span class="t">—</span><span class="m">Menunggu aktivitas kode…</span></li>'; return; }
+      streamEl.innerHTML = events.map(function (e) {
+        return '<li data-lvl="' + esc(e.lvl) + '"><span class="t">' + esc(e.t) + '</span><span class="m">' + esc(e.m) + '</span></li>';
+      }).join('');
+    }
+    function blip(mod, lvl) {
+      if (blips.length > 44) blips.shift();
+      var i = 0; for (; i < MODS.length; i++) if (MODS[i][0] === mod) break;
+      blips.push({ a: (i / MODS.length) * Math.PI * 2 + (Math.random() - .5) * .7, r: .28 + Math.random() * .62, t: performance.now(), l: lvl || 'ok' });
+    }
+    function setMod(m, lvl) {
+      var o = S.mods[m]; if (!o) return;
+      var rk = { ok: 0, warn: 1, bad: 2 };
+      if ((rk[lvl] || 0) > (rk[o.lvl] || 0)) o.lvl = lvl;
+    }
+    function paintMods() {
+      MODS.forEach(function (m) {
+        var o = S.mods[m[0]], c = cov[m[0]];
+        var pct = o.total ? Math.min(100, Math.round(o.done / o.total * 100)) : (S.sweeps ? 100 : 0);
+        c.bar.style.width = pct + '%';
+        c.em.textContent = o.done + '/' + o.total;
+        c.li.setAttribute('data-l', o.lvl);
+        c.li.classList.toggle('run', S.running && o.done < o.total);
+      });
+    }
+    function paintHead() {
+      var label = userPaused ? 'JEDA' : hidden ? 'JEDA (tab)' : S.running ? 'SCANNING' : (state === 'alert' || state === 'crit') ? 'ALERT' : 'ACTIVE';
+      statusEl.textContent = label;
+      swEl.textContent = String(S.sweeps);
+      msEl.textContent = S.lastMs ? S.lastMs + ' ms' : '—';
+      dvEl.textContent = String(S.dev);
+      knEl.textContent = String(S.known);
+      tsiEl.textContent = 'TSI ' + S.tsi;
+      var pct = S.total ? Math.round(S.done / S.total * 100) : 0;
+      progEl.style.width = (S.running ? pct : 100) + '%';
+      if (userPaused) metaEl.textContent = 'JEDA · ketuk "Lanjut" di monitor';
+      else if (hidden) metaEl.textContent = 'JEDA otomatis · tab tersembunyi';
+      else if (S.running) metaEl.textContent = (S.learning ? 'BASELINE · ' : 'SCAN · ') + S.done + '/' + S.total + ' · ' + S.cur;
+      else metaEl.textContent = (S.dev ? 'ALERT · ' + S.dev + ' deviasi' : 'AKTIF · sapuan #' + S.sweeps + ' bersih') + ' · ' + S.lastAt;
+      curEl.textContent = (S.running ? 'target: ' : 'selesai: ') + S.cur;
+    }
+    function paint() { paintHead(); paintMods(); }
+
+    /* ---------- deviasi & laporan ---------- */
+    function applyReport(r, source) {
+      lastReport = r;
+      if (!r || typeof r !== 'object') return;
+      var status = String(r.status || 'CLEAN'), TSI = +r.TSI || 0, conf = +r.confidence || 0;
+      stEl.textContent = status;
+      cfEl.textContent = conf ? conf + '%' : '—';
+      chEl.textContent = String((r.behavioralChains && r.behavioralChains.length) || 0);
+      lyEl.textContent = String((r.deobfuscation && r.deobfuscation.layers) || 0);
+      neEl.textContent = String((r.nestedPayloads && r.nestedPayloads.length) || 0);
+      fiEl.textContent = String((r.findings && r.findings.length) || 0);
+      return { status: status, TSI: TSI, lvl: lvlOf(status) };
+    }
+    function deviate(mod, msg, lvl, TSI) {
+      sweepDev++; S.dev = Math.max(S.dev, sweepDev);
+      var r = lvl === 'crit' ? 4 : lvl === 'bad' ? 3 : lvl === 'warn' ? 2 : 1;
+      if (r > sweepRank) sweepRank = r;
+      if (TSI > sweepTSI) sweepTSI = TSI;
+      setMod(mod, lvl === 'warn' || lvl === 'info' ? 'warn' : 'bad');
+      blip(mod, lvl === 'warn' || lvl === 'info' ? 'warn' : 'bad');
+      pushEvent(msg, lvl);
+      if (lvl === 'bad' || lvl === 'crit') { logSys(msg); try { document.body.setAttribute('data-state', 'alert'); } catch (e) {} }
+    }
+
+    /* ---------- unit kerja ---------- */
+    function listScripts() {
+      var out = [], all = document.scripts;
+      for (var i = 0; i < all.length; i++) {
+        var el = all[i], id = el.id || '', type = (el.type || '').toLowerCase();
+        if (type && !/javascript|module/.test(type)) continue;
+        if (el.src) { out.push({ key: 'src:' + el.src.slice(0, 140), ext: 1, src: el.src }); continue; }
+        var t = el.textContent || ''; if (!t.trim()) continue;
+        out.push({ key: id ? '#' + id : 'inline@' + fnv(t.slice(0, 600)), id: id, text: t, skip: /^nx-omni/.test(id) });
+      }
+      return out;
+    }
+    function buildSweep() {
+      Q = []; qi = 0; sweepDev = 0; sweepRank = 0; sweepTSI = 0;
+      MODS.forEach(function (m) { S.mods[m[0]] = { done: 0, total: 0, lvl: 'ok' }; });
+      var seen = {};
+      listScripts().forEach(function (s) {
+        seen[s.key] = 1;
+        if (s.ext) { Q.push({ m: 'script', f: 'ext', s: s }); S.mods.script.total++; return; }
+        var parts = slices(s.text, SLICE);
+        parts.forEach(function (p, i) { Q.push({ m: 'script', f: 'slice', s: s, p: p, i: i, n: parts.length }); S.mods.script.total++; S.mods.integrity.total++; });
+      });
+      Q.push({ m: 'integrity', f: 'missing', seen: seen }); S.mods.integrity.total++;
+      var nEl = document.getElementsByTagName('*').length, chunks = Math.max(1, Math.ceil(nEl / DOM_CHUNK));
+      for (var c = 0; c < chunks; c++) Q.push({ m: 'dom', f: 'dom', c: c }); S.mods.dom.total = chunks;
+      Q.push({ m: 'storage', f: 'storage' }); S.mods.storage.total = 1;
+      Q.push({ m: 'net', f: 'net' }); S.mods.net.total = 1;
+      Q.push({ m: 'chat', f: 'chat' }); S.mods.chat.total = 1;
+      S.total = Q.length; S.done = 0;
+    }
+    function doScript(u) {
+      var s = u.s;
+      if (u.f === 'ext') {
+        S.cur = s.key.slice(4, 60);
+        var h = host(s.src), known = BASE.scripts[s.key];
+        if (S.learning || known) { BASE.scripts[s.key] = 1; }
+        else { BASE.scripts[s.key] = 1; if (h && h !== location.hostname && !ALLOW.test(h)) deviate('script', 'Skrip eksternal dari host tak dikenal: ' + h, 'warn', 20); else pushEvent('Skrip eksternal baru: ' + h, 'info'); }
+        S.mods.script.done++; blip('script', 'ok'); return;
+      }
+      S.cur = (s.id ? '#' + s.id : s.key.slice(0, 18)) + ' · irisan ' + (u.i + 1) + '/' + u.n;
+      var k = s.key + '|' + u.i, hsh = fnv(u.p) + ':' + u.p.length, prev = BASE.slices[k];
+      S.mods.integrity.done++;
+      if (prev === hsh) { S.mods.script.done++; blip('integrity', 'ok'); return; }       // identik dengan baseline → terverifikasi
+      if (prev && !S.learning) {
+        var lv = 'warn';
+        if (!s.skip) {
+          var r = null; try { r = engine(u.p); } catch (e) {}
+          if (r) { var ap = applyReport(r, 'integrity'); var sg = sig(r); lv = (sg === BASE.sig[k]) ? 'warn' : ap.lvl === 'info' ? 'warn' : ap.lvl; sweepTSI = Math.max(sweepTSI, ap.TSI); BASE.sig[k] = sg; }
+        }
+        deviate('integrity', 'KODE BERUBAH: ' + (s.id ? '#' + s.id : s.key.slice(0, 20)) + ' (irisan ' + (u.i + 1) + ') dari baseline', lv === 'info' ? 'warn' : lv, sweepTSI);
+        BASE.slices[k] = hsh; S.mods.script.done++; return;
+      }
+      // baseline / skrip baru
+      var rep = null;
+      if (!s.skip) { try { rep = engine(u.p); } catch (e) {} }
+      BASE.slices[k] = hsh; BASE.sig[k] = sig(rep); S.baseSlices++;
+      if (!S.learning) {
+        BASE.scripts[s.key] = 1;
+        var ap2 = rep ? applyReport(rep, 'skrip-baru') : null;
+        var l2 = ap2 ? ap2.lvl : 'info';
+        deviate('script', 'Skrip inline BARU: ' + (s.id ? '#' + s.id : s.key.slice(0, 18)) + ' → ' + (rep ? rep.status : 'tak dianalisis'), l2 === 'info' ? 'warn' : l2, ap2 ? ap2.TSI : 0);
+      } else if (rep && (RANK[rep.status] || 0) >= 2) {
+        S.known++;
+        var ch = (rep.behavioralChains || []).slice(0, 2).map(function (c) { return c.chain; }).join(', ');
+        pushEvent('Dikenal (baseline): ' + (s.id ? '#' + s.id : s.key.slice(0, 16)) + ' ' + rep.status + (ch ? ' · ' + ch : '') + ' — dipantau perubahan', 'info');
+      }
+      S.mods.script.done++; blip('script', 'ok');
+    }
+    function doMissing(u) {
+      S.cur = 'daftar skrip vs baseline';
+      if (!S.learning) {
+        var gone = 0; Object.keys(BASE.scripts).forEach(function (k) { if (!u.seen[k]) { gone++; delete BASE.scripts[k]; } });
+        if (gone) pushEvent(gone + ' skrip dari baseline sudah tidak ada (mis. dimuat-ulang)', 'info');
+      } else { Object.keys(u.seen).forEach(function (k) { BASE.scripts[k] = 1; }); S.baseScripts = Object.keys(BASE.scripts).length; }
+      S.mods.integrity.done++; blip('integrity', 'ok');
+    }
+    function checkEl(el) {
+      var tag = el.tagName, i, a, nm, v, key, bad = null, lvl = 'info';
+      if (el.closest && el.closest('#nx-omni')) return;
+      for (i = 0; i < el.attributes.length; i++) {
+        a = el.attributes[i]; nm = a.name; v = a.value || '';
+        if (nm.indexOf('on') === 0 && nm.length > 3) { key = tag + '|' + nm; if (!BASE.dom[key]) { BASE.dom[key] = 1; if (!S.learning) { bad = 'Handler inline baru: <' + tag.toLowerCase() + ' ' + nm + '>'; lvl = 'info'; } } }
+        else if (/^(href|src|action|formaction|data)$/.test(nm) && /^\s*javascript:/i.test(v)) { key = tag + '|js:' + nm; if (!BASE.dom[key]) { BASE.dom[key] = 1; bad = 'URL javascript: pada <' + tag.toLowerCase() + ' ' + nm + '>'; lvl = 'bad'; } }
+      }
+      if (tag === 'IFRAME') {
+        var src = el.getAttribute('src') || '';
+        if (src && !el.hasAttribute('srcdoc') && !el.hasAttribute('sandbox')) { var h = host(src); key = 'IFRAME|' + h; if (h && h !== location.hostname && !BASE.dom[key]) { BASE.dom[key] = 1; bad = 'iframe tanpa sandbox ke ' + h; lvl = 'bad'; } }
+      } else if (tag === 'BASE' || tag === 'OBJECT' || tag === 'EMBED') {
+        key = 'TAG|' + tag; if (!BASE.dom[key]) { BASE.dom[key] = 1; if (!S.learning) { bad = 'Elemen <' + tag.toLowerCase() + '> terdeteksi'; lvl = 'warn'; } }
+      } else if (tag === 'META' && /refresh/i.test(el.getAttribute('http-equiv') || '')) {
+        key = 'META|refresh'; if (!BASE.dom[key]) { BASE.dom[key] = 1; bad = 'meta refresh terdeteksi'; lvl = 'warn'; }
+      }
+      if (bad && (!S.learning || lvl === 'bad')) deviate('dom', bad, lvl, lvl === 'bad' ? 45 : 10);
+    }
+    function doDom(u) {
+      var all = document.getElementsByTagName('*'), from = u.c * DOM_CHUNK, to = Math.min(all.length, from + DOM_CHUNK);
+      S.cur = 'DOM · simpul ' + from + '–' + to;
+      for (var i = from; i < to; i++) { try { checkEl(all[i]); } catch (e) {} }
+      S.mods.dom.done++; blip('dom', 'ok');
+    }
+    function doStorage() {
+      S.cur = 'storage · kunci & muatan';
+      var n = 0, bytes = 0;
+      [['localStorage', window.localStorage], ['sessionStorage', window.sessionStorage]].forEach(function (pair) {
+        try {
+          var st = pair[1]; if (!st) return;
+          for (var i = 0; i < st.length && i < 400; i++) {
+            var k = st.key(i), v = st.getItem(k) || ''; n++; bytes += v.length;
+            if (v.length > 400000) continue;
+            if (/<script[\s>]|javascript:\s*[a-z(]|\bon(error|load)\s*=/i.test(v)) {
+              var key = pair[0] + '|' + k;
+              if (!BASE.store[key]) { BASE.store[key] = 1; if (!S.learning) deviate('storage', 'Pola skrip/HTML aktif di ' + pair[0] + ' · kunci "' + String(k).slice(0, 28) + '"', 'warn', 25); }
+            }
+          }
+        } catch (e) {}
+      });
+      S.cur = 'storage · ' + n + ' kunci · ' + Math.round(bytes / 1024) + ' KB';
+      S.mods.storage.done++; blip('storage', 'ok');
+    }
+    function doNet() {
+      var take = netQ.splice(0, netQ.length), fresh = 0;
+      take.forEach(function (e) {
+        var h = host(e.name); if (!h) return;
+        if (!BASE.hosts[h]) {
+          BASE.hosts[h] = 1; fresh++;
+          if (!S.learning && h !== location.hostname && !ALLOW.test(h)) deviate('net', 'Host baru yang dihubungi NEXUS: ' + h + ' (periksa bila bukan provider pilihanmu)', 'warn', 15);
+        }
+        if (/^http:/i.test(e.name) && location.protocol === 'https:') deviate('net', 'Permintaan non-TLS dari halaman HTTPS: ' + h, 'warn', 20);
+      });
+      S.cur = 'jaringan · ' + Object.keys(BASE.hosts).length + ' host dikenal';
+      S.mods.net.done++; blip('net', 'ok');
+    }
+    function lastAi() {
+      try { if (typeof chatHistory !== 'undefined' && chatHistory && chatHistory.length) { for (var i = chatHistory.length - 1; i >= 0; i--) { var m = chatHistory[i]; if (m && m.role === 'assistant' && m.content) return String(m.content); } } } catch (e) {}
+      return '';
+    }
+    function fences(text) {
+      var out = [], re = /```(?:javascript|js|html|typescript|ts|jsx|tsx)?\s*([\s\S]*?)```/gi, m;
+      while ((m = re.exec(String(text || ''))) !== null) { var b = (m[1] || '').trim(); if (b.length >= 24) out.push(b); if (out.length >= 4) break; }
+      return out;
+    }
+    function doChat() {
+      S.cur = 'balasan AI terakhir';
+      var t = lastAi(), h = t ? fnv(t.slice(0, 20000)) : '';
+      if (t && h !== BASE.chat) {
+        BASE.chat = h;
+        var f = fences(t), code = f.length ? f[0].slice(0, 60000) : '';
+        if (code) { var r = null; try { r = engine(code); } catch (e) {}
+          if (r) { var ap = applyReport(r, 'ai-fence'); if ((RANK[r.status] || 0) >= 2 && !S.learning) deviate('chat', 'Kode di balasan AI: ' + r.status + ' (TSI ' + ap.TSI + ') — jangan dijalankan sebelum dicek', ap.lvl, ap.TSI); else if (!S.learning) pushEvent('Balasan AI berisi kode → ' + r.status + ' (TSI ' + ap.TSI + ')', 'ok'); } }
+      }
+      S.mods.chat.done++; blip('chat', 'ok');
+    }
+
+    /* ---------- penjadwal sapuan ---------- */
+    function idle(fn, delay) { clearTimeout(timer); timer = setTimeout(fn, delay); }
+    function endSweep() {
+      S.running = false; S.sweeps++; S.lastMs = Math.round(performance.now() - sweepT0); S.lastAt = ts();
+      if (sweepRank > stickyRank) stickyRank = sweepRank; if (sweepTSI > stickyTSI) stickyTSI = sweepTSI;
+      S.tsi = Math.max(sweepTSI, stickyTSI); S.dev = sweepDev;
+      if (S.learning) {
+        S.learning = false; S.baseScripts = Object.keys(BASE.scripts).length;
+        pushEvent('Baseline terkunci: ' + S.baseScripts + ' skrip · ' + S.baseSlices + ' irisan kode · ' + S.known + ' dikenal. Pemantauan perubahan aktif.', 'ok');
+        logSys('baseline terkunci · ' + S.baseSlices + ' irisan');
+      }
+      if (stickyRank >= 4) setState('crit'); else if (stickyRank >= 2) setState('alert'); else setState('scan');
+      hbEl.textContent = '♥ Sapuan #' + S.sweeps + ' selesai ' + S.lastAt + ' · ' + S.total + ' unit · ' + S.lastMs + ' ms · ' + sweepDev + ' deviasi';
+      S.cur = 'menunggu sapuan berikutnya';
+      paint();
+      schedule(COOL);
+    }
+    function step() {
+      if (!S.running) return;
+      if (userPaused || hidden) { paint(); idle(step, 800); return; }
+      var u = Q[qi++];
+      if (!u) { endSweep(); return; }
+      try {
+        if (u.f === 'ext' || u.f === 'slice') doScript(u);
+        else if (u.f === 'missing') doMissing(u);
+        else if (u.f === 'dom') doDom(u);
+        else if (u.f === 'storage') doStorage();
+        else if (u.f === 'net') doNet();
+        else if (u.f === 'chat') doChat();
+      } catch (e) { pushEvent('Unit dilewati: ' + String((e && e.message) || e).slice(0, 80), 'warn'); }
+      S.done = qi;
+      paint();
+      idle(step, TICK);
+    }
+    function startSweep() {
+      if (S.running) return false;
+      if (userPaused || hidden) { schedule(1500); return false; }
+      buildSweep(); S.running = true; sweepT0 = performance.now(); S.cur = 'memulai…';
+      if (state !== 'alert' && state !== 'crit') setState('scan');
+      paint(); idle(step, 60); return true;
+    }
+    function schedule(ms) { clearTimeout(timer); timer = setTimeout(startSweep, ms); }
+
+    /* ---------- pengawas perubahan DOM real-time ---------- */
+    var pend = [], pendT = 0;
+    function flushMut() {
+      pendT = 0; var list = pend.splice(0, pend.length);
+      list.forEach(function (el) {
+        try {
+          if (el.closest && el.closest('#nx-omni')) return;
+          S.mutChecks++;
+          var tag = el.tagName;
+          if (tag === 'SCRIPT') {
+            var id = el.id || '';
+            if (/^nx-omni/.test(id)) return;
+            if (el.src) { var h = host(el.src); if (h && h !== location.hostname && !ALLOW.test(h)) deviate('script', 'Skrip eksternal disuntik dari host tak dikenal: ' + h, 'bad', 55); return; }
+            var t = el.textContent || ''; if (!t.trim()) return;
+            var key = id ? '#' + id : 'inline@' + fnv(t.slice(0, 600));
+            if (BASE.scripts[key]) return;
+            BASE.scripts[key] = 1;
+            var r = null; try { r = engine(t.slice(0, 120000)); } catch (e) {}
+            var ap = r ? applyReport(r, 'live-inject') : null, lv = ap ? ap.lvl : 'info';
+            deviate('script', 'Skrip inline disuntik saat runtime: ' + (id ? '#' + id : key.slice(0, 18)) + ' → ' + (r ? r.status : 'tak dianalisis'), lv === 'info' ? 'warn' : lv, ap ? ap.TSI : 10);
+          } else { checkEl(el); }
+        } catch (e) {}
+      });
+      if (sweepRank > stickyRank) stickyRank = sweepRank; if (sweepTSI > stickyTSI) stickyTSI = sweepTSI; S.tsi = Math.max(S.tsi, stickyTSI);
+      if (sweepRank >= 3) setState(sweepRank >= 4 ? 'crit' : 'alert');
+      paint();
+    }
+    try {
+      new MutationObserver(function (recs) {
+        if (S.learning) return;
+        for (var i = 0; i < recs.length; i++) {
+          var add = recs[i].addedNodes;
+          for (var j = 0; j < add.length; j++) {
+            var n = add[j]; if (n.nodeType !== 1) continue;
+            var tg = n.tagName;
+            if (/^(SCRIPT|IFRAME|OBJECT|EMBED|BASE|META)$/.test(tg)) pend.push(n);
+            else if (n.childElementCount && n.childElementCount < 250 && n.querySelector) { var q = n.querySelector('script,iframe,object,embed,base'); if (q) pend.push(q); }
+            if (pend.length > 60) pend.length = 60;
+          }
+        }
+        if (pend.length && !pendT) pendT = setTimeout(flushMut, 250);
+      }).observe(document.documentElement, { childList: true, subtree: true });
+    } catch (e) {}
+    try {
+      if (window.PerformanceObserver) {
+        netObs = new PerformanceObserver(function (l) { var es = l.getEntries(); for (var i = 0; i < es.length; i++) { netQ.push({ name: es[i].name }); } if (netQ.length > 300) netQ.splice(0, netQ.length - 300); });
+        netObs.observe({ type: 'resource', buffered: true });
+      }
+    } catch (e) {}
+
+    /* ---------- scan manual (API lama) ---------- */
+    function scanCode(code, source) {
+      source = source || 'manual'; code = String(code || '');
+      if (!code.trim()) { pushEvent('Scan kosong — tidak ada kode', 'info'); return null; }
+      if (code.length > 512 * 1024) { pushEvent('Kode terlalu besar untuk dianalisis (>512KB)', 'warn'); return null; }
+      var report = null;
+      try {
+        report = engine(code);
+        if (!report) { pushEvent('Mesin Omni tidak tersedia', 'warn'); return null; }
+        var ap = applyReport(report, source);
+        S.tsi = ap.TSI; tsiEl.textContent = 'TSI ' + ap.TSI;
+        var chainNames = (report.behavioralChains || []).slice(0, 2).map(function (c) { return c.chain; }).join(', ');
+        var layers = (report.deobfuscation && report.deobfuscation.layers) || 0;
+        pushEvent(source + ' → ' + ap.status + ' (TSI ' + ap.TSI + ')' + (chainNames ? ' · ' + chainNames : '') + (layers ? ' · deobf×' + layers : ''), ap.lvl);
+        if (ap.lvl === 'bad' || ap.lvl === 'crit') { setState(ap.lvl === 'crit' ? 'crit' : 'alert'); try { document.body.setAttribute('data-state', 'alert'); } catch (e) {} }
+        blip('chat', ap.lvl === 'info' ? 'ok' : 'bad'); paint();
+      } catch (e) { pushEvent('Gagal scan: ' + String((e && e.message) || e).slice(0, 100), 'warn'); }
+      return report;
+    }
+    function scanTextAsync(text, source) {
+      setTimeout(function () {
+        try {
+          var f = fences(text); if (!f.length) return;
+          var cand = f.find(function (c) { return /eval|Function|innerHTML|document\.|fetch\s*\(|XMLHttpRequest|atob|fromCharCode|__proto__|localStorage|cookie/i.test(c); }) || f[0];
+          var interesting = /eval|Function|innerHTML|atob|fromCharCode|__proto__|constructor\.constructor|document\.cookie|sendBeacon/i.test(cand);
+          if (!interesting && cand.length > 4000) return;
+          if (!interesting && !/function|=>|addEventListener|script/i.test(cand)) return;
+          scanCode(cand, source || 'ai-fence');
+        } catch (e) {}
+      }, 0);
+    }
+
+    /* ---------- radar ---------- */
+    var cv = $('#nxo-radar'), cx = cv.getContext ? cv.getContext('2d') : null, raf = 0, rInt = 0;
+    var COL = { ok: '61,236,255', warn: '255,194,74', bad: '255,59,107' };
+    function drawRadar(now) {
+      if (!cx) return;
+      var W = cv.width, c = W / 2, R = c - 6, ang = reduce ? 0 : (now / 1800) % (Math.PI * 2), i;
+      cx.clearRect(0, 0, W, W);
+      cx.strokeStyle = 'rgba(61,236,255,.22)'; cx.lineWidth = 1.5;
+      for (i = 1; i <= 3; i++) { cx.beginPath(); cx.arc(c, c, R * i / 3, 0, 7); cx.stroke(); }
+      cx.beginPath(); cx.moveTo(c - R, c); cx.lineTo(c + R, c); cx.moveTo(c, c - R); cx.lineTo(c, c + R); cx.stroke();
+      if (!reduce) {
+        if (cx.createConicGradient) { var g = cx.createConicGradient(ang - 1.1, c, c); g.addColorStop(0, 'rgba(61,236,255,0)'); g.addColorStop(.17, 'rgba(61,236,255,.38)'); g.addColorStop(.175, 'rgba(61,236,255,0)'); cx.fillStyle = g; cx.beginPath(); cx.arc(c, c, R, 0, 7); cx.fill(); }
+        cx.strokeStyle = 'rgba(61,236,255,.9)'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(c, c); cx.lineTo(c + Math.cos(ang) * R, c + Math.sin(ang) * R); cx.stroke();
+      }
+      for (i = blips.length - 1; i >= 0; i--) {
+        var b = blips[i], age = (now - b.t) / 3200; if (age > 1) { blips.splice(i, 1); continue; }
+        cx.fillStyle = 'rgba(' + COL[b.l === 'ok' ? 'ok' : b.l] + ',' + (1 - age).toFixed(2) + ')';
+        cx.beginPath(); cx.arc(c + Math.cos(b.a) * R * b.r, c + Math.sin(b.a) * R * b.r, 4 + (b.l === 'ok' ? 0 : 2) * (1 - age), 0, 7); cx.fill();
+      }
+    }
+    function radarLoop(now) { if (!open || hidden) { raf = 0; return; } drawRadar(now); raf = requestAnimationFrame(radarLoop); }
+    function radarStart() {
+      if (raf || rInt) return;
+      if (reduce) { drawRadar(performance.now()); rInt = setInterval(function () { if (open) drawRadar(performance.now()); }, 1000); }
+      else raf = requestAnimationFrame(radarLoop);
+    }
+
+    /* ---------- interaksi ---------- */
+    function setOpen(v) {
+      open = !!v; root.setAttribute('data-open', open ? '1' : '0'); bar.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) { paint(); radarStart(); }
+    }
+    bar.addEventListener('click', function () { setOpen(!open); });
+    document.addEventListener('keydown', function (e) {
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'KeyO' || e.key === 'o' || e.key === 'O')) { e.preventDefault(); bar.click(); }
+      else if (e.key === 'Escape' && open) setOpen(false);
+    });
+    document.addEventListener('pointerdown', function (e) { if (open && !root.contains(e.target)) setOpen(false); }, true);
+    document.addEventListener('visibilitychange', function () {
+      hidden = document.hidden;
+      if (!hidden) { if (open) radarStart(); if (!S.running) schedule(300); }
+      paint();
+    });
+    root.querySelector('.nxo-acts').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-a]'); if (!b) return;
+      var a = b.getAttribute('data-a');
+      if (a === 'clear') { events = []; stickyRank = 0; stickyTSI = 0; S.tsi = 0; if (!S.running) setState('scan'); renderStream(); paint(); toast('Log Sentinel dibersihkan · status alert diakui'); }
+      else if (a === 'now') { if (S.running) toast('Sapuan sedang berjalan'); else { clearTimeout(timer); startSweep(); toast('Sapuan penuh dimulai'); } }
+      else if (a === 'pause') {
+        userPaused = !userPaused; pauseBtn.textContent = userPaused ? 'Lanjut' : 'Jeda';
+        if (userPaused) setState('standby'); else { setState('scan'); if (!S.running) schedule(200); }
+        pushEvent(userPaused ? 'Pemindaian dijeda oleh pengguna' : 'Pemindaian dilanjutkan', userPaused ? 'warn' : 'ok'); paint();
+      }
+      else if (a === 'self') { scanCode('eval(atob("YWxlcnQoMSk=")); document.cookie = "x=1"; fetch("/x");', 'self-check'); toast('Self-check dijalankan'); }
+      else if (a === 'scan') {
+        var last = lastAi(); if (!last) { pushEvent('Tidak ada balasan AI untuk di-scan', 'info'); toast('Belum ada balasan AI', 1); return; }
+        var f = fences(last); if (!f.length) scanCode(last.slice(0, 12000), 'ai-text'); else scanCode(f[0], 'ai-fence');
+        toast('Scan dimulai');
+      }
+    });
+
+    /* ---------- hook pesan AI (tidak memblokir) ---------- */
+    try {
+      if (typeof addMessageToUI === 'function' && !addMessageToUI.__nxOmni) {
+        var _orig = addMessageToUI;
+        var wrapped = function (role, text, isTyping) {
+          var r = _orig.apply(this, arguments);
+          try { if (role === 'ai' && text && !isTyping && String(text).length > 40) scanTextAsync(text, 'ai-msg'); } catch (e) {}
+          return r;
+        };
+        wrapped.__nxOmni = 1;
+        try { addMessageToUI = wrapped; } catch (e) { window.addMessageToUI = wrapped; }
+      }
+    } catch (e) {}
+
+    window.NexusOmniGuard = Object.freeze({
+      version: 'sentinel-2.0-aegis/' + ((window.NexusOmniCoreV3 && window.NexusOmniCoreV3.VERSION) || 'stub'),
+      scan: function (code, source) { return scanCode(code, source || 'api'); },
+      scanText: function (text, source) { scanTextAsync(text, source || 'api-text'); },
+      getLastReport: function () { return lastReport; },
+      getEvents: function () { return events.slice(); },
+      sweep: function () { if (!S.running) { clearTimeout(timer); startSweep(); } },
+      pause: function () { if (!userPaused) pauseBtn.click(); },
+      resume: function () { if (userPaused) pauseBtn.click(); },
+      status: function () { return { state: state, running: S.running, sweeps: S.sweeps, lastMs: S.lastMs, deviations: S.dev, learning: S.learning, paused: userPaused || hidden }; },
+      open: function () { setOpen(true); }, close: function () { setOpen(false); },
+      isReady: function () { return !!(window.NexusOmniCoreV3 || window.NexusOmniCore); }
+    });
+
+    renderStream();
+    pushEvent('Omni Guard online · memindai sistem NEXUS terus-menerus', 'ok');
+    logSys('Omni Sentinel v2 aktif · V3=' + !!(window.NexusOmniCoreV3) + ' · stub=' + !!(window.NexusOmniCore) + ' · Alt+O');
+    paint();
+    var begin = function () { schedule(1400); };
+    if (document.readyState === 'complete') begin(); else window.addEventListener('load', begin, { once: true });
+  } catch (err) {
+    console.warn('[OMNI SENTINEL] gagal dimuat (fitur lama tetap aman):', err);
+  }
+})();
+</script>
+
+<style id="nx-aegis-css">
+/* ===== NEXUS AEGIS · lapisan UI super-futuristik (aditif; tidak mengubah logika) ===== */
+@property --ag-a{syntax:"<angle>";inherits:false;initial-value:0deg}
+:root{--ag-cy:#3decff;--ag-vi:#8b5cf6;--ag-mg:#ff4fd8;--ag-lime:#5dffb0;--ag-amber:#ffc24a;--ag-red:#ff3b6b;
+  --hud:'Orbitron','Rajdhani','JetBrains Mono',ui-monospace,Menlo,sans-serif;--ui:'Rajdhani','JetBrains Mono',system-ui,sans-serif}
+
+/* --- latar: aurora + lantai grid perspektif + bintang + garis pindai --- */
+#nx-aegis-bg{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;
+  background:radial-gradient(120% 80% at 50% -10%,#08152e 0,#040913 55%,#02040a 100%)}
+#nx-aegis-bg i{position:absolute;display:block}
+#nx-aegis-bg .ag-a1,#nx-aegis-bg .ag-a2,#nx-aegis-bg .ag-a3{border-radius:50%;will-change:transform}
+#nx-aegis-bg .ag-a1{left:-30%;top:-18%;width:90vmax;height:90vmax;background:radial-gradient(circle,rgba(61,236,255,.22),transparent 62%);animation:agDrift1 26s ease-in-out infinite alternate}
+#nx-aegis-bg .ag-a2{right:-35%;bottom:-25%;width:100vmax;height:100vmax;background:radial-gradient(circle,rgba(139,92,246,.26),transparent 62%);animation:agDrift2 32s ease-in-out infinite alternate}
+#nx-aegis-bg .ag-a3{left:25%;top:35%;width:60vmax;height:60vmax;background:radial-gradient(circle,rgba(255,79,216,.12),transparent 60%);animation:agDrift3 38s ease-in-out infinite alternate}
+#nx-aegis-bg .ag-stars{inset:0;opacity:.7;
+  background-image:radial-gradient(1.2px 1.2px at 12% 18%,#9fe8ff,transparent),radial-gradient(1px 1px at 78% 12%,#fff,transparent),radial-gradient(1.4px 1.4px at 44% 66%,#b9a5ff,transparent),radial-gradient(1px 1px at 88% 74%,#9fe8ff,transparent),radial-gradient(1.2px 1.2px at 24% 86%,#fff,transparent),radial-gradient(1px 1px at 62% 32%,#9fe8ff,transparent),radial-gradient(1px 1px at 6% 52%,#fff,transparent);
+  background-size:340px 340px;animation:agTwinkle 6s ease-in-out infinite alternate}
+#nx-aegis-bg .ag-floor{left:-50%;right:-50%;bottom:-8%;height:58%;overflow:hidden;transform-origin:50% 100%;transform:perspective(520px) rotateX(66deg);
+  -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 55%,#000 100%);mask-image:linear-gradient(180deg,transparent 0,#000 55%,#000 100%);opacity:.5}
+#nx-aegis-bg .ag-floor::before{content:"";position:absolute;left:0;right:0;top:-64px;bottom:0;will-change:transform;
+  background-image:linear-gradient(rgba(61,236,255,.38) 1.5px,transparent 1.5px),linear-gradient(90deg,rgba(61,236,255,.3) 1.5px,transparent 1.5px);
+  background-size:64px 64px;animation:agFloor 5s linear infinite}
+#nx-aegis-bg .ag-horizon{left:0;right:0;bottom:calc(58% * .02 + 12%);height:1px;background:linear-gradient(90deg,transparent,var(--ag-cy),transparent);opacity:.0}
+#nx-aegis-bg .ag-scan{left:0;right:0;top:0;height:140px;background:linear-gradient(180deg,transparent,rgba(61,236,255,.04) 60%,rgba(61,236,255,.13) 92%,transparent);animation:agScan 11s linear infinite}
+#nx-aegis-bg .ag-vig{inset:0;background:radial-gradient(ellipse at 50% 42%,transparent 45%,rgba(0,0,6,.7) 100%)}
+@keyframes agDrift1{to{transform:translate(14vmax,10vmax) scale(1.12)}}
+@keyframes agDrift2{to{transform:translate(-12vmax,-8vmax) scale(1.08)}}
+@keyframes agDrift3{to{transform:translate(-8vmax,12vmax) scale(1.2)}}
+@keyframes agTwinkle{from{opacity:.35}to{opacity:.85}}
+@keyframes agFloor{to{transform:translateY(64px)}}
+@keyframes agScan{from{transform:translateY(-160px)}to{transform:translateY(105vh)}}
+body[data-theme="light"] #nx-aegis-bg{display:none}
+body[data-state="alert"] #nx-aegis-bg .ag-a1{background:radial-gradient(circle,rgba(255,59,107,.24),transparent 62%)}
+
+/* --- tata letak HUD atas: tiga baris rapi, tidak saling menimpa --- */
+body #nx9-chip{z-index:47;top:calc(max(10px,env(safe-area-inset-top)) + 6px);left:62px;max-width:calc(100vw - 62px - 140px);overflow:hidden;white-space:nowrap;
+  padding:.34rem .7rem;border-radius:12px;font-size:.58rem;background:linear-gradient(100deg,rgba(6,14,30,.86),rgba(8,22,44,.74));
+  box-shadow:0 0 0 1px rgba(61,236,255,.26),0 0 22px -10px var(--ag-cy);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+body #core-hint{top:calc(max(10px,env(safe-area-inset-top)) + 2px);left:10px;width:46px;height:46px;z-index:48;opacity:1;border-radius:15px;
+  background:linear-gradient(145deg,rgba(10,26,52,.9),rgba(4,10,24,.9));box-shadow:0 0 0 1px rgba(61,236,255,.4),0 0 24px -6px var(--ag-cy),inset 0 0 14px rgba(61,236,255,.12)}
+body #core-hint .status-dot{box-shadow:0 0 14px currentColor}
+body #nx11-cons{z-index:48;top:calc(max(10px,env(safe-area-inset-top)) + 6px);right:10px;width:min(132px,34vw);padding:.4rem .55rem .45rem;border-radius:14px;
+  background:linear-gradient(160deg,rgba(8,16,36,.9),rgba(5,10,24,.86));
+  box-shadow:0 0 0 1px rgba(139,92,246,.45),0 0 26px -10px var(--ag-vi);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);font-family:var(--hud)}
+body #nx11-cons .nx11-h{font-family:var(--hud);font-size:.5rem;letter-spacing:.16em}
+body #nx11-cons[data-open="1"]{width:min(262px,78vw);max-height:calc(100dvh - 150px);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;
+  top:calc(max(10px,env(safe-area-inset-top)) + 6px)}
+body #nx11-cons .nx11-bar{height:3px;background:rgba(139,92,246,.2)}
+body #nx11-cons .nx11-bar i{background:linear-gradient(90deg,var(--ag-vi),var(--ag-cy),var(--ag-lime));box-shadow:0 0 8px rgba(61,236,255,.6)}
+body #nx11-cons .nx11-term,body #nx11-cons .nx11-st{font-family:var(--ui);font-size:.62rem;letter-spacing:.08em}
+body #nx11-brand{top:calc(max(10px,env(safe-area-inset-top)) + 98px);z-index:18;font-family:var(--hud);font-size:.46rem;letter-spacing:.2em;text-transform:uppercase;
+  background:linear-gradient(90deg,var(--ag-cy),var(--ag-vi),var(--ag-mg));-webkit-background-clip:text;background-clip:text;color:transparent;transition:opacity .3s}
+body[data-dock] #nx11-brand,body[data-layer] #nx11-brand{opacity:0}
+
+/* --- dock / header perintah --- */
+body #dock{padding:calc(max(10px,env(safe-area-inset-top)) + 100px) 10px 16px;
+  background:linear-gradient(180deg,rgba(2,5,14,.95) 0,rgba(2,5,14,.88) 62%,rgba(2,5,14,0) 100%)}
+body .hud-title{font-family:var(--hud);font-weight:600;font-size:.64rem;letter-spacing:.3em;padding-left:2px;
+  background:linear-gradient(90deg,var(--ag-cy),var(--ag-vi),var(--ag-mg),var(--ag-cy));background-size:240% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:agTitle 7s linear infinite}
+body .hud-tag{font-family:var(--ui);font-size:.66rem;letter-spacing:.06em;color:rgba(190,215,255,.62);padding-left:2px}
+@keyframes agTitle{to{background-position:240% 0}}
+body .system-badge{font-family:var(--hud);font-size:.5rem;letter-spacing:.14em;padding:.28rem .7rem;border-radius:99px;white-space:nowrap;
+  color:var(--ag-lime);background:rgba(93,255,176,.07);box-shadow:inset 0 0 0 1px rgba(93,255,176,.38),0 0 16px -8px var(--ag-lime)}
+body .btn-icon{width:42px;height:42px;border-radius:13px;color:rgba(200,225,255,.82);
+  background:linear-gradient(145deg,rgba(14,30,60,.7),rgba(6,12,28,.7));border:1px solid rgba(61,236,255,.2);
+  box-shadow:inset 0 0 12px rgba(61,236,255,.06)}
+body .btn-icon:hover,body .btn-icon.active,body .btn-icon[aria-pressed="true"]{color:#02040a;background:linear-gradient(145deg,var(--ag-cy),#7ab8ff);
+  border-color:transparent;box-shadow:0 0 22px -2px var(--ag-cy)}
+body .btn-icon svg{stroke-width:1.7}
+
+/* --- kartu pesan & kartu sambutan --- */
+body #stage{padding-top:calc(112px + env(safe-area-inset-top,0px))}
+body .thought{position:relative}
+body .thought.boot{padding:1.35rem 1.25rem 1.4rem;border-radius:20px;overflow:visible;
+  background:linear-gradient(160deg,rgba(10,22,48,.74),rgba(4,9,24,.66));
+  -webkit-backdrop-filter:blur(16px) saturate(1.4);backdrop-filter:blur(16px) saturate(1.4);
+  box-shadow:0 0 60px -26px var(--ag-cy),0 30px 60px -30px #000}
+body .thought.boot::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.5px;pointer-events:none;
+  background:conic-gradient(from var(--ag-a),var(--ag-cy),var(--ag-vi),var(--ag-mg),var(--ag-cy));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
+  animation:agSpin 7s linear infinite;opacity:.9}
+body .thought.boot::after{content:"";position:absolute;inset:-6px;pointer-events:none;opacity:.8;
+  background:linear-gradient(var(--ag-cy),var(--ag-cy)) 0 0/18px 1.5px,linear-gradient(var(--ag-cy),var(--ag-cy)) 0 0/1.5px 18px,
+  linear-gradient(var(--ag-mg),var(--ag-mg)) 100% 100%/18px 1.5px,linear-gradient(var(--ag-mg),var(--ag-mg)) 100% 100%/1.5px 18px;background-repeat:no-repeat}
+@keyframes agSpin{to{--ag-a:360deg}}
+body .boot .flow h1{font-family:var(--hud);font-weight:800;font-size:clamp(1.7rem,9vw,2.6rem);letter-spacing:.34em;margin:0 0 .45em;
+  background:linear-gradient(90deg,#fff,var(--ag-cy),var(--ag-vi),var(--ag-cy));background-size:260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:agTitle 6s linear infinite;text-shadow:none;filter:drop-shadow(0 0 14px rgba(61,236,255,.45))}
+body .boot .flow p{font-family:var(--ui);font-weight:500;font-size:clamp(1.02rem,4.4vw,1.2rem);line-height:1.55;color:#dce9ff}
+body .boot .flow p:first-of-type b{color:var(--ag-cy);font-weight:600;letter-spacing:.02em}
+body .boot .flow p:last-of-type{font-family:var(--mono);font-size:.68rem;line-height:1.7;color:rgba(170,196,236,.66)}
+body .thought.ai:not(.boot){border-left:2px solid rgba(61,236,255,.55)}
+
+/* --- konsol input --- */
+body #summoner{background:linear-gradient(160deg,rgba(8,18,40,.86),rgba(4,9,22,.88))}
+body #summoner::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1.2px;pointer-events:none;
+  background:conic-gradient(from var(--ag-a),var(--ag-cy),var(--ag-vi),var(--ag-mg),var(--ag-cy));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:agSpin 8s linear infinite;opacity:.8}
+body #send-btn{background:linear-gradient(135deg,var(--ag-cy),var(--ag-vi))}
+body #tools .lnk{font-family:var(--hud);font-size:.52rem;letter-spacing:.12em}
+
+/* --- ikon melayang: perbaiki blob hitam (SVG tanpa fill:none) + gaya neon --- */
+body #nx-hd-fab{width:50px;height:50px;border-radius:17px;color:var(--ag-cy);
+  background:linear-gradient(145deg,rgba(12,28,58,.92),rgba(4,10,24,.92));
+  box-shadow:0 0 0 1px rgba(61,236,255,.45),0 0 28px -6px var(--ag-cy),inset 0 0 14px rgba(61,236,255,.12)}
+body #nx-hd-fab svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+body #nxd-rail .nxd-orb{box-shadow:0 0 0 1px rgba(139,92,246,.5),0 0 24px -6px var(--ag-vi);opacity:.62;transform:scale(.84);transform-origin:left center;transition:opacity .3s,transform .3s}
+body #nxd-rail[data-open="1"] .nxd-orb,body #nxd-rail .nxd-orb:hover{opacity:1;transform:none}
+body #nxd-rail .nxd-orb svg{fill:none;stroke:currentColor}
+body #nx-hd{background:linear-gradient(165deg,rgba(8,18,40,.94),rgba(4,9,22,.94));box-shadow:0 0 0 1px rgba(61,236,255,.3),0 0 60px -22px var(--ag-cy),0 24px 50px -24px #000}
+body #nx-hd .hd-t{font-family:var(--hud);font-weight:600}
+
+/* --- panel instrumen kanan & pengaturan --- */
+body #instruments,body #settings-panel{background:linear-gradient(180deg,rgba(5,11,26,.92),rgba(3,7,18,.94));-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+body .tele-title{font-family:var(--hud);font-size:.56rem;letter-spacing:.22em}
+
+@media(max-width:380px){body #nx9-chip .nx9-extra{display:none}}
+@media(min-width:900px){
+  #nx-omni{left:50%;right:auto;width:34rem;margin:0;transform:translateX(-50%)}
+  body #nx9-chip{max-width:none}
+  body #nx11-cons{width:150px}
+}
+@media(prefers-reduced-motion:reduce){
+  #nx-aegis-bg i,#nx-aegis-bg i::before,body .hud-title,body .boot .flow h1,body .thought.boot::before,body #summoner::before{animation:none!important}
+}
+@media print{#nx-aegis-bg{display:none!important}}
+</style>
+
+<script id="nx-aegis-js">
+/* NEXUS AEGIS · memasang latar futuristik di dalam #void (idempoten, tanpa mengubah logika lama). */
+(function () {
+  try {
+    if (document.getElementById('nx-aegis-bg')) return;
+    var host = document.getElementById('void') || document.body;
+    var bg = document.createElement('div');
+    bg.id = 'nx-aegis-bg'; bg.setAttribute('aria-hidden', 'true');
+    bg.innerHTML = '<i class="ag-a1"></i><i class="ag-a2"></i><i class="ag-a3"></i><i class="ag-stars"></i><i class="ag-floor"></i><i class="ag-scan"></i><i class="ag-vig"></i>';
+    host.insertBefore(bg, host.firstChild);
+  } catch (e) { console.warn('[AEGIS] latar gagal dipasang:', e); }
 })();
 </script>
 
