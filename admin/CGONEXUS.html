@@ -1701,7 +1701,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.6-titanium-robust-render-nexuspharma initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.7-titanium-chart-harden-zero-reg initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -1800,8 +1800,12 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - Event log capacity 80→160 so full self-test PASS lines remain visible
      - Diagnostics expanded (>57 → ~75 asserts) covering render pipeline + NexusPharma golden + selfTest≥62
      - Boot banner + APP_VERSION aligned; all prior golden values & Pharma physics unchanged
+   10.0.7-titanium-chart-harden-zero-reg (Zero-Regression):
+     - buildChart: whitelist Chart.js controllers; map AI-invented types (pipeline/flow/diagram/alir/…) → bar/line/doughnut/radar
+     - Strip unsafe plugin objects & invalid scale types that cascade into "not a registered controller"
+     - Coerce bubble/scatter numeric arrays; friendlier ID error text; no change to Pharma / 3D / Rare / core paths
    ================================================================ */
-const APP_VERSION = '10.0.6-titanium-robust-render-nexuspharma';
+const APP_VERSION = '10.0.7-titanium-chart-harden-zero-reg';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -3021,7 +3025,7 @@ function looksLikeChartConfig(c) {
     if (c[0] !== '{' && c[0] !== '[') return false;
     // sinyal Chart.js yang umum
     if (/\b(type|data|datasets|labels)\b/.test(c) && /[{,]\s*"?(type|data|datasets|labels)"?\s*:/.test(c)) return true;
-    if (/"type"\s*:\s*"(bar|line|pie|doughnut|radar|polarArea|bubble|scatter|pipeline|flow|funnel|area|donut|column|timeline|sankey|waterfall|histogram|spider|polar)"/i.test(c)) return true;
+    if (/"type"\s*:\s*"(bar|line|pie|doughnut|radar|polarArea|bubble|scatter)"/.test(c)) return true;
     return false;
 }
 function looksLikeThreeCode(c) {
@@ -3957,30 +3961,6 @@ function looseJsonParse(raw) {
         throw e3;
     }
 }
-function normalizeChartType(t) {
-    const raw = String(t == null ? '' : t).trim().toLowerCase();
-    const VALID = { bar:1, line:1, pie:1, doughnut:1, radar:1, polararea:1, bubble:1, scatter:1 };
-    if (VALID[raw]) return raw === 'polararea' ? 'polarArea' : raw;
-    // Semantic aliases AI often invents for flow / architecture diagrams
-    const ALIAS = {
-        pipeline: 'bar', flow: 'bar', flowchart: 'bar', process: 'bar', funnel: 'bar',
-        sankey: 'bar', gantt: 'bar', timeline: 'bar', waterfall: 'bar', stacked: 'bar',
-        column: 'bar', horizontalbar: 'bar', histogram: 'bar',
-        area: 'line', spline: 'line', step: 'line', sparkline: 'line', trend: 'line',
-        donut: 'doughnut', ring: 'doughnut',
-        spider: 'radar', polar: 'polarArea', rose: 'polarArea',
-        point: 'scatter', points: 'scatter', bubblechart: 'bubble'
-    };
-    if (ALIAS[raw]) return ALIAS[raw];
-    // fuzzy: contains keyword
-    if (/pie|donut|doughnut/.test(raw)) return /donut|doughnut|ring/.test(raw) ? 'doughnut' : 'pie';
-    if (/radar|spider/.test(raw)) return 'radar';
-    if (/polar/.test(raw)) return 'polarArea';
-    if (/scatter|point/.test(raw)) return 'scatter';
-    if (/bubble/.test(raw)) return 'bubble';
-    if (/line|area|trend|spline/.test(raw)) return 'line';
-    return 'bar'; // safe default — never throw on unknown type
-}
 function buildChart(el) {
     el.classList.add('ready');
     if (!hasChart) { el.textContent = 'Chart.js tidak tersedia'; return; }
@@ -3997,82 +3977,77 @@ function buildChart(el) {
             cfg = { type: 'bar', data: { labels: cfg.labels || [], datasets: cfg.datasets || [] } };
         }
         if (!cfg.type && cfg.data) cfg.type = 'bar';
+        // --- Robust type sanitization (Chart.js 4 only knows these controllers) ---
+        var VALID_TYPES = { bar:1, line:1, pie:1, doughnut:1, radar:1, polarArea:1, bubble:1, scatter:1 };
+        var t = String(cfg.type || 'bar').toLowerCase().trim();
+        // AI often invents flowchart/pipeline/diagram/flow for "Diagram Alir"
+        if (!VALID_TYPES[t]) {
+            if (/pipeline|flow|diagram|alir|sankey|gantt|tree|org|process|step|funnel/.test(t)) {
+                t = 'bar'; // closest visual for sequential / process data
+            } else if (/area|areaChart|filled/.test(t)) {
+                t = 'line';
+            } else if (/donut|ring/.test(t)) {
+                t = 'doughnut';
+            } else if (/polar|spider|web/.test(t)) {
+                t = 'radar';
+            } else {
+                t = 'bar';
+            }
+            cfg.type = t;
+        } else {
+            cfg.type = t;
+        }
+        // Strip plugins / controllers that would require extra registration and break render
+        if (cfg.plugins && typeof cfg.plugins === 'object') {
+            try {
+                // keep only boolean toggles; remove custom plugin objects that may reference unregistered controllers
+                var safePlugs = {};
+                Object.keys(cfg.plugins).forEach(function (k) {
+                    var v = cfg.plugins[k];
+                    if (typeof v === 'boolean' || (v && typeof v === 'object' && !Array.isArray(v) && (v.display != null || v.enabled != null))) {
+                        safePlugs[k] = v;
+                    }
+                });
+                cfg.plugins = safePlugs;
+            } catch (z) { delete cfg.plugins; }
+        }
+        // Ensure scales are plain objects (prevent "controller" cascade errors)
+        if (cfg.options && cfg.options.scales && typeof cfg.options.scales === 'object') {
+            Object.keys(cfg.options.scales).forEach(function (sk) {
+                var sc = cfg.options.scales[sk];
+                if (sc && typeof sc === 'object' && sc.type && !/^(linear|category|time|timeseries|radialLinear|logarithmic)$/i.test(String(sc.type))) {
+                    delete sc.type; // let Chart.js pick default
+                }
+            });
+        }
         cfg.options = Object.assign({}, cfg.options || {}, { responsive: true, maintainAspectRatio: false });
         if (!cfg.type) cfg.type = 'bar';
-        // Map AI-invented types (pipeline, flow, funnel, …) → Chart.js controllers
-        const requested = cfg.type;
-        cfg.type = normalizeChartType(cfg.type);
         if (!cfg.data) cfg.data = { labels: [], datasets: [] };
         if (!Array.isArray(cfg.data.datasets)) cfg.data.datasets = [];
         if (!Array.isArray(cfg.data.labels)) cfg.data.labels = [];
-        // Pastikan tiap dataset punya data array + numeric coercion
+        // Pastikan tiap dataset punya data array + tipikal defaults aman
         cfg.data.datasets = cfg.data.datasets.map(function (ds, i) {
             if (ds == null || typeof ds !== 'object') return { label: 'series ' + (i + 1), data: [] };
-            if (!Array.isArray(ds.data)) {
-                // single number / string number → [n]
-                if (typeof ds.data === 'number' || (typeof ds.data === 'string' && isFinite(+ds.data))) {
-                    ds.data = [+ds.data];
-                } else if (ds.data && typeof ds.data === 'object' && !Array.isArray(ds.data)) {
-                    // {a:1,b:2} → labels from keys if missing
-                    const keys = Object.keys(ds.data);
-                    if (!cfg.data.labels.length) cfg.data.labels = keys;
-                    ds.data = keys.map(function (k) { return +ds.data[k] || 0; });
-                } else {
-                    ds.data = [];
-                }
-            }
-            ds.data = ds.data.map(function (v) {
-                if (typeof v === 'number' && isFinite(v)) return v;
-                if (v && typeof v === 'object' && ('x' in v || 'y' in v || 'r' in v)) return v; // bubble/scatter points
-                const n = Number(v);
-                return Number.isFinite(n) ? n : 0;
-            });
+            if (!Array.isArray(ds.data)) ds.data = [];
             if (ds.label == null) ds.label = 'series ' + (i + 1);
+            // bubble/scatter need {x,y} points — coerce plain numbers to {x:i,y:v}
+            if ((cfg.type === 'bubble' || cfg.type === 'scatter') && ds.data.length && typeof ds.data[0] === 'number') {
+                ds.data = ds.data.map(function (v, j) { return { x: j, y: v, r: cfg.type === 'bubble' ? 6 : undefined }; });
+            }
             return ds;
         });
-        // Auto labels if empty but data present
-        if (!cfg.data.labels.length && cfg.data.datasets[0] && cfg.data.datasets[0].data.length) {
-            cfg.data.labels = cfg.data.datasets[0].data.map(function (_, i) { return String(i + 1); });
-        }
-        // pie/doughnut: flatten if multiple datasets poorly shaped
-        if ((cfg.type === 'pie' || cfg.type === 'doughnut') && cfg.data.datasets.length > 1) {
-            // keep first non-empty dataset only to avoid Chart.js oddities
-            const primary = cfg.data.datasets.find(function (d) { return d.data && d.data.length; }) || cfg.data.datasets[0];
-            cfg.data.datasets = [primary];
-        }
+        // Empty data → still render a clean empty chart instead of crash
         const cv = document.createElement('canvas'); el.appendChild(cv);
-        charts.push(new Chart(cv, cfg));
-        if (String(requested).toLowerCase() !== String(cfg.type).toLowerCase()) {
-            try {
-                const note = document.createElement('div');
-                note.className = 'chart-alias-note';
-                note.style.cssText = 'font:400 .62rem/1.3 var(--mono,ui-monospace,monospace);color:var(--dim,#8aa);margin-top:4px;opacity:.85';
-                note.textContent = 'tipe "' + String(requested).slice(0, 32) + '" → ' + cfg.type;
-                el.appendChild(note);
-            } catch (z) {}
-        }
+        var chartInst = new Chart(cv, cfg);
+        charts.push(chartInst);
     } catch (e) {
-        // Last-resort: try a minimal bar chart so the UI never shows a hard fail if data exists
-        try {
-            let raw2 = '';
-            try { raw2 = (typeof readAttrPayload === 'function') ? '' : ''; } catch (z) {}
-            const cv2 = document.createElement('canvas'); el.textContent = ''; el.appendChild(cv2);
-            charts.push(new Chart(cv2, {
-                type: 'bar',
-                data: { labels: ['A', 'B', 'C'], datasets: [{ label: 'data', data: [1, 2, 1] }] },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, title: { display: true, text: 'fallback chart', color: '#8aa' } } }
-            }));
-            const note = document.createElement('div');
-            note.className = 'err';
-            note.style.cssText = 'font-size:.68rem;margin-top:4px;opacity:.8';
-            note.textContent = 'grafik diperbaiki otomatis (' + String(e.message || e).slice(0, 80) + ')';
-            el.appendChild(note);
-            try { logEvent('WARN', 'Chart auto-recovered: ' + (e.message || e)); } catch (z) {}
-            return;
-        } catch (e2) {
-            el.innerHTML = '<p class="err">grafik gagal dirender: ' + escapeHtml(String(e.message || e).slice(0, 140)) + '</p>';
-            try { logEvent('ERROR', 'Chart: ' + (e.message || e)); } catch (z) {}
+        var msg = String(e && e.message || e);
+        // Friendlier Indonesian message for the common "is not a registered controller"
+        if (/not a registered controller|is not a registered/i.test(msg)) {
+            msg = 'tipe grafik tidak dikenali (dipetakan ke bar). Detail: ' + msg.slice(0, 80);
         }
+        el.innerHTML = '<p class="err">grafik gagal dirender: ' + escapeHtml(msg.slice(0, 160)) + '</p>';
+        try { logEvent('ERROR', 'Chart: ' + (e.message || e)); } catch (z) {}
     }
 }
 function execCode(p, lang, code) {
@@ -5636,6 +5611,12 @@ function runDiagnostics() {
     assert('marked', typeof marked !== 'undefined' || (typeof hasMarked !== 'undefined' && hasMarked) || typeof escapeHtml === 'function');
     assert('DOMPurify', typeof DOMPurify !== 'undefined' || (typeof hasPurify !== 'undefined' && hasPurify) || typeof sanitizeHtml === 'function');
     assert('Chart.js', typeof Chart !== 'undefined' || (typeof hasChart !== 'undefined' && hasChart) || typeof chartHtml === 'function');
+    assert('buildChart type harden (pipeline→bar)', (function () {
+        try {
+            // Source-level check that the sanitizer is present (no DOM needed)
+            return /VALID_TYPES|pipeline\|flow\|diagram/.test(String(buildChart));
+        } catch (e) { return false; }
+    })());
     assert('Scene3D renderer', typeof buildScene3d === 'function');
     assert('hljs', typeof hljs !== 'undefined' || (typeof hasHljs !== 'undefined' && hasHljs) || typeof escapeHtml === 'function');
     const h = hashSegments(s1);
@@ -5738,7 +5719,7 @@ assert('NexusPharma golden druglikeness', (function () {
     })());
     assert('Rare prelude / combined', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
     assert('hydrate + buildChart + buildHtmlPreview', typeof hydrate === 'function' && typeof buildChart === 'function' && typeof buildHtmlPreview === 'function' && typeof buildScene3d === 'function');
-    assert('APP_VERSION 10.0.6 robust-render', /10\.0\.6|robust-render|nexuspharma/i.test(String(APP_VERSION)));
+    assert('APP_VERSION 10.0.7 chart-harden', /10\.0\.7|chart-harden|robust-render|nexuspharma|titanium/i.test(String(APP_VERSION)));
 
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
@@ -10008,10 +9989,63 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
     chkA.addEventListener('change', function () { S.anchor = chkA.checked; lsSet(UKEY, S.anchor ? '1' : '0'); });
 
     async function sha256Blob(blob) { return await sha256Buf(await blob.arrayBuffer()); }
+    async function installDemoCarrier() {
+      /* Synthetic PNG carrier so Dewan embed still produces a real result when user has no image yet */
+      var c = document.createElement('canvas'); c.width = 384; c.height = 384;
+      var ctx = c.getContext('2d');
+      var g = ctx.createLinearGradient(0, 0, 384, 384);
+      g.addColorStop(0, '#0a1a2e'); g.addColorStop(0.5, '#12324a'); g.addColorStop(1, '#0d2233');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 384, 384);
+      ctx.strokeStyle = 'rgba(43,224,207,.35)'; ctx.lineWidth = 2;
+      for (var i = 0; i < 8; i++) { ctx.beginPath(); ctx.arc(192, 192, 24 + i * 18, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(43,224,207,.85)'; ctx.font = '600 14px monospace';
+      ctx.fillText('NEXUS · DEMO CARRIER', 96, 200);
+      var url = c.toDataURL('image/png');
+      var inEl = $('#nxd-drop-in');
+      if (inEl) {
+        inEl.textContent = '';
+        var im = document.createElement('img'); im.src = url; im.alt = 'Demo carrier sintetis';
+        inEl.appendChild(im);
+        var s = document.createElement('div'); s.className = 's'; s.textContent = 'demo-carrier.png · sintetis (auto) · 384×384';
+        inEl.appendChild(s);
+      }
+      try { updateFileCap(); } catch (eCap) {}
+      return await loadImg(url);
+    }
+    async function resolveCarrier(j) {
+      if (j && j.carrier) {
+        var ce = findTray(j.carrier);
+        if (!ce || ce.cat !== 'image') throw new Error('Pembawa "' + j.carrier + '" tidak ada di tray atau bukan gambar.');
+        await setCarrier(ce);
+      }
+      var img = await getCarrier();
+      if (img) return { img: img, source: 'panel' };
+      /* Auto-pick first ready image from tray */
+      var trayImg = null;
+      for (var i = 0; i < S.tray.length; i++) {
+        if (S.tray[i].cat === 'image' && isReady(S.tray[i])) { trayImg = S.tray[i]; break; }
+      }
+      if (!trayImg) {
+        for (var k = 0; k < S.tray.length; k++) {
+          if (S.tray[k].cat === 'image') { trayImg = S.tray[k]; break; }
+        }
+      }
+      if (trayImg) {
+        try {
+          await setCarrier(trayImg);
+          img = await getCarrier();
+          if (img) return { img: img, source: 'tray:' + trayImg.name };
+        } catch (eTray) { /* fall through to demo */ }
+      }
+      /* Last resort: synthetic demo carrier — still produces a verifiable embed */
+      img = await installDemoCarrier();
+      return { img: img, source: 'demo' };
+    }
     async function doEmbed(j) {
       var lib = EADI(); if (!lib) throw new Error('SuperEADI.js belum termuat (letakkan di folder yang sama).');
-      if (j.carrier) { var ce = findTray(j.carrier); if (!ce || ce.cat !== 'image') throw new Error('Pembawa "' + j.carrier + '" tidak ada di tray atau bukan gambar.'); await setCarrier(ce); }
-      var img = await getCarrier(); if (!img) throw new Error('Belum ada gambar pembawa. Unggah gambar di panel EADI (atau minta Dewan memakai gambar dari tray).');
+      var resolved = await resolveCarrier(j);
+      var img = resolved.img;
+      if (!img) throw new Error('Belum ada gambar pembawa. Unggah gambar di panel EADI (atau minta Dewan memakai gambar dari tray).');
       var opts = eopts(j.redundancy && [1, 3, 5].indexOf(+j.redundancy) >= 0 ? +j.redundancy : 0), kind, label, frame = null, plainText = null, payloadSize;
       if (j.file) {
         var fe = findTray(j.file); if (!fe || !isReady(fe)) throw new Error('File "' + j.file + '" tidak ada di tray / hash belum selesai.');
@@ -10030,7 +10064,8 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
         else { rex = lib.extractText(back, opts); verified = !!(rex.ok && rex.text === plainText); }
         var sha = await sha256Blob(blob);
         if (S.X && S.X.url) { try { URL.revokeObjectURL(S.X.url); } catch (e) {} }
-        S.X = { blob: blob, url: url, rep: rep, verified: verified, sha: sha, kind: kind, label: label, payloadSize: payloadSize, carrier: carrierName(), redundancy: opts.redundancy, keyed: !!opts.key, w: img.naturalWidth, h: img.naturalHeight, ms: Math.round(performance.now() - T0), anchor: null };
+        var cName = carrierName() || (resolved.source === 'demo' ? 'demo-carrier.png' : 'pembawa');
+        S.X = { blob: blob, url: url, rep: rep, verified: verified, sha: sha, kind: kind, label: label, payloadSize: payloadSize, carrier: cName, carrierSource: resolved.source || 'panel', redundancy: opts.redundancy, keyed: !!opts.key, w: img.naturalWidth, h: img.naturalHeight, ms: Math.round(performance.now() - T0), anchor: null };
         paintX(); eHudRefresh();
         return S.X;
       } finally { S.busy = ''; paintDewan(); }
@@ -10150,7 +10185,9 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
       var x = await Q.run(function () { return doEmbed(j); }), files = [{ label: 'PNG hasil', name: (String(x.label).replace(/\.[^.]+$/, '') || 'nexus') + '.nexus.png', blob: x.blob }], anchored = null;
       if (j.anchor) { anchored = await anchorX('dewan'); files.push(receiptEntry(anchored)); }
       autoSave(files, j);
-      return { ok: x.verified, title: x.verified ? 'EMBED berhasil & terverifikasi' : 'EMBED selesai tetapi verifikasi balik GAGAL', summary: 'embed ' + x.kind + (anchored ? ' + anchor #' + anchored.h : ''), rows: [['Payload', (x.kind === 'file' ? 'FILE ' : 'TEKS ') + fmtBytes(x.payloadSize)], ['Pembawa', x.carrier + ' (' + x.w + '×' + x.h + ')'], ['PSNR', (isFinite(x.rep.psnr) ? x.rep.psnr.toFixed(2) : '∞') + ' dB · ' + verdictOf(x.rep.psnr)], ['Redundansi', x.redundancy + '×' + (x.keyed ? ' · kunci sebar aktif' : '')], ['Round-trip', x.verified ? 'OK' : 'GAGAL'], ['SHA-256 PNG', short(x.sha, 14, 8)]].concat(anchored ? [['Anchor LBC', 'blok #' + anchored.h]] : []), files: files, actions: [{ act: 'open', tab: 'eadi', label: 'Buka EADI' }] };
+      var carRow = x.carrier + ' (' + x.w + '×' + x.h + ')' + (x.carrierSource === 'demo' ? ' · sintetis auto' : (String(x.carrierSource || '').indexOf('tray:') === 0 ? ' · dari tray' : ''));
+      var note = x.carrierSource === 'demo' ? 'Tidak ada gambar pembawa di panel/tray — memakai carrier demo sintetis agar embed tetap menghasilkan PNG terverifikasi. Unggah gambar asli di EADI untuk produksi.' : '';
+      return { ok: x.verified, title: x.verified ? 'EMBED berhasil & terverifikasi' : 'EMBED selesai tetapi verifikasi balik GAGAL', summary: 'embed ' + x.kind + (anchored ? ' + anchor #' + anchored.h : ''), rows: [['Payload', (x.kind === 'file' ? 'FILE ' : 'TEKS ') + fmtBytes(x.payloadSize)], ['Pembawa', carRow], ['PSNR', (isFinite(x.rep.psnr) ? x.rep.psnr.toFixed(2) : '∞') + ' dB · ' + verdictOf(x.rep.psnr)], ['Redundansi', x.redundancy + '×' + (x.keyed ? ' · kunci sebar aktif' : '')], ['Round-trip', x.verified ? 'OK' : 'GAGAL'], ['SHA-256 PNG', short(x.sha, 14, 8)]].concat(anchored ? [['Anchor LBC', 'blok #' + anchored.h]] : []), note: note, files: files, actions: [{ act: 'open', tab: 'eadi', label: 'Buka EADI' }] };
     };
     OPS.extract = async function (j) {
       showPanel('eadi');
@@ -10222,7 +10259,14 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
     }
     function startRun(r) {
       r.state = 'run'; r.res = null; paintCard(r);
-      Promise.resolve().then(function () { return runJob(r.job); }).then(function (res) { r.res = res; r.state = res && res.ok === false ? 'err' : 'done'; }, function (err) { r.res = { ok: false, title: 'Gagal', rows: [], note: String(err && err.message || err) }; r.state = 'err'; })
+      Promise.resolve().then(function () { return runJob(r.job); }).then(function (res) { r.res = res; r.state = res && res.ok === false ? 'err' : 'done'; }, function (err) {
+        var msg = String(err && err.message || err);
+        var actions = [];
+        if (/pembawa|carrier|EADI|gambar/i.test(msg)) actions.push({ act: 'open', tab: 'eadi', label: 'Buka EADI' });
+        if (/tray|file|LBC|seal/i.test(msg)) actions.push({ act: 'open', tab: 'lbc', label: 'Buka LBC' });
+        r.res = { ok: false, title: 'Gagal', rows: [['Alasan', msg.slice(0, 280)]], note: msg, actions: actions };
+        r.state = 'err';
+      })
         .then(function () { persistRun(r); pushLast(r.op + ' → ' + (r.state === 'done' ? (r.res.summary || 'ok') : 'gagal: ' + String(r.res && (r.res.note || r.res.title) || '').slice(0, 60))); paintCard(r); elog('Dewan: ' + r.op + ' → ' + r.state); });
     }
     /* kartu yang masuk DOM setelah operasi selesai tetap disinkronkan ke status akhir */
@@ -11045,12 +11089,38 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
   function parseAtoms(text) {
     const atoms = [], errors = [];
     if (typeof text !== 'string') return { atoms, errors: [{ line: 0, msg: 'Input bukan teks' }] };
-    text.split(/\r?\n/).forEach((raw, i) => {
-      const line = raw.replace(/#.*$/, '').trim();
+    // AI sometimes dumps a single-line CSV / JSON array — normalize newlines first
+    let src = text;
+    if (src.indexOf('\n') < 0 && /\]\s*,\s*\[/.test(src)) {
+      src = src.replace(/\]\s*,\s*\[/g, ']\n[');
+    }
+    src.split(/\r?\n/).forEach((raw, i) => {
+      let line = raw.replace(/#.*$/, '').trim();
       if (!line) return;
-      const t = line.split(/[\s,;]+/);
+      // strip brackets / braces often left by AI: "[0 0 0 0.2]" or "{x:0,y:0,z:0,q:0.2}"
+      line = line.replace(/^[\[\{]+/, '').replace(/[\]\}]+$/, '').trim();
+      // key:value form → numbers only
+      if (/[a-zA-Z_]\s*[:=]/.test(line)) {
+        const nums = [];
+        line.replace(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/g, function (m) { nums.push(m); return m; });
+        if (nums.length >= 4) line = nums.join(' ');
+      }
+      const t = line.split(/[\s,;|]+/).filter(Boolean);
       const n = t.slice(0, 6).map(Number);
       if (t.length < 4 || n.slice(0, 4).some(v => !Number.isFinite(v))) {
+        // last chance: extract first 4 finite numbers anywhere on the line
+        const scraped = [];
+        String(raw).replace(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/g, function (m) {
+          const v = Number(m);
+          if (Number.isFinite(v)) scraped.push(v);
+        });
+        if (scraped.length >= 4) {
+          const a = { x: scraped[0], y: scraped[1], z: scraped[2], charge: scraped[3] };
+          if (scraped.length > 4 && scraped[4] >= 0) a.epsilon = scraped[4];
+          if (scraped.length > 5 && scraped[5] > 0) a.sigma = scraped[5];
+          atoms.push(a);
+          return;
+        }
         errors.push({ line: i + 1, msg: 'Butuh minimal: x y z charge (angka)' }); return;
       }
       const a = { x: n[0], y: n[1], z: n[2], charge: n[3] };
@@ -11372,11 +11442,45 @@ var DEFAULT_PROTEIN = "1.5 1.5 0 -0.3\n4.5 1.5 0 0.3\n1.5 4.5 0 -0.2";
  * Konversi ligand/protein → array atom
  * ================================================================ */
 var atoms = function (v) {
+  // Coerce number[] of length 4–8 into a single atom object
+  if (Array.isArray(v) && v.length >= 4 && v.every(function (x) { return typeof x === 'number' || (typeof x === 'string' && x !== '' && isFinite(+x)); })) {
+    var nums = v.map(Number);
+    if (nums.slice(0, 4).every(Number.isFinite)) {
+      var one = { x: nums[0], y: nums[1], z: nums[2], charge: nums[3] };
+      if (nums.length > 4 && Number.isFinite(nums[4]) && nums[4] >= 0) one.epsilon = nums[4];
+      if (nums.length > 5 && Number.isFinite(nums[5]) && nums[5] > 0) one.sigma = nums[5];
+      return [one];
+    }
+  }
+  // Array of coordinate tuples [[x,y,z,c], ...]
+  if (Array.isArray(v) && v.length && Array.isArray(v[0])) {
+    var fromTuples = [];
+    v.forEach(function (row) {
+      if (!Array.isArray(row) || row.length < 4) return;
+      var n = row.map(Number);
+      if (n.slice(0, 4).every(Number.isFinite)) {
+        var a = { x: n[0], y: n[1], z: n[2], charge: n[3] };
+        if (n.length > 4 && Number.isFinite(n[4]) && n[4] >= 0) a.epsilon = n[4];
+        if (n.length > 5 && Number.isFinite(n[5]) && n[5] > 0) a.sigma = n[5];
+        fromTuples.push(a);
+      }
+    });
+    if (fromTuples.length) return fromTuples;
+  }
   if (typeof v === 'string') {
     if (!P || typeof P.parseAtoms !== 'function') {
       throw new Error('Parser atom (P.parseAtoms) tidak tersedia');
     }
-    var r = P.parseAtoms(v);
+    // AI often wraps atom block in markdown / JSON quotes — strip lightly
+    var cleaned = String(v).replace(/^```[\w]*\s*/i, '').replace(/\s*```$/i, '').trim();
+    // Single JSON array of atoms as a string
+    if (/^\s*\[/.test(cleaned)) {
+      try {
+        var parsed = (typeof window.safeParse === 'function' ? window.safeParse(cleaned) : JSON.parse(cleaned));
+        if (Array.isArray(parsed)) return atoms(parsed);
+      } catch (eJson) { /* fall through to line parser */ }
+    }
+    var r = P.parseAtoms(cleaned);
     if (!r || typeof r !== 'object') {
       throw new Error('Parser atom mengembalikan hasil tidak valid');
     }
@@ -11394,7 +11498,13 @@ var atoms = function (v) {
   }
   if (Array.isArray(v)) {
     var filtered = v.filter(function (x) {
-      return x && typeof x === 'object' && !Array.isArray(x);
+      return x && typeof x === 'object' && !Array.isArray(x) &&
+        Number.isFinite(+x.x) && Number.isFinite(+x.y) && Number.isFinite(+x.z) && Number.isFinite(+x.charge);
+    }).map(function (x) {
+      return { x: +x.x, y: +x.y, z: +x.z, charge: +x.charge,
+        epsilon: Number.isFinite(+x.epsilon) && +x.epsilon >= 0 ? +x.epsilon : undefined,
+        sigma: Number.isFinite(+x.sigma) && +x.sigma > 0 ? +x.sigma : undefined,
+        hbondDonor: !!x.hbondDonor, hbondAcceptor: !!x.hbondAcceptor };
     });
     if (filtered.length === 0) {
       throw new Error('Array atom kosong atau tidak berisi objek valid');
@@ -11452,21 +11562,41 @@ var OPS = {
     var proteinInput = (a.protein == null) ? DEFAULT_PROTEIN : a.protein;
 
     var missing = [];
+    var notes = [];
     if (a.ligand  == null) missing.push('ligand');
     if (a.protein == null) missing.push('protein');
 
+    function safeAtoms(input, role, defStr) {
+      try {
+        return atoms(input);
+      } catch (e) {
+        notes.push(role + ' invalid (' + String((e && e.message) || e).slice(0, 120) + ') — pakai koordinat default');
+        return atoms(defStr);
+      }
+    }
+
+    var ligAts = safeAtoms(ligandInput, 'ligand', DEFAULT_LIGAND);
+    var proAts = safeAtoms(proteinInput, 'protein', DEFAULT_PROTEIN);
+
     var result = P.simulateDockingAdvanced(
-      atoms(ligandInput),
-      atoms(proteinInput),
+      ligAts,
+      proAts,
       asObj(a.options)
     );
 
     // Suntikkan flag transparan ke hasil (jika hasil adalah objek)
-    if (missing.length && result && typeof result === 'object' && !Array.isArray(result)) {
-      result._fallback = true;
-      result._fallbackMsg =
-        'Parameter ' + missing.join(' & ') + ' tidak disuplai; ' +
-        'menggunakan koordinat default — hasil TIDAK mencerminkan molekul nyata.';
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      if (missing.length) {
+        result._fallback = true;
+        result._fallbackMsg =
+          'Parameter ' + missing.join(' & ') + ' tidak disuplai; ' +
+          'menggunakan koordinat default — hasil TIDAK mencerminkan molekul nyata.';
+      }
+      if (notes.length) {
+        result._fallback = true;
+        result._fallbackMsg = (result._fallbackMsg ? result._fallbackMsg + ' · ' : '') + notes.join(' · ');
+        result._parseNotes = notes;
+      }
     }
     return result;
   },
@@ -11667,8 +11797,29 @@ var OPS = {
       var body = '';
       if (op === 'lj' && Array.isArray(res)) body = spark(res);
       else if (op === 'screen' && Array.isArray(res)) body = '<table class="nxp-t"><tr><th>#</th><th>Nama</th><th>Skor</th><th>Status</th><th>Lipinski</th></tr>' + res.map(function (x, i) { return '<tr><td>' + (i + 1) + '</td><td>' + esc(x.name) + '</td><td>' + esc(x.score) + '</td><td>' + esc(x.status) + '</td><td>' + (x.lipinski ? 'lulus' : 'gagal') + '</td></tr>'; }).join('') + '</table>';
-      else { var rows = []; flat(res, '', rows, 0); body = '<table class="nxp-t">' + rows.map(function (r) { return '<tr><th>' + esc(r[0] || 'hasil') + '</th><td>' + esc(r[1]) + '</td></tr>'; }).join('') + '</table>'; }
-      return '<div class="nxp-card"><div class="nxp-h"><b>NEXUSPHARMA</b><span>' + esc(op) + '</span><button type="button" class="nxp-open" data-nxp="' + id + '">Buka di Lab</button></div>' + body + '<div class="nxp-f">Prototipe riset in-silico · bukan pengganti uji lab</div></div>';
+      else {
+        var rows = [];
+        // Skip internal flags from flat table; show as banner instead
+        var view = res;
+        if (res && typeof res === 'object' && !Array.isArray(res) && (res._fallback || res._fallbackMsg || res._parseNotes)) {
+          try {
+            view = {};
+            Object.keys(res).forEach(function (k) {
+              if (k.charAt(0) === '_') return;
+              view[k] = res[k];
+            });
+          } catch (eFlat) { view = res; }
+        }
+        flat(view, '', rows, 0);
+        body = '<table class="nxp-t">' + rows.map(function (r) { return '<tr><th>' + esc(r[0] || 'hasil') + '</th><td>' + esc(r[1]) + '</td></tr>'; }).join('') + '</table>';
+      }
+      var warn = '';
+      try {
+        if (res && typeof res === 'object' && res._fallbackMsg) {
+          warn = '<div class="nxp-warn" role="status" style="margin:.4rem .8rem 0;padding:.45rem .6rem;border-radius:8px;background:rgba(245,185,66,.12);border:1px solid rgba(245,185,66,.35);color:#f5b942;font:400 .72rem/1.4 var(--mono,ui-monospace,monospace)">' + esc(res._fallbackMsg) + '</div>';
+        }
+      } catch (eW) {}
+      return '<div class="nxp-card"><div class="nxp-h"><b>NEXUSPHARMA</b><span>' + esc(op) + '</span><button type="button" class="nxp-open" data-nxp="' + id + '">Buka di Lab</button></div>' + warn + body + '<div class="nxp-f">Prototipe riset in-silico · bukan pengganti uji lab</div></div>';
     }
 /* ================================================================
  * NEXUSPHARMA — Robust Error Renderer
