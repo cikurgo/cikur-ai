@@ -1810,8 +1810,13 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - OMNI SENTINEL live top bar: STANDBY / SCANNING / ALERT — code-only threat monitor
      - Auto non-blocking scan of AI code fences; never inspects network/device/hotspot
      - Additive only: existing Sentinel Deck v9, Pharma, Rare, Chart, 3D, Consensus untouched
+   10.0.9-titanium-dewan-visual-robust (Zero-Regression):
+     - NexusPharma fence: early visual-keyword guard (diagram/chart/grafik/3d/flow/…) → clear redirect to ```chart / ```scene3d instead of cryptic error
+     - Invalid-op messages now detect visual terms and guide the AI/user to the correct fence
+     - RULES_PHARMA strengthened with explicit ban on putting visual keywords inside nexuspharma blocks
+     - Zero regression: all prior Pharma physics, Chart.js whitelist, scene3d LRU, payload registry, Omni Sentinel unchanged
    ================================================================ */
-const APP_VERSION = '10.0.9-titanium-aegis-omni-live';
+const APP_VERSION = '10.0.9-titanium-dewan-visual-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -2170,8 +2175,8 @@ const RULES_3D = {
 };
 
 const RULES_PHARMA = {
-    id: "ATURAN MUTLAK NEXUSPHARMA:\n1. JIKA ingin menjalankan beberapa operasi (misal profile lalu dock), KAMU WAJIB MEMBUNGKUSNYA DALAM ARRAY KURUNG SIKU `[ {...}, {...} ]` di dalam blok ```nexuspharma.\n2. DILARANG menaruh teks apapun di luar atau di dalam kurung kurawal JSON. Harus JSON murni.\n3. WAJIB menyertakan parameter: `mw`, `logP`, `hbd`, `hba`, `rotB`, `psa` dengan angka yang logis (JANGAN 0 semua).\n4. Untuk simulasi `dock`, pastikan jarak koordinat atom (x, y, z) minimal 3.0 Å agar tidak terjadi CLASH.\n5. KODE 3D DILARANG ditaruh di sini. Buat blok ```scene3d terpisah di akhir jawaban.",
-    en: "ABSOLUTE NEXUSPHARMA RULES:\n1. If running multiple operations (e.g., profile then dock), YOU MUST WRAP THEM IN AN ARRAY `[ {...}, {...} ]` inside the ```nexuspharma block.\n2. FORBIDDEN to put any text outside or inside the JSON brackets. Must be pure JSON.\n3. MUST include: `mw`, `logP`, `hbd`, `hba`, `rotB`, `psa` with logical numbers (NOT all 0).\n4. For `dock` simulation, ensure atom coordinates (x, y, z) are at least 3.0 Å apart to avoid CLASH.\n5. FORBIDDEN to put 3D code here. Create a separate ```scene3d block at the end of your response."
+    id: "ATURAN MUTLAK NEXUSPHARMA:\n1. JIKA ingin menjalankan beberapa operasi (misal profile lalu dock), KAMU WAJIB MEMBUNGKUSNYA DALAM ARRAY KURUNG SIKU `[ {...}, {...} ]` di dalam blok ```nexuspharma.\n2. DILARANG menaruh teks apapun di luar atau di dalam kurung kurawal JSON. Harus JSON murni.\n3. WAJIB menyertakan parameter: `mw`, `logP`, `hbd`, `hba`, `rotB`, `psa` dengan angka yang logis (JANGAN 0 semua).\n4. Untuk simulasi `dock`, pastikan jarak koordinat atom (x, y, z) minimal 3.0 Å agar tidak terjadi CLASH.\n5. KODE 3D DILARANG ditaruh di sini. Buat blok ```scene3d terpisah di akhir jawaban.\n6. DILARANG menaruh kata 'diagram', 'chart', 'grafik', 'flow', '3d', 'visual' sebagai isi atau op di dalam ```nexuspharma. Itu akan error. Gunakan fence yang benar: ```chart untuk grafik, ```scene3d untuk 3D.",
+    en: "ABSOLUTE NEXUSPHARMA RULES:\n1. If running multiple operations (e.g., profile then dock), YOU MUST WRAP THEM IN AN ARRAY `[ {...}, {...} ]` inside the ```nexuspharma block.\n2. FORBIDDEN to put any text outside or inside the JSON brackets. Must be pure JSON.\n3. MUST include: `mw`, `logP`, `hbd`, `hba`, `rotB`, `psa` with logical numbers (NOT all 0).\n4. For `dock` simulation, ensure atom coordinates (x, y, z) are at least 3.0 Å apart to avoid CLASH.\n5. FORBIDDEN to put 3D code here. Create a separate ```scene3d block at the end of your response.\n6. FORBIDDEN to put the words 'diagram', 'chart', 'graph', 'flow', '3d', 'visual' as content or op inside ```nexuspharma. That will error. Use the correct fence: ```chart for graphs, ```scene3d for 3D."
 };
 
 const SYSTEM_PROMPTS = {
@@ -11938,6 +11943,18 @@ window.__nxpFence = function (code) {
   // ----------------------------------------------------------------
   // Parsing utama + auto-repair
   // ----------------------------------------------------------------
+  // Early visual-keyword guard (common AI mistake: put "diagram"/"chart"/"grafik"/"3d" inside nexuspharma)
+  var VISUAL_KW = /^(diagram|chart|grafik|graph|flow|flowchart|pipeline|sankey|gantt|alir|visual|3d|scene3d|scene|plot|bar|line|pie|radar)$/i;
+  if (raw && VISUAL_KW.test(raw.replace(/^["']|["']$/g, '').trim())) {
+    var kw = raw.replace(/^["']|["']$/g, '').trim();
+    return err(
+      'Perintah visual "' + kw + '" BUKAN operasi NexusPharma.\n\n' +
+      '• Untuk grafik / diagram 2D → gunakan blok:\n```chart\n{ "type": "bar", "data": { "labels": [...], "datasets": [...] } }\n```\n\n' +
+      '• Untuk visual 3D / animasi → gunakan blok terpisah:\n```scene3d\n// kode THREE.js di sini\n```\n\n' +
+      'NexusPharma hanya menerima: ' + OPS_LIST + '.'
+    );
+  }
+
   var job;
   if (!raw) {
     job = { op: 'selftest' };
@@ -11949,6 +11966,15 @@ window.__nxpFence = function (code) {
         var repaired = autoRepairJson(raw);
         job = tryParse(repaired);
       } catch (repairErr) {
+        // If raw looks like a single visual keyword even after repair fail
+        if (VISUAL_KW.test(raw.replace(/^["']|["']$/g, '').trim())) {
+          var kw2 = raw.replace(/^["']|["']$/g, '').trim();
+          return err(
+            'Perintah visual "' + kw2 + '" BUKAN operasi NexusPharma.\n\n' +
+            '• Untuk grafik → ```chart\n• Untuk 3D → ```scene3d\n\n' +
+            'Gunakan perintah: ' + OPS_LIST + '.'
+          );
+        }
         return err(
           'Gagal memproses JSON. Input tidak valid dan tidak dapat diperbaiki otomatis. ' +
           '(Error: ' + ((firstErr && firstErr.message) || String(firstErr)) + ')'
@@ -11959,6 +11985,21 @@ window.__nxpFence = function (code) {
 
   if (job === null || job === undefined) {
     return err('Data JSON kosong atau tidak dapat dibaca.');
+  }
+
+  // If AI put a bare string (e.g. "diagram") as the whole payload
+  if (typeof job === 'string') {
+    var s = job.trim();
+    if (VISUAL_KW.test(s)) {
+      return err(
+        'Perintah visual "' + s + '" BUKAN operasi NexusPharma.\n\n' +
+        '• Untuk grafik / diagram → gunakan blok ```chart dengan JSON Chart.js.\n' +
+        '• Untuk visual 3D → gunakan blok ```scene3d terpisah.\n\n' +
+        'NexusPharma hanya menerima: ' + OPS_LIST + '.'
+      );
+    }
+    // Try to treat as op name
+    job = { op: s };
   }
 
   var list = Array.isArray(job) ? job : [job];
@@ -12148,8 +12189,15 @@ if (!op) {
     // 3. Cek op valid — hasOwnProperty + fungsi
     if (!Object.prototype.hasOwnProperty.call(OPS, op) ||
         typeof OPS[op] !== 'function') {
+      // Friendlier message when AI confuses visual terms with Pharma ops
+      var visHint = '';
+      if (/diagram|chart|grafik|graph|flow|alir|pipeline|visual|3d|scene|plot|bar|line|pie|radar/i.test(op)) {
+        visHint = '\n\nCatatan: "' + op + '" terlihat seperti permintaan visual.\n' +
+                  '• Grafik 2D → blok ```chart { "type":"bar", ... }\n' +
+                  '• Visual 3D → blok ```scene3d terpisah (bukan di dalam nexuspharma).';
+      }
       out += err('Input tidak valid. Silakan gunakan perintah: ' + OPS_LIST +
-                 '. (diterima: "' + op + '")');
+                 '. (diterima: "' + op + '")' + visHint);
       continue;
     }
 
