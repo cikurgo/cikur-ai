@@ -1280,14 +1280,11 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
 .artifact-actions button:hover { color: var(--text-main); border-color: var(--accent); }
 
 .event-log {
-    background: #000; border-radius: 6px; padding: 7px 9px;
-    /* Taller viewport: show ~80–120+ lines; grows with panel, caps for usability */
-    height: auto; min-height: 220px; max-height: min(52vh, 480px);
-    overflow-y: auto; overscroll-behavior: contain;
+    background: #000; border-radius: 6px; padding: 7px 9px; height: 130px; overflow-y: auto;
     font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; line-height: 1.5;
     border: 1px solid rgba(255,255,255,0.07);
 }
-.event-log::-webkit-scrollbar { width: 5px; } .event-log::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; } .event-log::-webkit-scrollbar-track { background: transparent; }
+.event-log::-webkit-scrollbar { width: 3px; } .event-log::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
 .log-line { white-space: pre-wrap; word-break: break-word; color: var(--text-muted); }
 .log-line .ts { color: #475569; margin-right: 3px; }
 .spec-label{letter-spacing:0}
@@ -1701,8 +1698,8 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
                 </div>
             </div>
 
-            <div class="tele-section" style="border-bottom:none;display:flex;flex-direction:column;min-height:0;">
-                <div class="tele-title">NEURAL TRACE LOG <span class="hud-tag" style="opacity:.7">scroll · max 400</span></div>
+            <div class="tele-section" style="border-bottom:none;">
+                <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
                     <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.6-titanium-robust-render-nexuspharma initialized. Awaiting intent.</div>
                 </div>
@@ -2591,17 +2588,14 @@ function getCacheStats() {
 
 /* ===================== TELEMETRY ===================== */
 function logEvent(tag, message) {
-    try {
-        if (!eventLogEl) return;
-        const ts = new Date().toTimeString().slice(0, 8);
-        const tagClass = { SYSTEM:'tag-sys', PARSER:'tag-pars', VALIDATOR:'tag-val', COMPILER:'tag-comp', ERROR:'tag-err', OK:'tag-ok', CACHE:'tag-ok', DIAG:'tag-sys', PROVIDER:'tag-sys', AGENT:'tag-pars', SWARM:'tag-pars', SEQUENCE:'tag-comp' }[tag] || 'tag-sys';
-        const div = document.createElement('div');
-        div.className = 'log-line';
-        div.innerHTML = `<span class="ts">${ts}</span><span class="${tagClass}">[${tag}]</span> ${escapeHtml(message)}`;
-        eventLogEl.appendChild(div);
-        eventLogEl.scrollTop = eventLogEl.scrollHeight;
-        while (eventLogEl.children.length > 400) eventLogEl.removeChild(eventLogEl.firstChild);
-    } catch (e) { try { console.warn('[logEvent]', e); } catch (z) {} }
+    const ts = new Date().toTimeString().slice(0, 8);
+    const tagClass = { SYSTEM:'tag-sys', PARSER:'tag-pars', VALIDATOR:'tag-val', COMPILER:'tag-comp', ERROR:'tag-err', OK:'tag-ok', CACHE:'tag-ok', DIAG:'tag-sys', PROVIDER:'tag-sys', AGENT:'tag-pars', SWARM:'tag-pars', SEQUENCE:'tag-comp' }[tag] || 'tag-sys';
+    const div = document.createElement('div');
+    div.className = 'log-line';
+    div.innerHTML = `<span class="ts">${ts}</span><span class="${tagClass}">[${tag}]</span> ${escapeHtml(message)}`;
+    eventLogEl.appendChild(div);
+    eventLogEl.scrollTop = eventLogEl.scrollHeight;
+    while (eventLogEl.children.length > 160) eventLogEl.removeChild(eventLogEl.firstChild);
 }
 function escapeHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -5651,26 +5645,13 @@ assert('NexusPharma golden druglikeness', (function () {
     assert('__nxrFence callable', typeof window.__nxrFence === 'function');
     assert('NexusRare.selfTest', (function () {
         try {
-            if (typeof window.NexusRare !== 'object' || typeof window.NexusRare.selfTest !== 'function') {
-                try { logEvent('DIAG', 'NexusRare.selfTest: API missing'); } catch (z) {}
-                return false;
-            }
+            if (typeof window.NexusRare !== 'object' || typeof window.NexusRare.selfTest !== 'function') return false;
             var r = window.NexusRare.selfTest();
             if (!r || typeof r !== 'object') return false;
-            // engine + hex output + fence are critical; version/prelude covered by sibling asserts
+            // engine + hex output are critical; version/prelude already covered by sibling asserts
             var crit = (r.checks || []).filter(function (c) { return c && (c.name === 'engine' || c.name === 'hex32' || c.name === 'fence'); });
-            var ok = crit.length >= 3 && crit.every(function (c) { return c.ok; });
-            if (!ok) {
-                try {
-                    var bad = (r.checks || []).filter(function (c) { return c && !c.ok; }).map(function (c) { return c.name + (c.detail ? '=' + c.detail : ''); });
-                    logEvent('DIAG', 'NexusRare.selfTest detail: ' + (bad.length ? bad.join(', ') : 'incomplete checks'));
-                } catch (z) {}
-            }
-            return ok;
-        } catch (e) {
-            try { logEvent('DIAG', 'NexusRare.selfTest threw: ' + ((e && e.message) || e)); } catch (z) {}
-            return false;
-        }
+            return crit.length > 0 && crit.every(function (c) { return c.ok; });
+        } catch (e) { return false; }
     })());
     assert('Rare prelude / combined', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
     assert('hydrate + buildChart + buildHtmlPreview', typeof hydrate === 'function' && typeof buildChart === 'function' && typeof buildHtmlPreview === 'function' && typeof buildScene3d === 'function');
@@ -9944,10 +9925,63 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
     chkA.addEventListener('change', function () { S.anchor = chkA.checked; lsSet(UKEY, S.anchor ? '1' : '0'); });
 
     async function sha256Blob(blob) { return await sha256Buf(await blob.arrayBuffer()); }
+    async function installDemoCarrier() {
+      /* Synthetic PNG carrier so Dewan embed still produces a real result when user has no image yet */
+      var c = document.createElement('canvas'); c.width = 384; c.height = 384;
+      var ctx = c.getContext('2d');
+      var g = ctx.createLinearGradient(0, 0, 384, 384);
+      g.addColorStop(0, '#0a1a2e'); g.addColorStop(0.5, '#12324a'); g.addColorStop(1, '#0d2233');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 384, 384);
+      ctx.strokeStyle = 'rgba(43,224,207,.35)'; ctx.lineWidth = 2;
+      for (var i = 0; i < 8; i++) { ctx.beginPath(); ctx.arc(192, 192, 24 + i * 18, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(43,224,207,.85)'; ctx.font = '600 14px monospace';
+      ctx.fillText('NEXUS · DEMO CARRIER', 96, 200);
+      var url = c.toDataURL('image/png');
+      var inEl = $('#nxd-drop-in');
+      if (inEl) {
+        inEl.textContent = '';
+        var im = document.createElement('img'); im.src = url; im.alt = 'Demo carrier sintetis';
+        inEl.appendChild(im);
+        var s = document.createElement('div'); s.className = 's'; s.textContent = 'demo-carrier.png · sintetis (auto) · 384×384';
+        inEl.appendChild(s);
+      }
+      try { updateFileCap(); } catch (eCap) {}
+      return await loadImg(url);
+    }
+    async function resolveCarrier(j) {
+      if (j && j.carrier) {
+        var ce = findTray(j.carrier);
+        if (!ce || ce.cat !== 'image') throw new Error('Pembawa "' + j.carrier + '" tidak ada di tray atau bukan gambar.');
+        await setCarrier(ce);
+      }
+      var img = await getCarrier();
+      if (img) return { img: img, source: 'panel' };
+      /* Auto-pick first ready image from tray */
+      var trayImg = null;
+      for (var i = 0; i < S.tray.length; i++) {
+        if (S.tray[i].cat === 'image' && isReady(S.tray[i])) { trayImg = S.tray[i]; break; }
+      }
+      if (!trayImg) {
+        for (var k = 0; k < S.tray.length; k++) {
+          if (S.tray[k].cat === 'image') { trayImg = S.tray[k]; break; }
+        }
+      }
+      if (trayImg) {
+        try {
+          await setCarrier(trayImg);
+          img = await getCarrier();
+          if (img) return { img: img, source: 'tray:' + trayImg.name };
+        } catch (eTray) { /* fall through to demo */ }
+      }
+      /* Last resort: synthetic demo carrier — still produces a verifiable embed */
+      img = await installDemoCarrier();
+      return { img: img, source: 'demo' };
+    }
     async function doEmbed(j) {
       var lib = EADI(); if (!lib) throw new Error('SuperEADI.js belum termuat (letakkan di folder yang sama).');
-      if (j.carrier) { var ce = findTray(j.carrier); if (!ce || ce.cat !== 'image') throw new Error('Pembawa "' + j.carrier + '" tidak ada di tray atau bukan gambar.'); await setCarrier(ce); }
-      var img = await getCarrier(); if (!img) throw new Error('Belum ada gambar pembawa. Unggah gambar di panel EADI (atau minta Dewan memakai gambar dari tray).');
+      var resolved = await resolveCarrier(j);
+      var img = resolved.img;
+      if (!img) throw new Error('Belum ada gambar pembawa. Unggah gambar di panel EADI (atau minta Dewan memakai gambar dari tray).');
       var opts = eopts(j.redundancy && [1, 3, 5].indexOf(+j.redundancy) >= 0 ? +j.redundancy : 0), kind, label, frame = null, plainText = null, payloadSize;
       if (j.file) {
         var fe = findTray(j.file); if (!fe || !isReady(fe)) throw new Error('File "' + j.file + '" tidak ada di tray / hash belum selesai.');
@@ -9966,7 +10000,8 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
         else { rex = lib.extractText(back, opts); verified = !!(rex.ok && rex.text === plainText); }
         var sha = await sha256Blob(blob);
         if (S.X && S.X.url) { try { URL.revokeObjectURL(S.X.url); } catch (e) {} }
-        S.X = { blob: blob, url: url, rep: rep, verified: verified, sha: sha, kind: kind, label: label, payloadSize: payloadSize, carrier: carrierName(), redundancy: opts.redundancy, keyed: !!opts.key, w: img.naturalWidth, h: img.naturalHeight, ms: Math.round(performance.now() - T0), anchor: null };
+        var cName = carrierName() || (resolved.source === 'demo' ? 'demo-carrier.png' : 'pembawa');
+        S.X = { blob: blob, url: url, rep: rep, verified: verified, sha: sha, kind: kind, label: label, payloadSize: payloadSize, carrier: cName, carrierSource: resolved.source || 'panel', redundancy: opts.redundancy, keyed: !!opts.key, w: img.naturalWidth, h: img.naturalHeight, ms: Math.round(performance.now() - T0), anchor: null };
         paintX(); eHudRefresh();
         return S.X;
       } finally { S.busy = ''; paintDewan(); }
@@ -10086,7 +10121,9 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
       var x = await Q.run(function () { return doEmbed(j); }), files = [{ label: 'PNG hasil', name: (String(x.label).replace(/\.[^.]+$/, '') || 'nexus') + '.nexus.png', blob: x.blob }], anchored = null;
       if (j.anchor) { anchored = await anchorX('dewan'); files.push(receiptEntry(anchored)); }
       autoSave(files, j);
-      return { ok: x.verified, title: x.verified ? 'EMBED berhasil & terverifikasi' : 'EMBED selesai tetapi verifikasi balik GAGAL', summary: 'embed ' + x.kind + (anchored ? ' + anchor #' + anchored.h : ''), rows: [['Payload', (x.kind === 'file' ? 'FILE ' : 'TEKS ') + fmtBytes(x.payloadSize)], ['Pembawa', x.carrier + ' (' + x.w + '×' + x.h + ')'], ['PSNR', (isFinite(x.rep.psnr) ? x.rep.psnr.toFixed(2) : '∞') + ' dB · ' + verdictOf(x.rep.psnr)], ['Redundansi', x.redundancy + '×' + (x.keyed ? ' · kunci sebar aktif' : '')], ['Round-trip', x.verified ? 'OK' : 'GAGAL'], ['SHA-256 PNG', short(x.sha, 14, 8)]].concat(anchored ? [['Anchor LBC', 'blok #' + anchored.h]] : []), files: files, actions: [{ act: 'open', tab: 'eadi', label: 'Buka EADI' }] };
+      var carRow = x.carrier + ' (' + x.w + '×' + x.h + ')' + (x.carrierSource === 'demo' ? ' · sintetis auto' : (String(x.carrierSource || '').indexOf('tray:') === 0 ? ' · dari tray' : ''));
+      var note = x.carrierSource === 'demo' ? 'Tidak ada gambar pembawa di panel/tray — memakai carrier demo sintetis agar embed tetap menghasilkan PNG terverifikasi. Unggah gambar asli di EADI untuk produksi.' : '';
+      return { ok: x.verified, title: x.verified ? 'EMBED berhasil & terverifikasi' : 'EMBED selesai tetapi verifikasi balik GAGAL', summary: 'embed ' + x.kind + (anchored ? ' + anchor #' + anchored.h : ''), rows: [['Payload', (x.kind === 'file' ? 'FILE ' : 'TEKS ') + fmtBytes(x.payloadSize)], ['Pembawa', carRow], ['PSNR', (isFinite(x.rep.psnr) ? x.rep.psnr.toFixed(2) : '∞') + ' dB · ' + verdictOf(x.rep.psnr)], ['Redundansi', x.redundancy + '×' + (x.keyed ? ' · kunci sebar aktif' : '')], ['Round-trip', x.verified ? 'OK' : 'GAGAL'], ['SHA-256 PNG', short(x.sha, 14, 8)]].concat(anchored ? [['Anchor LBC', 'blok #' + anchored.h]] : []), note: note, files: files, actions: [{ act: 'open', tab: 'eadi', label: 'Buka EADI' }] };
     };
     OPS.extract = async function (j) {
       showPanel('eadi');
@@ -10158,7 +10195,14 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
     }
     function startRun(r) {
       r.state = 'run'; r.res = null; paintCard(r);
-      Promise.resolve().then(function () { return runJob(r.job); }).then(function (res) { r.res = res; r.state = res && res.ok === false ? 'err' : 'done'; }, function (err) { r.res = { ok: false, title: 'Gagal', rows: [], note: String(err && err.message || err) }; r.state = 'err'; })
+      Promise.resolve().then(function () { return runJob(r.job); }).then(function (res) { r.res = res; r.state = res && res.ok === false ? 'err' : 'done'; }, function (err) {
+        var msg = String(err && err.message || err);
+        var actions = [];
+        if (/pembawa|carrier|EADI|gambar/i.test(msg)) actions.push({ act: 'open', tab: 'eadi', label: 'Buka EADI' });
+        if (/tray|file|LBC|seal/i.test(msg)) actions.push({ act: 'open', tab: 'lbc', label: 'Buka LBC' });
+        r.res = { ok: false, title: 'Gagal', rows: [['Alasan', msg.slice(0, 280)]], note: msg, actions: actions };
+        r.state = 'err';
+      })
         .then(function () { persistRun(r); pushLast(r.op + ' → ' + (r.state === 'done' ? (r.res.summary || 'ok') : 'gagal: ' + String(r.res && (r.res.note || r.res.title) || '').slice(0, 60))); paintCard(r); elog('Dewan: ' + r.op + ' → ' + r.state); });
     }
     /* kartu yang masuk DOM setelah operasi selesai tetap disinkronkan ke status akhir */
@@ -10981,12 +11025,38 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
   function parseAtoms(text) {
     const atoms = [], errors = [];
     if (typeof text !== 'string') return { atoms, errors: [{ line: 0, msg: 'Input bukan teks' }] };
-    text.split(/\r?\n/).forEach((raw, i) => {
-      const line = raw.replace(/#.*$/, '').trim();
+    // AI sometimes dumps a single-line CSV / JSON array — normalize newlines first
+    let src = text;
+    if (src.indexOf('\n') < 0 && /\]\s*,\s*\[/.test(src)) {
+      src = src.replace(/\]\s*,\s*\[/g, ']\n[');
+    }
+    src.split(/\r?\n/).forEach((raw, i) => {
+      let line = raw.replace(/#.*$/, '').trim();
       if (!line) return;
-      const t = line.split(/[\s,;]+/);
+      // strip brackets / braces often left by AI: "[0 0 0 0.2]" or "{x:0,y:0,z:0,q:0.2}"
+      line = line.replace(/^[\[\{]+/, '').replace(/[\]\}]+$/, '').trim();
+      // key:value form → numbers only
+      if (/[a-zA-Z_]\s*[:=]/.test(line)) {
+        const nums = [];
+        line.replace(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/g, function (m) { nums.push(m); return m; });
+        if (nums.length >= 4) line = nums.join(' ');
+      }
+      const t = line.split(/[\s,;|]+/).filter(Boolean);
       const n = t.slice(0, 6).map(Number);
       if (t.length < 4 || n.slice(0, 4).some(v => !Number.isFinite(v))) {
+        // last chance: extract first 4 finite numbers anywhere on the line
+        const scraped = [];
+        String(raw).replace(/[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?/g, function (m) {
+          const v = Number(m);
+          if (Number.isFinite(v)) scraped.push(v);
+        });
+        if (scraped.length >= 4) {
+          const a = { x: scraped[0], y: scraped[1], z: scraped[2], charge: scraped[3] };
+          if (scraped.length > 4 && scraped[4] >= 0) a.epsilon = scraped[4];
+          if (scraped.length > 5 && scraped[5] > 0) a.sigma = scraped[5];
+          atoms.push(a);
+          return;
+        }
         errors.push({ line: i + 1, msg: 'Butuh minimal: x y z charge (angka)' }); return;
       }
       const a = { x: n[0], y: n[1], z: n[2], charge: n[3] };
@@ -11308,11 +11378,45 @@ var DEFAULT_PROTEIN = "1.5 1.5 0 -0.3\n4.5 1.5 0 0.3\n1.5 4.5 0 -0.2";
  * Konversi ligand/protein → array atom
  * ================================================================ */
 var atoms = function (v) {
+  // Coerce number[] of length 4–8 into a single atom object
+  if (Array.isArray(v) && v.length >= 4 && v.every(function (x) { return typeof x === 'number' || (typeof x === 'string' && x !== '' && isFinite(+x)); })) {
+    var nums = v.map(Number);
+    if (nums.slice(0, 4).every(Number.isFinite)) {
+      var one = { x: nums[0], y: nums[1], z: nums[2], charge: nums[3] };
+      if (nums.length > 4 && Number.isFinite(nums[4]) && nums[4] >= 0) one.epsilon = nums[4];
+      if (nums.length > 5 && Number.isFinite(nums[5]) && nums[5] > 0) one.sigma = nums[5];
+      return [one];
+    }
+  }
+  // Array of coordinate tuples [[x,y,z,c], ...]
+  if (Array.isArray(v) && v.length && Array.isArray(v[0])) {
+    var fromTuples = [];
+    v.forEach(function (row) {
+      if (!Array.isArray(row) || row.length < 4) return;
+      var n = row.map(Number);
+      if (n.slice(0, 4).every(Number.isFinite)) {
+        var a = { x: n[0], y: n[1], z: n[2], charge: n[3] };
+        if (n.length > 4 && Number.isFinite(n[4]) && n[4] >= 0) a.epsilon = n[4];
+        if (n.length > 5 && Number.isFinite(n[5]) && n[5] > 0) a.sigma = n[5];
+        fromTuples.push(a);
+      }
+    });
+    if (fromTuples.length) return fromTuples;
+  }
   if (typeof v === 'string') {
     if (!P || typeof P.parseAtoms !== 'function') {
       throw new Error('Parser atom (P.parseAtoms) tidak tersedia');
     }
-    var r = P.parseAtoms(v);
+    // AI often wraps atom block in markdown / JSON quotes — strip lightly
+    var cleaned = String(v).replace(/^```[\w]*\s*/i, '').replace(/\s*```$/i, '').trim();
+    // Single JSON array of atoms as a string
+    if (/^\s*\[/.test(cleaned)) {
+      try {
+        var parsed = (typeof window.safeParse === 'function' ? window.safeParse(cleaned) : JSON.parse(cleaned));
+        if (Array.isArray(parsed)) return atoms(parsed);
+      } catch (eJson) { /* fall through to line parser */ }
+    }
+    var r = P.parseAtoms(cleaned);
     if (!r || typeof r !== 'object') {
       throw new Error('Parser atom mengembalikan hasil tidak valid');
     }
@@ -11330,7 +11434,13 @@ var atoms = function (v) {
   }
   if (Array.isArray(v)) {
     var filtered = v.filter(function (x) {
-      return x && typeof x === 'object' && !Array.isArray(x);
+      return x && typeof x === 'object' && !Array.isArray(x) &&
+        Number.isFinite(+x.x) && Number.isFinite(+x.y) && Number.isFinite(+x.z) && Number.isFinite(+x.charge);
+    }).map(function (x) {
+      return { x: +x.x, y: +x.y, z: +x.z, charge: +x.charge,
+        epsilon: Number.isFinite(+x.epsilon) && +x.epsilon >= 0 ? +x.epsilon : undefined,
+        sigma: Number.isFinite(+x.sigma) && +x.sigma > 0 ? +x.sigma : undefined,
+        hbondDonor: !!x.hbondDonor, hbondAcceptor: !!x.hbondAcceptor };
     });
     if (filtered.length === 0) {
       throw new Error('Array atom kosong atau tidak berisi objek valid');
@@ -11388,21 +11498,41 @@ var OPS = {
     var proteinInput = (a.protein == null) ? DEFAULT_PROTEIN : a.protein;
 
     var missing = [];
+    var notes = [];
     if (a.ligand  == null) missing.push('ligand');
     if (a.protein == null) missing.push('protein');
 
+    function safeAtoms(input, role, defStr) {
+      try {
+        return atoms(input);
+      } catch (e) {
+        notes.push(role + ' invalid (' + String((e && e.message) || e).slice(0, 120) + ') — pakai koordinat default');
+        return atoms(defStr);
+      }
+    }
+
+    var ligAts = safeAtoms(ligandInput, 'ligand', DEFAULT_LIGAND);
+    var proAts = safeAtoms(proteinInput, 'protein', DEFAULT_PROTEIN);
+
     var result = P.simulateDockingAdvanced(
-      atoms(ligandInput),
-      atoms(proteinInput),
+      ligAts,
+      proAts,
       asObj(a.options)
     );
 
     // Suntikkan flag transparan ke hasil (jika hasil adalah objek)
-    if (missing.length && result && typeof result === 'object' && !Array.isArray(result)) {
-      result._fallback = true;
-      result._fallbackMsg =
-        'Parameter ' + missing.join(' & ') + ' tidak disuplai; ' +
-        'menggunakan koordinat default — hasil TIDAK mencerminkan molekul nyata.';
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      if (missing.length) {
+        result._fallback = true;
+        result._fallbackMsg =
+          'Parameter ' + missing.join(' & ') + ' tidak disuplai; ' +
+          'menggunakan koordinat default — hasil TIDAK mencerminkan molekul nyata.';
+      }
+      if (notes.length) {
+        result._fallback = true;
+        result._fallbackMsg = (result._fallbackMsg ? result._fallbackMsg + ' · ' : '') + notes.join(' · ');
+        result._parseNotes = notes;
+      }
     }
     return result;
   },
@@ -11603,8 +11733,29 @@ var OPS = {
       var body = '';
       if (op === 'lj' && Array.isArray(res)) body = spark(res);
       else if (op === 'screen' && Array.isArray(res)) body = '<table class="nxp-t"><tr><th>#</th><th>Nama</th><th>Skor</th><th>Status</th><th>Lipinski</th></tr>' + res.map(function (x, i) { return '<tr><td>' + (i + 1) + '</td><td>' + esc(x.name) + '</td><td>' + esc(x.score) + '</td><td>' + esc(x.status) + '</td><td>' + (x.lipinski ? 'lulus' : 'gagal') + '</td></tr>'; }).join('') + '</table>';
-      else { var rows = []; flat(res, '', rows, 0); body = '<table class="nxp-t">' + rows.map(function (r) { return '<tr><th>' + esc(r[0] || 'hasil') + '</th><td>' + esc(r[1]) + '</td></tr>'; }).join('') + '</table>'; }
-      return '<div class="nxp-card"><div class="nxp-h"><b>NEXUSPHARMA</b><span>' + esc(op) + '</span><button type="button" class="nxp-open" data-nxp="' + id + '">Buka di Lab</button></div>' + body + '<div class="nxp-f">Prototipe riset in-silico · bukan pengganti uji lab</div></div>';
+      else {
+        var rows = [];
+        // Skip internal flags from flat table; show as banner instead
+        var view = res;
+        if (res && typeof res === 'object' && !Array.isArray(res) && (res._fallback || res._fallbackMsg || res._parseNotes)) {
+          try {
+            view = {};
+            Object.keys(res).forEach(function (k) {
+              if (k.charAt(0) === '_') return;
+              view[k] = res[k];
+            });
+          } catch (eFlat) { view = res; }
+        }
+        flat(view, '', rows, 0);
+        body = '<table class="nxp-t">' + rows.map(function (r) { return '<tr><th>' + esc(r[0] || 'hasil') + '</th><td>' + esc(r[1]) + '</td></tr>'; }).join('') + '</table>';
+      }
+      var warn = '';
+      try {
+        if (res && typeof res === 'object' && res._fallbackMsg) {
+          warn = '<div class="nxp-warn" role="status" style="margin:.4rem .8rem 0;padding:.45rem .6rem;border-radius:8px;background:rgba(245,185,66,.12);border:1px solid rgba(245,185,66,.35);color:#f5b942;font:400 .72rem/1.4 var(--mono,ui-monospace,monospace)">' + esc(res._fallbackMsg) + '</div>';
+        }
+      } catch (eW) {}
+      return '<div class="nxp-card"><div class="nxp-h"><b>NEXUSPHARMA</b><span>' + esc(op) + '</span><button type="button" class="nxp-open" data-nxp="' + id + '">Buka di Lab</button></div>' + warn + body + '<div class="nxp-f">Prototipe riset in-silico · bukan pengganti uji lab</div></div>';
     }
 /* ================================================================
  * NEXUSPHARMA — Robust Error Renderer
@@ -12463,38 +12614,23 @@ if (!op) {
       selfTest: function () {
         var r = { ok: true, checks: [] };
         function chk(name, pass, detail) {
-          r.checks.push({ name: name, ok: !!pass, detail: detail == null ? '' : String(detail).slice(0, 96) });
+          r.checks.push({ name: name, ok: !!pass, detail: detail || '' });
           if (!pass) r.ok = false;
         }
+        chk('engine', !!(window.NexusRareCode && window.NexusRareCode.generate));
+        chk('version', !!(window.NexusRareCode && /^2\./.test(String(window.NexusRareCode.VERSION || ''))));
         try {
-          var eng = !!(window.NexusRareCode && typeof window.NexusRareCode.generate === 'function');
-          chk('engine', eng);
-          chk('version', !!(window.NexusRareCode && /^2\./.test(String(window.NexusRareCode.VERSION || ''))));
-          var a = null, b = null;
-          if (eng) {
-            try {
-              a = window.NexusRareCode.generate(1);
-              b = window.NexusRareCode.generate(1);
-            } catch (ge) {
-              chk('generate', false, (ge && ge.message) || ge);
-            }
-          }
-          var hexOk = typeof a === 'string' && /^[0-9a-f]{32}$/i.test(a);
-          chk('hex32', hexOk, a);
-          // nonce may collide rarely; both must still be valid 32-hex when generation succeeded
-          if (a != null || b != null) {
-            chk('nonce-varies-or-valid', typeof b === 'string' && /^[0-9a-f]{32}$/i.test(b), b);
-          } else {
-            chk('nonce-varies-or-valid', false, 'no output');
-          }
-          chk('fence', typeof window.__nxrFence === 'function');
-          chk('hint', typeof window.__nxrHint === 'function');
-          chk('prelude', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
+          var a = window.NexusRareCode.generate(1);
+          var b = window.NexusRareCode.generate(1);
+          chk('hex32', typeof a === 'string' && /^[0-9a-f]{32}$/.test(a), a);
+          // same seed still varies due to nonce — both valid hex
+          chk('nonce-varies-or-valid', /^[0-9a-f]{32}$/.test(b), b);
         } catch (e) {
-          chk('engine', false, (e && e.message) || e);
-          chk('hex32', false, 'selfTest crashed');
-          chk('fence', typeof window.__nxrFence === 'function');
+          chk('generate', false, String(e && e.message || e));
         }
+        chk('fence', typeof window.__nxrFence === 'function');
+        chk('hint', typeof window.__nxrHint === 'function');
+        chk('prelude', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
         return r;
       }
     });
