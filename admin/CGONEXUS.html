@@ -3231,7 +3231,8 @@ function forgeHtml(name, code) {
     const id = 'forge_' + fnv1a(cleanName + '|' + cleanCode).toString(36);
     FORGE_REG[id] = { name: cleanName, code: cleanCode };
     const params = forgeParams(cleanCode);
-    const ph = params ? 'Parameter: ' + params + ' (pisahkan dengan koma)' : 'Tanpa parameter — langsung EXECUTE';
+    let ph = params ? 'Parameter: ' + params + ' (pisahkan dengan koma)' : 'Tanpa parameter — langsung EXECUTE';
+    try { const pp = forgeParseParams(cleanCode); if (pp && pp.length === 1 && forgeParamKind(cleanCode, pp[0]) === 'array') ph = 'Parameter: ' + pp[0].name + ' (daftar, mis. 9, 8, 7)'; } catch (e) {}
     return '<div class="vulcan-skill-box">' +
         '<div class="vf-head">' + ic('tool') + '<span class="vf-tag">SKILL FORGED</span><b class="vf-name">' + escapeHtml(cleanName) + '</b>' +
         '<button type="button" class="vf-copy" data-forgeid="' + id + '" title="Salin kode skill" aria-label="Salin kode skill">' + ic('copy') + '</button></div>' +
@@ -5797,6 +5798,8 @@ function runDiagnostics() {
     assert('Ikon SVG (registry + hidrasi)', svgIcon('copy').indexOf('<svg') === 0 && !document.querySelector('[data-ic]'));
     assert('Vulcan Forge: tokenizer kurung seimbang', (() => { const t = tokenize('A\n\n[FORGE: pilih | (a) => [a, 1][0]] sisa', true).filter(x => x.t === 'forge'); return t.length === 1 && t[0].name === 'pilih' && /\[a, 1\]\[0\]$/.test(t[0].code); })());
     assert('Vulcan Forge sandbox runner', typeof runForgeSandbox === 'function' && typeof forgeHtml === 'function' && typeof FORGE_REG === 'object');
+    assert('Vulcan Forge: input daftar jadi array (scores.reduce)', (() => { const a = forgeAdaptArgs('(scores) => scores.reduce((a, b) => a + b, 0)', [9, 9, 8], '9, 9, 8').args; return a.length === 1 && Array.isArray(a[0]) && a[0].length === 3; })());
+    assert('Vulcan Forge: parameter skalar tidak berubah', (() => { const a = forgeAdaptArgs('(a, b) => a + b', [2, 3], '2, 3').args; return a.length === 2 && a[0] === 2 && a[1] === 3; })());
     assert('Titanium: MAX_LIVE_SCENE3D + prune', typeof MAX_LIVE_SCENE3D === 'number' && MAX_LIVE_SCENE3D >= 2 && typeof pruneOldestScenes === 'function');
     assert('Titanium: APP_VERSION', typeof APP_VERSION === 'string' && /titanium|robust|nexus|future|10\./i.test(String(APP_VERSION)));
     assert('Titanium: emergency cleanup charts/hist', /destroyCharts|hist-trim/.test(String(emergencyMemoryCleanup)));
@@ -7087,24 +7090,75 @@ function importBackup(file) {
    THE VULCAN FORGE v3: SKILL TERISOLASI (iframe sandbox + Web Worker, tanpa akses halaman/storage/jaringan)
    ============================================================ */
 function forgeWorkerMain() {
+    /* NX15 · serializer presisi (NaN/Infinity/BigInt/Map/Set/undefined tidak lagi tampil menyesatkan sebagai null) + compile toleran (const/let/var/function) */
+    function ser(v) {
+        try {
+            if (v === undefined) return 'undefined';
+            if (typeof v === 'number') return String(v);
+            if (typeof v === 'bigint') return v.toString() + 'n';
+            if (typeof v === 'function') return String(v);
+            var t = JSON.stringify(v, function (k, x) {
+                if (typeof x === 'number' && !isFinite(x)) return String(x);
+                if (typeof x === 'bigint') return x.toString() + 'n';
+                if (typeof Map !== 'undefined' && x instanceof Map) return { Map: Array.from(x.entries()) };
+                if (typeof Set !== 'undefined' && x instanceof Set) return Array.from(x.values());
+                return x;
+            });
+            return String(t === undefined ? v : t);
+        } catch (x) { try { return String(v); } catch (y) { return '[hasil tidak dapat ditampilkan]'; } }
+    }
+    function compile(code) {
+        try { return (0, eval)('(' + code + ')'); }
+        catch (e) {
+            if (!(e instanceof SyntaxError)) throw e;
+            var m = /^\s*(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/.exec(code) || /^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/.exec(code);
+            if (m) return (0, eval)(code + '\n;' + m[1]);
+            throw e;
+        }
+    }
     self.onmessage = function (e) {
         var d = e.data;
         function out(o) { self.postMessage(o); }
         try {
-            var fn = (0, eval)('(' + d.code + ')');
+            var fn = compile(d.code);
             if (typeof fn !== 'function') throw new Error('Kode bukan sebuah fungsi.');
-            Promise.resolve(fn.apply(null, d.args)).then(function (v) { var t; try { t = JSON.stringify(v); } catch (x) { t = String(v); } out({ ok: true, text: String(t) }); },
+            Promise.resolve(fn.apply(null, d.args)).then(function (v) { out({ ok: true, text: ser(v) }); },
                 function (er) { out({ ok: false, error: String((er && er.message) || er) }); });
         } catch (er) { out({ ok: false, error: String((er && er.message) || er) }); }
     };
 }
 function forgeFrameMain(id, code, args, wsrc) {
     function post(o) { try { parent.postMessage({ __forge: id, ok: o.ok, text: o.text, error: o.error }, '*'); } catch (e) {} }
+    function ser(v) {
+        try {
+            if (v === undefined) return 'undefined';
+            if (typeof v === 'number') return String(v);
+            if (typeof v === 'bigint') return v.toString() + 'n';
+            if (typeof v === 'function') return String(v);
+            var t = JSON.stringify(v, function (k, x) {
+                if (typeof x === 'number' && !isFinite(x)) return String(x);
+                if (typeof x === 'bigint') return x.toString() + 'n';
+                if (typeof Map !== 'undefined' && x instanceof Map) return { Map: Array.from(x.entries()) };
+                if (typeof Set !== 'undefined' && x instanceof Set) return Array.from(x.values());
+                return x;
+            });
+            return String(t === undefined ? v : t);
+        } catch (x) { try { return String(v); } catch (y) { return '[hasil tidak dapat ditampilkan]'; } }
+    }
+    function compile(code) {
+        try { return (0, eval)('(' + code + ')'); }
+        catch (e) {
+            if (!(e instanceof SyntaxError)) throw e;
+            var m = /^\s*(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/.exec(code) || /^\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/.exec(code);
+            if (m) return (0, eval)(code + '\n;' + m[1]);
+            throw e;
+        }
+    }
     function direct() {
         try {
-            var fn = (0, eval)('(' + code + ')');
+            var fn = compile(code);
             if (typeof fn !== 'function') throw new Error('Kode bukan sebuah fungsi.');
-            Promise.resolve(fn.apply(null, args)).then(function (v) { var t; try { t = JSON.stringify(v); } catch (x) { t = String(v); } post({ ok: true, text: String(t) }); },
+            Promise.resolve(fn.apply(null, args)).then(function (v) { post({ ok: true, text: ser(v) }); },
                 function (er) { post({ ok: false, error: String((er && er.message) || er) }); });
         } catch (er) { post({ ok: false, error: String((er && er.message) || er) }); }
     }
@@ -7133,47 +7187,174 @@ function runForgeSandbox(code, args, ms) {
         document.body.appendChild(frame);
     });
 }
+/* NX15 · ADAPTASI ARGUMEN SKILL
+   Akar error "scores.reduce is not a function": input "9, 9, 8" dipecah menjadi 3 argumen terpisah, padahal skill
+   menerima SATU parameter berupa daftar (scores). Penyesuaian di bawah membaca tanda tangan + pemakaian parameter
+   di badan fungsi, lalu menyusun argumen dengan benar. Skill tanpa petunjuk jelas tetap berjalan persis seperti sebelumnya. */
+function forgeParamsText(code) {
+    let s = String(code || '').trim(), guard = 0;
+    for (;;) {
+        if (++guard > 4) return null;
+        s = s.replace(/^async\b\s*/, '');
+        const dm = /^(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*/.exec(s);
+        if (dm) { s = s.slice(dm[0].length); continue; }
+        break;
+    }
+    let i = 0;
+    if (/^function\b/.test(s)) { i = s.indexOf('('); if (i < 0) return null; }
+    else if (s[0] !== '(') {
+        const m = /^([A-Za-z_$][\w$]*)\s*=>/.exec(s);
+        return m ? m[1] : null;
+    }
+    let depth = 0, q = null, esc = false;
+    for (let j = i; j < s.length; j++) {
+        const c = s[j];
+        if (q) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === q) q = null; continue; }
+        if (c === '"' || c === "'" || c === '`') { q = c; continue; }
+        if (c === '(' || c === '[' || c === '{') depth++;
+        else if (c === ')' || c === ']' || c === '}') { depth--; if (depth === 0) return s.slice(i + 1, j); }
+    }
+    return null;
+}
+function forgeParseParams(code) {
+    const txt = forgeParamsText(code);
+    if (txt == null) return null;
+    const parts = []; let depth = 0, q = null, esc = false, cur = '';
+    for (let j = 0; j < txt.length; j++) {
+        const c = txt[j];
+        if (q) { cur += c; if (esc) esc = false; else if (c === '\\') esc = true; else if (c === q) q = null; continue; }
+        if (c === '"' || c === "'" || c === '`') { q = c; cur += c; continue; }
+        if (c === '(' || c === '[' || c === '{') depth++;
+        else if (c === ')' || c === ']' || c === '}') depth--;
+        if (c === ',' && depth === 0) { parts.push(cur); cur = ''; } else cur += c;
+    }
+    if (cur.trim()) parts.push(cur);
+    return parts.map(p => {
+        let t = p.trim(); const rest = t.startsWith('...'); if (rest) t = t.slice(3).trim();
+        let k = -1, d = 0, qq = null;
+        for (let j = 0; j < t.length; j++) {
+            const c = t[j];
+            if (qq) { if (c === qq) qq = null; continue; }
+            if (c === '"' || c === "'" || c === '`') { qq = c; continue; }
+            if (c === '(' || c === '[' || c === '{') d++; else if (c === ')' || c === ']' || c === '}') d--;
+            else if (c === '=' && d === 0 && t[j + 1] !== '=' && t[j + 1] !== '>') { k = j; break; }
+        }
+        const head = (k >= 0 ? t.slice(0, k) : t).trim();
+        const destr = head[0] === '[' ? 'array' : head[0] === '{' ? 'object' : '';
+        return { name: destr ? '' : head, rest, destr, hasDefault: k >= 0 };
+    });
+}
+function forgeParamKind(code, p) {
+    if (!p) return 'unknown';
+    if (p.destr === 'array') return 'array';
+    if (p.destr === 'object' || !/^[A-Za-z_$][\w$]*$/.test(p.name)) return 'unknown';
+    const n = p.name.replace(/\$/g, '\\$'), src = String(code);
+    const pre = '(?:^|[^\\w$.])' + n;
+    const strong = new RegExp(pre + '\\s*(?:\\?\\.|\\.)\\s*(?:reduce|reduceRight|map|filter|forEach|some|every|find|findIndex|findLast|flat|flatMap|splice|sort|join|push|pop|shift|unshift|fill|entries|keys|values)\\b|\\.\\.\\.\\s*' + n + '\\b|\\bof\\s+' + n + '\\b|Array\\.isArray\\(\\s*' + n + '\\b|' + pre + '\\s*\\[').test(src);
+    const str = new RegExp(pre + '\\s*\\.\\s*(?:split|trim|trimStart|trimEnd|toUpperCase|toLowerCase|replace|replaceAll|match|matchAll|charAt|charCodeAt|codePointAt|padStart|padEnd|startsWith|endsWith|localeCompare|substring|substr|normalize|repeat|search)\\b').test(src);
+    const amb = new RegExp(pre + '\\s*(?:\\?\\.|\\.)\\s*(?:length|slice|includes|indexOf|lastIndexOf|concat)\\b').test(src);
+    const hint = /^(?:scores|arr|array|arrays|list|lists|daftar|nums|numbers|angka|values|vals|xs|ys|samples|points|weights|ratings|metrics|series|rows|items|inputs|args|dataset|data_list|array_nilai)$/i.test(p.name);
+    if (str && !strong) return 'string';
+    if (strong || hint) return 'array';
+    if (amb) return 'amb';
+    return 'unknown';
+}
+function forgeSplitList(v) {
+    const t = String(v).trim();
+    if (!t) return null;
+    const toks = t.split(/[\s,;]+/).filter(Boolean);
+    if (toks.length < 1) return null;
+    return toks.map(x => { const n = Number(x); return (x !== '' && Number.isFinite(n)) ? n : x; });
+}
+function forgeAdaptArgs(code, args, raw) {
+    const notes = [];
+    let params = null;
+    try { params = forgeParseParams(code); } catch (e) { params = null; }
+    if (!params || !params.length) return { args, notes };
+    const n = params.length, hasRest = params.some(p => p.rest);
+    const kinds = params.map(p => forgeParamKind(code, p));
+    const allNum = a => a.every(v => typeof v === 'number' && Number.isFinite(v));
+    const arrLike = k => k === 'array';
+    let a = args.slice();
+    if (!hasRest && a.length > n) {
+        if (n === 1) {
+            if (kinds[0] === 'string') { a = [String(raw).trim()]; notes.push(params[0].name + ' ← teks utuh'); }
+            else if (arrLike(kinds[0]) || (kinds[0] === 'amb' && allNum(a))) { a = [a]; notes.push((params[0].name || 'parameter') + ' ← daftar ' + a[0].length + ' nilai'); }
+        } else if (arrLike(kinds[0]) && !Array.isArray(a[0])) {
+            const cnt = a.length - (n - 1);
+            if (cnt >= 1) { a = [a.slice(0, cnt)].concat(a.slice(cnt)); notes.push((params[0].name || 'parameter 1') + ' ← daftar ' + cnt + ' nilai'); }
+        }
+    }
+    for (let i = 0; i < Math.min(a.length, n); i++) {
+        if (params[i].rest) break;
+        if (arrLike(kinds[i]) && !Array.isArray(a[i])) {
+            if (typeof a[i] === 'number') { a[i] = [a[i]]; notes.push((params[i].name || 'parameter ' + (i + 1)) + ' ← daftar 1 nilai'); }
+            else if (typeof a[i] === 'string') { const l = forgeSplitList(a[i]); if (l) { a[i] = l; notes.push((params[i].name || 'parameter ' + (i + 1)) + ' ← daftar ' + l.length + ' nilai'); } }
+        } else if (kinds[i] === 'string' && (typeof a[i] === 'number' || typeof a[i] === 'boolean') && a.length === 1 && n === 1) {
+            a[i] = String(raw).trim();
+        }
+    }
+    return { args: a, notes };
+}
+function forgeParseArgs(rawArgs) {
+    const raw = (rawArgs == null ? '' : String(rawArgs)).trim();
+    if (!raw) return [];
+    try {
+        const parsed = safeParse('[' + raw + ']');
+        if (!Array.isArray(parsed)) throw new Error('not-array');
+        return parsed.map(v => {
+            if (typeof v === 'number' && Number.isFinite(v)) return v;
+            if (typeof v === 'string') {
+                const t = v.trim();
+                if (t === '') return v;
+                const n = Number(t);
+                return (Number.isFinite(n) && String(n) === t) ? n : v;
+            }
+            return v;
+        });
+    } catch (e) {
+        const sp = raw.split(/[\s;]+/);
+        if (sp.length > 1 && raw.indexOf(',') < 0 && sp.every(t => t !== '' && Number.isFinite(Number(t)))) return sp.map(Number);
+        return raw.split(',').map(a => {
+            const t = a.trim();
+            if (t === '') return t;
+            const num = Number(t);
+            return Number.isFinite(num) ? num : t;
+        });
+    }
+}
+function forgeFormatResult(text) {
+    const t = String(text);
+    if (/^-?\d+\.\d{7,}(?:e[+-]?\d+)?$/i.test(t)) {
+        const x = Number(t);
+        if (Number.isFinite(x) && Math.abs(x) >= 0.001) return t + ' (≈ ' + String(Number(x.toFixed(4))) + ')';
+    }
+    return t;
+}
+function forgeErrorHint(msg) {
+    const m = String(msg);
+    if (/is not a function|is not iterable|is not a constructor/.test(m)) return 'Petunjuk: tipe parameter tidak cocok. Untuk daftar angka tulis 9, 8, 7 atau [9, 8, 7]; untuk teks, tulis "teks".';
+    if (/Cannot read propert|of undefined|of null/.test(m)) return 'Petunjuk: ada nilai yang tidak terdefinisi saat dibaca. Periksa jumlah dan bentuk parameter (pisahkan dengan koma).';
+    return '';
+}
 window.runForgedSkill = function (forgeId, argsStr, resultEl) {
     const skill = FORGE_REG[forgeId];
     if (!skill || !resultEl) return;
-    let args = [];
     const rawArgs = (argsStr == null ? '' : String(argsStr)).trim();
-    if (rawArgs) {
-        // Prefer JSON array parse so quoted strings with commas (e.g. "0,0") stay intact
-        try {
-            const parsed = safeParse('[' + rawArgs + ']');
-            if (!Array.isArray(parsed)) throw new Error('not-array');
-            args = parsed.map(v => {
-                if (typeof v === 'number' && Number.isFinite(v)) return v;
-                if (typeof v === 'string') {
-                    const t = v.trim();
-                    if (t === '') return v;
-                    const n = Number(t);
-                    // Only coerce pure numeric strings (avoid "0,0" / "1e2x" edge cases)
-                    return (Number.isFinite(n) && String(n) === t) ? n : v;
-                }
-                return v;
-            });
-        } catch (e) {
-            // Fallback: legacy comma-split (unquoted simple args only)
-            args = rawArgs.split(',').map(a => {
-                const t = a.trim();
-                if (t === '') return t;
-                const num = Number(t);
-                return Number.isFinite(num) ? num : t;
-            });
-        }
-    }
+    let args = forgeParseArgs(rawArgs), notes = [];
+    try { const ad = forgeAdaptArgs(skill.code, args, rawArgs); args = ad.args; notes = ad.notes; } catch (e) {}
     resultEl.className = 'vulcan-result run';
     resultEl.innerHTML = ic('loader', 'spin') + 'Executing...';
     runForgeSandbox(skill.code, args).then(r => {
         if (r.ok) {
             resultEl.className = 'vulcan-result ok';
-            resultEl.innerHTML = ic('check') + 'Hasil: <span class="vf-val">' + escapeHtml(r.text) + '</span>';
+            resultEl.innerHTML = ic('check') + 'Hasil: <span class="vf-val">' + escapeHtml(forgeFormatResult(r.text)) + '</span>' +
+                (notes.length ? ' <span class="vf-note" style="opacity:.6;font-size:.72rem">(' + escapeHtml(notes.join('; ')) + ')</span>' : '');
             try { logEvent('SYSTEM', '[FORGE] Eksekusi ' + skill.name + ' -> ' + String(r.text).slice(0, 160)); } catch (e) {}
         } else {
+            const hint = forgeErrorHint(r.error);
             resultEl.className = 'vulcan-result bad';
-            resultEl.innerHTML = ic('xcircle') + 'Error: ' + escapeHtml(r.error);
+            resultEl.innerHTML = ic('xcircle') + 'Error: ' + escapeHtml(r.error) + (hint ? ' <span class="vf-note" style="opacity:.75;font-size:.72rem;display:block;width:100%">' + escapeHtml(hint) + '</span>' : '');
         }
     });
 };
@@ -14603,6 +14784,12 @@ body #instruments,body #settings-panel{background:linear-gradient(180deg,rgba(5,
   body #nx9-chip{max-width:none}
   body #nx11-cons{width:150px}
 }
+/* NX15 · pil status "Siaga": sebelumnya terkunci 46x46 di atas tombol menu (core-hint) sehingga teks terpotong ("Siag") dan tombol menu tertutup */
+body #nx9-chip{left:62px;width:auto;height:32px;min-width:0;padding:0 .7rem;border-radius:12px;z-index:47;opacity:1;display:flex;align-items:center;
+  max-width:calc(100vw - 62px - 148px);box-sizing:border-box;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  background:linear-gradient(100deg,rgba(6,14,30,.96),rgba(8,22,44,.94));
+  box-shadow:0 0 0 1px rgba(61,236,255,.26),0 0 22px -10px var(--ag-cy)}
+@media(min-width:900px){body #nx9-chip{max-width:none}}
 @media(prefers-reduced-motion:reduce){
   #nx-aegis-bg i,#nx-aegis-bg i::before,body .hud-title,body .boot .flow h1,body .thought.boot::before,body #summoner::before{animation:none!important}
 }
