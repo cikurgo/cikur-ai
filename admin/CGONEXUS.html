@@ -1551,6 +1551,10 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
 #nxp-btn.active{color:var(--accent,#2be0cf)}
 .nxp-card{margin:.7rem 0;border:1px solid rgba(43,224,207,.35);border-radius:12px;background:linear-gradient(180deg,rgba(14,34,48,.85),rgba(10,24,34,.85));overflow:hidden;font-size:.86rem}
 .nxp-card.nxp-err{border-color:rgba(255,93,115,.55)}
+.nxp-card.nxp-info{border-color:rgba(245,185,66,.45)}
+.nxp-card.nxp-info .nxp-h{color:#f5b942;border-bottom-color:rgba(245,185,66,.25)}
+.nxp-card.nxp-info .nxp-h span{color:#c9b07a}
+.nxp-card.nxp-info .nxp-body{color:#e8d9a8}
 .nxp-h{display:flex;align-items:center;gap:.6rem;padding:.5rem .8rem;border-bottom:1px solid rgba(43,224,207,.2);font:600 .72rem ui-monospace,Menlo,Consolas,monospace;letter-spacing:.12em;color:#2be0cf}
 .nxp-h span{flex:1;color:#9fb8c2;text-transform:uppercase}
 .nxp-open{background:none;border:1px solid rgba(43,224,207,.5);color:#2be0cf;border-radius:7px;padding:.25rem .6rem;font:inherit;cursor:pointer}
@@ -1702,7 +1706,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
             <div class="tele-section" style="border-bottom:none;">
                 <div class="tele-title">NEURAL TRACE LOG</div>
                 <div class="event-log" id="event-log">
-                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.9-titanium-aegis-omni-live initialized. Awaiting intent.</div>
+                    <div class="log-line"><span class="ts">--:--:--</span><span class="tag-sys">[CORE]</span> Nexus v10.0.10-titanium-dewan-visual-soft initialized. Awaiting intent.</div>
                 </div>
             </div>
     </aside>
@@ -1810,13 +1814,22 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - OMNI SENTINEL live top bar: STANDBY / SCANNING / ALERT — code-only threat monitor
      - Auto non-blocking scan of AI code fences; never inspects network/device/hotspot
      - Additive only: existing Sentinel Deck v9, Pharma, Rare, Chart, 3D, Consensus untouched
-   10.0.9-titanium-dewan-visual-robust (Zero-Regression):
-     - NexusPharma fence: early visual-keyword guard (diagram/chart/grafik/3d/flow/…) → clear redirect to ```chart / ```scene3d instead of cryptic error
-     - Invalid-op messages now detect visual terms and guide the AI/user to the correct fence
-     - RULES_PHARMA strengthened with explicit ban on putting visual keywords inside nexuspharma blocks
-     - Zero regression: all prior Pharma physics, Chart.js whitelist, scene3d LRU, payload registry, Omni Sentinel unchanged
+   10.0.10-titanium-dewan-visual-soft (Zero-Regression):
+     - Visual keywords (diagram/chart/grafik/3d/flow/…) di dalam ```nexuspharma → kartu PANDUAN lembut (nxp-info), BUKAN GALAT merah
+     - infoCard helper + CSS .nxp-info (warna amber, role=status)
+     - Bare string "diagram" / invalid visual op → soft guidance, zero error noise di jawaban Dewan
+     - RULES_PHARMA + system prompt diperkuat (rule 6)
+     - Zero regression: Pharma physics, Chart whitelist, scene3d, Omni, Rare, payload registry utuh
+   10.0.11-titanium-visual-robust (Zero-Regression):
+     - buildChart: destroy previous instance on same el (anti Canvas-already-in-use);
+       coerce string/null numbers in datasets; pie/doughnut defaults; empty-safe render
+     - buildScene3d: idempotent guard; stagger concurrent iframes saat swarm/dewan;
+       safer contentWindow checks; blank code → silent fallback without error spam
+     - hydrate: stagger scene3d builds under data-swarm (anti GPU thrash multi-agen)
+     - Zero regression: Pharma, Omni, Rare, payload registry, chart whitelist, rules utuh
    ================================================================ */
-const APP_VERSION = '10.0.9-titanium-dewan-visual-robust';
+
+const APP_VERSION = '10.0.11-titanium-visual-robust';
 const STORAGE_KEY = 'spc_ai_v40';
 const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
 const MAX_HISTORY = 18;
@@ -2175,8 +2188,8 @@ const RULES_3D = {
 };
 
 const RULES_PHARMA = {
-    id: "ATURAN MUTLAK NEXUSPHARMA:\n1. JIKA ingin menjalankan beberapa operasi (misal profile lalu dock), KAMU WAJIB MEMBUNGKUSNYA DALAM ARRAY KURUNG SIKU `[ {...}, {...} ]` di dalam blok ```nexuspharma.\n2. DILARANG menaruh teks apapun di luar atau di dalam kurung kurawal JSON. Harus JSON murni.\n3. WAJIB menyertakan parameter: `mw`, `logP`, `hbd`, `hba`, `rotB`, `psa` dengan angka yang logis (JANGAN 0 semua).\n4. Untuk simulasi `dock`, pastikan jarak koordinat atom (x, y, z) minimal 3.0 Å agar tidak terjadi CLASH.\n5. KODE 3D DILARANG ditaruh di sini. Buat blok ```scene3d terpisah di akhir jawaban.\n6. DILARANG menaruh kata 'diagram', 'chart', 'grafik', 'flow', '3d', 'visual' sebagai isi atau op di dalam ```nexuspharma. Itu akan error. Gunakan fence yang benar: ```chart untuk grafik, ```scene3d untuk 3D.",
-    en: "ABSOLUTE NEXUSPHARMA RULES:\n1. If running multiple operations (e.g., profile then dock), YOU MUST WRAP THEM IN AN ARRAY `[ {...}, {...} ]` inside the ```nexuspharma block.\n2. FORBIDDEN to put any text outside or inside the JSON brackets. Must be pure JSON.\n3. MUST include: `mw`, `logP`, `hbd`, `hba`, `rotB`, `psa` with logical numbers (NOT all 0).\n4. For `dock` simulation, ensure atom coordinates (x, y, z) are at least 3.0 Å apart to avoid CLASH.\n5. FORBIDDEN to put 3D code here. Create a separate ```scene3d block at the end of your response.\n6. FORBIDDEN to put the words 'diagram', 'chart', 'graph', 'flow', '3d', 'visual' as content or op inside ```nexuspharma. That will error. Use the correct fence: ```chart for graphs, ```scene3d for 3D."
+    id: "ATURAN MUTLAK NEXUSPHARMA:\n1. JIKA ingin menjalankan beberapa operasi (misal profile lalu dock), KAMU WAJIB MEMBUNGKUSNYA DALAM ARRAY KURUNG SIKU `[ {...}, {...} ]` di dalam blok ```nexuspharma.\n2. DILARANG menaruh teks apapun di luar atau di dalam kurung kurawal JSON. Harus JSON murni.\n3. WAJIB menyertakan parameter: `mw`, `logP`, `hbd`, `hba`, `rotB`, `psa` dengan angka yang logis (JANGAN 0 semua).\n4. Untuk simulasi `dock`, pastikan jarak koordinat atom (x, y, z) minimal 3.0 Å agar tidak terjadi CLASH.\n5. KODE 3D DILARANG ditaruh di sini. Buat blok ```scene3d terpisah di akhir jawaban.\n6. DILARANG meletakkan kata 'diagram', 'chart', 'grafik', 'flow', '3d', 'visual' sebagai isi atau op di dalam ```nexuspharma — itu akan diganti jadi kartu panduan. Gunakan fence yang benar: ```chart untuk grafik, ```scene3d untuk 3D.",
+    en: "ABSOLUTE NEXUSPHARMA RULES:\n1. If running multiple operations (e.g., profile then dock), YOU MUST WRAP THEM IN AN ARRAY `[ {...}, {...} ]` inside the ```nexuspharma block.\n2. FORBIDDEN to put any text outside or inside the JSON brackets. Must be pure JSON.\n3. MUST include: `mw`, `logP`, `hbd`, `hba`, `rotB`, `psa` with logical numbers (NOT all 0).\n4. For `dock` simulation, ensure atom coordinates (x, y, z) are at least 3.0 Å apart to avoid CLASH.\n5. FORBIDDEN to put 3D code here. Create a separate ```scene3d block at the end of your response.\n6. FORBIDDEN to put the words 'diagram', 'chart', 'graph', 'flow', '3d', 'visual' as content or op inside ```nexuspharma — it will become a soft guidance card. Use the correct fence: ```chart for graphs, ```scene3d for 3D."
 };
 
 const SYSTEM_PROMPTS = {
@@ -3568,7 +3581,17 @@ function healScene3d(msg, code) {
     runLiveScan(chatInput.value); sendMessage(true);
 }
 function buildScene3d(el, opt) {
+    if (!el) return;
     const o = opt && typeof opt === 'object' ? opt : {};
+    // Idempotent: already live with iframe → skip (prevents double WebGL + postMessage races)
+    if (el.classList.contains('ready') && el.querySelector('iframe') && !o.force) return;
+    // If ready but iframe gone (pruned), allow rebuild
+    try {
+        if (el.classList.contains('ready') && !el.querySelector('iframe')) {
+            el.classList.remove('ready');
+            el.textContent = '';
+        }
+    } catch (z) {}
     el.classList.add('ready');
     Object.keys(s3dReg).forEach(k => { try { if (!s3dReg[k] || !s3dReg[k].fr || !s3dReg[k].fr.isConnected) delete s3dReg[k]; } catch (e) { delete s3dReg[k]; } });
     // Anti-GPU leak: batasi concurrent WebGL sebelum membuat scene baru
@@ -3580,7 +3603,17 @@ function buildScene3d(el, opt) {
     } catch (e) {}
     const code = readAttrPayload(el, 'code'); el.removeAttribute('data-code');
     const id = 's3d' + (++s3dN) + Math.random().toString(36).slice(2, 7), live = !!isGenerating && !o.noHeal, fresh = !!isGenerating && !o.lazy, skey = studioKey(code), doc = sceneDoc(code, id);
-    const fr = document.createElement('iframe'); fr.setAttribute('sandbox', 'allow-scripts allow-downloads'); fr.title = 'Scene 3D'; fr.srcdoc = doc;
+    const fr = document.createElement('iframe'); fr.setAttribute('sandbox', 'allow-scripts allow-downloads'); fr.title = 'Scene 3D';
+    // Stagger srcdoc under multi-agent to reduce simultaneous WebGL context creation
+    try {
+        const swarmBusy = !!(document.body.dataset.swarm && document.body.dataset.busy);
+        if (swarmBusy && !o.inStudio && !o.force) {
+            const delay = Math.min(800, (Object.keys(s3dReg).length % 6) * 120);
+            setTimeout(function () { try { if (fr.isConnected) fr.srcdoc = doc; } catch (e) {} }, delay);
+        } else {
+            fr.srcdoc = doc;
+        }
+    } catch (e) { try { fr.srcdoc = doc; } catch (z) {} }
     const bar = document.createElement('div'); bar.className = 's3d-bar';
     const st = document.createElement('span'); st.className = 's3d-st'; st.textContent = 'RENDERING...';
     const mk = (label, fn, icon) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'lnk'; b.innerHTML = (icon ? ic(icon) : '') + '<span>' + escapeHtml(label) + '</span>'; b.onclick = fn; bar.appendChild(b); return b; };
@@ -3649,7 +3682,7 @@ function buildScene3d(el, opt) {
         }
     } };
 }
-window.addEventListener('message', ev => { const d = ev.data, h = d && d.cgo3d && s3dReg[d.cgo3d]; if (h && h.fr.contentWindow === ev.source) h.fn(d); });
+window.addEventListener('message', ev => { try { const d = ev.data, h = d && d.cgo3d && s3dReg[d.cgo3d]; if (!h || !h.fr) return; try { if (h.fr.contentWindow !== ev.source) return; } catch (z) { return; } if (typeof h.fn === 'function') h.fn(d); } catch (e) {} });
 
 /* ===== v6.2 3D STUDIO: viewer live, galeri scene, hasil gambar (SNAP) & animasi (REC) ===== */
 const STUDIO_KEY = 'cgo_studio_v1', STUDIO_MAX = 12, MEDIA_MAX = 24;
@@ -3867,7 +3900,33 @@ document.addEventListener('keydown', e => {
 studioLoad(); studioRender();
 
 const charts = [];
-function destroyCharts() { charts.splice(0).forEach(c => { try { c.destroy(); } catch (e) {} }); }
+function destroyCharts() {
+    charts.splice(0).forEach(c => { try { c.destroy(); } catch (e) {} });
+    try {
+        document.querySelectorAll('.ui-chart[data-cgo-chart]').forEach(el => {
+            try { delete el._cgoChart; el.removeAttribute('data-cgo-chart'); } catch (z) {}
+        });
+    } catch (e) {}
+}
+function destroyChartOn(el) {
+    if (!el) return;
+    try {
+        if (el._cgoChart) { try { el._cgoChart.destroy(); } catch (e) {} el._cgoChart = null; }
+        const idx = charts.indexOf(el._cgoChart);
+        // also remove any chart whose canvas is still inside el
+        for (let i = charts.length - 1; i >= 0; i--) {
+            try {
+                const c = charts[i];
+                if (c && c.canvas && el.contains(c.canvas)) {
+                    try { c.destroy(); } catch (e) {}
+                    charts.splice(i, 1);
+                }
+            } catch (e) {}
+        }
+        el.querySelectorAll('canvas').forEach(cv => { try { cv.remove(); } catch (e) {} });
+        el.removeAttribute('data-cgo-chart');
+    } catch (e) {}
+}
 /** Hentikan semua iframe scene3d + bersihkan s3dReg (anti VRAM/GPU leak). */
 function destroyScene3d(root) {
     try {
@@ -3975,11 +4034,22 @@ function looseJsonParse(raw) {
     }
 }
 function buildChart(el) {
+    if (!el) return;
+    // Idempotent: if already ready with a live chart, skip unless forced rebuild
+    if (el.classList.contains('ready') && el._cgoChart) return;
     el.classList.add('ready');
     if (!hasChart) { el.textContent = 'Chart.js tidak tersedia'; return; }
     try {
+        // Always clear previous canvas/instance on this element (anti "Canvas is already in use")
+        destroyChartOn(el);
+        el.querySelectorAll('p.err').forEach(p => { try { p.remove(); } catch (z) {} });
+
         let raw = (typeof readAttrPayload === 'function') ? readAttrPayload(el, 'cfg') : (el.dataset.cfg || '');
         el.removeAttribute('data-cfg');
+        if (!raw || !String(raw).trim()) {
+            el.innerHTML = '<p class="err">grafik: konfigurasi kosong</p>';
+            return;
+        }
         let cfg = looseJsonParse(raw);
         if (Array.isArray(cfg)) {
             cfg = { type: 'bar', data: { labels: cfg.map((_, i) => String(i + 1)), datasets: [{ label: 'data', data: cfg }] } };
@@ -3996,7 +4066,7 @@ function buildChart(el) {
         // AI often invents flowchart/pipeline/diagram/flow for "Diagram Alir"
         if (!VALID_TYPES[t]) {
             if (/pipeline|flow|diagram|alir|sankey|gantt|tree|org|process|step|funnel/.test(t)) {
-                t = 'bar'; // closest visual for sequential / process data
+                t = 'bar';
             } else if (/area|areaChart|filled/.test(t)) {
                 t = 'line';
             } else if (/donut|ring/.test(t)) {
@@ -4013,7 +4083,6 @@ function buildChart(el) {
         // Strip plugins / controllers that would require extra registration and break render
         if (cfg.plugins && typeof cfg.plugins === 'object') {
             try {
-                // keep only boolean toggles; remove custom plugin objects that may reference unregistered controllers
                 var safePlugs = {};
                 Object.keys(cfg.plugins).forEach(function (k) {
                     var v = cfg.plugins[k];
@@ -4029,35 +4098,87 @@ function buildChart(el) {
             Object.keys(cfg.options.scales).forEach(function (sk) {
                 var sc = cfg.options.scales[sk];
                 if (sc && typeof sc === 'object' && sc.type && !/^(linear|category|time|timeseries|radialLinear|logarithmic)$/i.test(String(sc.type))) {
-                    delete sc.type; // let Chart.js pick default
+                    delete sc.type;
                 }
             });
         }
         cfg.options = Object.assign({}, cfg.options || {}, { responsive: true, maintainAspectRatio: false });
+        // pie/doughnut: hide empty scales noise
+        if (cfg.type === 'pie' || cfg.type === 'doughnut' || cfg.type === 'polarArea') {
+            if (!cfg.options.plugins) cfg.options.plugins = {};
+            if (!cfg.options.plugins.legend) cfg.options.plugins.legend = { position: 'bottom' };
+        }
         if (!cfg.type) cfg.type = 'bar';
         if (!cfg.data) cfg.data = { labels: [], datasets: [] };
         if (!Array.isArray(cfg.data.datasets)) cfg.data.datasets = [];
-        if (!Array.isArray(cfg.data.labels)) cfg.data.labels = [];
+        if (!Array.isArray(cfg.data.labels)) {
+            try { cfg.data.labels = cfg.data.labels != null ? [String(cfg.data.labels)] : []; }
+            catch (z) { cfg.data.labels = []; }
+        }
+        // Coerce label entries to strings
+        cfg.data.labels = cfg.data.labels.map(function (lb) {
+            if (lb == null) return '';
+            return typeof lb === 'string' ? lb : String(lb);
+        });
         // Pastikan tiap dataset punya data array + tipikal defaults aman
+        function coerceNum(v) {
+            if (v == null || v === '') return 0;
+            if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+            if (typeof v === 'string') {
+                var n = parseFloat(v.replace(/,/g, '').trim());
+                return Number.isFinite(n) ? n : 0;
+            }
+            if (typeof v === 'object' && v !== null) {
+                // bubble/scatter point
+                if ('y' in v || 'x' in v) {
+                    var o = { x: coerceNum(v.x), y: coerceNum(v.y) };
+                    if (v.r != null) o.r = coerceNum(v.r) || 6;
+                    return o;
+                }
+            }
+            return 0;
+        }
         cfg.data.datasets = cfg.data.datasets.map(function (ds, i) {
             if (ds == null || typeof ds !== 'object') return { label: 'series ' + (i + 1), data: [] };
-            if (!Array.isArray(ds.data)) ds.data = [];
+            if (!Array.isArray(ds.data)) {
+                if (ds.data == null) ds.data = [];
+                else if (typeof ds.data === 'number' || typeof ds.data === 'string') ds.data = [ds.data];
+                else ds.data = [];
+            }
             if (ds.label == null) ds.label = 'series ' + (i + 1);
             // bubble/scatter need {x,y} points — coerce plain numbers to {x:i,y:v}
-            if ((cfg.type === 'bubble' || cfg.type === 'scatter') && ds.data.length && typeof ds.data[0] === 'number') {
-                ds.data = ds.data.map(function (v, j) { return { x: j, y: v, r: cfg.type === 'bubble' ? 6 : undefined }; });
+            if ((cfg.type === 'bubble' || cfg.type === 'scatter') && ds.data.length && (typeof ds.data[0] === 'number' || typeof ds.data[0] === 'string')) {
+                ds.data = ds.data.map(function (v, j) { return { x: j, y: coerceNum(v), r: cfg.type === 'bubble' ? 6 : undefined }; });
+            } else if (cfg.type !== 'bubble' && cfg.type !== 'scatter') {
+                ds.data = ds.data.map(coerceNum);
+            } else {
+                ds.data = ds.data.map(function (v, j) {
+                    if (v && typeof v === 'object') return coerceNum(v);
+                    return { x: j, y: coerceNum(v), r: cfg.type === 'bubble' ? 6 : undefined };
+                });
             }
+            // Strip unknown chart-type-only fields that can confuse controllers
+            if (ds.type && !VALID_TYPES[String(ds.type).toLowerCase()]) delete ds.type;
             return ds;
         });
-        // Empty data → still render a clean empty chart instead of crash
-        const cv = document.createElement('canvas'); el.appendChild(cv);
+        // Ensure container has measurable height for Chart.js responsive
+        if (!el.style.height && !el.style.minHeight) {
+            try { el.style.minHeight = '220px'; } catch (z) {}
+        }
+        const cv = document.createElement('canvas');
+        cv.setAttribute('role', 'img');
+        cv.setAttribute('aria-label', 'Chart');
+        el.appendChild(cv);
         var chartInst = new Chart(cv, cfg);
         charts.push(chartInst);
+        el._cgoChart = chartInst;
+        el.setAttribute('data-cgo-chart', '1');
     } catch (e) {
         var msg = String(e && e.message || e);
-        // Friendlier Indonesian message for the common "is not a registered controller"
         if (/not a registered controller|is not a registered/i.test(msg)) {
             msg = 'tipe grafik tidak dikenali (dipetakan ke bar). Detail: ' + msg.slice(0, 80);
+        } else if (/canvas is already in use/i.test(msg)) {
+            msg = 'kanvas grafik bentrok — coba scroll ulang / clear history';
         }
         el.innerHTML = '<p class="err">grafik gagal dirender: ' + escapeHtml(msg.slice(0, 160)) + '</p>';
         try { logEvent('ERROR', 'Chart: ' + (e.message || e)); } catch (z) {}
@@ -4170,12 +4291,23 @@ function hydrate(root, silent) {
     root.querySelectorAll('.ui-chart:not(.ready)').forEach(buildChart);
     root.querySelectorAll('.ui-html:not(.ready)').forEach(buildHtmlPreview);
     const pending3d = Array.from(root.querySelectorAll('.ui-scene3d:not(.ready)'));
+    const swarmBusyHyd = !!(document.body.dataset.swarm && document.body.dataset.busy);
     pending3d.forEach((el, idx) => {
         // Lazy hanya untuk scene lama di riwayat; scene terbaru (akhir stream) selalu build langsung
         // agar hasil dewan/agen muncul segera dan akurat.
         const isLatest = idx >= pending3d.length - 2;
         if (silent && lazy3dObserver && !isLatest) {
             if (!el.classList.contains('lazy')) { el.classList.add('lazy'); lazy3dObserver.observe(el); }
+        } else if (swarmBusyHyd && pending3d.length > 2) {
+            // Multi-agen: stagger agar WebGL contexts tidak dibuat serentak
+            const delay = Math.min(900, idx * 140);
+            setTimeout(function () {
+                try {
+                    if (el.isConnected && !el.classList.contains('ready')) {
+                        buildScene3d(el, silent ? { noHeal: true } : undefined);
+                    }
+                } catch (e) {}
+            }, delay);
         } else {
             buildScene3d(el, silent ? { noHeal: true } : undefined);
         }
@@ -11860,12 +11992,49 @@ function err(m) {
        + '</div>';
 }
 
+/** Soft informational card (bukan error) — dipakai saat AI salah meletakkan kata visual di dalam nexuspharma */
+function infoCard(title, body) {
+  var safeTitle = (typeof esc === 'function') ? esc(title) : String(title || 'panduan');
+  var safeBody;
+  if (typeof esc === 'function') {
+    safeBody = esc(body);
+  } else {
+    safeBody = String(body || '').replace(/[&<>"']/g, function (c) {
+      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c];
+    });
+  }
+  return '<div class="nxp-card nxp-info" role="status">'
+       +   '<div class="nxp-h"><b>NEXUSPHARMA</b><span>' + safeTitle + '</span></div>'
+       +   '<div class="nxp-body" style="white-space:pre-wrap;color:#e8d9a8">' + safeBody + '</div>'
+       +   '<div class="nxp-f">Ini bukan error · hanya panduan agar visual tampil dengan benar</div>'
+       + '</div>';
+}
+
 /* ================================================================
  * NEXUSPHARMA — Main Fence (Robust Edition)
  * ================================================================ */
 window.__nxpFence = function (code) {
   var raw = (code == null ? '' : String(code)).trim();
   var OPS_LIST = 'profile, druglikeness, lipinski, dock, lj, affinity, screen, selftest';
+
+  // ----------------------------------------------------------------
+  // VISUAL KEYWORD GUARD (Zero-Regression · soft info, never GALAT)
+  // AI / Dewan sering meletakkan "diagram", "chart", "grafik", "3d"
+  // di dalam fence nexuspharma. Jangan tampilkan error merah.
+  // Tampilkan kartu panduan lembut saja.
+  // ----------------------------------------------------------------
+  var VISUAL_RE = /^(["']?)(diagram|chart|grafik|graph|flow|flowchart|pipeline|sankey|gantt|alir|visual|3d|scene3d|scene|plot|bar|line|pie|radar|donut|doughnut)\1$/i;
+  var cleaned = raw.replace(/^["']|["']$/g, '').trim();
+  if (raw && VISUAL_RE.test(raw) || (cleaned && VISUAL_RE.test(cleaned) && cleaned.length < 40)) {
+    var kw = cleaned || raw;
+    return infoCard('panduan visual',
+      'Kata "' + kw + '" bukan operasi NexusPharma.\n\n' +
+      'Gunakan fence yang tepat agar visual tampil:\n\n' +
+      '• Grafik / diagram 2D →\n```chart\n{ "type": "bar", "data": { "labels": ["Q1","Q2","Q3","Q4"], "datasets": [{ "label": "Milestone", "data": [1,2,3,4] }] } }\n```\n\n' +
+      '• Visual 3D / animasi →\n```scene3d\n// gunakan global THREE, scene, camera, renderer, onFrame(fn)\n```\n\n' +
+      'NexusPharma hanya untuk: ' + OPS_LIST + '.'
+    );
+  }
 
   // ----------------------------------------------------------------
   // AUTO-REPAIR: state-machine, escape-aware, stack-based
@@ -11943,18 +12112,6 @@ window.__nxpFence = function (code) {
   // ----------------------------------------------------------------
   // Parsing utama + auto-repair
   // ----------------------------------------------------------------
-  // Early visual-keyword guard (common AI mistake: put "diagram"/"chart"/"grafik"/"3d" inside nexuspharma)
-  var VISUAL_KW = /^(diagram|chart|grafik|graph|flow|flowchart|pipeline|sankey|gantt|alir|visual|3d|scene3d|scene|plot|bar|line|pie|radar)$/i;
-  if (raw && VISUAL_KW.test(raw.replace(/^["']|["']$/g, '').trim())) {
-    var kw = raw.replace(/^["']|["']$/g, '').trim();
-    return err(
-      'Perintah visual "' + kw + '" BUKAN operasi NexusPharma.\n\n' +
-      '• Untuk grafik / diagram 2D → gunakan blok:\n```chart\n{ "type": "bar", "data": { "labels": [...], "datasets": [...] } }\n```\n\n' +
-      '• Untuk visual 3D / animasi → gunakan blok terpisah:\n```scene3d\n// kode THREE.js di sini\n```\n\n' +
-      'NexusPharma hanya menerima: ' + OPS_LIST + '.'
-    );
-  }
-
   var job;
   if (!raw) {
     job = { op: 'selftest' };
@@ -11966,15 +12123,6 @@ window.__nxpFence = function (code) {
         var repaired = autoRepairJson(raw);
         job = tryParse(repaired);
       } catch (repairErr) {
-        // If raw looks like a single visual keyword even after repair fail
-        if (VISUAL_KW.test(raw.replace(/^["']|["']$/g, '').trim())) {
-          var kw2 = raw.replace(/^["']|["']$/g, '').trim();
-          return err(
-            'Perintah visual "' + kw2 + '" BUKAN operasi NexusPharma.\n\n' +
-            '• Untuk grafik → ```chart\n• Untuk 3D → ```scene3d\n\n' +
-            'Gunakan perintah: ' + OPS_LIST + '.'
-          );
-        }
         return err(
           'Gagal memproses JSON. Input tidak valid dan tidak dapat diperbaiki otomatis. ' +
           '(Error: ' + ((firstErr && firstErr.message) || String(firstErr)) + ')'
@@ -11987,18 +12135,17 @@ window.__nxpFence = function (code) {
     return err('Data JSON kosong atau tidak dapat dibaca.');
   }
 
-  // If AI put a bare string (e.g. "diagram") as the whole payload
+  // Jika AI mengirim string bare (mis. "diagram") → konversi / panduan lembut
   if (typeof job === 'string') {
-    var s = job.trim();
-    if (VISUAL_KW.test(s)) {
-      return err(
-        'Perintah visual "' + s + '" BUKAN operasi NexusPharma.\n\n' +
-        '• Untuk grafik / diagram → gunakan blok ```chart dengan JSON Chart.js.\n' +
-        '• Untuk visual 3D → gunakan blok ```scene3d terpisah.\n\n' +
-        'NexusPharma hanya menerima: ' + OPS_LIST + '.'
+    var s = job.trim().replace(/^["']|["']$/g, '');
+    if (/^(diagram|chart|grafik|graph|flow|flowchart|pipeline|sankey|gantt|alir|visual|3d|scene3d|scene|plot|bar|line|pie|radar|donut|doughnut)$/i.test(s)) {
+      return infoCard('panduan visual',
+        'Kata "' + s + '" bukan operasi NexusPharma.\n\n' +
+        '• Grafik 2D → blok ```chart\n• Visual 3D → blok ```scene3d terpisah\n\n' +
+        'Operasi valid: ' + OPS_LIST + '.'
       );
     }
-    // Try to treat as op name
+    // Coba treat sebagai nama op
     job = { op: s };
   }
 
@@ -12189,15 +12336,18 @@ if (!op) {
     // 3. Cek op valid — hasOwnProperty + fungsi
     if (!Object.prototype.hasOwnProperty.call(OPS, op) ||
         typeof OPS[op] !== 'function') {
-      // Friendlier message when AI confuses visual terms with Pharma ops
-      var visHint = '';
-      if (/diagram|chart|grafik|graph|flow|alir|pipeline|visual|3d|scene|plot|bar|line|pie|radar/i.test(op)) {
-        visHint = '\n\nCatatan: "' + op + '" terlihat seperti permintaan visual.\n' +
-                  '• Grafik 2D → blok ```chart { "type":"bar", ... }\n' +
-                  '• Visual 3D → blok ```scene3d terpisah (bukan di dalam nexuspharma).';
+      // Jika AI salah kirim kata visual sebagai "op", tampilkan panduan lembut (bukan GALAT merah)
+      if (/diagram|chart|grafik|graph|flow|alir|pipeline|visual|3d|scene|plot|bar|line|pie|radar|donut/i.test(op)) {
+        out += infoCard('panduan visual',
+          'Op "' + op + '" terdeteksi sebagai permintaan visual, bukan operasi kimia.\n\n' +
+          '• Grafik 2D → blok ```chart { "type":"bar", "data":{...} }\n' +
+          '• Visual 3D → blok ```scene3d terpisah (bukan di dalam nexuspharma).\n\n' +
+          'Operasi NexusPharma yang valid: ' + OPS_LIST + '.'
+        );
+      } else {
+        out += err('Input tidak valid. Silakan gunakan perintah: ' + OPS_LIST +
+                   '. (diterima: "' + op + '")');
       }
-      out += err('Input tidak valid. Silakan gunakan perintah: ' + OPS_LIST +
-                 '. (diterima: "' + op + '")' + visHint);
       continue;
     }
 
