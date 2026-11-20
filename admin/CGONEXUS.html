@@ -14828,6 +14828,7 @@ body #nx9-chip{left:62px;width:auto;height:32px;min-width:0;padding:0 .7rem;bord
 </script>
 
 
+<meta name="nx35-build" content="2">
 <style id="nx35-css">
 /* NX35 · Lapisan UI 2035 (aditif murni: tanpa mengubah/menghapus elemen, ID, atau logika lama) */
 body{--nx-ui:'Instrument Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;--nx-fs:1;--nx-w:46rem;--nx-blur:22px;--nx-gap:1;
@@ -14936,6 +14937,30 @@ body.nx35-finding .thought.nx35-cur{box-shadow:0 0 0 2px var(--accent);border-ra
 body[data-nx-motion="off"] *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
 body[data-theme="light"] #send-btn,body[data-theme="light"] #send-btn:hover:not(:disabled){color:#fff}
 @media(max-width:600px){body #composer{flex-wrap:wrap}body #composer .input-wrapper{flex:1 1 100%;order:0}body #composer .nx35-ib{order:1;width:38px;height:38px}body #composer #send-btn{order:2;margin-left:auto}}
+/* ===== v2: rombak identitas visual (menimpa blok aegis/future lama) ===== */
+body{--hud:var(--nx-ui);--ui:var(--nx-ui);font-family:var(--nx-ui);
+--ag-cy:var(--accent);--ag-vi:color-mix(in srgb,var(--accent) 55%,#7c6cff);--ag-mg:color-mix(in srgb,var(--accent) 65%,#ff7ab8)}
+/* kartu sambutan: tanpa bingkai sudut & cincin neon */
+body .thought.boot::after{content:none}
+body .thought.boot::before{opacity:.28}
+body .thought.boot{background:var(--nx-surf);-webkit-backdrop-filter:blur(var(--nx-blur)) saturate(1.4);backdrop-filter:blur(var(--nx-blur)) saturate(1.4);border-radius:28px;box-shadow:0 0 0 1px var(--nx-line),0 40px 80px -40px #000}
+body .boot .flow h1{letter-spacing:.14em;font-weight:700}
+body .boot .flow p{color:var(--ink)}
+body .boot .flow p:last-of-type{font-family:var(--nx-ui);color:var(--dim);font-size:.74rem}
+/* chip & instrumen atas: kaca tenang, bukan neon */
+body #nx-omni,body #nx11-cons,body #nx9-chip,body #core-hint,body #nxd-rail{background:var(--nx-surf);border:0;-webkit-backdrop-filter:blur(var(--nx-blur));backdrop-filter:blur(var(--nx-blur));box-shadow:inset 0 0 0 1px var(--nx-line),0 14px 34px -20px #000}
+body #nx-omni *,body #nx11-cons *,body #nx9-chip,body #nx11-brand,body #nxd-rail *{font-family:var(--nx-ui)}
+body #nx11-brand{color:var(--dim);letter-spacing:.06em;font-size:.58rem}
+body #nx-omni{border-radius:20px}
+body #nx11-cons{border-radius:18px}
+body .hud-title{color:var(--dim);background:none;-webkit-text-fill-color:currentColor;letter-spacing:.16em}
+body .hud-tag{color:var(--dim);opacity:.8}
+/* tombol kirim & alat */
+body #send-btn{font-family:var(--nx-ui);font-weight:700;letter-spacing:.01em;text-transform:none}
+body #tools .lnk{font-size:.68rem;letter-spacing:.03em;font-weight:600}
+body #tools,body #tools *{font-family:var(--nx-ui)}
+body textarea::placeholder{font-family:var(--nx-ui);opacity:.55}
+.nx35-ver{margin-top:14px;text-align:center;font:500 .66rem var(--nx-ui);color:var(--dim)}
 </style>
 <script id="nx35-js">
 /* NX35 · lapisan fitur 2035 — aditif & idempoten; semua dibungkus try/catch; tidak menimpa fungsi global lama */
@@ -15102,7 +15127,7 @@ var look=el('<section id="nx35-look" role="dialog" aria-label="Studio Tampilan">
 '<h5>Intensitas kaca</h5><input type="range" min="0" max="40" step="2" data-k="blur" aria-label="Intensitas kaca">'+
 '<h5>Latar & gerak</h5><div class="nx35-seg" data-k="calm"><button type="button" data-v="1">Latar tenang</button><button type="button" data-v="0">Sinematik</button></div>'+
 '<div class="nx35-seg" data-k="motion" style="margin-top:6px"><button type="button" data-v="auto">Gerak otomatis</button><button type="button" data-v="off">Kurangi gerak</button></div>'+
-'<h5>Aksi cepat</h5><div class="nx35-act"><button type="button" data-a="attach">Lampirkan file</button><button type="button" data-a="find">Cari percakapan</button><button type="button" data-a="export">Unduh .md</button><button type="button" data-a="reset">Setel ulang</button></div></section>');
+'<h5>Aksi cepat</h5><div class="nx35-act"><button type="button" data-a="attach">Lampirkan file</button><button type="button" data-a="find">Cari percakapan</button><button type="button" data-a="export">Unduh .md</button><button type="button" data-a="reset">Setel ulang</button></div><p class="nx35-ver">NX35 · build 2</p></section>');
 B.appendChild(scrim);B.appendChild(look);
 var sw=$('[data-k="hue"]',look);HUES.forEach(function(h){var b=D.createElement('button');b.type='button';b.setAttribute('data-h',h==null?'':h);b.setAttribute('aria-label',h==null?'Warna bawaan':'Rona '+h);
  b.style.background=h==null?'conic-gradient(#3decff,#8b5cf6,#ec4899,#3decff)':'hsl('+h+' 92% 62%)';sw.appendChild(b)});
@@ -15130,7 +15155,7 @@ window.addEventListener('keydown',function(e){
  if(e.key==='Escape'){if(look.classList.contains('open')){e.stopImmediatePropagation();closeLook();return}if(find.classList.contains('open')){e.stopImmediatePropagation();closeFind();return}}
  if(!(e.ctrlKey||e.metaKey)||!e.shiftKey||!e.key)return;var k=e.key.toLowerCase();
  if(k==='u'){e.preventDefault();fin.click()}else if(k==='f'){e.preventDefault();openFind()}else if(k==='l'){e.preventDefault();look.classList.contains('open')?closeLook():openLook()}},true);
-window.NX35={prefs:function(){return JSON.parse(JSON.stringify(P))},attach:handle,find:openFind,look:openLook,exportMd:exportMd};
+window.NX35={build:2,prefs:function(){return JSON.parse(JSON.stringify(P))},attach:handle,find:openFind,look:openLook,exportMd:exportMd};
 })();
 </script>
 </body>
