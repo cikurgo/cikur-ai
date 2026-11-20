@@ -16496,5 +16496,169 @@ window.addEventListener('keydown',function(e){
 window.NX35={prefs:function(){return JSON.parse(JSON.stringify(P))},attach:handle,find:openFind,look:openLook,exportMd:exportMd};
 })();
 </script>
+<style id="nx2035-horizon">
+/* ═══════════════════════════════════════════════════════════════════
+   NX2035 · HORIZON — lapisan tampilan final (murni CSS, aditif).
+   Tidak ada elemen/ID/handler/JS yang diubah atau dihapus.
+   Diletakkan di akhir <body> agar menang urutan atas style yang
+   disuntik runtime ke <head>.
+   ═══════════════════════════════════════════════════════════════════ */
+html body{
+  --hz-r:22px;--hz-r2:16px;
+  --hz-glass:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.022) 55%,rgba(255,255,255,.04));
+  --hz-edge:rgba(var(--aura-a),.30);
+  --hz-hair:rgba(255,255,255,.085);
+  --hz-deep:0 28px 60px -30px rgba(0,0,0,.9);
+  --hz-glow:0 0 44px -18px rgba(var(--aura-a),.7);
+  --hz-deck:calc(max(10px,env(safe-area-inset-top)) + 180px);
+  --hz-fs:'Instrument Sans','Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+}
+html body[data-theme="light"]{--hz-glass:linear-gradient(145deg,rgba(255,255,255,.9),rgba(255,255,255,.55));--hz-hair:rgba(10,20,40,.1);--hz-deep:0 24px 48px -28px rgba(20,30,60,.35)}
+
+/* ── latar: mesh aurora berlapis (di bawah semua konten) ─────────── */
+html body #void{
+  background:
+    radial-gradient(90% 60% at 12% -8%,rgba(var(--aura-a),.20),transparent 62%),
+    radial-gradient(80% 55% at 100% 8%,rgba(var(--aura-b),.18),transparent 60%),
+    radial-gradient(70% 50% at 50% 118%,rgba(var(--aura-b),.22),transparent 65%),
+    var(--void);
+}
+
+/* ── DECK ATAS: satu tumpukan rapi, tidak saling menimpa ─────────── */
+html body #core-hint{top:max(10px,env(safe-area-inset-top));left:max(10px,env(safe-area-inset-left));width:44px;height:44px;opacity:1;border-radius:15px;background:var(--hz-glass);box-shadow:inset 0 0 0 1px var(--hz-hair),0 10px 24px -14px #000;-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+html body #nx9-chip{top:max(16px,calc(env(safe-area-inset-top) + 6px));left:calc(max(10px,env(safe-area-inset-left)) + 52px);height:32px;font-family:var(--hz-fs);letter-spacing:.02em;background:var(--hz-glass);box-shadow:inset 0 0 0 1px var(--hz-hair)}
+html body #nx11-cons{top:max(10px,env(safe-area-inset-top));right:max(10px,env(safe-area-inset-right));border-radius:15px;background:var(--hz-glass);box-shadow:inset 0 0 0 1px var(--hz-edge),var(--hz-glow);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px)}
+html body #nx-omni{left:max(10px,env(safe-area-inset-left));right:max(10px,env(safe-area-inset-right));width:auto;top:calc(max(10px,env(safe-area-inset-top)) + 52px);transform:none;margin:0}
+html body #nx-omni .nxo-bar{border-radius:var(--hz-r2);background:var(--hz-glass);-webkit-backdrop-filter:blur(18px) saturate(1.4);backdrop-filter:blur(18px) saturate(1.4)}
+/* brand tengah menduplikasi .hud-tag di dock → disembunyikan visual saja */
+html body #nx11-brand{display:none}
+
+html body #dock{
+  top:calc(max(10px,env(safe-area-inset-top)) + 100px);left:0;right:0;
+  min-height:0;height:auto;padding:0 max(10px,env(safe-area-inset-left)) 0;
+  display:grid;grid-template-columns:minmax(0,1fr);gap:4px;align-items:center;
+  background:none;opacity:1;transform:none;pointer-events:auto;
+}
+html body #dock .hud-title{font:600 .64rem var(--hz-fs);letter-spacing:.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;width:auto}
+html body #dock .hud-tag{font:400 .62rem var(--hz-fs);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;width:auto;padding:0 0 0 1px;color:var(--dim)}
+html body #dock .header-right{
+  display:flex;flex-wrap:nowrap;gap:6px;align-items:center;min-width:0;width:100%;
+  padding:6px;border-radius:20px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scrollbar-width:none;
+  background:var(--hz-glass);box-shadow:inset 0 0 0 1px var(--hz-hair),var(--hz-deep);
+  -webkit-backdrop-filter:blur(18px) saturate(1.5);backdrop-filter:blur(18px) saturate(1.5);
+  -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(90deg,transparent 0,#000 14px,#000 calc(100% - 22px),transparent);
+}
+html body #dock .header-right::-webkit-scrollbar{display:none}
+html body #dock .header-right>*{flex:none}
+html body #dock .btn-icon{width:40px;height:40px;border-radius:14px;background:rgba(255,255,255,.035);box-shadow:inset 0 0 0 1px var(--hz-hair)}
+html body #dock .btn-icon:hover,html body #dock .btn-icon.active,html body #dock .btn-icon[aria-pressed="true"]{background:rgba(var(--aura-a),.14);box-shadow:inset 0 0 0 1px rgba(var(--aura-a),.6),0 0 22px -4px rgba(var(--aura-a),.55)}
+html body #dock .system-badge{font:500 .62rem var(--hz-fs);margin:0 2px;max-width:none}
+html body #dock #nx10-dna{margin-left:0}
+
+/* ── PANGGUNG PERCAKAPAN ─────────────────────────────────────────── */
+html body #stage{padding-top:var(--hz-deck);padding-bottom:calc(30vh + var(--kb,0px));
+  -webkit-mask-image:linear-gradient(transparent calc(var(--hz-deck) - 30px),#000 calc(var(--hz-deck) + 10px),#000 86%,transparent);mask-image:linear-gradient(transparent calc(var(--hz-deck) - 30px),#000 calc(var(--hz-deck) + 10px),#000 86%,transparent)}
+html body #chat-container{width:min(var(--nx-w,46rem),calc(100% - 1.6rem));gap:clamp(1.4rem,4.5vh,2.6rem)}
+html body .thought:nth-last-child(n+3){opacity:.62;filter:none}
+html body .thought:nth-last-child(n+5){opacity:.4;filter:blur(.6px)}
+html body .thought:nth-last-child(n+8){opacity:.2;filter:blur(2px)}
+
+/* kartu sambutan / pesan agen = panel kaca berlapis */
+html body .thought.boot,html body .thought.agent.synth{
+  padding:clamp(1.1rem,3.6vw,1.9rem);border-radius:var(--hz-r);border:0;
+  background:var(--hz-glass);
+  box-shadow:inset 0 0 0 1px var(--hz-hair),0 0 0 1px transparent,var(--hz-deep),var(--hz-glow);
+  position:relative;overflow:hidden;
+}
+html body .thought.boot::before{content:'';position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(135deg,rgba(var(--aura-a),.9),transparent 38%,transparent 62%,rgba(var(--aura-b),.85));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);mask-composite:exclude;opacity:.75}
+html body .boot .flow h1{font:700 clamp(1.9rem,9vw,3rem)/1.05 var(--hz-fs);letter-spacing:.34em;margin:0 0 .45em;
+  background:linear-gradient(100deg,#fff,rgb(var(--aura-a)) 55%,rgb(var(--aura-b)));-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+html body .boot .flow h2,html body .boot .flow h3{font:500 clamp(1rem,4.4vw,1.35rem)/1.4 var(--hz-fs);letter-spacing:0;color:var(--accent)}
+html body .boot .flow p{font:300 clamp(.95rem,3.9vw,1.15rem)/1.7 var(--hz-fs);color:var(--ink)}
+html body .boot .flow p.aside,html body .boot .flow blockquote{font:400 .72rem/1.7 var(--mono);opacity:.5}
+
+html body .thought.user .flow{font-family:var(--hz-fs);font-weight:400;font-size:.9rem;line-height:1.7;color:var(--ink)}
+html body .thought.agent{padding-left:1.15rem}
+html body .flow{font-family:var(--hz-fs);font-weight:300}
+html body .flow h1,html body .flow h2,html body .flow h3,html body .flow h4{font-family:var(--hz-fs);font-weight:500}
+html body .flow pre,html body .ui-code,html body .ui-html,html body .ui-scene3d,html body .vulcan-skill-box{border-radius:var(--hz-r2)}
+html body .flow table{border-radius:12px}
+
+/* ── KOMPOSER: bilah perintah melayang ───────────────────────────── */
+html body #summoner{width:min(var(--nx-w,46rem),calc(100% - 1.4rem));padding:.5rem .55rem .35rem;border-radius:26px;
+  background:linear-gradient(160deg,rgba(14,20,34,.82),rgba(8,12,22,.7));
+  box-shadow:inset 0 0 0 1px var(--hz-edge),0 30px 70px -28px #000,0 0 60px -26px rgba(var(--aura-a),.8);
+  -webkit-backdrop-filter:blur(22px) saturate(1.6);backdrop-filter:blur(22px) saturate(1.6)}
+html body[data-theme="light"] #summoner{background:linear-gradient(160deg,rgba(255,255,255,.88),rgba(238,241,246,.78))}
+html body #composer{gap:.5rem;align-items:center}
+html body .input-wrapper{border-radius:18px;background:rgba(0,0,0,.28);box-shadow:inset 0 0 0 1px var(--hz-hair);padding:0 .7rem}
+html body[data-theme="light"] .input-wrapper{background:rgba(255,255,255,.7)}
+html body .input-wrapper::before{inset:-3px;border-radius:21px}
+html body .input-wrapper::after{display:none}
+html body textarea{font:300 1rem/1.55 var(--hz-fs)}
+html body .input-wrapper textarea:focus-visible{outline:none}
+html body #send-btn{border-radius:16px;min-height:46px;padding:.6rem 1rem;font:700 .7rem var(--hz-fs);letter-spacing:.14em;color:#04070d;background:linear-gradient(135deg,rgb(var(--aura-a)),rgb(var(--aura-b)));box-shadow:0 10px 26px -10px rgba(var(--aura-a),.9)}
+html body #tools{flex-wrap:nowrap;overflow-x:auto;gap:4px;padding:.45rem 0 .15rem;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 26px),transparent)}
+html body #tools::-webkit-scrollbar{display:none}
+html body #tools>*{flex:none}
+html body #tools .lnk{font:500 .62rem var(--hz-fs);letter-spacing:.1em;border-radius:12px;background:rgba(255,255,255,.03)}
+html body #summon-hint::after{width:56px;height:3px;margin-left:-28px;bottom:10px;background:linear-gradient(90deg,rgb(var(--aura-a)),rgb(var(--aura-b)));opacity:.55}
+html body #jump-bottom{bottom:calc(var(--kb,0px) + 92px)}
+html body .toast{font-family:var(--hz-fs);padding:.55rem 1rem;border-radius:99px;background:var(--hz-glass);box-shadow:inset 0 0 0 1px var(--hz-edge);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);text-shadow:none}
+
+/* ── RAIL KIRI & FAB: tidak lagi menimpa isi percakapan ──────────── */
+@media(max-width:999px){
+  html body #nxd-rail{top:auto;bottom:calc(var(--kb,0px) + max(0px,env(safe-area-inset-bottom)) + 160px);transform:none;left:max(10px,env(safe-area-inset-left))}
+  html body #nx-hd-fab{bottom:calc(var(--kb,0px) + max(0px,env(safe-area-inset-bottom)) + 96px)}
+  html body #nxd-rail{flex-direction:column-reverse}
+}
+html body #nx-hd-fab{border-radius:17px}
+
+/* ── PANEL OVERLAY: bahasa visual seragam ────────────────────────── */
+html body #settings-panel,html body #instruments,html body #nx10-echo,html body #studio,html body #council,html body #palette .box{
+  background:linear-gradient(170deg,rgba(14,20,34,.9),rgba(6,10,18,.92));
+}
+html body[data-theme="light"] #settings-panel,html body[data-theme="light"] #instruments,html body[data-theme="light"] #nx10-echo,html body[data-theme="light"] #studio,html body[data-theme="light"] #council{background:linear-gradient(170deg,rgba(246,248,252,.96),rgba(232,237,245,.96))}
+html body #palette .box{border-radius:22px}
+html body .field input,html body .field select{border-radius:10px;border:0;padding:.6rem .75rem;background:rgba(255,255,255,.045);box-shadow:inset 0 0 0 1px var(--hz-hair);font-family:var(--hz-fs)}
+html body .field input:focus,html body .field select:focus{box-shadow:inset 0 0 0 1px var(--accent)}
+html body .cc-card,html body .cc-pane,html body .nx10-item,html body .nbadge{border-radius:var(--hz-r2)}
+html body .tele-section{padding-bottom:1.3rem}
+
+/* panel pengaturan mulai di bawah deck; panel sentinel di atas deck */
+html body #settings-panel{padding-top:var(--hz-deck)}
+html body #nx9-panel{z-index:50}
+@media(max-width:999px){
+  html body:not(.nxd-open)[data-input] #nxd-rail,html body:not(.nxd-open)[data-busy] #nxd-rail{opacity:0;pointer-events:none}
+}
+
+/* ── MOBILE ──────────────────────────────────────────────────────── */
+@media(max-width:700px){
+  html body #dock .hud-tag{display:none}
+  html body #nx9-chip .nx9-extra{display:none}
+  html body #dock .btn-icon{width:42px;height:42px}
+}
+@media(max-width:380px){
+  html body #nx9-chip{max-width:calc(100vw - 200px)}
+  html body .boot .flow h1{letter-spacing:.24em}
+}
+
+/* ── DESKTOP+TABLET: baris alat boleh melipat ── */
+@media(min-width:700px){html body #tools{flex-wrap:wrap;overflow:visible;-webkit-mask-image:none;mask-image:none;gap:2px}html body #tools .lnk{padding:.5rem .55rem;letter-spacing:.06em}}
+
+/* ── DESKTOP: omni di tengah atas, dock rata tengah ──────────────── */
+@media(min-width:1000px){
+  html body #nx-omni{left:50%;right:auto;width:min(46rem,calc(100% - 30rem));transform:translateX(-50%);top:max(10px,env(safe-area-inset-top))}
+  html body #dock{top:calc(max(10px,env(safe-area-inset-top)) + 58px);grid-template-columns:minmax(0,1fr);justify-items:center;padding:0 2rem}
+  html body #dock .hud-title,html body #dock .hud-tag{justify-self:center;text-align:center}
+  html body #dock .header-right{width:auto;max-width:100%;justify-self:center;-webkit-mask-image:none;mask-image:none}
+  html body{--hz-deck:calc(max(10px,env(safe-area-inset-top)) + 176px)}
+}
+
+@media(prefers-reduced-motion:reduce){html body *{scroll-behavior:auto!important}}
+@media print{html body #dock,html body #nx-omni,html body #nx11-cons{display:none!important}}
+</style>
 </body>
 </html>
