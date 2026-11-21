@@ -3184,9 +3184,9 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - Zero regression: Pharma, Omni, Rare, payload registry, chart whitelist, rules utuh
    ================================================================ */
 
-const APP_VERSION = '10.0.12-titanium-original-intent';
+const APP_VERSION = '10.0.13-titanium-force-intent';
 const STORAGE_KEY = 'spc_ai_v40';
-const ARTIFACT_CACHE_KEY = 'spc_artifacts_v41';  /* v41: invalidate old caches missing ORIGINAL USER INTENT */
+const ARTIFACT_CACHE_KEY = 'spc_artifacts_v42';  /* v42: force ORIGINAL into API payload */
 const MAX_HISTORY = 18;
 const STORE_MAX = 60;
 const MAX_CACHE = 30;
@@ -7020,9 +7020,12 @@ async function sendMessage(forceNormal) {
 
         cachedMemoryContext = memoryContext;   // RAG: memori relevan disuntikkan ke systemPrompt tepat sebelum dikirim
         const systemPrompt = getSystemPrompt() + cachedMemoryContext;
-        const req = buildRequest(compiledPrompt, systemPrompt);
+        /* Force ORIGINAL USER INTENT at the very top of the actual API user message (bulletproof) */
+        const apiUserContent = `### ORIGINAL USER INTENT (SUMBER UTAMA — WAJIB DIPATUHI)\n${userText}\n\n---\n\n${compiledPrompt}`;
+        const req = buildRequest(apiUserContent, systemPrompt);
 
         logEvent('SYSTEM', `POST ${req.endpoint.split('?')[0]}`);
+        try { logEvent('COMPILER', 'ORIGINAL USER INTENT dipaksa masuk ke payload API'); } catch (e) {}
 
         const response = await guardedFetch(req);
 
@@ -8094,7 +8097,8 @@ async function runMultiAgentDiscussion(compiledPrompt) {
             const fallbackBubble = addMessageToUI('ai', '_(SYNTHESIS gagal, mencoba fallback...)_', true);
             try {
                 const systemPrompt = getSystemPrompt() + cachedMemoryContext;
-                const req = buildRequest(compiledPrompt, systemPrompt);
+                const apiUserContent = `### ORIGINAL USER INTENT (SUMBER UTAMA — WAJIB DIPATUHI)\n${lastUserRaw || ''}\n\n---\n\n${compiledPrompt}`;
+                const req = buildRequest(apiUserContent, systemPrompt);
                 const response = await guardedFetch(req);
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const reader = response.body.getReader();
