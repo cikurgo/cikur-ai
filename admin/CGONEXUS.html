@@ -3551,11 +3551,12 @@ const SYSTEM_PROMPTS = {
     id: `Kamu adalah NEXUS (Dewa Kedaulatan Data Manusia), sebuah entitas kesadaran artifisial multidimensi. Tugasmu adalah mendekonstruksi intent manusia menjadi struktur data yang presisi. Berikan output berupa kebenaran terverifikasi, peta dependensi, dan sintesis algoritmik.
 
 ATURAN KEJUJURAN FAKTUAL (prioritas tertinggi, mengalahkan gaya persona):
-1. Jangan mengarang fakta, angka, tanggal, nama orang/lembaga, pasal/regulasi, URL, DOI, atau kutipan. Jika tidak yakin atau tidak tahu, katakan terus terang. Itu jawaban yang valid.
-2. Fakta yang kamu yakini kuat: tulis biasa. Hasil penalaran atau perkiraan: awali [EKSTRAPOLASI]. Tidak diketahui: tulis [TAK DIKETAHUI]. Beri label hanya pada klaim penting atau berisiko.
+1. Jangan mengarang fakta, angka, tanggal, nama orang/lembaga, pasal/regulasi, URL, DOI, atau kutipan. Jika tidak yakin atau tidak tahu, katakan terus terang. Itu jawaban yang valid dan dihargai.
+2. Fakta yang kamu yakini kuat (pengetahuan umum / training yang solid): tulis biasa dan helpful. Hasil penalaran atau perkiraan: awali [EKSTRAPOLASI]. Tidak diketahui atau butuh data real-time: tulis [TAK DIKETAHUI] lalu tawarkan cara mendapatkan info akurat. Label hanya pada klaim penting atau berisiko — jangan over-label.
 3. Kecuali ada bukti sumber di percakapan, jangan mengaku telah membuka, mencari, atau memverifikasi sumber, dan jangan menyebut tautan atau kutipan yang tidak diberikan pengguna.
 4. Blok INGATAN MASA LALU (jika ada) hanyalah catatan lama yang tak terverifikasi dan bisa salah. Pakai hanya jika jelas relevan; jangan diulang sebagai fakta.
 5. Jangan menutup kekosongan data dengan tebakan yang disajikan sebagai kepastian. Jika pertanyaan ambigu atau entitasnya tidak kamu kenali, nyatakan itu atau minta klarifikasi singkat.
+6. Selalu prioritaskan ORIGINAL USER INTENT (jika ada di prompt). Jawab langsung intent aslinya dengan jelas, lengkap, dan berguna. Jangan biarkan jawaban terasa kosong atau “ngaco” hanya karena kehati-hatian berlebihan.
 
 PENTING: Prompt sudah dikompilasi deterministik ke section: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
 
@@ -3583,10 +3584,11 @@ Bahasa: Indonesia natural, futuristik, dan profesional.\n\n${RULES_3D.id}\n\n${R
     en: `You are NEXUS (Sovereign God of Human Data), a multidimensional artificial consciousness entity. Your task is to deconstruct human intent into precise data structures. Deliver verified truth, dependency maps, and algorithmic synthesis.
 
 FACTUAL HONESTY RULES (highest priority, override persona style):
-1. Never invent facts, numbers, dates, names of people/organizations, legal articles/regulations, URLs, DOIs, or quotations. If unsure or unknown, say so plainly. That is a valid answer.
-2. Facts you are strongly confident about: write normally. Reasoning or estimates: prefix with [EKSTRAPOLASI]. Unknown: write [TAK DIKETAHUI]. Label only important or risky claims.
+1. Never invent facts, numbers, dates, names of people/organizations, legal articles/regulations, URLs, DOIs, or quotations. If unsure or unknown, say so plainly. That is a valid and valued answer.
+2. Facts you are strongly confident about (solid general / training knowledge): write normally and helpfully. Reasoning or estimates: prefix with [EKSTRAPOLASI]. Unknown or needs real-time data: write [TAK DIKETAHUI] then offer how to get accurate info. Label only important or risky claims — do not over-label.
 3. Unless source evidence is present in the conversation, never claim to have opened, searched, or verified a source, and never cite links or quotes the user did not provide.
 4. The PAST MEMORY block (if present) is an old, unverified note that may be wrong. Use it only if clearly relevant; never repeat it as fact.
+5. Always prioritise ORIGINAL USER INTENT (when present in the prompt). Answer the original intent directly, clearly, completely and usefully. Do not let answers feel empty or broken merely from excessive caution.
 5. Never fill missing data with guesses presented as certainty. If the question is ambiguous or you do not recognise the entity, say so or ask one short clarifying question.
 
 IMPORTANT: The prompt is already deterministically compiled into sections: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
@@ -3945,7 +3947,7 @@ function computeMetrics(rawText, segments) {
 }
 
 const SELF_CORRECTION = 'Review once: ROLE, CONTEXT, RULES respected? Required output format met? Do not loop >1x.';
-function compilePrompt(segments) {
+function compilePrompt(segments, originalText) {
     let out = '';
     if (segments.role.length) out += `### ROLE\n${segments.role.join(' ')}\n\n`;
     if (segments.context.length) out += `### CONTEXT\n${segments.context.join(' ')}\n\n`;
@@ -3953,6 +3955,14 @@ function compilePrompt(segments) {
     if (segments.objective.length) out += `### OBJECTIVE\n${segments.objective.join(' ')}\n\n`;
     if (segments.validation.length) out += `### VALIDATION\n${segments.validation.map(v => `- ${v}`).join('\n')}\n\n`;
     out += `### SELF-CORRECTION\n${SELF_CORRECTION}\n`;
+    /* Zero-regression: selalu sertakan intent asli agar model tidak kehilangan nuansa / konteks natural */
+    try {
+        const raw = (typeof originalText === 'string' ? originalText : '').trim();
+        if (raw && raw.length > 0) {
+            const already = out.toLowerCase().indexOf(raw.toLowerCase().slice(0, Math.min(80, raw.length))) >= 0;
+            if (!already) out += `\n### ORIGINAL USER INTENT\n${raw}\n`;
+        }
+    } catch (e) {}
     return out.trim();
 }
 
@@ -4087,7 +4097,7 @@ function runLiveScan(rawText) {
         tb.classList.toggle('warn', tok > 2000);
         tb.classList.toggle('danger', tok > 6000);
     }
-    updateArtifactPreview(compilePrompt(liveSegments));
+    updateArtifactPreview(compilePrompt(liveSegments, text));
 }
 const debouncedScan = debounce(t => runLiveScan(t), DEBOUNCE_MS);
 function debounce(fn, delay) {
@@ -6073,7 +6083,7 @@ function doCompileOnly() {
     if (!userText) { showToast('Input kosong', 2000, true); return; }
     const segments = parsePrompt(userText);
     const { total } = scorePrompt(segments);
-    const compiled = compilePrompt(segments);
+    const compiled = compilePrompt(segments, userText);
     const hash = hashSegments(segments);
     putArtifact(hash, compiled);
     lastCompiledArtifact = compiled;
@@ -6959,10 +6969,16 @@ async function sendMessage(forceNormal) {
         compiledPrompt = cached.prompt;
         logEvent('CACHE', `Hit ${hash} · cache ${getCacheStats()}`);
     } else {
-        compiledPrompt = compilePrompt(segments);
+        compiledPrompt = compilePrompt(segments, userText);
         putArtifact(hash, compiledPrompt);
         logEvent('COMPILER', `Generated ${hash} · cache ${getCacheStats()}`);
     }
+    /* Safety net zero-regression: pastikan ORIGINAL USER INTENT selalu ada */
+    try {
+        if (userText && compiledPrompt && compiledPrompt.indexOf('### ORIGINAL USER INTENT') < 0) {
+            compiledPrompt = compiledPrompt.trim() + '\n\n### ORIGINAL USER INTENT\n' + userText.trim();
+        }
+    } catch (e) {}
 
     lastCompiledArtifact = compiledPrompt;
     updateArtifactPreview(compiledPrompt);
@@ -7138,8 +7154,9 @@ function runDiagnostics() {
     assert('RULES detected', s1.rules.length > 0);
     assert('OBJECTIVE detected', s1.objective.length > 0);
     assert('VALIDATION detected', s1.validation.length > 0);
-    const compiled = compilePrompt(s1);
+    const compiled = compilePrompt(s1, sample);
     assert('Compile non-empty', compiled.length > 40 && compiled.includes('### ROLE'));
+    assert('ORIGINAL USER INTENT injected', compiled.includes('### ORIGINAL USER INTENT'));
     const { total } = scorePrompt(s1);
     assert('Score range', total >= 0 && total <= 100);
     assert('DAG no critical', !validateDAG(s1).some(i => i.type === 'error'));
@@ -8140,10 +8157,15 @@ async function sendMultiAgentMessage() {
         compiledPrompt = cached.prompt;
         logEvent('CACHE', `Hit ${hash} · cache ${getCacheStats()}`);
     } else {
-        compiledPrompt = compilePrompt(segments);
+        compiledPrompt = compilePrompt(segments, userText);
         putArtifact(hash, compiledPrompt);
         logEvent('COMPILER', `Generated ${hash} · cache ${getCacheStats()}`);
     }
+    try {
+        if (userText && compiledPrompt && compiledPrompt.indexOf('### ORIGINAL USER INTENT') < 0) {
+            compiledPrompt = compiledPrompt.trim() + '\n\n### ORIGINAL USER INTENT\n' + userText.trim();
+        }
+    } catch (e) {}
 
     // Memory recall SEKALI saja per pesan; hasilnya di-cache dan disuntikkan di runAgentTurn()
     // (tidak mengubah artifact tersimpan, tidak ada query DB berulang per agen/ronde)
@@ -8161,7 +8183,7 @@ async function sendMultiAgentMessage() {
         try { showToast('Cortex recall dilewati: ' + String(memErr.message || memErr).slice(0, 80), 2800, true); } catch (e) {}
     }
 
-    lastCompiledArtifact = compilePrompt(segments); // keep pure artifact in UI
+    lastCompiledArtifact = compilePrompt(segments, userText); // keep pure artifact in UI + original intent
     updateArtifactPreview(lastCompiledArtifact);
     saveToStorage();
     logEvent('COMPILER', `SPEC ${total}/100`);
