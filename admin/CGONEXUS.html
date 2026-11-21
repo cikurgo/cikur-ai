@@ -13,8 +13,9 @@ var LS_MAX=5*1024*1024;
 try{var _set=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){var s=String(v);if(s.length>LS_MAX){try{this.removeItem(k)}catch(e){}return}return _set.call(this,k,s)}}catch(e){}
 window.nxSafeParse=function(text,fallback){try{return JSON.parse(text)}catch(e){try{window.dispatchEvent(new CustomEvent('userError',{detail:{type:'json-parse',message:String(e&&e.message||e)}}))}catch(x){}return fallback}};
 window.nxStorageGet=function(key,fallback){try{return window.nxSafeParse(localStorage.getItem(key)||'null',fallback)}catch(e){return fallback}};
-/* 4) sanitasi XSS + WeakMap pendaftar event listener (cegah kebocoran) */
-window.sanitizeXSS=function(str){return String(str==null?'':str).replace(/[<>]/g,'')};
+/* 4) sanitasi XSS + WeakMap pendaftar event listener (cegah kebocoran)
+   Diperkuat: escape HTML entities penuh (bukan hanya strip <>). Kompatibel API lama. */
+window.sanitizeXSS=function(str){return String(str==null?'':str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')};
 var REG=new WeakMap();
 window.nxOn=function(el,type,fn,opts){if(!el||!el.addEventListener)return false;var m=REG.get(el);if(!m){m=new Map();REG.set(el,m)}var list=m.get(type)||[];for(var i=0;i<list.length;i++)if(list[i].fn===fn)return false;el.addEventListener(type,fn,opts);list.push({fn:fn,opts:opts});m.set(type,list);return true};
 window.nxOffAll=function(el,type){var m=REG.get(el);if(!m)return;(type?[type]:Array.from(m.keys())).forEach(function(t){(m.get(t)||[]).forEach(function(r){el.removeEventListener(t,r.fn,r.opts)});m.delete(t)})};
@@ -67,7 +68,7 @@ window.NexusConfig = { hud: (function () { try { return localStorage.getItem('cg
  *
  * secureExec options
  *   timeoutMs  100..30000 (default 3000)
- *   allowFetch false → fetch is unavailable inside the sandbox (default true)
+ *   allowFetch true  → enable fetch inside the sandbox (default false — safer)
  *
  * speak options
  *   voiceLang, rate, pitch, volume, onStart, onEnd, onError, cancelOthers (default true)
@@ -283,7 +284,7 @@ window.NexusConfig = { hud: (function () { try { return localStorage.getItem('cg
           error: function () { _console.error.apply(_console, ['[sandbox]'].concat([].slice.call(arguments))); }
         });
 
-        var useFetch = data.allowFetch !== false;
+        var useFetch = data.allowFetch === true;
 
         var allowed = Object.freeze({
           fetch: useFetch ? _fetch : undefined,
@@ -417,7 +418,7 @@ window.NexusConfig = { hud: (function () { try { return localStorage.getItem('cg
         try {
           worker.postMessage({
             code: code, id: id, timeoutMs: timeoutMs,
-            allowFetch: options.allowFetch !== false
+            allowFetch: options.allowFetch === true
           });
         } catch (e) {
           finish(true, new Error('postMessage failed: ' + ((e && e.message) || e)));
@@ -1062,7 +1063,7 @@ window.NexusConfig = { hud: (function () { try { return localStorage.getItem('cg
 })();
 </script>
 <script id="nexus-truth-core">
-/* NEXUS TRUTH CORE v13.7.0 — Universal Truth-Guard (IPV6 HARDENED)
+/* NEXUS TRUTH CORE v13.7.1 — Universal Truth-Guard (IPV6 HARDENED + browser SSRF on)
  * Injected into CGONEXUS as anti-hallucination substrate.
  * Idempotent: skips if window.NexusTruth already present.
  * Zero regression: pure additive; no existing APIs overwritten.
@@ -1074,8 +1075,11 @@ window.NexusConfig = { hud: (function () { try { return localStorage.getItem('cg
     return;
   }
 /*! ═══════════════════════════════════════════════════════════════════
- *  NEXUS TRUTH CORE v13.7.0 — Universal Truth-Guard (IPV6 HARDENED)
+ *  NEXUS TRUTH CORE v13.7.1 — Universal Truth-Guard (IPV6 HARDENED + browser SSRF on)
  *  ─────────────────────────────────────────────────────────────────
+ *  CHANGELOG dari v13.7.0:
+ *   • FIX: isSafeUrl aktif di browser (hapus bypass IS_BROWSER)
+ *   • ADD: blok hostname metadata (metadata.google.internal, k8s default)
  *  CHANGELOG dari v13.6:
  *   • FIX B6: expandIPv6 — normalisasi penuh, tangkap `0:0:0:0:0:ffff:7f00:1`
  *   • FIX B7: blokir NAT64 (64:ff9b::/96), 6to4 (2002::/16), Teredo (2001::/32),
@@ -1410,7 +1414,9 @@ function () {
       h = h.split('%')[0].replace(/\.$/, '');
       if (!h) return false;
 
-      if (IS_BROWSER || cfg.allowPrivateUrls) return true;
+      /* allowPrivateUrls = true hanya untuk debug/power-user eksplisit.
+         Default (termasuk di browser): selalu blok private/metadata ranges. */
+      if (cfg.allowPrivateUrls === true) return true;
 
       /* IPv4 langsung (decimal/oktal/hex/trailing-dot) */
       const v4 = canonicalIPv4(h);
@@ -1419,10 +1425,12 @@ function () {
       /* IPv6 literal — satu jalur penuh (B6+B7) */
       if (h.indexOf(':') !== -1) return !isPrivateIPv6(h);
 
-      /* Hostname DNS */
+      /* Hostname DNS + metadata endpoints umum */
       if (h === 'localhost' || h.endsWith('.localhost')) return false;
       if (h.endsWith('.internal') || h.endsWith('.local')) return false;
       if (h.endsWith('.test') || h.endsWith('.example') || h.endsWith('.invalid')) return false;
+      if (h === 'metadata.google.internal' || h === 'metadata' ||
+          h === 'kubernetes.default' || h === 'kubernetes.default.svc') return false;
       /* Single-label → resolusi lokal, blokir */
       if (h.indexOf('.') === -1) return false;
 
@@ -2385,7 +2393,7 @@ function () {
 
   /* ══════════════════ EKSPOR PUBLIK ══════════════════ */
   return {
-    version: '13.7.0',
+    version: '13.7.1',
     configure, getConfig,
     checkEntity, verifyCitation, verifyBatch,
     calibrate, label, audit, gate, selfTest,
@@ -16384,6 +16392,9 @@ var bMic=el('<button type="button" class="nx35-ib" id="nx35-mic" title="Dikte su
 var drop=el('<div id="nx35-drop" aria-hidden="true"><div>Lepaskan untuk melampirkan<small>Teks, kode, CSV, JSON, PDF, atau gambar (dibaca lewat OCR)</small></div></div>');
 try{if(summ&&comp&&sendB){summ.insertBefore(tray,comp);comp.insertBefore(bAtt,sendB);comp.insertBefore(bMic,sendB);B.appendChild(fin);B.appendChild(drop)}}catch(e){}
 var atts=[],uid=0,PART=11000;
+/* Global lock: hanya 1 pekerjaan berat (PDF/OCR) pada satu waktu — cegah OOM di perangkat rendah */
+var _nx35Heavy = Promise.resolve();
+function withHeavy(fn){var prev=_nx35Heavy;var done;_nx35Heavy=new Promise(function(r){done=r});return prev.then(function(){return fn()}).finally(function(){try{done()}catch(e){}})}
 function block(a,t){return '\n\n--- Lampiran: '+a.name+(a.parts.length>1?' (bagian '+(a.i+1)+'/'+a.parts.length+')':'')+' ---\n'+t+'\n--- Akhir lampiran ---\n'}
 function split(t,n){var o=[];while(t.length>n){var c=t.lastIndexOf('\n',n);if(c<n*.8)c=n;o.push(t.slice(0,c));t=t.slice(c)}o.push(t);return o}
 function busy(){return B.hasAttribute('data-busy')||ta.disabled}
@@ -16413,25 +16424,25 @@ function add(a){a.id=++uid;atts.push(a);render(a);return a}
 function addText(f,txt,extra){var a=add({name:f.name,size:f.size,ext:(f.name.split('.').pop()||'txt'),text:txt,meta:''});
  var ok=put(a);a.meta=fmt(f.size)+' · '+txt.split(/\n/).length+' baris'+(a.parts.length>1?' · bagian 1/'+a.parts.length:'')+(extra||'');if(!ok){rm(a);return}render(a);buzz()}
 async function readText(f){var t=await f.text();if(t.charCodeAt(0)===0xFEFF)t=t.slice(1);if(t.slice(0,3000).indexOf('\u0000')>=0)throw new Error('biner');return t.replace(/\r\n?/g,'\n')}
-async function readPdf(f){var a=add({name:f.name,size:f.size,ext:'pdf',meta:'Membaca PDF…'});
+async function readPdf(f){return withHeavy(async function(){var a=add({name:f.name,size:f.size,ext:'pdf',meta:'Membaca PDF…'});
  try{if(!window.pdfjsLib){await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'}
  var doc=await window.pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise,n=Math.min(doc.numPages,80),out=[];
  for(var p=1;p<=n;p++){var pg=await doc.getPage(p),tc=await pg.getTextContent(),s='';tc.items.forEach(function(it){s+=it.str+(it.hasEOL?'\n':' ')});out.push('[Halaman '+p+']\n'+s.replace(/[ \t]+/g,' ').trim());prog(a,p/n)}
  var txt=out.join('\n\n');if(txt.replace(/\[Halaman \d+\]/g,'').trim().length<20){toast('PDF tanpa teks (kemungkinan hasil pindai). Ekspor halamannya ke gambar lalu pakai OCR.',true);rm(a);return}
  a.text=txt;a.size=f.size;var ok=put(a);if(!ok){rm(a);return}a.meta=fmt(f.size)+' · '+doc.numPages+' hlm'+(doc.numPages>n?' (dibaca '+n+')':'')+(a.parts.length>1?' · bagian 1/'+a.parts.length:'');render(a);buzz()}
- catch(e){toast('Gagal membaca PDF: '+(e&&e.message||e),true);rm(a)}}
+ catch(e){toast('Gagal membaca PDF: '+(e&&e.message||e),true);rm(a)}})}
 function addImage(f){var url=URL.createObjectURL(f),a=add({name:f.name,size:f.size,ext:'img',url:url,isImg:true,file:f,meta:fmt(f.size)});
  var im=new Image();im.onload=function(){a.meta=im.naturalWidth+'×'+im.naturalHeight+' · '+fmt(f.size);
   try{var c=D.createElement('canvas');c.width=c.height=24;var g=c.getContext('2d');g.drawImage(im,0,0,24,24);var d=g.getImageData(0,0,24,24).data,m={};
    for(var i=0;i<d.length;i+=4){if(d[i+3]<128)continue;var q=[d[i]>>5,d[i+1]>>5,d[i+2]>>5].join();m[q]=(m[q]||0)+1}
    a.pal=Object.keys(m).sort(function(x,y){return m[y]-m[x]}).slice(0,4).map(function(q){var v=q.split(',');return 'rgb('+(v[0]*36+18)+','+(v[1]*36+18)+','+(v[2]*36+18)+')'})}catch(e){}
   render(a)};im.onerror=function(){render(a)};im.src=url;buzz()}
-async function ocr(a){if(a.busy)return;a.busy=true;a.meta='Memuat mesin OCR…';render(a);
+async function ocr(a){if(a.busy)return;return withHeavy(async function(){if(a.busy)return;a.busy=true;a.meta='Memuat mesin OCR…';render(a);
  try{if(!window.Tesseract)await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
   var r=await window.Tesseract.recognize(a.file,'eng+ind',{logger:function(m){if(m&&m.status==='recognizing text'){a.meta='Membaca teks… '+Math.round(m.progress*100)+'%';prog(a,m.progress);var s=$('small',a.chip);if(s)s.textContent=a.meta}}});
   var t=(r&&r.data&&r.data.text||'').trim();if(!t){a.meta='Tidak ada teks terbaca';a.busy=false;render(a);prog(a,0);return}
   a.text=t;a.ocr=true;a.name=a.name+' (OCR)';var ok=put(a);a.busy=false;a.meta=ok?(t.length+' karakter terbaca'):'Gagal menyisipkan';render(a);prog(a,0)}
- catch(e){a.busy=false;a.meta=fmt(a.size);render(a);prog(a,0);toast('OCR gagal: '+(e&&e.message||e),true)}}
+ catch(e){a.busy=false;a.meta=fmt(a.size);render(a);prog(a,0);toast('OCR gagal: '+(e&&e.message||e),true)}})}
 var TXT=/\.(txt|md|markdown|json|json5|csv|tsv|log|xml|html?|css|scss|js|mjs|cjs|jsx|ts|tsx|py|rb|go|rs|java|kt|c|h|cpp|hpp|cs|php|sh|bash|sql|ya?ml|toml|ini|env|cfg|conf|tex|srt|vtt|svg|ipynb|r|swift|lua|dart)$/i;
 async function handle(list){if(!list||!list.length)return;if(busy()){toast('Tunggu proses selesai dulu',true);return}reveal();
  var fs=Array.prototype.slice.call(list).slice(0,8);
