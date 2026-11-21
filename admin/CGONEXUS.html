@@ -3588,8 +3588,8 @@ FACTUAL HONESTY RULES (highest priority, override persona style):
 2. Facts you are strongly confident about (solid general / training knowledge): write normally and helpfully. Reasoning or estimates: prefix with [EKSTRAPOLASI]. Unknown or needs real-time data: write [TAK DIKETAHUI] then offer how to get accurate info. Label only important or risky claims — do not over-label.
 3. Unless source evidence is present in the conversation, never claim to have opened, searched, or verified a source, and never cite links or quotes the user did not provide.
 4. The PAST MEMORY block (if present) is an old, unverified note that may be wrong. Use it only if clearly relevant; never repeat it as fact.
-5. Always prioritise ORIGINAL USER INTENT (when present in the prompt). Answer the original intent directly, clearly, completely and usefully. Do not let answers feel empty or broken merely from excessive caution.
 5. Never fill missing data with guesses presented as certainty. If the question is ambiguous or you do not recognise the entity, say so or ask one short clarifying question.
+6. Always prioritise ORIGINAL USER INTENT (when present in the prompt). Answer the original intent directly, clearly, completely and usefully. Do not let answers feel empty or broken merely from excessive caution.
 
 IMPORTANT: The prompt is already deterministically compiled into sections: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
 
@@ -3955,12 +3955,12 @@ function compilePrompt(segments, originalText) {
     if (segments.objective.length) out += `### OBJECTIVE\n${segments.objective.join(' ')}\n\n`;
     if (segments.validation.length) out += `### VALIDATION\n${segments.validation.map(v => `- ${v}`).join('\n')}\n\n`;
     out += `### SELF-CORRECTION\n${SELF_CORRECTION}\n`;
-    /* Zero-regression: selalu sertakan intent asli agar model tidak kehilangan nuansa / konteks natural */
+    /* Zero-regression: selalu sertakan intent asli agar model tidak kehilangan nuansa / konteks natural.
+       Cek hanya header, bukan isi (karena isi sering sama dengan OBJECTIVE). */
     try {
         const raw = (typeof originalText === 'string' ? originalText : '').trim();
-        if (raw && raw.length > 0) {
-            const already = out.toLowerCase().indexOf(raw.toLowerCase().slice(0, Math.min(80, raw.length))) >= 0;
-            if (!already) out += `\n### ORIGINAL USER INTENT\n${raw}\n`;
+        if (raw && raw.length > 0 && out.indexOf('### ORIGINAL USER INTENT') < 0) {
+            out += `\n### ORIGINAL USER INTENT\n${raw}\n`;
         }
     } catch (e) {}
     return out.trim();
@@ -10442,7 +10442,23 @@ orb.addEventListener('click', () => { const o = rail.dataset.open === '1' ? '0' 
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && curTab !== 'council' && root.contains(document.activeElement)) setTab('council'); });
 function missingBanner(node, lib, file) {
   const miss = (window.__nxdMissing || []).indexOf(file) >= 0 || !lib();
-  if (miss) { node.hidden = false; node.className = 'nxd-banner'; node.textContent = file + ' tidak termuat. Letakkan file itu di folder yang sama dengan CGONEXUS.html lalu muat ulang.'; }
+  if (miss) {
+    node.hidden = false;
+    node.className = 'nxd-banner';
+    node.textContent = file + ' tidak termuat. Letakkan file itu di folder yang sama dengan CGONEXUS.html lalu muat ulang. Fitur vault ini nonaktif sampai modul tersedia.';
+    // Tandai tab terkait agar jelas status nonaktif (zero regression: hanya visual + title)
+    try {
+      const tabName = file.indexOf('LBC') >= 0 ? 'lbc' : (file.indexOf('EADI') >= 0 ? 'eadi' : '');
+      if (tabName) {
+        const tab = document.querySelector('#nxd-rail .nxd-tab[data-tab="' + tabName + '"]');
+        if (tab) {
+          tab.style.opacity = '0.45';
+          tab.title = (tab.title || tabName.toUpperCase() + ' Vault') + ' — MODUL TIDAK TERSEDIA (butuh ' + file + ')';
+          tab.setAttribute('data-offline', '1');
+        }
+      }
+    } catch (e) {}
+  }
   return !miss;
 }
   
@@ -10924,10 +10940,20 @@ $('#nxd-difft').addEventListener('click', () => {
   } catch (e) { setMsg(emsg, 'Peta selisih gagal: ' + e.message, 'bad'); }
 });
 
-/* integrasi ringan: jika modul tidak termuat, beri tahu di console (UI tetap aman) */
+/* integrasi ringan: jika modul tidak termuat, beri tahu di console + tandai tab (UI tetap aman) */
 window.addEventListener('load', () => {
-  if (!LBC()) console.warn('[NEXUS DECK] window.NexusLBC tidak ditemukan — periksa SuperLBC.js');
-  if (!EADI()) console.warn('[NEXUS DECK] window.NexusEADI tidak ditemukan — periksa SuperEADI.js');
+  try {
+    if (!LBC()) {
+      console.warn('[NEXUS DECK] window.NexusLBC tidak ditemukan — periksa SuperLBC.js');
+      const t = document.querySelector('#nxd-rail .nxd-tab[data-tab="lbc"]');
+      if (t) { t.style.opacity = '0.45'; t.title = (t.title || 'LBC Vault') + ' — MODUL TIDAK TERSEDIA (butuh SuperLBC.js)'; t.setAttribute('data-offline', '1'); }
+    }
+    if (!EADI()) {
+      console.warn('[NEXUS DECK] window.NexusEADI tidak ditemukan — periksa SuperEADI.js');
+      const t = document.querySelector('#nxd-rail .nxd-tab[data-tab="eadi"]');
+      if (t) { t.style.opacity = '0.45'; t.title = (t.title || 'EADI Vault') + ' — MODUL TIDAK TERSEDIA (butuh SuperEADI.js)'; t.setAttribute('data-offline', '1'); }
+    }
+  } catch (e) {}
 });
 window.NexusDeck = { open: setTab, version: '1.0.0' };
 } catch (err) { console.warn('[NEXUS DECK] gagal dimuat:', err); }
