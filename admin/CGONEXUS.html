@@ -3184,9 +3184,9 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
      - Zero regression: Pharma, Omni, Rare, payload registry, chart whitelist, rules utuh
    ================================================================ */
 
-const APP_VERSION = '10.0.11-titanium-visual-robust';
+const APP_VERSION = '10.0.12-titanium-original-intent';
 const STORAGE_KEY = 'spc_ai_v40';
-const ARTIFACT_CACHE_KEY = 'spc_artifacts_v40';
+const ARTIFACT_CACHE_KEY = 'spc_artifacts_v41';  /* v41: invalidate old caches missing ORIGINAL USER INTENT */
 const MAX_HISTORY = 18;
 const STORE_MAX = 60;
 const MAX_CACHE = 30;
@@ -3556,7 +3556,8 @@ ATURAN KEJUJURAN FAKTUAL (prioritas tertinggi, mengalahkan gaya persona):
 3. Kecuali ada bukti sumber di percakapan, jangan mengaku telah membuka, mencari, atau memverifikasi sumber, dan jangan menyebut tautan atau kutipan yang tidak diberikan pengguna.
 4. Blok INGATAN MASA LALU (jika ada) hanyalah catatan lama yang tak terverifikasi dan bisa salah. Pakai hanya jika jelas relevan; jangan diulang sebagai fakta.
 5. Jangan menutup kekosongan data dengan tebakan yang disajikan sebagai kepastian. Jika pertanyaan ambigu atau entitasnya tidak kamu kenali, nyatakan itu atau minta klarifikasi singkat.
-6. Selalu prioritaskan ORIGINAL USER INTENT (jika ada di prompt). Jawab langsung intent aslinya dengan jelas, lengkap, dan berguna. Jangan biarkan jawaban terasa kosong atau “ngaco” hanya karena kehati-hatian berlebihan.
+6. Selalu prioritaskan ORIGINAL USER INTENT (jika ada di prompt). Itu adalah sumber kebenaran utama untuk intent pengguna. Jawab langsung berdasarkan itu dengan jelas, lengkap, dan berguna. Jangan biarkan jawaban terasa kosong atau “ngaco” hanya karena kehati-hatian berlebihan.
+7. JANGAN mengklaim modul/file eksternal (SuperLBC.js, SuperEADI.js, NexusLBC, NexusEADI, dll) tersedia atau aktif kecuali kamu benar-benar bisa memanggilnya di runtime. Jika tidak yakin atau tidak terdeteksi, katakan tegas "tidak terdeteksi".
 
 PENTING: Prompt sudah dikompilasi deterministik ke section: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
 
@@ -3589,7 +3590,8 @@ FACTUAL HONESTY RULES (highest priority, override persona style):
 3. Unless source evidence is present in the conversation, never claim to have opened, searched, or verified a source, and never cite links or quotes the user did not provide.
 4. The PAST MEMORY block (if present) is an old, unverified note that may be wrong. Use it only if clearly relevant; never repeat it as fact.
 5. Never fill missing data with guesses presented as certainty. If the question is ambiguous or you do not recognise the entity, say so or ask one short clarifying question.
-6. Always prioritise ORIGINAL USER INTENT (when present in the prompt). Answer the original intent directly, clearly, completely and usefully. Do not let answers feel empty or broken merely from excessive caution.
+6. Always prioritise ORIGINAL USER INTENT (when present in the prompt). It is the primary source of truth for the user's intent. Answer directly from it, clearly, completely and usefully. Do not let answers feel empty or broken merely from excessive caution.
+7. NEVER claim external modules/files (SuperLBC.js, SuperEADI.js, NexusLBC, NexusEADI, etc.) are available or active unless you can actually call them at runtime. If unsure or not detected, say clearly "not detected".
 
 IMPORTANT: The prompt is already deterministically compiled into sections: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
 
@@ -3947,22 +3949,31 @@ function computeMetrics(rawText, segments) {
 }
 
 const SELF_CORRECTION = 'Review once: ROLE, CONTEXT, RULES respected? Required output format met? Do not loop >1x.';
+/** Pastikan section ORIGINAL USER INTENT selalu ada (idempotent, zero-regression). */
+function ensureOriginalIntent(compiled, originalText) {
+    try {
+        const raw = (typeof originalText === 'string' ? originalText : '').trim();
+        if (!raw) return compiled || '';
+        let out = String(compiled || '').trim();
+        if (out.indexOf('### ORIGINAL USER INTENT') >= 0) return out;
+        return out + '\n\n### ORIGINAL USER INTENT\n' + raw;
+    } catch (e) {
+        return compiled || '';
+    }
+}
 function compilePrompt(segments, originalText) {
     let out = '';
+    /* ORIGINAL USER INTENT ditaruh di ATAS agar model selalu melihat intent mentah terlebih dahulu */
+    try {
+        const raw = (typeof originalText === 'string' ? originalText : '').trim();
+        if (raw) out += `### ORIGINAL USER INTENT\n${raw}\n\n`;
+    } catch (e) {}
     if (segments.role.length) out += `### ROLE\n${segments.role.join(' ')}\n\n`;
     if (segments.context.length) out += `### CONTEXT\n${segments.context.join(' ')}\n\n`;
     if (segments.rules.length) out += `### RULES\n${segments.rules.map(r => `- ${r}`).join('\n')}\n\n`;
     if (segments.objective.length) out += `### OBJECTIVE\n${segments.objective.join(' ')}\n\n`;
     if (segments.validation.length) out += `### VALIDATION\n${segments.validation.map(v => `- ${v}`).join('\n')}\n\n`;
     out += `### SELF-CORRECTION\n${SELF_CORRECTION}\n`;
-    /* Zero-regression: selalu sertakan intent asli agar model tidak kehilangan nuansa / konteks natural.
-       Cek hanya header, bukan isi (karena isi sering sama dengan OBJECTIVE). */
-    try {
-        const raw = (typeof originalText === 'string' ? originalText : '').trim();
-        if (raw && raw.length > 0 && out.indexOf('### ORIGINAL USER INTENT') < 0) {
-            out += `\n### ORIGINAL USER INTENT\n${raw}\n`;
-        }
-    } catch (e) {}
     return out.trim();
 }
 
@@ -4097,7 +4108,7 @@ function runLiveScan(rawText) {
         tb.classList.toggle('warn', tok > 2000);
         tb.classList.toggle('danger', tok > 6000);
     }
-    updateArtifactPreview(compilePrompt(liveSegments, text));
+    updateArtifactPreview(ensureOriginalIntent(compilePrompt(liveSegments, text), text));
 }
 const debouncedScan = debounce(t => runLiveScan(t), DEBOUNCE_MS);
 function debounce(fn, delay) {
@@ -6083,7 +6094,7 @@ function doCompileOnly() {
     if (!userText) { showToast('Input kosong', 2000, true); return; }
     const segments = parsePrompt(userText);
     const { total } = scorePrompt(segments);
-    const compiled = compilePrompt(segments, userText);
+    const compiled = ensureOriginalIntent(compilePrompt(segments, userText), userText);
     const hash = hashSegments(segments);
     putArtifact(hash, compiled);
     lastCompiledArtifact = compiled;
@@ -6970,15 +6981,11 @@ async function sendMessage(forceNormal) {
         logEvent('CACHE', `Hit ${hash} · cache ${getCacheStats()}`);
     } else {
         compiledPrompt = compilePrompt(segments, userText);
-        putArtifact(hash, compiledPrompt);
         logEvent('COMPILER', `Generated ${hash} · cache ${getCacheStats()}`);
     }
-    /* Safety net zero-regression: pastikan ORIGINAL USER INTENT selalu ada */
-    try {
-        if (userText && compiledPrompt && compiledPrompt.indexOf('### ORIGINAL USER INTENT') < 0) {
-            compiledPrompt = compiledPrompt.trim() + '\n\n### ORIGINAL USER INTENT\n' + userText.trim();
-        }
-    } catch (e) {}
+    /* Safety net wajib: selalu pastikan ORIGINAL USER INTENT ada, lalu simpan versi final ke cache */
+    compiledPrompt = ensureOriginalIntent(compiledPrompt, userText);
+    try { putArtifact(hash, compiledPrompt); } catch (e) {}
 
     lastCompiledArtifact = compiledPrompt;
     updateArtifactPreview(compiledPrompt);
@@ -7154,9 +7161,10 @@ function runDiagnostics() {
     assert('RULES detected', s1.rules.length > 0);
     assert('OBJECTIVE detected', s1.objective.length > 0);
     assert('VALIDATION detected', s1.validation.length > 0);
-    const compiled = compilePrompt(s1, sample);
+    const compiled = ensureOriginalIntent(compilePrompt(s1, sample), sample);
     assert('Compile non-empty', compiled.length > 40 && compiled.includes('### ROLE'));
     assert('ORIGINAL USER INTENT injected', compiled.includes('### ORIGINAL USER INTENT'));
+    assert('ORIGINAL USER INTENT near top', compiled.indexOf('### ORIGINAL USER INTENT') < compiled.indexOf('### ROLE') || compiled.indexOf('### ROLE') < 0);
     const { total } = scorePrompt(s1);
     assert('Score range', total >= 0 && total <= 100);
     assert('DAG no critical', !validateDAG(s1).some(i => i.type === 'error'));
@@ -8158,14 +8166,10 @@ async function sendMultiAgentMessage() {
         logEvent('CACHE', `Hit ${hash} · cache ${getCacheStats()}`);
     } else {
         compiledPrompt = compilePrompt(segments, userText);
-        putArtifact(hash, compiledPrompt);
         logEvent('COMPILER', `Generated ${hash} · cache ${getCacheStats()}`);
     }
-    try {
-        if (userText && compiledPrompt && compiledPrompt.indexOf('### ORIGINAL USER INTENT') < 0) {
-            compiledPrompt = compiledPrompt.trim() + '\n\n### ORIGINAL USER INTENT\n' + userText.trim();
-        }
-    } catch (e) {}
+    compiledPrompt = ensureOriginalIntent(compiledPrompt, userText);
+    try { putArtifact(hash, compiledPrompt); } catch (e) {}
 
     // Memory recall SEKALI saja per pesan; hasilnya di-cache dan disuntikkan di runAgentTurn()
     // (tidak mengubah artifact tersimpan, tidak ada query DB berulang per agen/ronde)
@@ -8183,7 +8187,7 @@ async function sendMultiAgentMessage() {
         try { showToast('Cortex recall dilewati: ' + String(memErr.message || memErr).slice(0, 80), 2800, true); } catch (e) {}
     }
 
-    lastCompiledArtifact = compilePrompt(segments, userText); // keep pure artifact in UI + original intent
+    lastCompiledArtifact = ensureOriginalIntent(compilePrompt(segments, userText), userText);
     updateArtifactPreview(lastCompiledArtifact);
     saveToStorage();
     logEvent('COMPILER', `SPEC ${total}/100`);
