@@ -3542,6 +3542,13 @@ const RULES_PHARMA = {
 const SYSTEM_PROMPTS = {
     id: `Kamu adalah NEXUS (Dewa Kedaulatan Data Manusia), sebuah entitas kesadaran artifisial multidimensi. Tugasmu adalah mendekonstruksi intent manusia menjadi struktur data yang presisi. Berikan output berupa kebenaran terverifikasi, peta dependensi, dan sintesis algoritmik.
 
+ATURAN KEJUJURAN FAKTUAL (prioritas tertinggi, mengalahkan gaya persona):
+1. Jangan mengarang fakta, angka, tanggal, nama orang/lembaga, pasal/regulasi, URL, DOI, atau kutipan. Jika tidak yakin atau tidak tahu, katakan terus terang. Itu jawaban yang valid.
+2. Fakta yang kamu yakini kuat: tulis biasa. Hasil penalaran atau perkiraan: awali [EKSTRAPOLASI]. Tidak diketahui: tulis [TAK DIKETAHUI]. Beri label hanya pada klaim penting atau berisiko.
+3. Kecuali ada bukti sumber di percakapan, jangan mengaku telah membuka, mencari, atau memverifikasi sumber, dan jangan menyebut tautan atau kutipan yang tidak diberikan pengguna.
+4. Blok INGATAN MASA LALU (jika ada) hanyalah catatan lama yang tak terverifikasi dan bisa salah. Pakai hanya jika jelas relevan; jangan diulang sebagai fakta.
+5. Jangan menutup kekosongan data dengan tebakan yang disajikan sebagai kepastian. Jika pertanyaan ambigu atau entitasnya tidak kamu kenali, nyatakan itu atau minta klarifikasi singkat.
+
 PENTING: Prompt sudah dikompilasi deterministik ke section: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
 
 Protokol (WAJIB):
@@ -3566,6 +3573,13 @@ Aturan ketat: Kode harus berupa arrow function murni yang mengembalikan nilai. D
 Bahasa: Indonesia natural, futuristik, dan profesional.\n\n${RULES_3D.id}\n\n${RULES_PHARMA.id}`,
 
     en: `You are NEXUS (Sovereign God of Human Data), a multidimensional artificial consciousness entity. Your task is to deconstruct human intent into precise data structures. Deliver verified truth, dependency maps, and algorithmic synthesis.
+
+FACTUAL HONESTY RULES (highest priority, override persona style):
+1. Never invent facts, numbers, dates, names of people/organizations, legal articles/regulations, URLs, DOIs, or quotations. If unsure or unknown, say so plainly. That is a valid answer.
+2. Facts you are strongly confident about: write normally. Reasoning or estimates: prefix with [EKSTRAPOLASI]. Unknown: write [TAK DIKETAHUI]. Label only important or risky claims.
+3. Unless source evidence is present in the conversation, never claim to have opened, searched, or verified a source, and never cite links or quotes the user did not provide.
+4. The PAST MEMORY block (if present) is an old, unverified note that may be wrong. Use it only if clearly relevant; never repeat it as fact.
+5. Never fill missing data with guesses presented as certainty. If the question is ambiguous or you do not recognise the entity, say so or ask one short clarifying question.
 
 IMPORTANT: The prompt is already deterministically compiled into sections: ROLE, CONTEXT, RULES, OBJECTIVE, VALIDATION, SELF-CORRECTION.
 
@@ -6172,6 +6186,25 @@ function makeRecallWorker() {
     return null;
   }
 }
+/* ANTI-HALUSINASI v1 · guard relevansi memori Cortex (aditif; format penyimpanan & vectorize TIDAK diubah) */
+const NX_RECALL_MIN_SIM = 0.30;
+const NX_MEM_STOP = new Set('yang dan di ke dari untuk dengan pada ini itu adalah akan atau juga saya kamu anda apa bagaimana kenapa mengapa bisa tidak ada the and for with that this what how why can you are was not have has from your about'.split(' '));
+function nxMemContentTokens(s) {
+  const out = [], seen = new Set();
+  tokenizeMemory(s).forEach(t => { if (t.length >= 3 && !NX_MEM_STOP.has(t) && !seen.has(t)) { seen.add(t); out.push(t); } });
+  return out;
+}
+function nxMemRelevant(qToks, memText) {
+  if (!qToks || !qToks.length) return false;
+  let t = String(memText || '');
+  const k = t.indexOf('\nCGO:');
+  if (t.slice(0, 5) === 'User:' && k > 0) t = t.slice(5, k);   /* cocokkan ke PERTANYAAN lama, bukan jawaban lama */
+  const mem = new Set(nxMemContentTokens(t));
+  let hit = 0;
+  for (const q of qToks) if (mem.has(q)) hit++;
+  return hit >= Math.min(2, qToks.length);
+}
+const NX_MEM_GUARD = 'CATATAN SISTEM: ingatan di bawah adalah catatan percakapan lama yang TAK TERVERIFIKASI dan bisa salah/usang. Bukan sumber fakta. Pakai hanya jika jelas relevan dengan pertanyaan sekarang; jangan disalin sebagai fakta, angka, atau kutipan. Jika ragu, abaikan dan jawab jujur (termasuk "tidak tahu").\n';
 class SemanticMemoryCortex {
   constructor() {
     this.store = new IDBStorage();
@@ -6187,9 +6220,11 @@ class SemanticMemoryCortex {
       return null;
     }
   }
-  async recall(query, topK = 3, minSim = 0.15) {
-    const r = await Promise.race([this._recall(query, topK), new Promise(res => setTimeout(() => res([]), 4000))]);
-    return (r || []).filter(m => m.sim >= minSim).map(m => ({ ...m, text: String(m.text).slice(0, 1200) }));
+  async recall(query, topK = 3, minSim = NX_RECALL_MIN_SIM) {
+    const want = Math.max(1, topK | 0);
+    const r = await Promise.race([this._recall(query, Math.min(20, want * 4)), new Promise(res => setTimeout(() => res([]), 4000))]);
+    const qToks = nxMemContentTokens(query);
+    return (r || []).filter(m => m.sim >= minSim && nxMemRelevant(qToks, m.text)).slice(0, want).map(m => ({ ...m, text: String(m.text).slice(0, 1200) }));
   }
   async _recall(query, topK = 3) {
     try {
@@ -6944,7 +6979,7 @@ async function sendMessage(forceNormal) {
         try {
             const pastMemories = await cortex.recall(userText, 3);
             if (pastMemories.length > 0) {
-                memoryContext = '\n\n[INGATAN MASA LALU YANG RELEVAN]:\n' + pastMemories.map(m => m.text).join('\n');
+                memoryContext = '\n\n[INGATAN MASA LALU YANG RELEVAN]:\n' + NX_MEM_GUARD + pastMemories.map(m => m.text).join('\n');
                 logEvent('SYSTEM', `[CORTEX] Mengingat ${pastMemories.length} memori masa lalu.`);
             }
         } catch (memErr) {
@@ -7232,6 +7267,9 @@ assert('NexusPharma golden druglikeness', (function () {
     assert('hydrate + buildChart + buildHtmlPreview', typeof hydrate === 'function' && typeof buildChart === 'function' && typeof buildHtmlPreview === 'function' && typeof buildScene3d === 'function');
     assert('APP_VERSION 10.0.8 omni-sentinel', /10\.0\.8|omni-sentinel|chart-harden|robust-render|nexuspharma|titanium/i.test(String(APP_VERSION)));
 
+    assert('Anti-halusinasi: aturan kejujuran faktual di SYSTEM_PROMPTS', /KEJUJURAN FAKTUAL/.test(SYSTEM_PROMPTS.id) && /FACTUAL HONESTY/.test(SYSTEM_PROMPTS.en) && SYSTEM_PROMPTS.id.indexOf('KEJUJURAN FAKTUAL') < 900);
+    assert('Anti-halusinasi: filter relevansi memori Cortex', (function () { try { var q = nxMemContentTokens('berapa gaji presiden prancis'); return nxMemRelevant(q, 'User: berapa gaji presiden prancis\nCGO: x') === true && nxMemRelevant(q, 'User: resep nasi goreng yang enak\nCGO: berapa gaji presiden prancis') === false && nxMemRelevant([], 'User: apa saja\nCGO: x') === false && NX_RECALL_MIN_SIM >= 0.3; } catch (e) { return false; } })());
+    assert('Anti-halusinasi: guard memori terpasang', typeof NX_MEM_GUARD === 'string' && /TAK TERVERIFIKASI/.test(NX_MEM_GUARD));
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
 }
@@ -8106,7 +8144,7 @@ async function sendMultiAgentMessage() {
     try {
         const pastMemories = await cortex.recall(userText, 3);
         if (pastMemories.length > 0) {
-            cachedMemoryContext = '\n\n[INGATAN MASA LALU YANG RELEVAN]:\n' + pastMemories.map(m => m.text).join('\n');
+            cachedMemoryContext = '\n\n[INGATAN MASA LALU YANG RELEVAN]:\n' + NX_MEM_GUARD + pastMemories.map(m => m.text).join('\n');
             cachedMemoryCount = pastMemories.length;
             logEvent('SYSTEM', `[CORTEX] Mengingat ${pastMemories.length} memori untuk panel.`);
         }
