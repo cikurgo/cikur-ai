@@ -16395,6 +16395,44 @@ var atts=[],uid=0,PART=11000;
 /* Global lock: hanya 1 pekerjaan berat (PDF/OCR) pada satu waktu — cegah OOM di perangkat rendah */
 var _nx35Heavy = Promise.resolve();
 function withHeavy(fn){var prev=_nx35Heavy;var done;_nx35Heavy=new Promise(function(r){done=r});return prev.then(function(){return fn()}).finally(function(){try{done()}catch(e){}})}
+/* ===== Validasi file ketat (whitelist MIME + deny extension berbahaya) + sinyal anomali ringan ===== */
+var ALLOW_MIME = {
+  'text/plain':1,'text/markdown':1,'text/csv':1,'text/tab-separated-values':1,'text/html':1,'text/css':1,
+  'text/javascript':1,'application/javascript':1,'application/json':1,'application/xml':1,'text/xml':1,
+  'application/pdf':1,'image/png':1,'image/jpeg':1,'image/jpg':1,'image/gif':1,'image/webp':1,'image/svg+xml':1,
+  'application/x-yaml':1,'text/yaml':1,'application/toml':1,'text/x-python':1,'text/x-java-source':1
+};
+var DENY_EXT = /\.(exe|dll|bat|cmd|com|msi|scr|ps1|vbs|js\.exe|hta|jar|apk|dmg|pkg|sh\.exe|php\d*|asp|aspx|cgi|pl|py\.exe)$/i;
+var TXT=/\.(txt|md|markdown|json|json5|csv|tsv|log|xml|html?|css|scss|js|mjs|cjs|jsx|ts|tsx|py|rb|go|rs|java|kt|c|h|cpp|hpp|cs|php|sh|bash|sql|ya?ml|toml|ini|env|cfg|conf|tex|srt|vtt|svg|ipynb|r|swift|lua|dart)$/i;
+var _nx35Anom = {rejects:0, heavy:0, lastReject:0, lastHeavy:0};
+function nx35Anom(kind, detail){
+  try{
+    var now = Date.now();
+    if(kind==='reject'){_nx35Anom.rejects++; _nx35Anom.lastReject=now;}
+    if(kind==='heavy'){_nx35Anom.heavy++; _nx35Anom.lastHeavy=now;}
+    if(typeof logEvent==='function'){
+      if(kind==='reject' && _nx35Anom.rejects>=3) logEvent('AKU','[ANOMALI] penolakan file berulang ('+_nx35Anom.rejects+'): '+(detail||''));
+      if(kind==='heavy' && _nx35Anom.heavy>=4) logEvent('AKU','[ANOMALI] pekerjaan berat berulang ('+_nx35Anom.heavy+'): '+(detail||''));
+    }
+  }catch(e){}
+}
+function fileAllowed(f){
+  if(!f || !f.name) return {ok:false, reason:'nama file tidak valid'};
+  var name = String(f.name);
+  if(DENY_EXT.test(name)) return {ok:false, reason:'ekstensi berbahaya diblokir'};
+  var ext = (name.split('.').pop()||'').toLowerCase();
+  var mime = String(f.type||'').toLowerCase();
+  // Izinkan jika MIME ada di whitelist, atau ekstensi teks/kode yang dikenal (TXT regex), atau image/*, atau pdf
+  if(mime && ALLOW_MIME[mime]) return {ok:true};
+  if(/^image\//.test(mime)) return {ok:true};
+  if(mime==='application/pdf' || ext==='pdf') return {ok:true};
+  if(TXT.test(name)) return {ok:true};
+  if(/^text\//.test(mime) || /json|xml|javascript|yaml|toml/.test(mime)) return {ok:true};
+  // MIME kosong sering terjadi di mobile — izinkan hanya jika ekstensi aman
+  if(!mime && TXT.test(name)) return {ok:true};
+  if(!mime && /^(png|jpe?g|gif|webp|svg|pdf)$/i.test(ext)) return {ok:true};
+  return {ok:false, reason:'tipe/MIME tidak diizinkan ('+(mime||'kosong')+')'};
+}
 function block(a,t){return '\n\n--- Lampiran: '+a.name+(a.parts.length>1?' (bagian '+(a.i+1)+'/'+a.parts.length+')':'')+' ---\n'+t+'\n--- Akhir lampiran ---\n'}
 function split(t,n){var o=[];while(t.length>n){var c=t.lastIndexOf('\n',n);if(c<n*.8)c=n;o.push(t.slice(0,c));t=t.slice(c)}o.push(t);return o}
 function busy(){return B.hasAttribute('data-busy')||ta.disabled}
@@ -16437,22 +16475,23 @@ function addImage(f){var url=URL.createObjectURL(f),a=add({name:f.name,size:f.si
    for(var i=0;i<d.length;i+=4){if(d[i+3]<128)continue;var q=[d[i]>>5,d[i+1]>>5,d[i+2]>>5].join();m[q]=(m[q]||0)+1}
    a.pal=Object.keys(m).sort(function(x,y){return m[y]-m[x]}).slice(0,4).map(function(q){var v=q.split(',');return 'rgb('+(v[0]*36+18)+','+(v[1]*36+18)+','+(v[2]*36+18)+')'})}catch(e){}
   render(a)};im.onerror=function(){render(a)};im.src=url;buzz()}
-async function ocr(a){if(a.busy)return;return withHeavy(async function(){if(a.busy)return;a.busy=true;a.meta='Memuat mesin OCR…';render(a);
+async function ocr(a){if(a.busy)return;nx35Anom('heavy','ocr');return withHeavy(async function(){if(a.busy)return;a.busy=true;a.meta='Memuat mesin OCR…';render(a);
  try{if(!window.Tesseract)await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
   var r=await window.Tesseract.recognize(a.file,'eng+ind',{logger:function(m){if(m&&m.status==='recognizing text'){a.meta='Membaca teks… '+Math.round(m.progress*100)+'%';prog(a,m.progress);var s=$('small',a.chip);if(s)s.textContent=a.meta}}});
   var t=(r&&r.data&&r.data.text||'').trim();if(!t){a.meta='Tidak ada teks terbaca';a.busy=false;render(a);prog(a,0);return}
   a.text=t;a.ocr=true;a.name=a.name+' (OCR)';var ok=put(a);a.busy=false;a.meta=ok?(t.length+' karakter terbaca'):'Gagal menyisipkan';render(a);prog(a,0)}
  catch(e){a.busy=false;a.meta=fmt(a.size);render(a);prog(a,0);toast('OCR gagal: '+(e&&e.message||e),true)}})}
-var TXT=/\.(txt|md|markdown|json|json5|csv|tsv|log|xml|html?|css|scss|js|mjs|cjs|jsx|ts|tsx|py|rb|go|rs|java|kt|c|h|cpp|hpp|cs|php|sh|bash|sql|ya?ml|toml|ini|env|cfg|conf|tex|srt|vtt|svg|ipynb|r|swift|lua|dart)$/i;
 async function handle(list){if(!list||!list.length)return;if(busy()){toast('Tunggu proses selesai dulu',true);return}reveal();
  var fs=Array.prototype.slice.call(list).slice(0,8);
  for(var i=0;i<fs.length;i++){var f=fs[i];
-  if(f.size>25*1048576){toast(f.name+' terlalu besar (maks 25 MB)',true);continue}
-  try{if(/^image\//.test(f.type))addImage(f);
-   else if(/\.pdf$/i.test(f.name)||f.type==='application/pdf')await readPdf(f);
-   else if(/^text\//.test(f.type)||TXT.test(f.name)||/json|xml|javascript/.test(f.type)){if(f.size>2*1048576){toast(f.name+': teks >2 MB, dipotong bagian awal',true);f=f.slice(0,2*1048576)&&new File([f.slice(0,2*1048576)],fs[i].name)}addText(f,await readText(f))}
+  if(f.size>25*1048576){toast(f.name+' terlalu besar (maks 25 MB)',true);nx35Anom('reject',f.name+' size');continue}
+  var chk=fileAllowed(f);
+  if(!chk.ok){toast('Ditolak: '+f.name+' — '+chk.reason,true);nx35Anom('reject',f.name+' '+chk.reason);continue}
+  try{if(/^image\//.test(f.type)||/\.(png|jpe?g|gif|webp|svg)$/i.test(f.name))addImage(f);
+   else if(/\.pdf$/i.test(f.name)||f.type==='application/pdf'){nx35Anom('heavy','pdf');await readPdf(f);}
+   else if(/^text\//.test(f.type)||TXT.test(f.name)||/json|xml|javascript|yaml|toml/.test(f.type)){if(f.size>2*1048576){toast(f.name+': teks >2 MB, dipotong bagian awal',true);f=new File([f.slice(0,2*1048576)],fs[i].name,{type:f.type})}addText(f,await readText(f))}
    else toast('Format belum didukung: '+f.name,true)}
-  catch(e){toast('Tidak bisa membaca '+f.name,true)}}}
+  catch(e){toast('Tidak bisa membaca '+f.name,true);nx35Anom('reject',f.name+' read-error')}}}
 bAtt.addEventListener('click',function(){fin.click()});
 fin.addEventListener('change',function(){handle(fin.files);fin.value=''});
 var dc=0;function hasF(e){var t=e.dataTransfer&&e.dataTransfer.types;return !!t&&Array.prototype.indexOf.call(t,'Files')>=0}
@@ -16542,7 +16581,7 @@ window.addEventListener('keydown',function(e){
  if(e.key==='Escape'){if(look.classList.contains('open')){e.stopImmediatePropagation();closeLook();return}if(find.classList.contains('open')){e.stopImmediatePropagation();closeFind();return}}
  if(!(e.ctrlKey||e.metaKey)||!e.shiftKey||!e.key)return;var k=e.key.toLowerCase();
  if(k==='u'){e.preventDefault();fin.click()}else if(k==='f'){e.preventDefault();openFind()}else if(k==='l'){e.preventDefault();look.classList.contains('open')?closeLook():openLook()}},true);
-window.NX35={prefs:function(){return JSON.parse(JSON.stringify(P))},attach:handle,find:openFind,look:openLook,exportMd:exportMd};
+window.NX35={prefs:function(){return JSON.parse(JSON.stringify(P))},attach:handle,find:openFind,look:openLook,exportMd:exportMd,anomaly:function(){return {rejects:_nx35Anom.rejects,heavy:_nx35Anom.heavy,lastReject:_nx35Anom.lastReject,lastHeavy:_nx35Anom.lastHeavy}},fileAllowed:fileAllowed};
 })();
 </script>
 <!--NX-AKU-BEGIN-->
