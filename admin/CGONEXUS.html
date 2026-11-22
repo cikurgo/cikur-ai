@@ -18310,5 +18310,339 @@ html body #nx9-panel{z-index:50}
 })();
 </script>
 
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     NEXUS · HAZARD-CONTROLLED FAULT INJECTOR 3.7.4.eng-C
+     SuperEADI + Memory-Leak Scan only. Zero regression on 8 perfect modules.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script id="nx-hazard-eadi-374c">
+(function () {
+  'use strict';
+  if (window.__nxHazardEadi374c) return;
+  window.__nxHazardEadi374c = true;
+
+  var TAG = '[NX-HAZARD-EADI]';
+  function log(){ try{ console.log.apply(console,[TAG].concat([].slice.call(arguments))); }catch(e){} }
+  function warn(){ try{ console.warn.apply(console,[TAG].concat([].slice.call(arguments))); }catch(e){} }
+
+  /* ── Fixed-size trace buffer (max 50). WeakSet for object refs if any.
+     Stack traces are strings → circular buffer; WeakSet cannot hold strings. ── */
+  var MAX_TRACES = 50;
+  var CLEAR_EVERY_N = 8;           /* clear every N fault cycles → force GC path */
+  var traceBuf = new Array(MAX_TRACES);
+  var traceHead = 0;
+  var traceCount = 0;
+  var cycleCount = 0;
+  var objectRefSet = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+
+  function pushTrace(entry) {
+    traceBuf[traceHead] = entry;
+    traceHead = (traceHead + 1) % MAX_TRACES;
+    if (traceCount < MAX_TRACES) traceCount++;
+    if (entry && typeof entry === 'object' && objectRefSet) {
+      try { objectRefSet.add(entry); } catch (e) {}
+    }
+  }
+
+  function clearTraceSet(reason) {
+    var ts = Date.now();
+    for (var i = 0; i < MAX_TRACES; i++) traceBuf[i] = null;
+    traceHead = 0;
+    traceCount = 0;
+    /* WeakSet cannot be cleared; replace reference so old entries become collectible */
+    objectRefSet = typeof WeakSet !== 'undefined' ? new WeakSet() : null;
+    log('trace set cleared', reason || 'scheduled', 'ts=' + ts, 'cycle=' + cycleCount);
+    persistEvent('trace_clear', { reason: String(reason || 'scheduled'), cycle: cycleCount, ts: ts });
+    /* Soft GC hint */
+    try { if (typeof window.gc === 'function') window.gc(); } catch (e) {}
+    return ts;
+  }
+
+  /* ── Token Bucket: burst limit 5000 tokens/sec ── */
+  var TB_CAPACITY = 5000;
+  var TB_REFILL_PER_MS = 5000 / 1000; /* 5 tokens per ms */
+  var tbTokens = TB_CAPACITY;
+  var tbLast = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+  function tokenBucketTake(n) {
+    n = n || 1;
+    var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    var elapsed = Math.max(0, now - tbLast);
+    tbLast = now;
+    tbTokens = Math.min(TB_CAPACITY, tbTokens + elapsed * TB_REFILL_PER_MS);
+    if (tbTokens >= n) {
+      tbTokens -= n;
+      return true;
+    }
+    return false;
+  }
+
+  function tokenBucketWaitMs(n) {
+    n = n || 1;
+    if (tbTokens >= n) return 0;
+    var need = n - tbTokens;
+    return Math.ceil(need / TB_REFILL_PER_MS);
+  }
+
+  /* ── IndexedDB persistence for __nexusLeakCount + event log ── */
+  var IDB_NAME = 'NexusHazardEADI';
+  var IDB_VER = 1;
+  var IDB_STORE = 'leak';
+  var leakCount = 0;
+  var idbReady = null;
+
+  function openIDB() {
+    if (idbReady) return idbReady;
+    idbReady = new Promise(function (resolve, reject) {
+      try {
+        if (!window.indexedDB) { resolve(null); return; }
+        var req = indexedDB.open(IDB_NAME, IDB_VER);
+        req.onupgradeneeded = function (ev) {
+          var db = ev.target.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) {
+            var store = db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+            store.createIndex('ts', 'ts', { unique: false });
+          }
+        };
+        req.onsuccess = function (ev) { resolve(ev.target.result); };
+        req.onerror = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+    return idbReady;
+  }
+
+  function idbPut(record) {
+    return openIDB().then(function (db) {
+      if (!db) return;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).put(record);
+          tx.oncomplete = function () { resolve(true); };
+          tx.onerror = function () { resolve(false); };
+        } catch (e) { resolve(false); }
+      });
+    });
+  }
+
+  function idbGet(id) {
+    return openIDB().then(function (db) {
+      if (!db) return null;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(IDB_STORE, 'readonly');
+          var req = tx.objectStore(IDB_STORE).get(id);
+          req.onsuccess = function () { resolve(req.result || null); };
+          req.onerror = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+    });
+  }
+
+  function persistCounter() {
+    window.__nexusLeakCount = leakCount;
+    return idbPut({
+      id: 'counter',
+      value: leakCount,
+      ts: Date.now()
+    });
+  }
+
+  function persistEvent(type, detail) {
+    var rec = {
+      id: 'evt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      type: String(type || 'event'),
+      detail: detail || {},
+      ts: Date.now(),
+      leakCount: leakCount
+    };
+    /* Keep only recent events: also write a rolling 'lastEvents' summary */
+    return idbPut(rec).then(function () {
+      return idbGet('lastEvents').then(function (prev) {
+        var list = (prev && Array.isArray(prev.list)) ? prev.list.slice(-49) : [];
+        list.push({ type: rec.type, ts: rec.ts, leakCount: leakCount });
+        return idbPut({ id: 'lastEvents', list: list, ts: Date.now() });
+      });
+    });
+  }
+
+  function restoreFromIDB() {
+    return idbGet('counter').then(function (row) {
+      if (row && typeof row.value === 'number' && row.value >= 0) {
+        leakCount = row.value | 0;
+        window.__nexusLeakCount = leakCount;
+        log('restored __nexusLeakCount from IndexedDB =', leakCount, 'ts=' + (row.ts || 0));
+      } else {
+        window.__nexusLeakCount = leakCount;
+        log('no prior counter in IndexedDB — starting at 0');
+      }
+      return leakCount;
+    });
+  }
+
+  /* ── Hazard-controlled faultInject (replaces previous free-running path) ── */
+  var hazardStats = { total: 0, deferred: 0, cleared: 0, post: 0, get: 0, unauth: 0, timeout: 0 };
+  var hazardTimer = null;
+  var pendingInject = false;
+
+  function runFaultOnce() {
+    cycleCount++;
+    /* Token bucket gate */
+    if (!tokenBucketTake(1)) {
+      hazardStats.deferred++;
+      var wait = tokenBucketWaitMs(1);
+      log('tokenBucket throttle — defer', wait + 'ms');
+      if (!pendingInject) {
+        pendingInject = true;
+        setTimeout(function () {
+          pendingInject = false;
+          runFaultOnce();
+        }, Math.max(1, wait));
+      }
+      return;
+    }
+
+    var kinds = ['POST', 'GET', 'unauthorized', 'timeout'];
+    var kind = kinds[(Math.random() * kinds.length) | 0];
+    hazardStats.total++;
+    if (kind === 'POST') hazardStats.post++;
+    else if (kind === 'GET') hazardStats.get++;
+    else if (kind === 'unauthorized') hazardStats.unauth++;
+    else hazardStats.timeout++;
+
+    var stackSnippet = '';
+    try {
+      stackSnippet = (new Error('eadi-fault-' + kind)).stack || '';
+      stackSnippet = String(stackSnippet).slice(0, 400);
+    } catch (e) {}
+
+    pushTrace({
+      kind: kind,
+      ts: Date.now(),
+      stack: stackSnippet,
+      cycle: cycleCount
+    });
+
+    try {
+      var api = window.API_DEP_EADI || window.NexusEADI;
+      if (api) {
+        if (kind === 'POST' || kind === 'GET') {
+          try {
+            if (typeof api.embed === 'function') api.embed(null, '\x00malformed-' + kind, { delta: -1 });
+            else if (typeof api.embedText === 'function') api.embedText(null, '', { key: null });
+          } catch (e) {}
+        } else if (kind === 'unauthorized') {
+          try {
+            if (typeof api.extract === 'function') api.extract(undefined, { key: '__no_auth__' });
+            else if (typeof api.extractText === 'function') api.extractText(undefined, { key: '' });
+          } catch (e) {}
+        } else {
+          try {
+            if (typeof api.capacity === 'function') api.capacity({ width: 0, height: 0 }, null);
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      warn('fault body', e && e.message);
+    }
+
+    leakCount++;
+    window.__nexusLeakCount = leakCount;
+    persistCounter();
+    persistEvent('fault', { kind: kind, cycle: cycleCount });
+
+    /* Every N cycles: clear fixed-size set → force GC path + log */
+    if (cycleCount % CLEAR_EVERY_N === 0) {
+      clearTraceSet('every_' + CLEAR_EVERY_N + '_cycles');
+      hazardStats.cleared++;
+    }
+
+    log('hazard faultInject', kind, 'count=' + leakCount, 'traces=' + traceCount,
+        'tokens≈' + Math.round(tbTokens));
+  }
+
+  function startHazardLoop() {
+    if (hazardTimer) return;
+    /* Keep 120s cadence of previous design, but each shot is hazard-gated */
+    hazardTimer = setInterval(runFaultOnce, 120000);
+    log('Hazard-Controlled Fault Injector armed (120s, TB=5000/s, WeakSet/buffer=50)');
+  }
+
+  /* ── Memory-leak scan integration: use same counter + buffer hygiene ── */
+  var memScanTimer = null;
+  function hazardMemoryScan() {
+    try {
+      var pm = (typeof performance !== 'undefined' && performance.memory) ? performance.memory : null;
+      var used = pm ? (pm.usedJSHeapSize || 0) : 0;
+      var lim = pm ? (pm.jsHeapSizeLimit || 0) : 0;
+      var pct = lim ? Math.round((used / lim) * 1000) / 10 : null;
+      if (traceCount >= MAX_TRACES) {
+        clearTraceSet('memscan_buffer_full');
+        hazardStats.cleared++;
+      }
+      /* Keep SuperLBC warm for Pharma GC path without thrashing */
+      var L = window.NexusLBC;
+      if (L && typeof L.sha256Hex === 'function') {
+        try { L.sha256Hex('hazard-memscan-' + leakCount); } catch (e) {}
+      }
+      persistEvent('memscan', { used: used, pct: pct, traces: traceCount, leakCount: leakCount });
+      log('memscan', 'heap%=' + pct, 'leakCount=' + leakCount, 'traces=' + traceCount);
+    } catch (e) {
+      warn('hazardMemoryScan', e && e.message);
+    }
+  }
+
+  function startHazardMemScan() {
+    if (memScanTimer) return;
+    memScanTimer = setInterval(hazardMemoryScan, 120000);
+  }
+
+  /* Public surface — does not clobber NexusFinalPatch / NexusArchitect */
+  window.NexusHazardEADI = Object.freeze({
+    version: '3.7.4.eng-C',
+    getLeakCount: function () { return leakCount; },
+    getStats: function () { return Object.assign({}, hazardStats, { leakCount: leakCount, traces: traceCount, tokens: Math.round(tbTokens) }); },
+    clearTraces: function () { return clearTraceSet('manual'); },
+    forceFault: function () { runFaultOnce(); },
+    restore: restoreFromIDB
+  });
+  /* Sync legacy global */
+  Object.defineProperty(window, '__nexusLeakCount', {
+    get: function () { return leakCount; },
+    set: function (v) {
+      var n = Number(v);
+      if (Number.isFinite(n) && n >= 0) {
+        leakCount = n | 0;
+        persistCounter();
+      }
+    },
+    configurable: true,
+    enumerable: true
+  });
+
+  /* Boot: restore counter then arm loops */
+  function bootHazard() {
+    restoreFromIDB().then(function () {
+      startHazardLoop();
+      startHazardMemScan();
+      /* One deferred dry-run after bind windows settle */
+      setTimeout(function () {
+        if (tokenBucketTake(1)) {
+          /* don't actually inject on boot — only verify path */
+          tbTokens = Math.min(TB_CAPACITY, tbTokens + 1);
+        }
+        log('Hazard EADI online · __nexusLeakCount=' + leakCount);
+      }, 2000);
+    });
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(bootHazard, 1600);
+  } else {
+    window.addEventListener('load', function () { setTimeout(bootHazard, 1600); }, { once: true });
+  }
+})();
+</script>
+
 </body>
 </html>
