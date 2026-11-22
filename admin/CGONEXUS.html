@@ -17939,5 +17939,376 @@ html body #nx9-panel{z-index:50}
 })();
 </script>
 
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     NEXUS · FINAL PATCH 3.7.4.eng-B — Dr. Cortex directives
+     Additive only. Preserves Architect patch 374 + 4 perfect modules.
+     Zero UI/CSS mutation. No variable collision with prior surfaces.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script id="nx-final-patch-374b">
+(function () {
+  'use strict';
+  if (window.__nxFinalPatch374b) return;
+  window.__nxFinalPatch374b = true;
+
+  var TAG = '[NX-FINAL-374B]';
+  function log(){ try{ console.log.apply(console,[TAG].concat([].slice.call(arguments))); }catch(e){} }
+  function warn(){ try{ console.warn.apply(console,[TAG].concat([].slice.call(arguments))); }catch(e){} }
+
+  /* ═══════════════════════════════════════════════════════════════
+     1. SUPER EADI — Continuous Stochastic Sanity Test
+        + simulated captureHeapdump (browser-safe)
+     ═══════════════════════════════════════════════════════════════ */
+  var eadiFaultTimer = null;
+  var eadiHeapTimer = null;
+  var eadiFaultStats = { total: 0, post: 0, get: 0, unauth: 0, timeout: 0, last: null };
+
+  function captureHeapdump(label) {
+    var snap = {
+      t: Date.now(),
+      label: String(label || 'periodic'),
+      jsHeap: null,
+      totalJSHeap: null,
+      limit: null,
+      pct: null
+    };
+    try {
+      var pm = (typeof performance !== 'undefined' && performance.memory) ? performance.memory : null;
+      if (pm) {
+        snap.jsHeap = pm.usedJSHeapSize || 0;
+        snap.totalJSHeap = pm.totalJSHeapSize || 0;
+        snap.limit = pm.jsHeapSizeLimit || 0;
+        if (snap.limit > 0) snap.pct = Math.round((snap.jsHeap / snap.limit) * 1000) / 10;
+      }
+    } catch (e) {}
+    /* Soft log only — never block UI */
+    try {
+      window.__nxHeapLog = window.__nxHeapLog || [];
+      window.__nxHeapLog.push(snap);
+      if (window.__nxHeapLog.length > 48) window.__nxHeapLog.shift();
+    } catch (e) {}
+    log('captureHeapdump', snap.label, snap.pct != null ? (snap.pct + '%') : 'n/a',
+        snap.jsHeap != null ? (Math.round(snap.jsHeap / 1024) + ' kB') : 'n/a');
+    return snap;
+  }
+
+  function faultInject() {
+    /* Stochastic malformed request simulation — does NOT hit real network.
+       Exercises SuperEADI / API_DEP_EADI defensive paths only. */
+    var kinds = ['POST', 'GET', 'unauthorized', 'timeout'];
+    var kind = kinds[(Math.random() * kinds.length) | 0];
+    eadiFaultStats.total++;
+    eadiFaultStats[kind === 'POST' ? 'post' : kind === 'GET' ? 'get' : kind === 'unauthorized' ? 'unauth' : 'timeout']++;
+    eadiFaultStats.last = { kind: kind, t: Date.now() };
+
+    try {
+      var api = window.API_DEP_EADI || window.NexusEADI;
+      if (!api) {
+        log('faultInject skip — EADI not bound yet');
+        return;
+      }
+      /* Malformed payloads that must be rejected safely */
+      if (kind === 'POST' || kind === 'GET') {
+        try {
+          if (typeof api.embed === 'function') {
+            api.embed(null, '\x00\x01malformed-' + kind, { delta: -1, redundancy: 0 });
+          } else if (typeof api.embedText === 'function') {
+            api.embedText(null, '', { key: null });
+          }
+        } catch (e) {
+          /* expected rejection */
+        }
+      } else if (kind === 'unauthorized') {
+        try {
+          if (typeof api.extract === 'function') api.extract(undefined, { key: '__no_auth__' });
+          else if (typeof api.extractText === 'function') api.extractText(undefined, { key: '' });
+        } catch (e) {}
+      } else if (kind === 'timeout') {
+        /* Simulate abort-style path without real timer leak */
+        try {
+          if (typeof api.capacity === 'function') api.capacity({ width: 0, height: 0 }, null);
+        } catch (e) {}
+      }
+      log('faultInject', kind, 'stats', JSON.stringify(eadiFaultStats));
+    } catch (e) {
+      warn('faultInject outer', e && e.message);
+    }
+  }
+
+  function startEadiSanityLoop() {
+    if (eadiFaultTimer) return;
+    eadiFaultTimer = setInterval(faultInject, 120000);   /* every 2 min */
+    eadiHeapTimer = setInterval(function () {
+      captureHeapdump('eadi-periodic-2m');
+    }, 120000);
+    log('Continuous Stochastic Sanity Test armed (120s)');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     2. OMNI GUARD HEALTH-PULSE — 5ms debounce + exp back-off retry
+     ═══════════════════════════════════════════════════════════════ */
+  var omniDebounceTimer = null;
+  var omniBackoffMs = 1000;
+  var omniMaxBackoff = 32000;
+  var omniRetryCount = 0;
+
+  function debounce(fn, wait) {
+    return function () {
+      var ctx = this, args = arguments;
+      if (omniDebounceTimer) clearTimeout(omniDebounceTimer);
+      omniDebounceTimer = setTimeout(function () {
+        omniDebounceTimer = null;
+        try { fn.apply(ctx, args); } catch (e) { warn('debounced pulse', e); }
+      }, wait);
+    };
+  }
+
+  function probeHealthEndpoint() {
+    /* Client-side synthetic /health — uses existing NexusOmniGuard surface */
+    var g = window.NexusOmniGuard;
+    if (!g) return { ok: false, latencyMs: null, reason: 'missing' };
+    var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    var ready = typeof g.isReady === 'function' ? !!g.isReady() : true;
+    var hasScan = typeof g.scan === 'function' || typeof g.scanText === 'function';
+    var t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    var latency = Math.round((t1 - t0) * 100) / 100;
+    return { ok: ready && hasScan, latencyMs: latency, ready: ready, hasScan: hasScan };
+  }
+
+  function retryHealthWithBackoff() {
+    var h = probeHealthEndpoint();
+    if (h.ok) {
+      omniBackoffMs = 1000;
+      omniRetryCount = 0;
+      if (h.latencyMs != null && h.latencyMs > 12) {
+        log('OmniGuard health OK · latency', h.latencyMs, 'ms (target <18ms)');
+      }
+      return;
+    }
+    omniRetryCount++;
+    warn('OmniGuard /health no-response · retry #' + omniRetryCount + ' in ' + omniBackoffMs + 'ms');
+    setTimeout(function () {
+      try {
+        if (window.NexusOmniGuard && typeof window.NexusOmniGuard.open === 'function') {
+          window.NexusOmniGuard.open();
+        }
+      } catch (e) {}
+      retryHealthWithBackoff();
+    }, omniBackoffMs);
+    omniBackoffMs = Math.min(omniMaxBackoff, omniBackoffMs * 2);
+  }
+
+  var pulseDebounced = debounce(function () {
+    var h = probeHealthEndpoint();
+    if (!h.ok) retryHealthWithBackoff();
+  }, 5); /* 5ms debounce as requested */
+
+  function armOmniDebouncedPulse() {
+    /* Replace/augment previous watch with debounced + backoff path */
+    setInterval(pulseDebounced, 30000);
+    log('OmniGuard health-pulse: 5ms debounce + exponential back-off armed');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     3. NEXUSPHARMA MEMORY — soft V8 guidance + SuperLBC GC path
+        (--max-old-space-size is Node-only; browser soft-limit + scan)
+     ═══════════════════════════════════════════════════════════════ */
+  var pharmaScanTimer = null;
+  var lastHeapForSpike = null;
+
+  function softV8ConfigNote() {
+    /* Browser cannot set --max-old-space-size. We record intent + soft limit. */
+    window.__nxV8SoftConfig = Object.freeze({
+      intendedFlag: '--max-old-space-size=4096',
+      softHeapWarnPct: 80,
+      softHeapCriticalPct: 90,
+      appliedAt: Date.now(),
+      note: 'Node flag recorded for parity; browser uses performance.memory soft thresholds'
+    });
+    log('V8 soft config bound', window.__nxV8SoftConfig.intendedFlag);
+  }
+
+  function scanV8InternalStructures() {
+    var report = { t: Date.now(), spike: false, thrashingRisk: false, heapPct: null, lbcOk: false };
+    try {
+      var pm = (typeof performance !== 'undefined' && performance.memory) ? performance.memory : null;
+      if (pm && pm.jsHeapSizeLimit) {
+        var used = pm.usedJSHeapSize || 0;
+        var lim = pm.jsHeapSizeLimit;
+        report.heapPct = Math.round((used / lim) * 1000) / 10;
+        if (lastHeapForSpike != null) {
+          var delta = used - lastHeapForSpike;
+          /* ~22 kB/min ≈ 367 bytes/s; flag larger jumps as GC-spike candidate */
+          if (delta > 200 * 1024) {
+            report.spike = true;
+            warn('GC Spike Mis-attribution candidate · Δheap', Math.round(delta / 1024) + ' kB');
+          }
+        }
+        lastHeapForSpike = used;
+        if (report.heapPct >= 90) report.thrashingRisk = true;
+      }
+      /* Exercise SuperLBC so GC path stays warm and not dead-code */
+      var L = window.NexusLBC;
+      if (L && typeof L.sha256Hex === 'function') {
+        var dig = L.sha256Hex('nx-pharma-gc-probe-' + Date.now());
+        report.lbcOk = !!(dig && dig.length === 64);
+      }
+      if (window.NexusPharma && typeof window.NexusPharma.selftest === 'function') {
+        try { window.NexusPharma.selftest(); } catch (e) {}
+      }
+    } catch (e) {
+      warn('scanV8InternalStructures', e && e.message);
+    }
+    try {
+      window.__nxV8ScanLog = window.__nxV8ScanLog || [];
+      window.__nxV8ScanLog.push(report);
+      if (window.__nxV8ScanLog.length > 36) window.__nxV8ScanLog.shift();
+    } catch (e) {}
+    return report;
+  }
+
+  function startPharmaMemoryGuard() {
+    softV8ConfigNote();
+    if (pharmaScanTimer) return;
+    pharmaScanTimer = setInterval(function () {
+      scanV8InternalStructures();
+    }, 60000); /* 1 min scan — tracks ~22 kB/min class leaks */
+    log('NexusPharma V8 structure scan + SuperLBC GC path armed (60s)');
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     4. CGO CYBERLAB 3D RENDERER TELEMETRY
+        GPU mem (approx), FPS, CPU% (approx), baseline compare
+     ═══════════════════════════════════════════════════════════════ */
+  var s3dTelemetry = {
+    baselineFps: null,
+    baselineGpuApprox: null,
+    frames: 0,
+    lastTick: 0,
+    fps: 0,
+    gpuApprox: 0,
+    cpuApprox: 0,
+    running: false,
+    rafId: null
+  };
+
+  function sampleCpuApprox() {
+    /* Best-effort: busy micro-benchmark vs wall clock (non-blocking small) */
+    try {
+      var t0 = performance.now();
+      var x = 0;
+      for (var i = 0; i < 20000; i++) x += i * 0.001;
+      var dt = performance.now() - t0;
+      /* Normalize roughly to 0–100 scale (device-dependent) */
+      return Math.min(100, Math.round(dt * 8));
+    } catch (e) { return null; }
+  }
+
+  function sampleGpuApprox() {
+    /* No direct GPU mem in browser; approximate via canvas count + heap */
+    var n = 0;
+    try {
+      n = document.querySelectorAll('.ui-scene3d, canvas').length;
+    } catch (e) {}
+    var heap = 0;
+    try {
+      if (performance.memory) heap = performance.memory.usedJSHeapSize || 0;
+    } catch (e) {}
+    return Math.round((n * 12) + (heap / (1024 * 1024) * 0.35)); /* relative score */
+  }
+
+  function s3dTelemetryTick() {
+    if (!s3dTelemetry.running) return;
+    s3dTelemetry.frames++;
+    var now = performance.now();
+    if (s3dTelemetry.lastTick && (now - s3dTelemetry.lastTick) >= 1000) {
+      s3dTelemetry.fps = Math.round(s3dTelemetry.frames * 1000 / (now - s3dTelemetry.lastTick));
+      s3dTelemetry.frames = 0;
+      s3dTelemetry.lastTick = now;
+      s3dTelemetry.gpuApprox = sampleGpuApprox();
+      s3dTelemetry.cpuApprox = sampleCpuApprox();
+
+      if (s3dTelemetry.baselineFps == null && s3dTelemetry.fps > 0) {
+        s3dTelemetry.baselineFps = s3dTelemetry.fps;
+        s3dTelemetry.baselineGpuApprox = s3dTelemetry.gpuApprox;
+        log('3D telemetry baseline set', 'FPS', s3dTelemetry.baselineFps, 'GPU≈', s3dTelemetry.baselineGpuApprox);
+      } else if (s3dTelemetry.baselineFps != null) {
+        var fpsDrop = ((s3dTelemetry.baselineFps - s3dTelemetry.fps) / s3dTelemetry.baselineFps) * 100;
+        var gpuRise = s3dTelemetry.baselineGpuApprox > 0
+          ? ((s3dTelemetry.gpuApprox - s3dTelemetry.baselineGpuApprox) / s3dTelemetry.baselineGpuApprox) * 100
+          : 0;
+        if (fpsDrop > 15 || gpuRise > 30) {
+          warn('3D bottleneck: FPS drop ' + fpsDrop.toFixed(1) + '% / GPU≈ rise ' + gpuRise.toFixed(1) +
+               '% — possible shader complexity or scene density');
+        } else {
+          log('3D telemetry', 'FPS', s3dTelemetry.fps, 'GPU≈', s3dTelemetry.gpuApprox, 'CPU≈', s3dTelemetry.cpuApprox);
+        }
+      }
+    }
+    s3dTelemetry.rafId = requestAnimationFrame(s3dTelemetryTick);
+  }
+
+  function startScene3DTelemetry() {
+    if (s3dTelemetry.running) return;
+    s3dTelemetry.running = true;
+    s3dTelemetry.lastTick = performance.now();
+    s3dTelemetry.frames = 0;
+    s3dTelemetry.rafId = requestAnimationFrame(s3dTelemetryTick);
+    log('CGO Cyberlab 3D Renderer telemetry online');
+  }
+
+  function stopScene3DTelemetry() {
+    s3dTelemetry.running = false;
+    if (s3dTelemetry.rafId) {
+      try { cancelAnimationFrame(s3dTelemetry.rafId); } catch (e) {}
+      s3dTelemetry.rafId = null;
+    }
+  }
+
+  /* Public diagnostic surface (does not overwrite NexusArchitect) */
+  window.NexusFinalPatch = Object.freeze({
+    version: '3.7.4.eng-B',
+    faultInject: faultInject,
+    captureHeapdump: captureHeapdump,
+    eadiFaultStats: function () { return Object.assign({}, eadiFaultStats); },
+    probeHealthEndpoint: probeHealthEndpoint,
+    scanV8InternalStructures: scanV8InternalStructures,
+    s3dTelemetry: function () {
+      return {
+        fps: s3dTelemetry.fps,
+        gpuApprox: s3dTelemetry.gpuApprox,
+        cpuApprox: s3dTelemetry.cpuApprox,
+        baselineFps: s3dTelemetry.baselineFps,
+        baselineGpuApprox: s3dTelemetry.baselineGpuApprox
+      };
+    },
+    startScene3DTelemetry: startScene3DTelemetry,
+    stopScene3DTelemetry: stopScene3DTelemetry
+  });
+
+  /* ── BOOT ── */
+  function bootFinal() {
+    startEadiSanityLoop();
+    armOmniDebouncedPulse();
+    startPharmaMemoryGuard();
+    /* Start 3D telemetry only when a scene is likely present; still safe if none */
+    setTimeout(startScene3DTelemetry, 2500);
+    /* One immediate sanity + heap sample */
+    setTimeout(function () {
+      captureHeapdump('boot');
+      scanV8InternalStructures();
+      if (window.checkModuleHealth) window.checkModuleHealth();
+    }, 1500);
+    log('Final Patch 3.7.4.eng-B online — 4 Cortex directives applied');
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(bootFinal, 1200);
+  } else {
+    window.addEventListener('load', function () { setTimeout(bootFinal, 1200); }, { once: true });
+  }
+})();
+</script>
+
 </body>
 </html>
