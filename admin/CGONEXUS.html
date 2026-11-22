@@ -2627,7 +2627,7 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
 
 .artifact-box {
     background: #000; border: 1px solid rgba(255,255,255,0.1); border-radius: 7px;
-    padding: 8px; max-height: 200px; overflow-y: auto; font-family: 'JetBrains Mono', monospace;
+    padding: 8px; max-height: 160px; overflow-y: auto; font-family: 'JetBrains Mono', monospace;
     font-size: 0.68rem; line-height: 1.4; color: var(--text-muted); white-space: pre-wrap; word-break: break-word;
 }
 .artifact-box::-webkit-scrollbar { width: 3px; }
@@ -2640,10 +2640,9 @@ body[data-busy] #activity{display:flex}body[data-busy] #composer,body[data-busy]
 .artifact-actions button:hover { color: var(--text-main); border-color: var(--accent); }
 
 .event-log {
-    background: #000; border-radius: 6px; padding: 8px 10px; height: auto; min-height: 220px; max-height: min(48vh, 420px); overflow-y: auto;
-    font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; line-height: 1.55;
+    background: #000; border-radius: 6px; padding: 7px 9px; height: 130px; overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; line-height: 1.5;
     border: 1px solid rgba(255,255,255,0.07);
-    flex: 1 1 auto;
 }
 .event-log::-webkit-scrollbar { width: 3px; } .event-log::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
 .log-line { white-space: pre-wrap; word-break: break-word; color: var(--text-muted); }
@@ -18487,10 +18486,6 @@ html body #nx9-panel{z-index:50}
   var pendingInject = false;
 
   function runFaultOnce() {
-    /* Pause during stack-storm quench window */
-    try {
-      if (typeof window.__nxStormActive === 'function' && window.__nxStormActive()) return;
-    } catch (e) {}
     cycleCount++;
     /* Token bucket gate */
     if (!tokenBucketTake(1)) {
@@ -18687,10 +18682,10 @@ html body #nx9-panel{z-index:50}
     }
     if ((h2 & 1) === 0) h2 = (h2 + 1) >>> 0; /* ensure odd step */
     var out = new Array(this.k);
-    var m = this.m;
     for (var j = 0; j < this.k; j++) {
-      /* modulo AFTER unsigned shift — fixes operator-precedence bug */
-      out[j] = ((h1 + Math.imul(j, h2)) >>> 0) % m;
+      out[j] = (h1 + Math.imul(j, h2)) >>> 0 % this.m;
+      if (out[j] < 0) out[j] += this.m;
+      out[j] = out[j] % this.m;
     }
     return out;
   };
@@ -18764,35 +18759,20 @@ html body #nx9-panel{z-index:50}
     function wrapApi(api) {
       if (!api || api.__nxBloomWrapped) return api;
       var methods = ['embed', 'embedText', 'extract', 'extractText', 'capacity'];
-      var depth = 0;
       methods.forEach(function (name) {
         if (typeof api[name] !== 'function') return;
         var orig = api[name];
-        /* skip if already a bloom wrapper */
-        if (orig && orig.__nxBloomFn) return;
-        var wrapped = function () {
-          if (depth > 3) {
-            return { ok: false, reason: 'bloom-reentry-guard' };
-          }
-          depth++;
+        api[name] = function () {
+          var hint = '';
           try {
-            var hint = '';
-            try {
-              if (arguments[1] != null) hint = String(arguments[1]).slice(0, 48);
-              else if (arguments[0] != null) hint = String(arguments[0]).slice(0, 32);
-            } catch (e) {}
-            if (!eadiBloomAdmit(name, hint)) {
-              return { ok: false, reason: 'bloom-reject', deferred: true };
-            }
-            return orig.apply(this, arguments);
-          } catch (err) {
-            return { ok: false, reason: String(err && err.message || err) };
-          } finally {
-            depth--;
+            if (arguments[1] != null) hint = String(arguments[1]).slice(0, 48);
+            else if (arguments[0] != null) hint = String(arguments[0]).slice(0, 32);
+          } catch (e) {}
+          if (!eadiBloomAdmit(name, hint)) {
+            return { ok: false, reason: 'bloom-reject', deferred: true };
           }
+          return orig.apply(this, arguments);
         };
-        wrapped.__nxBloomFn = true;
-        try { api[name] = wrapped; } catch (e) { /* frozen API — skip */ }
       });
       try { api.__nxBloomWrapped = true; } catch (e) {}
       return api;
@@ -19011,107 +18991,6 @@ html body #nx9-panel{z-index:50}
   } else {
     window.addEventListener('load', function () { setTimeout(bootCortex, 1800); }, { once: true });
   }
-})();
-</script>
-
-
-<!-- ═══════════════════════════════════════════════════════════════════
-     NEXUS · STACK GUARD + LOG PANEL 3.7.4.eng-E
-     Breaks call-stack storms; enlarges NEURAL TRACE LOG downward.
-     ═══════════════════════════════════════════════════════════════════ -->
-<style id="nx-log-panel-expand">
-/* Additive only — widen/tall Neural Trace Log without breaking layout */
-html body #instruments .tele-section:has(#event-log),
-html body #instruments .tele-section:last-child {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-html body #instruments .event-log {
-  height: auto !important;
-  min-height: 240px !important;
-  max-height: min(52vh, 480px) !important;
-  flex: 1 1 auto;
-}
-html body #instruments {
-  display: flex;
-  flex-direction: column;
-}
-@media (max-width: 700px) {
-  html body #instruments .event-log {
-    min-height: 180px !important;
-    max-height: min(40vh, 320px) !important;
-  }
-}
-</style>
-<script id="nx-stackguard-374e">
-(function () {
-  'use strict';
-  if (window.__nxStackGuard374e) return;
-  window.__nxStackGuard374e = true;
-  var TAG = '[NX-STACKGUARD]';
-  var stormUntil = 0;
-  var stormCount = 0;
-
-  function isStackStorm(msg) {
-    return /Maximum call stack size exceeded|too much recursion|out of stack space/i.test(String(msg || ''));
-  }
-
-  /* Hard-stop fault injectors during a stack storm */
-  function quenchStorm() {
-    stormUntil = Date.now() + 15000;
-    stormCount++;
-    try {
-      if (window.NexusHazardEADI && typeof window.NexusHazardEADI.clearTraces === 'function') {
-        window.NexusHazardEADI.clearTraces();
-      }
-    } catch (e) {}
-    try { console.warn(TAG, 'stack storm quenched #' + stormCount + ' — injectors paused 15s'); } catch (e) {}
-  }
-
-  /* Patch hazard forceFault / run path to no-op during storm */
-  function gateHazard() {
-    try {
-      var H = window.NexusHazardEADI;
-      if (!H || H.__stormGated) return;
-      var orig = H.forceFault;
-      if (typeof orig === 'function') {
-        /* cannot mutate frozen object methods easily — use global flag */
-      }
-      window.__nxStormActive = function () { return Date.now() < stormUntil; };
-    } catch (e) {}
-  }
-
-  window.addEventListener('error', function (ev) {
-    try {
-      if (ev && isStackStorm(ev.message)) {
-        quenchStorm();
-        /* prevent repeated log spam of the same storm */
-        if (stormCount > 1 && Date.now() < stormUntil) {
-          try { ev.preventDefault(); } catch (x) {}
-        }
-      }
-    } catch (e) {}
-  }, true);
-
-  window.addEventListener('unhandledrejection', function (ev) {
-    try {
-      var r = ev && ev.reason;
-      var msg = (r && (r.message || r.name)) || String(r || '');
-      if (isStackStorm(msg)) {
-        quenchStorm();
-        try { ev.preventDefault(); } catch (x) {}
-      }
-    } catch (e) {}
-  }, true);
-
-  /* Safe idle: if bloom gate re-install loops, cap it */
-  var bloomInstalls = 0;
-  var _ib = window.NexusCortexFinal && window.NexusCortexFinal.eadiBloomAdmit;
-  gateHazard();
-  setTimeout(gateHazard, 3000);
-  try { console.log(TAG, 'online — stack storm breaker + log panel expand'); } catch (e) {}
 })();
 </script>
 
