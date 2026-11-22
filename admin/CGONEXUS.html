@@ -2473,6 +2473,8 @@ body[data-focus] .thought:not(.live){opacity:.2!important;filter:blur(4px)!impor
 .flow table{display:block;overflow-x:auto;border-collapse:collapse;margin:0 0 1.2em;font:300 .9rem/1.6 var(--serif)}
 .flow th{font:400 .72rem var(--mono);color:var(--dim);text-align:left;padding:.4rem 1.2rem .6rem 0}
 .flow td{padding:.5rem 1.2rem .5rem 0;border-top:1px solid rgba(160,180,220,.1)}
+.flow th{white-space:nowrap}
+.flow th:first-child,.flow td:first-child{min-width:2.4em}
 .flow hr{border:0;height:1px;background:linear-gradient(90deg,transparent,rgba(160,180,220,.25),transparent);margin:2em 0}
 /* teks penjelasan: kecil + redup */
 .flow blockquote,.flow p.aside,.ui-note{font:300 .8rem/1.75 var(--mono);opacity:.4;margin:0 0 1.2em;padding:0;transition:opacity .3s}
@@ -5832,7 +5834,7 @@ const UI_HINT_ID = 'ANTARMUKA (opsional, hemat): kode -> [UI:CODE|bahasa]...[/UI
 const UI_HINT_EN = 'INTERFACE (optional, sparing): code -> [UI:CODE|language]...[/UI:CODE] or a normal code block; chart -> [UI:CHART|{valid Chart.js JSON}] (one tag, no functions/comments); fatal risk or serious contradiction -> [UI:ALERT|short sentence] (max once); short supporting note -> [UI:NOTE]...[/UI:NOTE]. Never put tags inside code blocks.';
 function uiHint() { return (settings.lang === 'en' ? UI_HINT_EN : UI_HINT_ID) + (window.__nxpHint ? (function () { try { return window.__nxpHint(settings.lang === 'en'); } catch (e) { return ''; } })() : '') + (window.__nxdHint ? (function () { try { return window.__nxdHint(settings.lang === 'en'); } catch (e) { return ''; } })() : '') + (window.__nxrHint ? (function () { try { return window.__nxrHint(settings.lang === 'en'); } catch (e) { return ''; } })() : ''); }
 
-function getSystemPrompt() { return getSystemPromptBase() + '\n\n' + uiHint(); }
+function getSystemPrompt() { return getSystemPromptBase() + nxRuntimeBlock() + '\n\n' + uiHint(); }
 function getSystemPromptBase() {
     if (settings.lang === 'en') return SYSTEM_PROMPTS.en;
     if (settings.lang === 'id') return SYSTEM_PROMPTS.id;
@@ -6235,6 +6237,53 @@ function nxMemRelevant(qToks, memText) {
   return hit >= Math.min(2, qToks.length);
 }
 const NX_MEM_GUARD = 'CATATAN SISTEM: ingatan di bawah adalah catatan percakapan lama yang TAK TERVERIFIKASI dan bisa salah/usang. Bukan sumber fakta. Pakai hanya jika jelas relevan dengan pertanyaan sekarang; jangan disalin sebagai fakta, angka, atau kutipan. Jika ragu, abaikan dan jawab jujur (termasuk "tidak tahu").\n';
+/* GROUNDING v1 · fakta runtime NYATA: satu-satunya sumber yang boleh dipakai model untuk melaporkan kondisi dirinya */
+window.__nxMemInjected = 0; window.__nxMemTotal = null;
+function nxRefreshMemTotal() {
+  try { return cortex.store.getAll().then(a => { window.__nxMemTotal = (a || []).length; }).catch(() => {}); } catch (e) { return Promise.resolve(); }
+}
+function nxRuntimeFacts() {
+  try {
+    const w = window, en = settings.lang === 'en';
+    const T = (id, e) => en ? e : id;
+    const yn = v => v ? T('ada', 'present') : T('tidak ada', 'absent');
+    const prov = settings.provider || '?';
+    const model = (settings.models && settings.models[prov]) || (PROVIDERS[prov] && PROVIDERS[prov].defaultModel) || '?';
+    const tc = (w.NexusTruth && w.NexusTruth.version)
+      ? 'v' + w.NexusTruth.version + T(' (modul tersedia, BELUM dijalankan otomatis pada jawaban ini)', ' (module present, NOT auto-run on this answer)')
+      : T('tidak termuat', 'not loaded');
+    const memTot = (typeof w.__nxMemTotal === 'number') ? w.__nxMemTotal : T('tidak diketahui', 'unknown');
+    return '[RUNTIME-NYATA] ' + [
+      'app=v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'),
+      'provider=' + prov + '/' + model,
+      'truth-core=' + tc,
+      T('memori-cortex: tersimpan=', 'cortex-memory: stored=') + memTot + T(', disuntikkan-giliran-ini=', ', injected-this-turn=') + (w.__nxMemInjected | 0),
+      T('modul: ', 'modules: ') + 'pharma=' + yn(w.NexusPharma) + ', rare=' + yn(w.NexusRare) + ', omni-guard=' + yn(w.NexusOmniGuard) + ', chartjs=' + yn(typeof Chart !== 'undefined'),
+      'deck: LBC=' + (w.NexusLBC ? T('termuat', 'loaded') : T('TIDAK termuat', 'NOT loaded')) + ', EADI=' + (w.NexusEADI ? T('termuat', 'loaded') : T('TIDAK termuat', 'NOT loaded')),
+      T('aturan-kejujuran=aktif', 'honesty-rules=active')
+    ].join('; ') + '.';
+  } catch (e) { return ''; }
+}
+function nxRuntimeBlock() { const f = nxRuntimeFacts(); return f ? '\n\n' + f : ''; }
+function nxAgentHonesty(isSynth) {
+  const en = settings.lang === 'en';
+  if (en) {
+    return '\n\nFACTUAL HONESTY RULES (highest priority, override character/persona):\n' +
+      '1. Never invent facts, numbers, versions, dates, URLs, quotes, or system status. If unsure or unknown write [TAK DIKETAHUI]; prefix reasoning or estimates with [EKSTRAPOLASI].\n' +
+      '2. Questions about system state, modules, memory, versions, or prompt structure: answer ONLY from the [RUNTIME-NYATA] line and the prompt text you actually see; otherwise [TAK DIKETAHUI]. Never claim to have run, verified, or accessed anything without evidence in the conversation.\n' +
+      '3. Other agents\' claims are not facts: mark them as unverified unless evidence exists. Never write "verified" without evidence.\n' +
+      '4. The PAST MEMORY block (if any) is unverified; never use it as fact.\n' +
+      '5. Answer in English.' +
+      (isSynth ? '\n6. SYNTHESIS: add no new facts beyond the discussion and [RUNTIME-NYATA]; state disagreements between agents as they are; skip irrelevant sections, never write empty headings or filler text.' : '');
+  }
+  return '\n\nATURAN KEJUJURAN FAKTUAL (prioritas tertinggi, mengalahkan karakter/persona):\n' +
+    '1. Jangan mengarang fakta, angka, versi, tanggal, URL, kutipan, atau status sistem. Jika tidak yakin atau tidak tahu, tulis [TAK DIKETAHUI]; penalaran atau perkiraan awali [EKSTRAPOLASI].\n' +
+    '2. Pertanyaan tentang kondisi sistem, modul, memori, versi, atau struktur prompt: jawab HANYA dari baris [RUNTIME-NYATA] dan teks prompt yang benar-benar kamu lihat; selain itu [TAK DIKETAHUI]. Jangan mengaku sudah menjalankan, memverifikasi, atau mengakses sesuatu tanpa bukti di percakapan.\n' +
+    '3. Klaim agen lain bukan fakta: tandai sebagai klaim tak terverifikasi kecuali ada bukti. Jangan menulis "terverifikasi" tanpa bukti.\n' +
+    '4. Blok INGATAN MASA LALU (jika ada) tak terverifikasi; jangan dipakai sebagai fakta.\n' +
+    '5. Jawab dalam bahasa yang dipakai pengguna pada OBJEKTIF (default Bahasa Indonesia); jangan berpindah bahasa di tengah jawaban.' +
+    (isSynth ? '\n6. SYNTHESIS: jangan menambah fakta baru di luar diskusi dan [RUNTIME-NYATA]; sebut perbedaan pendapat antar agen apa adanya; lewati bagian yang tidak relevan, jangan menulis heading kosong atau teks pengisi.' : '');
+}
 class SemanticMemoryCortex {
   constructor() {
     this.store = new IDBStorage();
@@ -7011,7 +7060,9 @@ async function sendMessage(forceNormal) {
         // Single cortex recall — inject only into the request system prompt (artifact stays pure)
         let memoryContext = '';
         try {
+            window.__nxMemInjected = 0;
             const pastMemories = await cortex.recall(userText, 3);
+            window.__nxMemInjected = pastMemories.length; await nxRefreshMemTotal();
             if (pastMemories.length > 0) {
                 memoryContext = '\n\n---\n[INGATAN MASA LALU YANG RELEVAN]:\n' + NX_MEM_GUARD + pastMemories.map(m => m.text).join('\n');
                 logEvent('SYSTEM', `[CORTEX] Mengingat ${pastMemories.length} memori masa lalu.`);
@@ -7305,6 +7356,9 @@ assert('NexusPharma golden druglikeness', (function () {
     assert('Anti-halusinasi: aturan kejujuran faktual di SYSTEM_PROMPTS', /KEJUJURAN FAKTUAL/.test(SYSTEM_PROMPTS.id) && /FACTUAL HONESTY/.test(SYSTEM_PROMPTS.en) && SYSTEM_PROMPTS.id.indexOf('KEJUJURAN FAKTUAL') < 900);
     assert('Anti-halusinasi: filter relevansi memori Cortex', (function () { try { var q = nxMemContentTokens('berapa gaji presiden prancis'); return nxMemRelevant(q, 'User: berapa gaji presiden prancis\nCGO: x') === true && nxMemRelevant(q, 'User: resep nasi goreng yang enak\nCGO: berapa gaji presiden prancis') === false && nxMemRelevant([], 'User: apa saja\nCGO: x') === false && NX_RECALL_MIN_SIM >= 0.3; } catch (e) { return false; } })());
     assert('Anti-halusinasi: guard memori terpasang', typeof NX_MEM_GUARD === 'string' && /TAK TERVERIFIKASI/.test(NX_MEM_GUARD));
+    assert('Grounding: Dewan/Cortex/SYNTHESIS memuat aturan kejujuran + [RUNTIME-NYATA]', (function () { try { var rx = /KEJUJURAN FAKTUAL|FACTUAL HONESTY/; return rx.test(buildAgentSystemPrompt(AGENTS[0])) && rx.test(buildAgentSystemPrompt({ id: 'cortex', name: 'Dr. Cortex' })) && rx.test(buildSynthSystemPrompt()) && /\[RUNTIME-NYATA\]/.test(getSystemPrompt()) && /\[RUNTIME-NYATA\]/.test(buildSynthSystemPrompt()); } catch (e) { return false; } })());
+    assert('Grounding: fakta runtime terbentuk & jujur soal Deck', (function () { try { var f = nxRuntimeFacts(); return f.indexOf('[RUNTIME-NYATA]') === 0 && /deck: LBC=/.test(f) && /memori-cortex|cortex-memory/.test(f) && (!!window.NexusLBC === !/LBC=TIDAK/.test(f)); } catch (e) { return false; } })());
+    assert('Deck: diagnosis pemuat LBC/EADI tersedia', typeof window.NexusDeckDiag === 'function' && typeof window.NexusDeckDiag().base === 'string');
     logEvent('DIAG', `=== DONE: ${passed} passed, ${failed} failed ===`);
     showToast(failed === 0 ? `Self-test OK (${passed})` : `${failed} failed`, 3500, failed > 0);
 }
@@ -7588,16 +7642,16 @@ function buildAgentSystemPrompt(agent) {
     const en = settings.lang === 'en';
     if (agent && agent.id === 'cortex') {
         const cortexTpl = en ? CORTEX_PROTOCOL_EN : CORTEX_PROTOCOL_ID;
-        return cortexTpl + '\n\n' + uiHint() + agent3d(false);
+        return cortexTpl + nxAgentHonesty(false) + nxRuntimeBlock() + '\n\n' + uiHint() + agent3d(false);
     }
     const tpl = en ? AGENT_PROTOCOL_EN : AGENT_PROTOCOL_ID;
     return tpl
         .replace('{NAME}', agent.name)
         .replace('{ROLE}', en ? agent.role_en : agent.role_id)
-        .replace('{CHAR}', en ? agent.char_en : agent.char_id) + '\n\n' + uiHint() + agent3d(false);
+        .replace('{CHAR}', en ? agent.char_en : agent.char_id) + nxAgentHonesty(false) + nxRuntimeBlock() + '\n\n' + uiHint() + agent3d(false);
 }
 function buildSynthSystemPrompt() {
-    return (settings.lang === 'en' ? SYNTH_PROTOCOL_EN : SYNTH_PROTOCOL_ID) + '\n\n' + uiHint() + agent3d(true);
+    return (settings.lang === 'en' ? SYNTH_PROTOCOL_EN : SYNTH_PROTOCOL_ID) + nxAgentHonesty(true) + nxRuntimeBlock() + '\n\n' + uiHint() + agent3d(true);
 }
 function formatTranscript(entries, maxChars) {
     maxChars = maxChars || 4000; // Dipangkas dari 7000 agar hemat token context window
@@ -8180,7 +8234,9 @@ async function sendMultiAgentMessage() {
     currentAbortController = new AbortController();   // dibuat sebelum recall agar Stop bekerja sejak awal
     cachedMemoryContext = ''; cachedMemoryCount = 0;
     try {
+        window.__nxMemInjected = 0;
         const pastMemories = await cortex.recall(userText, 3);
+        window.__nxMemInjected = pastMemories.length; await nxRefreshMemTotal();
         if (pastMemories.length > 0) {
             cachedMemoryContext = '\n\n---\n[INGATAN MASA LALU YANG RELEVAN]:\n' + NX_MEM_GUARD + pastMemories.map(m => m.text).join('\n');
             cachedMemoryCount = pastMemories.length;
@@ -10135,8 +10191,21 @@ setInterval(function(){if(!document.hidden)sync()},900);sync();
 <!-- ═══════════════ NEXUS · SPATIAL COMMAND DECK (LBC VAULT + EADI VAULT) ═══════════════
      Syarat: SuperLBC.js dan SuperEADI.js berada di folder yang SAMA dengan CGONEXUS.html.
      Blok ini mandiri (prefix "nxd-"), tidak mengubah/menimpa kode NEXUS yang sudah ada. -->
-<script src="SuperLBC.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('SuperLBC.js')"></script>
-<script src="SuperEADI.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('SuperEADI.js')"></script>
+<script>(function(){window.__nxdErr=window.__nxdErr||[];window.addEventListener('error',function(e){try{if(e&&e.filename&&/Super(LBC|EADI)\.js/i.test(e.filename))window.__nxdErr.push(String(e.message||'error').slice(0,140)+' @'+String(e.filename).split('/').pop()+':'+(e.lineno||0))}catch(x){}})})();</script>
+<script src="SuperLBC.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('SuperLBC.js')" onload="(window.__nxdLoaded=window.__nxdLoaded||[]).push('SuperLBC.js')"></script>
+<script src="SuperEADI.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('SuperEADI.js')" onload="(window.__nxdLoaded=window.__nxdLoaded||[]).push('SuperEADI.js')"></script>
+<script id="nxd-resolve">
+/* Resolver duck-typing: jika file termuat tetapi global bernama lain, buat alias NexusLBC / NexusEADI (hanya bila API cocok) */
+(function(){try{
+  function pick(rx,probe){var best=null;Object.getOwnPropertyNames(window).forEach(function(k){if(best||!rx.test(k))return;try{var v=window[k];if(v&&(typeof v==='object'||typeof v==='function')&&probe(v))best=k}catch(e){}});return best}
+  var alias=[];
+  if(!window.NexusLBC){var a=pick(/lbc/i,function(v){return typeof v.sha256==='function'&&typeof v.schnorrSign==='function'});if(a&&a!=='NexusLBC'){window.NexusLBC=window[a];alias.push(a+'->NexusLBC')}}
+  if(!window.NexusEADI){var b=pick(/eadi/i,function(v){return typeof v.embedText==='function'});if(b&&b!=='NexusEADI'){window.NexusEADI=window[b];alias.push(b+'->NexusEADI')}}
+  var cand=Object.getOwnPropertyNames(window).filter(function(k){return /LBC|EADI|^Super|^lbc|^eadi/.test(k)}).slice(0,12);
+  window.__nxdDiag={loaded:(window.__nxdLoaded||[]).slice(),missing:(window.__nxdMissing||[]).slice(),errors:(window.__nxdErr||[]).slice(),alias:alias,candidates:cand,lbc:!!window.NexusLBC,eadi:!!window.NexusEADI,base:String(location.href).replace(/[#?].*$/,'').replace(/[^\/]*$/,'')};
+  window.NexusDeckDiag=function(){return JSON.parse(JSON.stringify(window.__nxdDiag))};
+}catch(e){}})();
+</script>
 <style id="nxd-css">
 #nxd-root{--c:var(--aura-a,61,236,255);--c2:var(--aura-b,139,92,246);--nxd-ink:var(--ink,#e9edf5);--nxd-dim:var(--dim,rgba(196,208,232,.55));--nxd-mono:var(--mono,ui-monospace,Menlo,Consolas,monospace);font-family:var(--nxd-mono);color:var(--nxd-ink)}
 #nxd-root *{box-sizing:border-box}
@@ -10453,7 +10522,17 @@ function missingBanner(node, lib, file) {
   if (miss) {
     node.hidden = false;
     node.className = 'nxd-banner';
-    node.textContent = file + ' tidak termuat. Letakkan file itu di folder yang sama dengan CGONEXUS.html lalu muat ulang. Fitur vault ini nonaktif sampai modul tersedia.';
+    node.textContent = (function () {
+      try {
+        const d = window.__nxdDiag || {}, g = file.indexOf('LBC') >= 0 ? 'NexusLBC' : 'NexusEADI';
+        const failed = (window.__nxdMissing || []).indexOf(file) >= 0, loaded = (d.loaded || []).indexOf(file) >= 0;
+        const errs = (d.errors || []).filter(x => x.indexOf(file) >= 0);
+        if (failed) return file + ' GAGAL diunduh dari ' + (d.base || '') + file + ' (404 / diblokir). Nama file harus PERSIS "' + file + '" (huruf besar/kecil berpengaruh di GitHub Pages) dan satu folder dengan halaman ini, lalu muat ulang. Fitur vault nonaktif sampai modul tersedia.';
+        if (loaded && errs.length) return file + ' terunduh tetapi error saat dijalankan: ' + errs[0] + '. Fitur vault nonaktif.';
+        if (loaded) return file + ' terunduh tetapi tidak mengekspos window.' + g + '. Global terdeteksi: ' + ((d.candidates || []).join(', ') || '(tidak ada)') + '. Fitur vault nonaktif.';
+      } catch (e) {}
+      return file + ' tidak termuat. Letakkan file itu di folder yang sama dengan CGONEXUS.html lalu muat ulang. Fitur vault ini nonaktif sampai modul tersedia.';
+    })();
     // Tandai tab terkait agar jelas status nonaktif (zero regression: hanya visual + title)
     try {
       const tabName = file.indexOf('LBC') >= 0 ? 'lbc' : (file.indexOf('EADI') >= 0 ? 'eadi' : '');
