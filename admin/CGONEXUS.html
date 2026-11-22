@@ -1063,7 +1063,7 @@ window.NexusConfig = { hud: (function () { try { return localStorage.getItem('cg
 })();
 </script>
 <script id="nexus-truth-core">
-/* NEXUS TRUTH CORE v13.7.1 — Universal Truth-Guard (IPV6 HARDENED + browser SSRF on)
+/* NEXUS TRUTH CORE v13.7.2 — Universal Truth-Guard (IPV6 HARDENED + browser SSRF on)
  * Injected into CGONEXUS as anti-hallucination substrate.
  * Idempotent: skips if window.NexusTruth already present.
  * Zero regression: pure additive; no existing APIs overwritten.
@@ -1075,8 +1075,10 @@ window.NexusConfig = { hud: (function () { try { return localStorage.getItem('cg
     return;
   }
 /*! ═══════════════════════════════════════════════════════════════════
- *  NEXUS TRUTH CORE v13.7.1 — Universal Truth-Guard (IPV6 HARDENED + browser SSRF on)
+ *  NEXUS TRUTH CORE v13.7.2 — Universal Truth-Guard (IPV6 HARDENED + browser SSRF on)
  *  ─────────────────────────────────────────────────────────────────
+ *  CHANGELOG dari v13.7.1:
+ *   • FIX: T7/T10/T11/T12 kini juga dijalankan di browser (guard SSRF aktif di browser)
  *  CHANGELOG dari v13.7.0:
  *   • FIX: isSafeUrl aktif di browser (hapus bypass IS_BROWSER)
  *   • ADD: blok hostname metadata (metadata.google.internal, k8s default)
@@ -2261,7 +2263,7 @@ function () {
       'tanpa bukti ' + noEv.confidence + '% (terkunci ≤30) · dengan bukti '
       + ev.confidence + '% (≥80)');
 
-    if (IS_BROWSER) {
+    if (false /* v13.7.2: guard SSRF aktif di browser → uji penuh */) {
       const scheme = !isSafeUrl('file:///etc/passwd')
                   && !isSafeUrl('javascript:alert(1)')
                   && isSafeUrl('https://example.com/');
@@ -2313,7 +2315,7 @@ function () {
         'trailing-dot tidak melewati canonicalIPv4 — bypass tertutup');
     })();
 
-    if (IS_BROWSER) {
+    if (false /* v13.7.2: guard SSRF aktif di browser → uji penuh */) {
       P('T10 SINGLE-LABEL', 'SKIP', 'browser mode — tidak relevan');
     } else {
       const bad = ['http://intranet/', 'http://printer/', 'http://nas/',
@@ -2326,7 +2328,7 @@ function () {
     }
 
     /* T11 — IPv4-mapped IPv6 expanded form (B6) */
-    if (IS_BROWSER) {
+    if (false /* v13.7.2: guard SSRF aktif di browser → uji penuh */) {
       P('T11 IPV6-EXPANDED', 'SKIP', 'browser mode');
     } else {
       const cases = [
@@ -2343,7 +2345,7 @@ function () {
     }
 
     /* T12 — NAT64 / 6to4 / Teredo (B7) */
-    if (IS_BROWSER) {
+    if (false /* v13.7.2: guard SSRF aktif di browser → uji penuh */) {
       P('T12 TUNNEL-PREFIX', 'SKIP', 'browser mode');
     } else {
       const cases = [
@@ -2393,7 +2395,7 @@ function () {
 
   /* ══════════════════ EKSPOR PUBLIK ══════════════════ */
   return {
-    version: '13.7.1',
+    version: '13.7.2',
     configure, getConfig,
     checkEntity, verifyCitation, verifyBatch,
     calibrate, label, audit, gate, selfTest,
@@ -3947,6 +3949,16 @@ function computeMetrics(rawText, segments) {
 }
 
 const SELF_CORRECTION = 'Review once: ROLE, CONTEXT, RULES respected? Required output format met? Do not loop >1x.';
+/* Sisipkan ORIGINAL USER INTENT yang SEGAR (buang sisa intent dari cache) */
+function nxApplyIntent(compiled, raw) {
+    try {
+        const t = String(raw == null ? '' : raw).trim();
+        let c = String(compiled == null ? '' : compiled);
+        const k = c.indexOf('### ORIGINAL USER INTENT');
+        if (k >= 0) c = c.slice(0, k).replace(/\s+$/, '');
+        return t ? c + '\n\n### ORIGINAL USER INTENT\n' + t : c;
+    } catch (e) { return compiled; }
+}
 function compilePrompt(segments, originalText) {
     let out = '';
     if (segments.role.length) out += `### ROLE\n${segments.role.join(' ')}\n\n`;
@@ -6975,9 +6987,7 @@ async function sendMessage(forceNormal) {
     }
     /* Safety net zero-regression: pastikan ORIGINAL USER INTENT selalu ada */
     try {
-        if (userText && compiledPrompt && compiledPrompt.indexOf('### ORIGINAL USER INTENT') < 0) {
-            compiledPrompt = compiledPrompt.trim() + '\n\n### ORIGINAL USER INTENT\n' + userText.trim();
-        }
+        if (userText && compiledPrompt) { compiledPrompt = nxApplyIntent(compiledPrompt, userText); }
     } catch (e) {}
 
     lastCompiledArtifact = compiledPrompt;
@@ -7003,7 +7013,7 @@ async function sendMessage(forceNormal) {
         try {
             const pastMemories = await cortex.recall(userText, 3);
             if (pastMemories.length > 0) {
-                memoryContext = '\n\n[INGATAN MASA LALU YANG RELEVAN]:\n' + NX_MEM_GUARD + pastMemories.map(m => m.text).join('\n');
+                memoryContext = '\n\n---\n[INGATAN MASA LALU YANG RELEVAN]:\n' + NX_MEM_GUARD + pastMemories.map(m => m.text).join('\n');
                 logEvent('SYSTEM', `[CORTEX] Mengingat ${pastMemories.length} memori masa lalu.`);
             }
         } catch (memErr) {
@@ -8162,9 +8172,7 @@ async function sendMultiAgentMessage() {
         logEvent('COMPILER', `Generated ${hash} · cache ${getCacheStats()}`);
     }
     try {
-        if (userText && compiledPrompt && compiledPrompt.indexOf('### ORIGINAL USER INTENT') < 0) {
-            compiledPrompt = compiledPrompt.trim() + '\n\n### ORIGINAL USER INTENT\n' + userText.trim();
-        }
+        if (userText && compiledPrompt) { compiledPrompt = nxApplyIntent(compiledPrompt, userText); }
     } catch (e) {}
 
     // Memory recall SEKALI saja per pesan; hasilnya di-cache dan disuntikkan di runAgentTurn()
@@ -8174,7 +8182,7 @@ async function sendMultiAgentMessage() {
     try {
         const pastMemories = await cortex.recall(userText, 3);
         if (pastMemories.length > 0) {
-            cachedMemoryContext = '\n\n[INGATAN MASA LALU YANG RELEVAN]:\n' + NX_MEM_GUARD + pastMemories.map(m => m.text).join('\n');
+            cachedMemoryContext = '\n\n---\n[INGATAN MASA LALU YANG RELEVAN]:\n' + NX_MEM_GUARD + pastMemories.map(m => m.text).join('\n');
             cachedMemoryCount = pastMemories.length;
             logEvent('SYSTEM', `[CORTEX] Mengingat ${pastMemories.length} memori untuk panel.`);
         }
@@ -12105,6 +12113,21 @@ body[data-theme="light"] .nxd2-ex-in{background:linear-gradient(160deg,rgba(255,
         : '\n\nNEXUS DECK (Dewan memegang kontrol penuh autopilot atas LBC Vault & EADI Vault): jalankan lewat blok ```nexusdeck berisi JSON {"op":...} atau array [{...},{...}] (maks 6, tanpa teks lain di dalam blok). Beri tiap perintah field "id" unik agar tidak dianggap duplikat. op: ' + ops + '. File: hanya yang sudah diunggah user ke tray Vault (kamu tidak bisa membaca file lain). Kunci privat, reset ledger, dan kunci sebar tetap dipegang user. Hasil tampil otomatis sebagai kartu; jangan mengarang hasil — pakai status [DECK] di bawah. save:true = hasil diunduh otomatis. ' + deckState();
     };
 
+    /* ANTI-HALUSINASI: bila SuperLBC.js & SuperEADI.js tidak termuat, jangan perintahkan model memakai Deck */
+    (function () {
+      var base = window.__nxdHint;
+      window.__nxdHint = function (en) {
+        try {
+          if (!window.NexusLBC && !window.NexusEADI) {
+            return en
+              ? '\n\nNEXUS DECK: UNAVAILABLE (SuperLBC.js / SuperEADI.js not loaded). Do NOT emit nexusdeck blocks and never invent Vault results.'
+              : '\n\nNEXUS DECK: TIDAK TERSEDIA (SuperLBC.js / SuperEADI.js tidak termuat). JANGAN membuat blok nexusdeck dan jangan mengarang hasil Vault.';
+          }
+        } catch (e) {}
+        return base(en);
+      };
+    })();
+
     window.NexusDeckAI = {
       version: '1.0.0', ops: Object.keys(OPS),
       run: function (job) { return runJob(job); },
@@ -14549,9 +14572,9 @@ if (!op) {
 
     window.__nxrHint = function (en) {
       if (en) {
-        return '\\n\\nNEXUS RARE (full council access, active): generate high-entropy 128-bit rare codes with a ```nexusrare (or ```rare / ```nxr) block. Body = JSON {"seed":12345,"count":1,"mode":"sync"|"async"} or a bare number, or empty (time-derived seed). In html/js sandbox blocks the global NexusRareCode is preloaded via prelude (generate / generateAsync / workerSupported). Also: window.NexusRareCode / window.NexusRare. Research entropy tool — not a production CSPRNG for key material.';
+        return '\n\nNEXUS RARE (full council access, active): generate high-entropy 128-bit rare codes with a ```nexusrare (or ```rare / ```nxr) block. Body = JSON {"seed":12345,"count":1,"mode":"sync"|"async"} or a bare number, or empty (time-derived seed). In html/js sandbox blocks the global NexusRareCode is preloaded via prelude (generate / generateAsync / workerSupported). Also: window.NexusRareCode / window.NexusRare. Research entropy tool — not a production CSPRNG for key material.';
       }
-      return '\\n\\nNEXUS RARE (akses penuh Dewan, aktif): hasilkan kode langka 128-bit ber-entropi tinggi lewat blok ```nexusrare (atau ```rare / ```nxr). Isi = JSON {"seed":12345,"count":1,"mode":"sync"|"async"} atau angka seed, atau kosong (seed dari waktu). Di blok html/js sandbox, global NexusRareCode sudah di-preload (generate / generateAsync / workerSupported). Juga: window.NexusRareCode / window.NexusRare. Alat riset entropy — bukan CSPRNG produksi untuk material kunci.';
+      return '\n\nNEXUS RARE (akses penuh Dewan, aktif): hasilkan kode langka 128-bit ber-entropi tinggi lewat blok ```nexusrare (atau ```rare / ```nxr). Isi = JSON {"seed":12345,"count":1,"mode":"sync"|"async"} atau angka seed, atau kosong (seed dari waktu). Di blok html/js sandbox, global NexusRareCode sudah di-preload (generate / generateAsync / workerSupported). Juga: window.NexusRareCode / window.NexusRare. Alat riset entropy — bukan CSPRNG produksi untuk material kunci.';
     };
 
     // Click: salin dari kartu
@@ -16442,7 +16465,7 @@ try{if(summ&&comp&&sendB){summ.insertBefore(tray,comp);comp.insertBefore(bAtt,se
 var atts=[],uid=0,PART=11000;
 /* Global lock: hanya 1 pekerjaan berat (PDF/OCR) pada satu waktu — cegah OOM di perangkat rendah */
 var _nx35Heavy = Promise.resolve();
-function withHeavy(fn){var prev=_nx35Heavy;var done;_nx35Heavy=new Promise(function(r){done=r});return prev.then(function(){return fn()}).finally(function(){try{done()}catch(e){}})}
+function withHeavy(fn){var prev=_nx35Heavy;var done,wd;_nx35Heavy=new Promise(function(r){done=r});return prev.then(function(){wd=setTimeout(function(){try{done()}catch(e){}},180000);return fn()}).finally(function(){clearTimeout(wd);try{done()}catch(e){}})}   /* watchdog 180 dtk: job macet tidak mengunci antrean selamanya */
 /* ===== Validasi file ketat (whitelist MIME + deny extension berbahaya) + sinyal anomali ringan ===== */
 var ALLOW_MIME = {
   'text/plain':1,'text/markdown':1,'text/csv':1,'text/tab-separated-values':1,'text/html':1,'text/css':1,
@@ -16450,7 +16473,8 @@ var ALLOW_MIME = {
   'application/pdf':1,'image/png':1,'image/jpeg':1,'image/jpg':1,'image/gif':1,'image/webp':1,'image/svg+xml':1,
   'application/x-yaml':1,'text/yaml':1,'application/toml':1,'text/x-python':1,'text/x-java-source':1
 };
-var DENY_EXT = /\.(exe|dll|bat|cmd|com|msi|scr|ps1|vbs|js\.exe|hta|jar|apk|dmg|pkg|sh\.exe|php\d*|asp|aspx|cgi|pl|py\.exe)$/i;
+var DENY_EXT = /\.(exe|dll|bat|cmd|com|msi|scr|ps1|vbs|hta|jar|apk|dmg|pkg)$/i;   /* hanya biner/eksekusi; .php/.pl/.asp dibaca sebagai TEKS (tidak pernah dijalankan) */
+var OFFICE_RE = /\.(docx?|xlsx?|pptx?|odt|ods|odp|pages|numbers|key)$/i, OFFICE_MIME = /openxmlformats|opendocument|msword|ms-excel|ms-powerpoint/i;   /* biner ZIP — bukan teks */
 var TXT=/\.(txt|md|markdown|json|json5|csv|tsv|log|xml|html?|css|scss|js|mjs|cjs|jsx|ts|tsx|py|rb|go|rs|java|kt|c|h|cpp|hpp|cs|php|sh|bash|sql|ya?ml|toml|ini|env|cfg|conf|tex|srt|vtt|svg|ipynb|r|swift|lua|dart)$/i;
 var _nx35Anom = {rejects:0, heavy:0, lastReject:0, lastHeavy:0};
 function nx35Anom(kind, detail){
@@ -16468,6 +16492,7 @@ function fileAllowed(f){
   if(!f || !f.name) return {ok:false, reason:'nama file tidak valid'};
   var name = String(f.name);
   if(DENY_EXT.test(name)) return {ok:false, reason:'ekstensi berbahaya diblokir'};
+  if(OFFICE_RE.test(name) || OFFICE_MIME.test(String(f.type||''))) return {ok:false, reason:'dokumen Office belum didukung — ekspor ke PDF/TXT atau salin teksnya'};
   var ext = (name.split('.').pop()||'').toLowerCase();
   var mime = String(f.type||'').toLowerCase();
   // Izinkan jika MIME ada di whitelist, atau ekstensi teks/kode yang dikenal (TXT regex), atau image/*, atau pdf
@@ -16523,7 +16548,7 @@ function addImage(f){var url=URL.createObjectURL(f),a=add({name:f.name,size:f.si
    for(var i=0;i<d.length;i+=4){if(d[i+3]<128)continue;var q=[d[i]>>5,d[i+1]>>5,d[i+2]>>5].join();m[q]=(m[q]||0)+1}
    a.pal=Object.keys(m).sort(function(x,y){return m[y]-m[x]}).slice(0,4).map(function(q){var v=q.split(',');return 'rgb('+(v[0]*36+18)+','+(v[1]*36+18)+','+(v[2]*36+18)+')'})}catch(e){}
   render(a)};im.onerror=function(){render(a)};im.src=url;buzz()}
-async function ocr(a){if(a.busy)return;nx35Anom('heavy','ocr');return withHeavy(async function(){if(a.busy)return;a.busy=true;a.meta='Memuat mesin OCR…';render(a);
+async function ocr(a){if(a.busy||a.ocr||a.queued)return;a.queued=true;nx35Anom('heavy','ocr');return withHeavy(async function(){a.queued=false;if(a.busy||a.ocr)return;a.busy=true;a.meta='Memuat mesin OCR…';render(a);
  try{if(!window.Tesseract)await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
   var r=await window.Tesseract.recognize(a.file,'eng+ind',{logger:function(m){if(m&&m.status==='recognizing text'){a.meta='Membaca teks… '+Math.round(m.progress*100)+'%';prog(a,m.progress);var s=$('small',a.chip);if(s)s.textContent=a.meta}}});
   var t=(r&&r.data&&r.data.text||'').trim();if(!t){a.meta='Tidak ada teks terbaca';a.busy=false;render(a);prog(a,0);return}
