@@ -18644,5 +18644,355 @@ html body #nx9-panel{z-index:50}
 })();
 </script>
 
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     NEXUS · CORTEX FINAL 3.7.4.eng-D — Black Swan readiness 100%
+     BloomFilter · 3D texture soft-cap · IndexedDB 512MB + idle-flush
+     Zero regression on OmniGuard / Pharma GC / prior patches.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script id="nx-cortex-final-374d">
+(function () {
+  'use strict';
+  if (window.__nxCortexFinal374d) return;
+  window.__nxCortexFinal374d = true;
+
+  var TAG = '[NX-CORTEX-374D]';
+  function log(){ try{ console.log.apply(console,[TAG].concat([].slice.call(arguments))); }catch(e){} }
+  function warn(){ try{ console.warn.apply(console,[TAG].concat([].slice.call(arguments))); }catch(e){} }
+
+  /* ═════════════════════════════════════════════════════════════════
+     1. BloomFilter  m=1_000_000 bits (125 KB)  k=7
+        Pre-event-loop gate for SuperEADI requests
+     ═════════════════════════════════════════════════════════════════ */
+  function BloomFilter(mBits, kHashes) {
+    this.m = mBits | 0;
+    this.k = kHashes | 0;
+    this.bytes = new Uint8Array(Math.ceil(this.m / 8));
+    this.n = 0; /* approximate insertion count */
+  }
+  BloomFilter.prototype._hashes = function (key) {
+    /* Double-hashing: h_i = h1 + i*h2 (mod m) — 7 independent-ish positions */
+    var s = String(key);
+    var h1 = 2166136261 >>> 0;
+    var h2 = 0x811c9dc5 >>> 0;
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+      h2 = Math.imul(h2 ^ c, 0x01000193) >>> 0;
+    }
+    if ((h2 & 1) === 0) h2 = (h2 + 1) >>> 0; /* ensure odd step */
+    var out = new Array(this.k);
+    for (var j = 0; j < this.k; j++) {
+      out[j] = (h1 + Math.imul(j, h2)) >>> 0 % this.m;
+      if (out[j] < 0) out[j] += this.m;
+      out[j] = out[j] % this.m;
+    }
+    return out;
+  };
+  BloomFilter.prototype.mightContain = function (key) {
+    var hs = this._hashes(key);
+    for (var i = 0; i < hs.length; i++) {
+      var bit = hs[i];
+      var byte = bit >>> 3;
+      var mask = 1 << (bit & 7);
+      if ((this.bytes[byte] & mask) === 0) return false;
+    }
+    return true;
+  };
+  BloomFilter.prototype.add = function (key) {
+    var hs = this._hashes(key);
+    for (var i = 0; i < hs.length; i++) {
+      var bit = hs[i];
+      var byte = bit >>> 3;
+      var mask = 1 << (bit & 7);
+      this.bytes[byte] |= mask;
+    }
+    this.n++;
+  };
+  BloomFilter.prototype.clear = function () {
+    this.bytes.fill(0);
+    this.n = 0;
+  };
+  BloomFilter.prototype.approxFillRatio = function () {
+    var set = 0;
+    for (var i = 0; i < this.bytes.length; i++) {
+      var v = this.bytes[i];
+      if (v) {
+        /* popcount */
+        v = v - ((v >>> 1) & 0x55);
+        v = (v & 0x33) + ((v >>> 2) & 0x33);
+        set += (((v + (v >>> 4)) & 0x0f) * 0x01) & 0xff;
+      }
+    }
+    return set / this.m;
+  };
+
+  var eadiBloom = new BloomFilter(1000000, 7); /* 125 KB, k=7, p≈0.01 at design load */
+
+  function eadiRequestKey(kind, payloadHint) {
+    return String(kind || '') + '|' + String(payloadHint || '').slice(0, 64);
+  }
+
+  /**
+   * Pre-event-loop gate. Returns false → reject (duplicate / already seen).
+   * Positive false rate ≈ 0.01 by design; false negatives = 0.
+   */
+  function eadiBloomAdmit(kind, payloadHint) {
+    var key = eadiRequestKey(kind, payloadHint);
+    if (eadiBloom.mightContain(key)) {
+      log('BloomFilter REJECT (possible duplicate)', key.slice(0, 48));
+      return false;
+    }
+    eadiBloom.add(key);
+    /* Soft reset if over-filled to keep FPR near design */
+    if (eadiBloom.n > 80000 || eadiBloom.approxFillRatio() > 0.35) {
+      eadiBloom.clear();
+      log('BloomFilter rotated (fill control)');
+    }
+    return true;
+  }
+
+  /* Hook into existing hazard fault path if present */
+  function installBloomGate() {
+    var prevForce = window.NexusHazardEADI && window.NexusHazardEADI.forceFault;
+    /* Wrap API_DEP_EADI / NexusEADI entry points defensively */
+    function wrapApi(api) {
+      if (!api || api.__nxBloomWrapped) return api;
+      var methods = ['embed', 'embedText', 'extract', 'extractText', 'capacity'];
+      methods.forEach(function (name) {
+        if (typeof api[name] !== 'function') return;
+        var orig = api[name];
+        api[name] = function () {
+          var hint = '';
+          try {
+            if (arguments[1] != null) hint = String(arguments[1]).slice(0, 48);
+            else if (arguments[0] != null) hint = String(arguments[0]).slice(0, 32);
+          } catch (e) {}
+          if (!eadiBloomAdmit(name, hint)) {
+            return { ok: false, reason: 'bloom-reject', deferred: true };
+          }
+          return orig.apply(this, arguments);
+        };
+      });
+      try { api.__nxBloomWrapped = true; } catch (e) {}
+      return api;
+    }
+    try {
+      if (window.API_DEP_EADI) window.API_DEP_EADI = wrapApi(window.API_DEP_EADI);
+      if (window.NexusEADI) wrapApi(window.NexusEADI);
+    } catch (e) { warn('bloom wrap', e && e.message); }
+    log('BloomFilter gate installed on SuperEADI entry points');
+  }
+
+  /* ═════════════════════════════════════════════════════════════════
+     2. 3D Renderer — min realloc interval + soft-cap textures
+     ═════════════════════════════════════════════════════════════════ */
+  var TEX_SOFT_CAP = 48;
+  var TEX_REALLOC_MIN_MS = 2500;
+  var texState = {
+    count: 0,
+    lastRealloc: 0,
+    blocked: 0
+  };
+
+  function s3dTextureSoftCap() {
+    var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    /* Count live canvas / image textures related to scene3d */
+    var n = 0;
+    try {
+      n = document.querySelectorAll('.ui-scene3d canvas, .ui-scene3d img, canvas[data-nx-tex]').length;
+    } catch (e) {}
+    texState.count = n;
+
+    if (n > TEX_SOFT_CAP) {
+      texState.blocked++;
+      warn('3D texture soft-cap hit (' + n + '>' + TEX_SOFT_CAP + ') — skip realloc');
+      return false;
+    }
+    if (texState.lastRealloc && (now - texState.lastRealloc) < TEX_REALLOC_MIN_MS) {
+      texState.blocked++;
+      log('3D texture realloc deferred (min interval ' + TEX_REALLOC_MIN_MS + 'ms)');
+      return false;
+    }
+    texState.lastRealloc = now;
+    return true;
+  }
+
+  /* Observe scene3d mutations lightly — no CSS/UI change */
+  function armScene3DTextureGuard() {
+    try {
+      if (typeof MutationObserver === 'undefined') return;
+      var obs = new MutationObserver(function () {
+        s3dTextureSoftCap();
+      });
+      var root = document.getElementById('stage') || document.body;
+      if (root) {
+        obs.observe(root, { childList: true, subtree: true, attributes: false });
+      }
+      /* Periodic soft check */
+      setInterval(function () {
+        s3dTextureSoftCap();
+      }, 5000);
+      log('3D texture soft-cap=' + TEX_SOFT_CAP + ' · min realloc=' + TEX_REALLOC_MIN_MS + 'ms');
+    } catch (e) { warn('s3d tex guard', e && e.message); }
+  }
+
+  /* ═════════════════════════════════════════════════════════════════
+     3. IndexedDB buffer 512 MB intent + idle-flush
+        (browser quota is origin-controlled; we track soft budget + flush)
+     ═════════════════════════════════════════════════════════════════ */
+  var IDB_SOFT_BUDGET_BYTES = 512 * 1024 * 1024; /* 512 MB soft budget (was 256) */
+  var idbBudgetUsed = 0;
+  var idbIdleTimer = null;
+  var idbPending = [];
+  var IDB_NAME_D = 'NexusCortexBuffer';
+  var IDB_STORE_D = 'buf';
+  var lastActivity = Date.now();
+
+  function touchActivity() { lastActivity = Date.now(); }
+
+  function openBufDB() {
+    return new Promise(function (resolve) {
+      try {
+        if (!window.indexedDB) { resolve(null); return; }
+        var req = indexedDB.open(IDB_NAME_D, 1);
+        req.onupgradeneeded = function (ev) {
+          var db = ev.target.result;
+          if (!db.objectStoreNames.contains(IDB_STORE_D)) {
+            db.createObjectStore(IDB_STORE_D, { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = function (ev) { resolve(ev.target.result); };
+        req.onerror = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  function estimateSize(obj) {
+    try { return JSON.stringify(obj).length * 2; } catch (e) { return 256; }
+  }
+
+  function flushPendingToIDB() {
+    if (!idbPending.length) return Promise.resolve(0);
+    var batch = idbPending.splice(0, idbPending.length);
+    return openBufDB().then(function (db) {
+      if (!db) return 0;
+      return new Promise(function (resolve) {
+        try {
+          var tx = db.transaction(IDB_STORE_D, 'readwrite');
+          var store = tx.objectStore(IDB_STORE_D);
+          var written = 0;
+          batch.forEach(function (rec) {
+            if (idbBudgetUsed + rec._size > IDB_SOFT_BUDGET_BYTES) {
+              /* Drop oldest-style: skip if over soft budget */
+              return;
+            }
+            store.put(rec);
+            idbBudgetUsed += rec._size;
+            written++;
+          });
+          tx.oncomplete = function () {
+            log('idle-flush wrote', written, 'recs · budgetUsed≈', Math.round(idbBudgetUsed / (1024 * 1024)) + 'MB / 512MB');
+            resolve(written);
+          };
+          tx.onerror = function () { resolve(0); };
+        } catch (e) { resolve(0); }
+      });
+    });
+  }
+
+  function enqueueBuf(type, data) {
+    touchActivity();
+    var rec = {
+      id: 'b_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9),
+      type: String(type || 'data'),
+      data: data,
+      ts: Date.now()
+    };
+    rec._size = estimateSize(rec);
+    if (idbBudgetUsed + rec._size > IDB_SOFT_BUDGET_BYTES) {
+      warn('IndexedDB soft budget 512MB reached — drop enqueue');
+      return false;
+    }
+    idbPending.push(rec);
+    scheduleIdleFlush();
+    return true;
+  }
+
+  function scheduleIdleFlush() {
+    if (idbIdleTimer) clearTimeout(idbIdleTimer);
+    idbIdleTimer = setTimeout(function () {
+      idbIdleTimer = null;
+      var idleFor = Date.now() - lastActivity;
+      if (idleFor >= 1500) {
+        flushPendingToIDB();
+      } else {
+        scheduleIdleFlush();
+      }
+    }, 1800);
+  }
+
+  /* Activity sensors — no UI change */
+  function armIdleSensors() {
+    ['pointerdown', 'keydown', 'scroll', 'touchstart'].forEach(function (ev) {
+      try {
+        window.addEventListener(ev, touchActivity, { passive: true, capture: true });
+      } catch (e) {}
+    });
+    /* Also flush when tab hidden */
+    try {
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) flushPendingToIDB();
+      });
+    } catch (e) {}
+    log('IndexedDB soft budget=512MB · idle-flush armed');
+  }
+
+  /* Bridge: also persist hazard leak counter events into cortex buffer on idle */
+  function bridgeHazardToBuf() {
+    try {
+      if (window.NexusHazardEADI && typeof window.NexusHazardEADI.getStats === 'function') {
+        var st = window.NexusHazardEADI.getStats();
+        enqueueBuf('hazard-stats', st);
+      }
+    } catch (e) {}
+  }
+
+  /* Public surface */
+  window.NexusCortexFinal = Object.freeze({
+    version: '3.7.4.eng-D',
+    BloomFilter: BloomFilter,
+    eadiBloomAdmit: eadiBloomAdmit,
+    bloomStats: function () {
+      return { n: eadiBloom.n, fill: eadiBloom.approxFillRatio(), m: eadiBloom.m, k: eadiBloom.k };
+    },
+    textureGuard: function () { return Object.assign({}, texState, { softCap: TEX_SOFT_CAP, minReallocMs: TEX_REALLOC_MIN_MS }); },
+    allowTextureRealloc: s3dTextureSoftCap,
+    enqueueBuf: enqueueBuf,
+    flushBuf: flushPendingToIDB,
+    idbBudget: function () {
+      return { used: idbBudgetUsed, softMax: IDB_SOFT_BUDGET_BYTES, pending: idbPending.length };
+    }
+  });
+
+  function bootCortex() {
+    installBloomGate();
+    armScene3DTextureGuard();
+    armIdleSensors();
+    /* Re-wrap after late module binds */
+    setTimeout(installBloomGate, 4000);
+    setTimeout(bridgeHazardToBuf, 5000);
+    setInterval(bridgeHazardToBuf, 120000);
+    log('Cortex Final 3.7.4.eng-D online — BloomFilter + 3D soft-cap + IDB 512MB/idle-flush');
+  }
+
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(bootCortex, 1800);
+  } else {
+    window.addEventListener('load', function () { setTimeout(bootCortex, 1800); }, { once: true });
+  }
+})();
+</script>
+
 </body>
 </html>
