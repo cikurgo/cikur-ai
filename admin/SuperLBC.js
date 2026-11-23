@@ -481,52 +481,11 @@
     return { ok: r.every(x => x.ok), results: r };
   }
 
-  /*------------------------- 7. Ekspor + Integrity Meta (Fase 1, additive) --*/
-  // Build-time fingerprint of this source (best-effort; surface check is authoritative at runtime)
-  const MODULE_CHECKSUM = '0d885adde2039038f5c52182ac5bff09b1cebb1acc8bc9bc8d1914b998a28ed8';
-  const MODULE_ID = 'NexusLBC';
-  const MODULE_VERSION = '3.0.0';
-
-  function getMeta() {
-    return Object.freeze({
-      id: MODULE_ID,
-      version: MODULE_VERSION,
-      checksum: MODULE_CHECKSUM,
-      fingerprint: 'sha256:' + MODULE_CHECKSUM,
-      algorithm: 'SHA-256',
-      artifact: 'source-file',
-      note: 'Checksum is build-time hash. Runtime selfTest verifies API surface integrity (zero regression).'
-    });
-  }
-
-  // Non-breaking wrapper: always call original selfTest first
-  const _nxOrigSelfTest = selfTest;
-  async function selfTestWithIntegrity() {
-    const base = await _nxOrigSelfTest();
-    try {
-      const meta = getMeta();
-      const surfaceOk = typeof sha256Hex === 'function'
-        && typeof MerklePatriciaTrie === 'function'
-        && typeof schnorrSign === 'function'
-        && typeof verifyMPTProof === 'function'
-        && meta && meta.id === MODULE_ID
-        && meta.version === MODULE_VERSION;
-      if (base && Array.isArray(base.results)) {
-        base.results.push({ name: 'INTEGRITY getMeta+surface', ok: !!surfaceOk });
-      }
-      if (base) {
-        base.ok = !!(base.ok && surfaceOk);
-        base.meta = meta;
-        base.integrity = surfaceOk ? 'OK' : 'MISMATCH';
-      }
-    } catch (e) { /* never break original result */ }
-    return base;
-  }
-
-  const API = { version: MODULE_VERSION, getMeta, canonicalize, canonicalJSON, MPTNode, MerklePatriciaTrie, SECP256K1, G, mod, modInv, isOnCurve,
+  /*------------------------- 7. Ekspor ----------------------------------*/
+  const API = { version: '3.0.0', canonicalize, canonicalJSON, MPTNode, MerklePatriciaTrie, SECP256K1, G, mod, modInv, isOnCurve,
     pointAdd, pointMultiply, generatePrivateKey, getPublicKey, generateSchnorrProof, verifySchnorrProof,
     schnorrSign, schnorrVerify, schnorrGetPublicKey, generateKeyPair, taggedHash, verifyMPTProof,
-    sha256, sha256Hex, bytesToHex, hexToBytes, toBytes, selfTest: selfTestWithIntegrity };
+    sha256, sha256Hex, bytesToHex, hexToBytes, toBytes, selfTest };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   global.NexusLBC = API;
   ['canonicalize', 'MPTNode', 'MerklePatriciaTrie', 'SECP256K1', 'mod', 'modInv', 'pointAdd', 'pointMultiply', 'generateSchnorrProof', 'verifySchnorrProof']

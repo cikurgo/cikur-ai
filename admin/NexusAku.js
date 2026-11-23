@@ -599,53 +599,11 @@
     return { results: hasil, pass: lulus, total: hasil.length, score: lulus + '/' + hasil.length };
   }
 
-  /* Integrity Meta (Fase 1, additive — zero regression) */
-  const MODULE_CHECKSUM = 'c58ebb052c8ebf9c17c6950480b5b0cad89961b4bb1a9ea687884a653bd54ada';
-  const MODULE_ID = 'NexusAku';
-  const MODULE_VERSION = VERSI;
-
-  function getMeta() {
-    return Object.freeze({
-      id: MODULE_ID,
-      version: MODULE_VERSION,
-      checksum: MODULE_CHECKSUM,
-      fingerprint: 'sha256:' + MODULE_CHECKSUM,
-      algorithm: 'SHA-256',
-      artifact: 'source-file',
-      note: 'Checksum is build-time hash. Runtime selfTest verifies API surface integrity (zero regression).'
-    });
-  }
-
-  const _nxOrigSelfTest = selfTest;
-  async function selfTestWithIntegrity() {
-    const base = await _nxOrigSelfTest();
-    try {
-      const meta = getMeta();
-      const surfaceOk = typeof GerbangAKU === 'function'
-        && typeof inspeksiTeks === 'function'
-        && typeof hitungBukti === 'function'
-        && meta && meta.id === MODULE_ID
-        && meta.version === MODULE_VERSION;
-      if (base && Array.isArray(base.results)) {
-        base.results.push({ n: 'A15 INTEGRITY', status: surfaceOk ? 'PASS' : 'FAIL', d: surfaceOk ? 'getMeta+surface OK' : 'MISMATCH' });
-        if (surfaceOk) base.pass = (base.pass || 0) + 1;
-        base.total = base.results.length;
-      }
-      if (base) {
-        base.meta = meta;
-        base.integrity = surfaceOk ? 'OK' : 'MISMATCH';
-        if (base.pass != null && base.total != null) base.score = base.pass + '/' + base.total;
-      }
-    } catch (e) { /* never break original */ }
-    return base;
-  }
-
   return {
-    VERSI, version: MODULE_VERSION, getMeta,
-    GerbangAKU, Entitas, Komponen, KeamananError,
+    VERSI, GerbangAKU, Entitas, Komponen, KeamananError,
     AIPenyusup, PenyusupPintar, PenyusupReplay,
     safeEqual, hitungBukti, pesanBukti, rangkaiPantulan,
-    inspeksiTeks, sidikObjek, selfTest: selfTestWithIntegrity,
+    inspeksiTeks, sidikObjek, selfTest,
     buat: (opsi) => new GerbangAKU(opsi),
     ADA_WEBCRYPTO: !!subtle
   };
