@@ -2219,7 +2219,61 @@ function () {
       text: '<html><body>ISO/IEC 42001:2023 Artificial intelligence '
           + 'Management system published December 2023. This document '
           + 'specifies requirements for establishing an AI management system.'
-          + '</body></html>'
+          + '
+<!-- ═══════════════════════════════════════════════════════════════════
+     NEXUS INTEGRITY BOOTSTRAP v1.2.0 (additive, zero-regression)
+     Loads NexusIntegrity if present; reports to Neural Trace Log once.
+     Does not alter layout, control flow, or existing APIs.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script id="nx-integrity-bootstrap">
+(function () {
+  'use strict';
+  if (window.__nxIntegrityBoot) return;
+  window.__nxIntegrityBoot = true;
+  var BUILD = 'integrity-1.2.0';
+
+  function safeLog(msg) {
+    try {
+      if (typeof logEvent === 'function') logEvent('SYSTEM', msg);
+      else console.log('[NexusIntegrity]', msg);
+    } catch (e) {}
+  }
+
+  function run() {
+    var I = window.NexusIntegrity;
+    if (!I || typeof I.report !== 'function') {
+      safeLog('[INTEGRITY] NexusIntegrity not loaded — skip report');
+      return;
+    }
+    I.report({ log: true }).then(function (r) {
+      var line = '[INTEGRITY] ' + r.ok + '/' + r.loaded + ' OK'
+        + (r.missing ? ' · missing=' + r.missing : '')
+        + (r.mismatch ? ' · mismatch=' + r.mismatch : '')
+        + ' · v' + (I.version || '');
+      safeLog(line);
+      // One-line fingerprint summary for UI transparency (C1)
+      try {
+        var fps = (r.modules || []).filter(function (m) { return m.loaded && m.fingerprint; })
+          .map(function (m) { return m.id.replace('Nexus', '') + ':' + String(m.fingerprint).slice(7, 15); })
+          .join(' ');
+        if (fps) safeLog('[INTEGRITY] fingerprints ' + fps);
+      } catch (e) {}
+    }).catch(function (e) {
+      safeLog('[INTEGRITY] report error: ' + (e && e.message || e));
+    });
+  }
+
+  // Delay so modules that load late can register
+  function arm() {
+    setTimeout(run, 2500);
+    setTimeout(run, 6000); // second chance
+  }
+  if (document.readyState === 'complete') arm();
+  else window.addEventListener('load', arm, { once: true });
+})();
+</script>
+
+</body></html>'
     });
     const good = await verifyCitation('mock://kontrol',
       'This document specifies requirements for establishing an AI '

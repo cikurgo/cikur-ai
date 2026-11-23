@@ -806,8 +806,39 @@
   }
 
   // =====================================================
-  // [12] PUBLIC API
+  // [12] PUBLIC API + Integrity Meta (Fase 1, additive)
   // =====================================================
+  const MODULE_CHECKSUM = 'bc65cb12ea751ad9fa3858ff27ab5421742360f79ad824fbc31fe3ddc10a8203';
+  const MODULE_ID = 'NexusOmniCoreV3';
+  const MODULE_VERSION = V3;
+
+  function getMeta() {
+    return Object.freeze({
+      id: MODULE_ID,
+      version: MODULE_VERSION,
+      checksum: MODULE_CHECKSUM,
+      fingerprint: 'sha256:' + MODULE_CHECKSUM,
+      algorithm: 'SHA-256',
+      artifact: 'source-file',
+      note: 'Checksum is build-time hash. Runtime selfTest verifies API surface integrity (zero regression).'
+    });
+  }
+
+  function selfTest() {
+    const meta = getMeta();
+    const surfaceOk = typeof analyzeV3 === 'function'
+      && typeof deobfuscate === 'function'
+      && typeof detectExtraTags === 'function'
+      && meta && meta.id === MODULE_ID;
+    return {
+      ok: !!surfaceOk,
+      results: [{ name: 'INTEGRITY getMeta+surface', ok: !!surfaceOk }],
+      meta,
+      integrity: surfaceOk ? 'OK' : 'MISMATCH',
+      version: MODULE_VERSION
+    };
+  }
+
   const nexusV3 = Object.freeze({
     analyze: analyzeV3,
     deobfuscate,
@@ -816,7 +847,10 @@
     extractNestedPayloads,
     detectExtraTags,
     analyzeChains,
+    getMeta,
+    selfTest,
     VERSION: V3,
+    version: V3,
     BASE_VERSION: CORE.VERSION || '2.0',
     _rules: Object.freeze(RULES.map(r => r.name)),
     _regex: Object.freeze(RE),

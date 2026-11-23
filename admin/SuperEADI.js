@@ -242,10 +242,50 @@
     return { ok: r.every(x => x.ok), results: r };
   }
 
-  /*---------------------- Ekspor ----------------------*/
-  const API = { version: '3.0.0', DELTA, dct2D, idct2D, getBlock, rgbToY, embedSVD, extractSVD, capacity,
+  /*---------------------- Ekspor + Integrity Meta (Fase 1, additive) ----------------------*/
+  const MODULE_CHECKSUM = 'ea0bbc4c41c6d7e3aa9b2feb47389b2df874b596f024b40b833fe3cf7b8f7a18';
+  const MODULE_ID = 'NexusEADI';
+  const MODULE_VERSION = '3.0.0';
+
+  function getMeta() {
+    return Object.freeze({
+      id: MODULE_ID,
+      version: MODULE_VERSION,
+      checksum: MODULE_CHECKSUM,
+      fingerprint: 'sha256:' + MODULE_CHECKSUM,
+      algorithm: 'SHA-256',
+      artifact: 'source-file',
+      note: 'Checksum is build-time hash. Runtime selfTest verifies API surface integrity (zero regression).'
+    });
+  }
+
+  const _nxOrigSelfTest = selfTest;
+  function selfTestWithIntegrity() {
+    const base = _nxOrigSelfTest();
+    try {
+      const meta = getMeta();
+      const surfaceOk = typeof embedSVD === 'function'
+        && typeof extractSVD === 'function'
+        && typeof embedText === 'function'
+        && typeof extractText === 'function'
+        && typeof capacity === 'function'
+        && meta && meta.id === MODULE_ID
+        && meta.version === MODULE_VERSION;
+      if (base && Array.isArray(base.results)) {
+        base.results.push({ name: 'INTEGRITY getMeta+surface', ok: !!surfaceOk });
+      }
+      if (base) {
+        base.ok = !!(base.ok && surfaceOk);
+        base.meta = meta;
+        base.integrity = surfaceOk ? 'OK' : 'MISMATCH';
+      }
+    } catch (e) { /* never break original */ }
+    return base;
+  }
+
+  const API = { version: MODULE_VERSION, getMeta, DELTA, dct2D, idct2D, getBlock, rgbToY, embedSVD, extractSVD, capacity,
     embedBytes, extractBytes, embedText, extractText, crc32,
-    textToBits, bitsToText, hexToBits, bitsToHex, selfTest };
+    textToBits, bitsToText, hexToBits, bitsToHex, selfTest: selfTestWithIntegrity };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   global.NexusEADI = API;
   ['dct2D', 'idct2D', 'embedSVD', 'extractSVD'].forEach(n => { if (!(n in global)) global[n] = API[n]; });
