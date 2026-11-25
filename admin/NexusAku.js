@@ -605,6 +605,7 @@
     safeEqual, hitungBukti, pesanBukti, rangkaiPantulan,
     inspeksiTeks, sidikObjek, selfTest,
     buat: (opsi) => new GerbangAKU(opsi),
+    getMeta: function () { var b = { id: 'NexusAku', version: VERSI, checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; },
     ADA_WEBCRYPTO: !!subtle
   };
 });

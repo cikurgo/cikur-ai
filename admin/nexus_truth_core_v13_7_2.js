@@ -1323,6 +1323,7 @@ function () {
     configure, getConfig,
     checkEntity, verifyCitation, verifyBatch,
     calibrate, label, audit, gate, selfTest,
+    getMeta: function () { var b = { id: 'NexusTruth', version: '13.7.2', checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; },
     _internal: {
       fetchText, norm, htmlToText, trigramScore,
       isSafeUrl, extractUrls, trimUrlTrailing,

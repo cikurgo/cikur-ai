@@ -245,7 +245,8 @@
   /*---------------------- Ekspor ----------------------*/
   const API = { version: '3.0.0', DELTA, dct2D, idct2D, getBlock, rgbToY, embedSVD, extractSVD, capacity,
     embedBytes, extractBytes, embedText, extractText, crc32,
-    textToBits, bitsToText, hexToBits, bitsToHex, selfTest };
+    textToBits, bitsToText, hexToBits, bitsToHex, selfTest,
+    getMeta: function () { var b = { id: 'NexusEADI', version: '3.0.0', checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   global.NexusEADI = API;
   ['dct2D', 'idct2D', 'embedSVD', 'extractSVD'].forEach(n => { if (!(n in global)) global[n] = API[n]; });

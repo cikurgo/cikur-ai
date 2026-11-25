@@ -2399,6 +2399,7 @@ function () {
     configure, getConfig,
     checkEntity, verifyCitation, verifyBatch,
     calibrate, label, audit, gate, selfTest,
+    getMeta: function () { var b = { id: 'NexusTruth', version: '13.7.2', checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; },
     _internal: {
       fetchText, norm, htmlToText, trigramScore,
       isSafeUrl, extractUrls, trimUrlTrailing,
@@ -3060,6 +3061,14 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
                 <div class="artifact-actions">
                     <button id="copy-artifact-btn"><span class="ic" data-ic="clipboard"></span>COPY ARTIFACT</button>
                     <button id="export-md-btn"><span class="ic" data-ic="filetext"></span>EXPORT MD</button>
+                </div>
+            </div>
+
+            <div class="tele-section" id="nx-intg-section">
+                <div class="tele-title">BUILD FINGERPRINT <span class="hint">SHA-256</span></div>
+                <div class="heat-meta">
+                    <span id="nx-intg-fp" title="NexusIntegrity — menunggu baseline">menunggu baseline…</span>
+                    <span id="nx-intg-st"></span>
                 </div>
             </div>
 
@@ -7335,67 +7344,6 @@ assert('NexusPharma golden druglikeness', (function () {
         } catch (e) { return false; }
     })());
     assert('Rare prelude / combined', typeof window.__nxrPrelude === 'function' || typeof window.__cgoPrelude === 'function');
-    /* Truth heal-in-place (eng-G2): ensure surface before asserts — zero regression */
-    (function nxEnsureTruth() {
-        function ok(t) {
-            return t && typeof t === 'object'
-                && typeof t.calibrate === 'function' && typeof t.label === 'function'
-                && typeof t.audit === 'function' && typeof t.gate === 'function'
-                && /^13\.7/.test(String(t.version || ''));
-        }
-        function functional(t) {
-            try {
-                var a = t.calibrate({ hasEvidence: false, sourceTier: 'none' });
-                var b = t.calibrate({ hasEvidence: true, sourceTier: 'official', quoteVerified: true, reachable: true });
-                return a && a.confidence <= 30 && t.label(b) === '[SUMBER NYATA]';
-            } catch (e) { return false; }
-        }
-        if (ok(window.NexusTruth) && functional(window.NexusTruth)) return;
-        var noEvidenceCap = 30;
-        function calibrate(e) {
-            e = e || {};
-            var tiers = { official: 85, primary: 70, secondary: 45, none: 15 };
-            var hasTier = Object.prototype.hasOwnProperty.call(tiers, e.sourceTier);
-            var conf = hasTier ? tiers[e.sourceTier] : tiers.none;
-            if (e.quoteVerified === true) conf += 10;
-            if (e.reachable === false) conf -= 25;
-            if (e.entityFound === true) conf += 8;
-            if (e.entityMissing === true) conf = Math.min(conf, 10);
-            if (e.entityAmbiguous === true) conf -= 5;
-            if (e.contradiction === true) conf = Math.min(conf, 10);
-            if (!e.hasEvidence) conf = Math.min(conf, noEvidenceCap);
-            conf = Math.max(0, Math.min(100, Math.round(conf)));
-            var result = { confidence: conf, reasons: [] };
-            if (hasTier) result.sourceTier = e.sourceTier;
-            if (e.quoteVerified === true) result.quoteVerified = true;
-            if (e.entityFound === true) result.entityFound = true;
-            if (e.entityMissing === true) result.entityMissing = true;
-            if (e.entityAmbiguous === true) result.entityAmbiguous = true;
-            if (e.contradiction === true) result.contradiction = true;
-            if (e.emptyPage === true) result.emptyPage = true;
-            return result;
-        }
-        function label(cal) {
-            cal = cal || {};
-            if (cal.contradiction === true || cal.emptyPage === true || cal.entityMissing === true) return '[TAK DIKETAHUI]';
-            var c = (typeof cal.confidence === 'number' && isFinite(cal.confidence)) ? cal.confidence : 0;
-            if (cal.entityAmbiguous === true && cal.quoteVerified !== true) return c >= 40 ? '[EKSTRAPOLASI]' : '[TAK DIKETAHUI]';
-            var strong = cal.quoteVerified === true || cal.entityFound === true || cal.sourceTier === 'official' || cal.sourceTier === 'primary';
-            if (c >= 80 && strong) return '[SUMBER NYATA]';
-            if (c >= 40) return '[EKSTRAPOLASI]';
-            return '[TAK DIKETAHUI]';
-        }
-        window.NexusTruth = {
-            version: '13.7.2',
-            calibrate: calibrate,
-            label: label,
-            audit: function () { return { flags: [], verdict: 'BERSIH', clean: true }; },
-            gate: function () { return { clean: true, suggestedAction: 'EMIT', verdict: 'LOLOS', audit: { flags: [], verdict: 'BERSIH', clean: true }, citations: [], entities: [] }; },
-            selfTest: async function () { return { results: [], pass: 0, total: 0, score: '0/0', integrity: 'OK' }; },
-            __recoveryShim: true
-        };
-        try { logEvent('SYSTEM', '[TRUTH] heal-in-place before DIAG asserts'); } catch (e) {}
-    })();
     assert('NexusTruth core present', typeof window.NexusTruth === 'object' && typeof window.NexusTruth.gate === 'function' && typeof window.NexusTruth.calibrate === 'function' && typeof window.NexusTruth.label === 'function' && typeof window.NexusTruth.audit === 'function');
     assert('NexusTruth version 13.7', window.NexusTruth && /^13\.7/.test(String(window.NexusTruth.version || '')));
     assert('NexusTruth calibrate no-evidence ≤30', (function () {
@@ -7564,33 +7512,23 @@ function initThermalWatchdog() {
 }
 
 
-/* Global soft-capture: cegah crash diam + log ke Neural Trace (stack-storm silenced) */
+/* Global soft-capture: cegah crash diam + log ke Neural Trace */
 (function installGlobalGuards() {
     try {
-        function isStackStorm(msg) {
-            return /Maximum call stack size exceeded|too much recursion|out of stack space/i.test(String(msg || ''));
-        }
         window.addEventListener('unhandledrejection', function (ev) {
             try {
                 const r = ev && ev.reason;
                 const msg = (r && (r.message || r.name)) || String(r || 'unknown');
-                if (/AbortError|Request dihentikan|Aborted by caller/i.test(msg)) return;
-                if (isStackStorm(msg)) {
-                    try { ev.preventDefault(); } catch (x) {}
-                    return; // stack-guard handles; do not spam Neural Trace
-                }
+                if (/AbortError|Request dihentikan|Aborted by caller/i.test(msg)) return; // normal stop
                 if (typeof logEvent === 'function') logEvent('ERROR', '[UNHANDLED] ' + msg.slice(0, 220));
             } catch (e) {}
         });
         window.addEventListener('error', function (ev) {
             try {
                 if (!ev) return;
+                // Abaikan noise ResizeObserver & script CDN partial
                 const m = String(ev.message || '');
                 if (/ResizeObserver|Script error\.?$/i.test(m)) return;
-                if (isStackStorm(m)) {
-                    try { ev.preventDefault(); } catch (x) {}
-                    return;
-                }
                 if (typeof logEvent === 'function') logEvent('ERROR', '[WINDOW] ' + m.slice(0, 180) + (ev.filename ? ' @' + String(ev.filename).split('/').pop() : ''));
             } catch (e) {}
         });
@@ -11114,7 +11052,9 @@ window.addEventListener('load', () => {
     }
   } catch (e) {}
 });
-window.NexusDeck = { open: setTab, version: '1.0.0' };
+window.NexusDeck = { open: setTab, version: '1.0.0',
+  getMeta: function () { var b = { id: 'NexusDeck', version: '1.0.0', checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; },
+  selfTest: function () { try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.selfTest === 'function') return I.selfTest({ scope: 'deck' }); } catch (e) {} return { status: 'SKIP', version: '1.0.0', checksum: null, hash_timestamp: Date.now(), modules: {} }; } };
 } catch (err) { console.warn('[NEXUS DECK] gagal dimuat:', err); }
 })();
   
@@ -13313,6 +13253,7 @@ assert('GOLDEN H-bond energy', dockHB.energyHB === -1.197);
 
     // Metadata
     version: '3.2.1-canonical-le',
+    getMeta: function () { var b = { id: 'NexusPharma', version: '3.2.1-canonical-le', checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; },
     constants: {
       COULOMB_K,
       SOFTCORE_ALPHA,
@@ -15725,6 +15666,7 @@ if (!op) {
     analyzeChains,
     VERSION: V3,
     BASE_VERSION: CORE.VERSION || '2.0',
+    getMeta: function () { var b = { id: 'NexusOmniCoreV3', version: V3, checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; },
     _rules: Object.freeze(RULES.map(r => r.name)),
     _regex: Object.freeze(RE),
   });
@@ -16278,7 +16220,8 @@ if (!op) {
       resume: function () { if (userPaused) pauseBtn.click(); },
       status: function () { return { state: state, running: S.running, sweeps: S.sweeps, lastMs: S.lastMs, deviations: S.dev, learning: S.learning, paused: userPaused || hidden }; },
       open: function () { setOpen(true); }, close: function () { setOpen(false); },
-      isReady: function () { return !!(window.NexusOmniCoreV3 || window.NexusOmniCore); }
+      isReady: function () { return !!(window.NexusOmniCoreV3 || window.NexusOmniCore); },
+      getMeta: function () { var b = { id: 'NexusOmniGuard', version: 'sentinel-2.0-aegis/' + ((window.NexusOmniCoreV3 && window.NexusOmniCoreV3.VERSION) || 'stub'), checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; }
     });
 
     renderStream();
@@ -17416,6 +17359,7 @@ window.NX35={prefs:function(){return JSON.parse(JSON.stringify(P))},attach:handl
     safeEqual, hitungBukti, pesanBukti, rangkaiPantulan,
     inspeksiTeks, sidikObjek, selfTest,
     buat: (opsi) => new GerbangAKU(opsi),
+    getMeta: function () { var b = { id: 'NexusAku', version: VERSI, checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; },
     ADA_WEBCRYPTO: !!subtle
   };
 });
@@ -17772,6 +17716,11 @@ html body #nx9-panel{z-index:50}
   function warn() {
     try { console.warn.apply(console, [PATCH_TAG].concat([].slice.call(arguments))); } catch (e) {}
   }
+  /* D2: gagal-cepat bila dependency tak stabil (default enforce=soft → hanya bila modul benar-benar hilang). */
+  function _dep(id) {
+    try { var I = window.NexusIntegrity; if (I && typeof I.ensureStable === 'function') { var s = I.ensureStable(id); if (!s.ok) return { ok: false, reason: 'dependency ' + s.reason }; } } catch (e) {}
+    return null;
+  }
 
   /* ─── 7. FALLBACK SHIM for API_DEP_EADI ─────────────────────────── */
   if (typeof window.API_DEP_EADI === 'undefined') {
@@ -17817,10 +17766,12 @@ html body #nx9-panel{z-index:50}
         ready: true,
         version: e.version || '3.0.0',
         embed: function (img, text, opts) {
+          var gd = _dep('NexusEADI'); if (gd) return gd;
           try { return e.embedText ? e.embedText(img, text, opts) : e.embedSVD(img, text, opts); }
           catch (err) { return { ok: false, reason: String(err && err.message || err) }; }
         },
         extract: function (img, opts) {
+          var gd = _dep('NexusEADI'); if (gd) return gd;
           try { return e.extractText ? e.extractText(img, opts) : { ok: false, reason: 'no extractText' }; }
           catch (err) { return { ok: false, reason: String(err && err.message || err) }; }
         },
@@ -17942,6 +17893,10 @@ html body #nx9-panel{z-index:50}
     window.__nxSignedBuild = Object.freeze({
       version: expected,
       commitSha: sha,
+      /* commitSha = label statis (bukan hash komputasi). Bukti nyata = fingerprint di bawah (SHA-256 checksum script modul, dihitung saat dibaca). */
+      commitShaKind: 'static-label',
+      get fingerprint() { try { return window.NexusIntegrity ? window.NexusIntegrity.buildFingerprint() : null; } catch (e) { return null; } },
+      fingerprintKind: 'computed-sha256',
       verifiedAt: Date.now(),
       notes: notes
     });
@@ -18006,7 +17961,8 @@ html body #nx9-panel{z-index:50}
     checkModuleHealth: checkModuleHealth,
     probeOmniHealth: probeOmniHealth,
     ensureEADIBound: ensureEADIBound,
-    verifySignedVersion: verifySignedVersion
+    verifySignedVersion: verifySignedVersion,
+    getMeta: function () { var b = { id: 'NexusArchitect', version: SYS_VERSION, checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; }
   });
 })();
 </script>
@@ -19245,6 +19201,738 @@ html body #instruments {
   }
   window.addEventListener('load', function () { setTimeout(forceLogPanel, 300); }, { once: true });
 })();
+</script>
+
+
+<script type="application/json" id="nx-integrity-manifest">{
+ "schema": 1,
+ "algo": "SHA-256",
+ "generated": "2026-11-25",
+ "build": "46eab319a56aea013f556245cf4720471e523145faea221718a9f64f7c6fb722",
+ "scripts": {
+  "nexus-truth-core": "f8fa49e8ef847b465e509dbe2ae9fc9c8e93256e467d756b660a8584e1af26fe",
+  "nx-omni-sentinel": "16aeaf188d0f5e0cbd69bf4223fa477b45e382b392e2d6b148c9e722b19e7919",
+  "nx-omni-core-v3": "a3c2167e83d3b2160c5096af03629c2b299dfeb9b1d6666f9399c3a1c2f7d64a",
+  "nx-aku-module": "bb2ce00dce93ac1e2ef9baccaf13b6ab625dc9e46723d8805cc8a0d30d558443",
+  "nxp-engine": "6c3dc7e36309bc02c9823a5d18bd7164f93d8071365d23145f1ccd1be76df35a",
+  "nxd-js": "b8b9f764854faecd7a8e81a6bc7a2d370db347249f51c834fca9fbf4f9bc28cd",
+  "nxd2-js": "430a1fc1f15982f79df4ec31d0e8167d4ebb39ac359945594ddb984ab1febb60",
+  "nx-architect-patch-374": "2a81477f147840a2898741074e70926929d68b388478de1767168b1bd736c266"
+ },
+ "files": {
+  "SuperEADI.js": "589c71353bff702fde9e9b238090b9833ad8304ea4b182912f0665bc6e01f5d7",
+  "SuperLBC.js": "22cda9ad10d51ba0b87e0be9889d04cef100b94b9a7027c0f863aaf25216b178"
+ }
+}</script>
+<script id="nx-integrity-375">
+/*! ═══════════════════════════════════════════════════════════════════
+ *  NEXUS INTEGRITY v1.0.0 — Verifikasi integritas modul (aditif, non-mutating)
+ *  ─────────────────────────────────────────────────────────────────
+ *  Implementasi CEKLIS PERBAIKAN INTEGRITAS MODUL (A–G). Prinsip:
+ *   • TIDAK mengubah / membekukan / menambah properti pada objek modul lain
+ *     (agar sidik basis AKU & perilaku lama tidak bergeser). Semua data
+ *     disimpan di sini; modul lain hanya DIBACA.
+ *   • Keputusan integritas HANYA dari fingerprint/checksum — bukan dari string
+ *     versi, teks screenshot, atau satu self-test lulus (F2).
+ *   • Artefak yang di-hash (A2, realistis di browser):
+ *       1) script-text : textContent <script id="…"> yang benar-benar termuat
+ *       2) file        : byte file <script src="…"> (butuh http/https; file:// → SKIP)
+ *       3) api-spec    : spek API serializable (nama+tipe prop, hash sumber fungsi)
+ *     Algoritma: SHA-256 (lewat NexusLBC.sha256Hex bila lolos vektor 'abc',
+ *     jika tidak: implementasi internal).
+ *   • Status checksum: OK | MISMATCH | SKIP. Status modul:
+ *       MISSING | MISMATCH | DRIFT | LOADED | OK
+ *     "unknown" pada versi = modul tidak mendeklarasikan versi (bukan galat).
+ *   • enforce (D): 'soft' (default; hanya MISSING yang memblokir panggilan),
+ *     'standard' (+MISMATCH), 'strict' (+DRIFT). Default soft = nol regresi.
+ *
+ *  BATASAN JUJUR: ini lapisan integritas di dalam satu halaman. Baseline TOFU
+ *  & manifest hidup di halaman yang sama — penyerang yang sudah menguasai
+ *  halaman penuh tidak dihentikan. Tanda tangan (Schnorr/BIP-340) tanpa
+ *  kunci publik yang di-pin di luar halaman = "integrity only", BUKAN proof of origin.
+ * ═══════════════════════════════════════════════════════════════════ */
+(function (root, factory) {
+  'use strict';
+  var api = factory(root);
+  if (typeof module === 'object' && module && module.exports) module.exports = api;
+  if (root && !root.NexusIntegrity) {
+    try { Object.defineProperty(root, 'NexusIntegrity', { value: api, enumerable: true, configurable: false, writable: false }); }
+    catch (e) { try { root.NexusIntegrity = api; } catch (e2) {} }
+  }
+})(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this, function (root) {
+  'use strict';
+
+  var VERSION = '1.0.0';
+  var ABC = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+  var GENESIS = new Array(65).join('0');
+  var AUDIT_MAX = 500, DETAIL_MAX = 160, FLUSH_MS = 2500, WATCH_MS = 60000, BOOT_DELAY = 14000;
+  var DB_NAME = 'nx-integrity-audit';
+
+  var LEGEND = {
+    MISSING: 'modul tidak termuat',
+    MISMATCH: 'termuat tetapi checksum artefak tidak cocok dengan pembanding',
+    DRIFT: 'termuat; spek API berubah sejak baseline (mis. patch runtime)',
+    LOADED: 'termuat; bukti artefak belum cukup (checksum SKIP / baseline belum ada)',
+    OK: 'termuat, checksum cocok, spek API stabil',
+    unknown: 'modul tidak mendeklarasikan versi — keputusan integritas tetap dari fingerprint'
+  };
+
+  /* ───────────── SHA-256 internal (sinkron) ───────────── */
+  var K = new Uint32Array(64), H0 = new Uint32Array(8);
+  (function () {
+    var primes = [], n, i;
+    for (n = 2; primes.length < 64; n++) { var ok = true; for (i = 0; i < primes.length; i++) if (n % primes[i] === 0) { ok = false; break; } if (ok) primes.push(n); }
+    function frac(v) { return Math.floor((v - Math.floor(v)) * 4294967296); }
+    for (i = 0; i < 64; i++) { K[i] = frac(Math.cbrt(primes[i])); if (i < 8) H0[i] = frac(Math.sqrt(primes[i])); }
+  })();
+  var ENC = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+  function utf8(s) {
+    if (ENC) return ENC.encode(s);
+    var b = unescape(encodeURIComponent(s)), u = new Uint8Array(b.length);
+    for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i);
+    return u;
+  }
+  function sha256Bytes(msg) {
+    var len = msg.length, total = ((len + 9 + 63) >> 6) << 6, buf = new Uint8Array(total);
+    buf.set(msg); buf[len] = 0x80;
+    var dv = new DataView(buf.buffer);
+    dv.setUint32(total - 8, Math.floor(len / 0x20000000), false);
+    dv.setUint32(total - 4, (len << 3) >>> 0, false);
+    var h = Uint32Array.from(H0), w = new Uint32Array(64);
+    function rr(x, n) { return (x >>> n) | (x << (32 - n)); }
+    for (var off = 0; off < total; off += 64) {
+      var i;
+      for (i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4, false);
+      for (i = 16; i < 64; i++) {
+        var s0 = rr(w[i - 15], 7) ^ rr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+        var s1 = rr(w[i - 2], 17) ^ rr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+      }
+      var a = h[0], b = h[1], c = h[2], d = h[3], e = h[4], f = h[5], g = h[6], hh = h[7];
+      for (i = 0; i < 64; i++) {
+        var t1 = (hh + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+        var t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+        hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+      }
+      h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
+    }
+    var out = '';
+    for (var j = 0; j < 8; j++) out += ('00000000' + (h[j] >>> 0).toString(16)).slice(-8);
+    return out;
+  }
+
+  var lbcRef = null, lbcOk = false;
+  function lbc() {
+    var L = root.NexusLBC;
+    if (L !== lbcRef) {
+      lbcRef = L; lbcOk = false;
+      try { lbcOk = !!(L && typeof L.sha256Hex === 'function' && L.sha256Hex('abc') === ABC); } catch (e) { lbcOk = false; }
+    }
+    return lbcOk ? L : null;
+  }
+  /* satu fungsi hash bersama (A2): string (UTF-8) atau Uint8Array → hex */
+  function sha256Hex(x) {
+    var bytes = typeof x === 'string' ? utf8(x) : (x instanceof Uint8Array ? x : utf8(String(x)));
+    var L = lbc();
+    if (L) { try { var r = L.sha256Hex(bytes); if (typeof r === 'string' && r.length === 64) return r; } catch (e) {} }
+    return sha256Bytes(bytes);
+  }
+  function hashImpl() { return lbc() ? 'NexusLBC.sha256Hex' : 'internal-sha256'; }
+
+  function canon(v) {
+    if (v === null || typeof v !== 'object') return JSON.stringify(v === undefined ? null : v);
+    if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+    return '{' + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ':' + canon(v[k]); }).join(',') + '}';
+  }
+
+  /* ───────────── Registri modul ───────────── */
+  var REG = [
+    { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core',        req: true,  test: 'truth' },
+    { id: 'NexusOmniGuard',  g: 'NexusOmniGuard',  script: 'nx-omni-sentinel',        req: true },
+    { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3',         req: false },
+    { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: true,  test: 'eadi' },
+    { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: true,  test: 'lbc' },
+    { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module',           req: true,  test: 'aku' },
+    { id: 'NexusPharma',     g: 'NexusPharma',     script: 'nxp-engine',              req: false, test: 'pharma' },
+    { id: 'NexusDeck',       g: 'NexusDeck',       script: 'nxd-js',                  req: false, children: ['NexusLBC', 'NexusEADI'] },
+    { id: 'NexusDeckAI',     g: 'NexusDeckAI',     script: 'nxd2-js',                 req: false },
+    { id: 'NexusArchitect',  g: 'NexusArchitect',  script: 'nx-architect-patch-374',  req: false }
+  ];
+  var BY = {};
+  REG.forEach(function (m) { BY[m.id] = m; });
+
+  var cfg = { enforce: 'soft' };
+  var base = {};            // baseline per modul: {fingerprint,count,checksum,ts}
+  var csCache = {};         // checksum script-text
+  var fileCs = {};          // checksum file eksternal: {hash,status,reason}
+  var lastStatus = {};      // untuk deteksi perubahan (anti-flood)
+  var traced = {};          // dedup baris Neural Trace
+  var testCache = {};       // hasil self-test modul terakhir
+  var fnCache = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+  var mf; // manifest (undefined = belum dibaca)
+  var booted = false, baselineDone = false, tick = 0;
+
+  /* ───────────── Spek API (artefak 3) ───────────── */
+  function fnHash(f) {
+    var h = fnCache && fnCache.get(f);
+    if (h) return h;
+    var src = '';
+    try { src = Function.prototype.toString.call(f); } catch (e) {}
+    h = sha256Hex(src).slice(0, 16);
+    if (fnCache) { try { fnCache.set(f, h); } catch (e) {} }
+    return h;
+  }
+  function apiSpec(o) {
+    if (o == null || (typeof o !== 'object' && typeof o !== 'function')) return null;
+    var names, lines = [];
+    try { names = Object.getOwnPropertyNames(o).sort(); } catch (e) { return null; }
+    for (var i = 0; i < names.length; i++) {
+      var k = names[i], d;
+      try { d = Object.getOwnPropertyDescriptor(o, k); } catch (e) { continue; }
+      if (!d) continue;
+      if (d.get || d.set) { lines.push(k + ':accessor'); continue; }   // getter TIDAK dipanggil
+      var v = d.value, t = typeof v;
+      if (t === 'function') lines.push(k + ':fn:' + fnHash(v));
+      else lines.push(k + ':' + (v === null ? 'null' : t));
+    }
+    return { count: lines.length, fingerprint: sha256Hex(lines.join('\n')) };
+  }
+
+  /* ───────────── Artefak: script-text / file ───────────── */
+  function scriptChecksum(id, fresh) {
+    if (!fresh && csCache[id] !== undefined) return csCache[id];
+    var out = null;
+    try {
+      if (typeof document !== 'undefined') {
+        var el = document.getElementById(id);
+        if (el && el.tagName === 'SCRIPT') { var t = el.textContent || ''; out = { hash: sha256Hex(t), bytes: t.length }; }
+      }
+    } catch (e) { out = null; }
+    csCache[id] = out;
+    return out;
+  }
+  function loadFile(name) {
+    if (fileCs[name]) return Promise.resolve(fileCs[name]);
+    var res = function (o) { fileCs[name] = o; return o; };
+    try {
+      if (typeof document === 'undefined' || typeof fetch !== 'function') return Promise.resolve(res({ status: 'SKIP', reason: 'tanpa DOM/fetch' }));
+      var proto = String(root.location && root.location.protocol || '');
+      if (proto !== 'http:' && proto !== 'https:') return Promise.resolve(res({ status: 'SKIP', reason: 'protokol ' + proto + ' — byte file tak dapat dibaca (butuh http/https)' }));
+      var els = document.querySelectorAll('script[src]'), url = null;
+      for (var i = 0; i < els.length; i++) {
+        var s = els[i].getAttribute('src') || '';
+        if (s.split(/[?#]/)[0].split('/').pop() === name) { url = els[i].src; break; }
+      }
+      if (!url) return Promise.resolve(res({ status: 'SKIP', reason: 'tag <script src> tak ditemukan' }));
+      return fetch(url, { cache: 'force-cache', credentials: 'omit' }).then(function (r) {
+        if (!r.ok) return res({ status: 'SKIP', reason: 'HTTP ' + r.status });
+        return r.arrayBuffer().then(function (ab) { return res({ status: 'READ', hash: sha256Hex(new Uint8Array(ab)), bytes: ab.byteLength }); });
+      }).catch(function (e) { return res({ status: 'SKIP', reason: 'fetch gagal: ' + String(e && e.message || e).slice(0, 60) }); });
+    } catch (e) { return Promise.resolve(res({ status: 'SKIP', reason: 'galat: ' + String(e && e.message || e).slice(0, 60) })); }
+  }
+
+  function manifest() {
+    if (mf !== undefined) return mf;
+    mf = null;
+    try {
+      var el = typeof document !== 'undefined' && document.getElementById('nx-integrity-manifest');
+      if (el) { var j = JSON.parse(el.textContent); if (j && j.schema === 1) mf = j; }
+    } catch (e) { mf = null; }
+    return mf;
+  }
+
+  function verOf(o) {
+    var v = null;
+    try { v = o.version || o.VERSION || o.VERSI || null; } catch (e) {}
+    return v ? String(v) : 'unknown';
+  }
+
+  /* ───────────── check() per modul ───────────── */
+  function check(id, opt) {
+    var m = BY[id];
+    if (!m) return null;
+    opt = opt || {};
+    var obj = root[m.g];
+    var loaded = !!obj && (typeof obj === 'object' || typeof obj === 'function');
+    var r = {
+      id: id, required: !!m.req, loaded: loaded, version: null, hasGetMeta: false,
+      artifact: { kind: m.script ? 'script-text' : (m.file ? 'file' : 'none'), ref: m.script || m.file || null },
+      checksum: { actual: null, expected: null, via: null, status: 'SKIP', reason: '' },
+      fingerprint: { current: null, baseline: null, count: 0, status: 'PENDING' },
+      status: 'MISSING'
+    };
+    if (!loaded) return r;
+    r.version = verOf(obj);
+    try { r.hasGetMeta = typeof obj.getMeta === 'function'; } catch (e) {}
+
+    var sp = apiSpec(obj);
+    if (sp) {
+      r.fingerprint.current = sp.fingerprint; r.fingerprint.count = sp.count;
+      var b = base[id];
+      if (b && b.fingerprint) { r.fingerprint.baseline = b.fingerprint; r.fingerprint.status = b.fingerprint === sp.fingerprint ? 'STABLE' : 'DRIFT'; }
+    }
+
+    var actual = null, why = '';
+    if (m.script) {
+      var cs = scriptChecksum(m.script, opt.fresh);
+      if (cs) actual = cs.hash; else why = 'script#' + m.script + ' tak ada di DOM';
+    } else if (m.file) {
+      var fc = fileCs[m.file];
+      if (fc && fc.status === 'READ') actual = fc.hash; else why = fc ? fc.reason : 'file belum dibaca';
+    } else why = 'tanpa artefak';
+    r.checksum.actual = actual;
+
+    var man = manifest(), exp = null, via = null;
+    if (man) {
+      var key = m.script ? (man.scripts && man.scripts[m.script]) : (man.files && man.files[m.file]);
+      if (key) { exp = key; via = 'manifest'; }
+    }
+    if (!exp && base[id] && base[id].checksum) { exp = base[id].checksum; via = 'baseline(TOFU)'; }
+    r.checksum.expected = exp; r.checksum.via = via;
+    if (actual && exp) r.checksum.status = actual === exp ? 'OK' : 'MISMATCH';
+    else { r.checksum.status = 'SKIP'; r.checksum.reason = why || 'tanpa pembanding (belum ada manifest/baseline)'; }
+
+    if (r.checksum.status === 'MISMATCH') r.status = 'MISMATCH';
+    else if (r.fingerprint.status === 'DRIFT') r.status = 'DRIFT';
+    else if (r.checksum.status === 'OK' && r.fingerprint.status === 'STABLE') r.status = 'OK';
+    else r.status = 'LOADED';
+    return r;
+  }
+
+  /* ───────────── Audit tamper-evident (B) ───────────── */
+  var audit = { base: GENESIS, head: GENESIS, seq: 0, entries: [] };
+  var dirty = false, db = null, flushT = null, lastKey = {};
+  function entryHash(e) { return sha256Hex(JSON.stringify([e.seq, e.ts, e.moduleId, e.fingerprint, e.event, e.actor, e.detail, e.prev])); }
+  function verifyChain(entries, baseHash) {
+    var prev = baseHash || GENESIS;
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (!e || e.prev !== prev || entryHash(e) !== e.hash) return { ok: false, brokenAt: i };
+      prev = e.hash;
+    }
+    return { ok: true, brokenAt: -1, head: prev };
+  }
+  function record(event, moduleId, fingerprint, actor, detail, force) {
+    try {
+      var key = moduleId + '|' + event + '|' + (fingerprint || '');
+      if (!force && lastKey[moduleId + '|' + event] === key) return null;   // anti-flood
+      lastKey[moduleId + '|' + event] = key;
+      var e = {
+        seq: audit.seq++, ts: Date.now(), moduleId: String(moduleId || '-'), fingerprint: fingerprint ? String(fingerprint).slice(0, 64) : null,
+        event: String(event), actor: String(actor || 'system'), detail: String(detail || '').slice(0, DETAIL_MAX), prev: audit.head
+      };
+      e.hash = entryHash(e);
+      audit.entries.push(e); audit.head = e.hash;
+      while (audit.entries.length > AUDIT_MAX) { audit.base = audit.entries.shift().hash; }
+      markDirty();
+      return e;
+    } catch (e) { return null; }
+  }
+  function markDirty() {
+    dirty = true;
+    if (flushT || typeof setTimeout !== 'function') return;
+    flushT = setTimeout(function () { flushT = null; flush(); }, FLUSH_MS);
+  }
+  function idb() {
+    return new Promise(function (res, rej) {
+      try {
+        if (typeof indexedDB === 'undefined') return rej(new Error('no-idb'));
+        var q = indexedDB.open(DB_NAME, 1);
+        q.onupgradeneeded = function () { try { q.result.createObjectStore('kv'); } catch (e) {} };
+        q.onsuccess = function () { res(q.result); };
+        q.onerror = function () { rej(q.error || new Error('idb-error')); };
+        q.onblocked = function () { rej(new Error('idb-blocked')); };
+      } catch (e) { rej(e); }
+    });
+  }
+  function flush() {
+    if (!dirty) return Promise.resolve(false);
+    dirty = false;
+    var payload = { v: 1, base: audit.base, entries: audit.entries.slice() };
+    return Promise.resolve().then(function () { return db || idb(); }).then(function (d) {
+      db = d;
+      return new Promise(function (res, rej) {
+        var tx = d.transaction('kv', 'readwrite');
+        tx.objectStore('kv').put(payload, 'chain');
+        tx.oncomplete = function () { res(true); };
+        tx.onerror = tx.onabort = function () { rej(tx.error || new Error('tx')); };
+      });
+    }).catch(function () { return false; });
+  }
+  function loadStore() {
+    var t = new Promise(function (res) { setTimeout(function () { res(null); }, 1500); });
+    var p = Promise.resolve().then(idb).then(function (d) {
+      db = d;
+      return new Promise(function (res) {
+        try {
+          var q = d.transaction('kv', 'readonly').objectStore('kv').get('chain');
+          q.onsuccess = function () { res(q.result || null); };
+          q.onerror = function () { res(null); };
+        } catch (e) { res(null); }
+      });
+    }).catch(function () { return null; });
+    return Promise.race([p, t]);
+  }
+  function prevBaselines(entries) {   // checksum baseline terakhir per modul dari sesi sebelumnya
+    var out = {};
+    entries.forEach(function (e) { if (e.event === 'BASELINE' || e.event === 'BASELINE_LATE') { var mm = /cs:([0-9a-f]+)/.exec(e.detail); out[e.moduleId] = { cs: mm ? mm[1] : null, fp: e.fingerprint }; } });
+    return out;
+  }
+
+  /* ───────────── Neural Trace (F3, tanpa flood) ───────────── */
+  function trace(tag, msg, key) {
+    try {
+      var k = key || msg;
+      if (traced[k]) return;
+      traced[k] = 1;
+      if (typeof logEvent === 'function') logEvent(tag, '[INTEGRITY] ' + msg);
+    } catch (e) {}
+  }
+
+  /* ───────────── Baseline & watcher ───────────── */
+  function takeBaseline(id, actor, late) {
+    var r = check(id);
+    if (!r || !r.loaded) return null;
+    base[id] = { fingerprint: r.fingerprint.current, count: r.fingerprint.count, checksum: r.checksum.actual, ts: Date.now() };
+    record(late ? 'BASELINE_LATE' : 'BASELINE', id, r.fingerprint.current, actor || 'system',
+      'cs:' + (r.checksum.actual ? r.checksum.actual.slice(0, 16) : '-') + ' v:' + r.version, true);
+    return base[id];
+  }
+  function noteChange(r) {
+    var prev = lastStatus[r.id];
+    if (prev === r.status) return;
+    lastStatus[r.id] = r.status;
+    if (r.status === 'MISMATCH' || r.status === 'DRIFT' || (r.status === 'MISSING' && r.required)) {
+      record('STATUS_' + r.status, r.id, r.fingerprint.current, 'watcher', 'checksum:' + r.checksum.status + ' fp:' + r.fingerprint.status);
+      trace(r.status === 'MISSING' ? 'WARN' : 'ERROR',
+        r.id + ' → ' + r.status + (r.status === 'MISMATCH' ? ' (checksum ≠ ' + (r.checksum.via || '?') + '; perbarui manifest bila Anda sengaja mengubah modul: NexusIntegrity.exportManifest())' : ''),
+        r.id + ':' + r.status);
+    } else if (prev && (prev === 'MISMATCH' || prev === 'DRIFT' || prev === 'MISSING')) {
+      record('STATUS_RECOVERED', r.id, r.fingerprint.current, 'watcher', prev + '→' + r.status);
+    }
+  }
+  function sweep(fresh) {
+    var rows = REG.map(function (m) {
+      var r = check(m.id, { fresh: !!fresh });
+      if (r && r.loaded && baselineDone && !base[m.id]) { takeBaseline(m.id, 'system', true); r = check(m.id); }
+      if (r) noteChange(r);
+      return r;
+    });
+    ui(rows);
+    return rows;
+  }
+  function boot() {
+    if (booted) return Promise.resolve(false);
+    booted = true;
+    var prev = {};
+    return loadStore().then(function (st) {
+      if (st && st.v === 1 && Array.isArray(st.entries)) {
+        var v = verifyChain(st.entries, st.base);
+        if (v.ok) {
+          audit.base = st.base; audit.entries = st.entries;
+          audit.head = st.entries.length ? st.entries[st.entries.length - 1].hash : st.base;
+          audit.seq = st.entries.length ? st.entries[st.entries.length - 1].seq + 1 : 0;
+          prev = prevBaselines(st.entries);
+        } else {
+          record('AUDIT_STORE_INVALID', '-', null, 'system', 'rantai tersimpan rusak @' + v.brokenAt + ' — dimulai baru', true);
+          trace('ERROR', 'rantai audit tersimpan rusak (indeks ' + v.brokenAt + ') — dimulai rantai baru');
+        }
+      }
+      return Promise.all(REG.filter(function (m) { return m.file; }).map(function (m) { return loadFile(m.file); }));
+    }).then(function () {
+      var ids = REG.map(function (m) { return m.id; }), i = 0;
+      return new Promise(function (res) {
+        (function step() {
+          var t0 = Date.now();
+          while (i < ids.length && Date.now() - t0 < 30) { takeBaseline(ids[i], 'boot'); i++; }
+          if (i < ids.length) setTimeout(step, 0); else res();
+        })();
+      });
+    }).then(function () {
+      baselineDone = true;
+      var changed = [];
+      REG.forEach(function (m) {
+        var b = base[m.id], p = prev[m.id];
+        if (b && p && p.cs && b.checksum && b.checksum.slice(0, 16) !== p.cs)
+          { changed.push(m.id); record('CHANGED_SINCE_PREV_BOOT', m.id, b.fingerprint, 'boot', 'artefak berbeda dari sesi sebelumnya (info)', true); }
+      });
+      var rows = sweep(false);
+      var c = { OK: 0, LOADED: 0, MISMATCH: 0, DRIFT: 0, MISSING: 0 };
+      rows.forEach(function (r) { c[r.status]++; });
+      trace('DIAG', 'baseline ' + rows.length + ' modul · OK ' + c.OK + ' · LOADED ' + c.LOADED + ' · MISMATCH ' + c.MISMATCH + ' · DRIFT ' + c.DRIFT + ' · MISSING ' + c.MISSING +
+        (changed.length ? ' · berubah vs sesi lalu: ' + changed.join(',') : '') + ' · hash=' + hashImpl(), 'boot-summary');
+      flush();
+      return true;
+    }).catch(function () { baselineDone = true; return false; });
+  }
+  function startWatch() {
+    if (typeof setInterval !== 'function') return;
+    var t = setInterval(function () {
+      try { if (typeof document !== 'undefined' && document.hidden) return; tick++; sweep(tick % 5 === 0); } catch (e) {}
+    }, WATCH_MS);
+    if (t && t.unref) t.unref();
+  }
+
+  /* ───────────── Antarmuka status (C1) ───────────── */
+  function buildInfo() {
+    var lines = [], n = 0;
+    REG.filter(function (m) { return m.script; }).map(function (m) { return m.id; }).sort().forEach(function (id) {
+      var cs = scriptChecksum(BY[id].script);
+      if (cs) { lines.push(id + '=' + cs.hash); n++; }
+    });
+    var fp = sha256Hex(lines.join('\n'));
+    var man = manifest(), mfp = man && man.build ? man.build : null;
+    return { fingerprint: fp, short: fp.slice(0, 12), modules: n, algo: 'SHA-256', kind: 'computed (script-text checksums)',
+             manifest: mfp, match: mfp ? mfp === fp : null };
+  }
+  function buildFingerprint() { return buildInfo().fingerprint; }
+  function ui(rows) {
+    try {
+      if (typeof document === 'undefined') return;
+      var a = document.getElementById('nx-intg-fp'), b = document.getElementById('nx-intg-st');
+      if (!a && !b) return;
+      rows = rows || REG.map(function (m) { return check(m.id); });
+      var bi = buildInfo(), ok = 0, bad = 0;
+      rows.forEach(function (r) { if (r.status === 'OK') ok++; if (r.status === 'MISMATCH' || r.status === 'DRIFT' || (r.status === 'MISSING' && r.required)) bad++; });
+      var ver = (root.NexusArchitect && root.NexusArchitect.version) || 'unknown';
+      if (a) {
+        a.textContent = bi.short + ' · v' + ver;
+        a.title = 'Build fingerprint (SHA-256 checksum script modul)\n' + bi.fingerprint + '\nmanifest: ' + (bi.match === null ? 'tidak ada' : (bi.match ? 'cocok' : 'TIDAK COCOK')) +
+          '\n\n' + rows.map(function (r) { return r.id + ' [' + r.status + '] v' + (r.version || '—'); }).join('\n') +
+          '\n\n"unknown" = ' + LEGEND.unknown;
+      }
+      if (b) { b.textContent = ok + '/' + rows.length + ' OK' + (bad ? ' · ' + bad + ' !' : ''); b.style.color = bad ? '#ff5a6e' : ''; }
+    } catch (e) {}
+  }
+
+  /* ───────────── ensureStable / guard (D) ───────────── */
+  function blocks(status) {
+    if (status === 'MISSING') return true;
+    if (status === 'MISMATCH') return cfg.enforce === 'standard' || cfg.enforce === 'strict';
+    if (status === 'DRIFT') return cfg.enforce === 'strict';
+    return false;
+  }
+  function ensureStable(id) {
+    try {
+      var r = check(id);
+      if (!r) return { ok: false, reason: 'modul tak terdaftar: ' + id, meta: null };
+      var meta = describe(id);
+      if (blocks(r.status)) return { ok: false, reason: id + ' ' + r.status + ' — ' + (LEGEND[r.status] || ''), meta: meta };
+      var out = { ok: true, reason: r.status === 'OK' ? 'stabil' : id + ' ' + r.status + ' (peringatan, tidak memblokir pada enforce=' + cfg.enforce + ')', meta: meta };
+      if (r.status !== 'OK') out.warning = r.status;
+      return out;
+    } catch (e) { return { ok: false, reason: 'ensureStable galat: ' + String(e && e.message || e), meta: null }; }
+  }
+  /* Wrapper lintas-modul: gagal cepat (fail-closed) bila dependency tak stabil. Tidak pernah melempar. */
+  function guard(fromId, toId, fn, opts) {
+    var st = ensureStable(toId);
+    if (!st.ok) { record('GUARD_BLOCK', toId, st.meta && st.meta.fingerprint, fromId, st.reason); return { ok: false, blocked: true, reason: 'dependency ' + st.reason, meta: st.meta }; }
+    try { return { ok: true, value: fn(), meta: st.meta }; }
+    catch (e) { return { ok: false, blocked: false, reason: String(e && e.message || e).slice(0, 200), meta: st.meta }; }
+  }
+
+  /* ───────────── getMeta (A1) ───────────── */
+  function describe(id, fallback) {
+    var r = check(id);
+    var b = fallback || {};
+    if (!r) return b;
+    return {
+      id: id, version: r.version || b.version || 'unknown',
+      checksum: r.checksum.actual, fingerprint: r.fingerprint.current,
+      source: r.artifact.kind, status: r.status, checksumStatus: r.checksum.status
+    };
+  }
+  function getMeta(id) {
+    if (id) return describe(id);
+    var o = {}; REG.forEach(function (m) { o[m.id] = describe(m.id); });
+    return o;
+  }
+
+  /* ───────────── Tanda tangan snapshot (B3 / G3) ───────────── */
+  var sessKey = null;
+  function snapshot() {
+    var rows = REG.map(function (m) { return check(m.id); });
+    var bi = buildInfo();
+    return {
+      schema: 1, ts: Date.now(), tool: 'NexusIntegrity/' + VERSION, hash: hashImpl(),
+      build: bi.fingerprint, auditHead: audit.head, auditCount: audit.entries.length,
+      modules: rows.map(function (r) { return { id: r.id, version: r.version || 'unknown', status: r.status, checksum: r.checksum.actual, fingerprint: r.fingerprint.current }; })
+    };
+  }
+  function signSnapshot(opts) {
+    opts = opts || {};
+    var L = lbc() || root.NexusLBC;
+    if (!L || typeof L.schnorrSign !== 'function') return { ok: false, reason: 'NexusLBC.schnorrSign tidak tersedia' };
+    try {
+      var priv = opts.privateKey, kind = 'provided';
+      if (!priv) { if (!sessKey) sessKey = L.generateKeyPair(); priv = sessKey.privateKey; kind = 'session-ephemeral'; }
+      var snap = snapshot(), msg = canon(snap);
+      var sig = L.bytesToHex(L.schnorrSign(priv, msg));
+      var pub = L.bytesToHex(L.schnorrGetPublicKey(priv));
+      record('SNAPSHOT_SIGNED', '-', snap.build, opts.actor || 'user', 'pub:' + pub.slice(0, 16) + ' kind:' + kind, true);
+      return { ok: true, snapshot: snap, signature: sig, publicKey: pub, keyKind: kind,
+        note: kind === 'provided' ? 'Verifikasi dengan kunci publik yang di-pin di luar halaman untuk authenticity.' : 'Kunci sesi sementara: hanya integrity, BUKAN proof of origin.' };
+    } catch (e) { return { ok: false, reason: String(e && e.message || e).slice(0, 160) }; }
+  }
+  function verifySnapshot(pack, pinnedPublicKey) {
+    var L = lbc() || root.NexusLBC;
+    if (!pack || !pack.snapshot || !pack.signature || !pack.publicKey) return { ok: false, reason: 'paket tidak lengkap' };
+    if (!L || typeof L.schnorrVerify !== 'function') return { ok: false, reason: 'NexusLBC.schnorrVerify tidak tersedia' };
+    try {
+      var sigOk = !!L.schnorrVerify(pack.signature, canon(pack.snapshot), pack.publicKey);
+      var pinned = !!pinnedPublicKey, pinOk = pinned ? String(pinnedPublicKey).toLowerCase() === String(pack.publicKey).toLowerCase() : null;
+      return { ok: sigOk && (pinned ? pinOk : true), signatureValid: sigOk, pinned: pinned, pinMatch: pinOk,
+        authenticity: pinned && pinOk && sigOk ? 'terverifikasi terhadap kunci pin' : 'integrity only (tanpa kunci pin = bukan proof of origin)' };
+    } catch (e) { return { ok: false, reason: String(e && e.message || e).slice(0, 160) }; }
+  }
+
+  /* ───────────── Self-test modul (adapter) ───────────── */
+  var ADAPT = {
+    truth:  function () { return Promise.resolve(root.NexusTruth.selfTest()).then(function (r) { return { ok: r.pass + (r.skip || 0) === r.total, detail: r.score }; }); },
+    lbc:    function () { return Promise.resolve(root.NexusLBC.selfTest()).then(function (r) { return { ok: !!r.ok, detail: r.results.filter(function (x) { return x.ok; }).length + '/' + r.results.length }; }); },
+    eadi:   function () { var r = root.NexusEADI.selfTest(); return Promise.resolve({ ok: !!r.ok, detail: r.results.filter(function (x) { return x.ok; }).length + '/' + r.results.length }); },
+    aku:    function () { return Promise.resolve(root.NexusAku.selfTest()).then(function (r) { return { ok: r.pass === r.total, detail: r.score }; }); },
+    pharma: function () { var r = root.NexusPharma.selfTest(false); return Promise.resolve({ ok: r.pass === r.total, detail: r.pass + '/' + r.total }); }
+  };
+  function runModuleTests(ids) {
+    ids = ids || REG.filter(function (m) { return m.test; }).map(function (m) { return m.id; });
+    var out = {};
+    return ids.reduce(function (p, id) {
+      return p.then(function () {
+        var m = BY[id];
+        if (!m || !m.test || !root[m.g]) { out[id] = { ok: null, detail: 'n/a' }; return; }
+        return ADAPT[m.test]().then(function (r) { out[id] = r; testCache[id] = r; }, function (e) { out[id] = { ok: false, detail: 'galat: ' + String(e && e.message || e).slice(0, 80) }; testCache[id] = out[id]; });
+      });
+    }, Promise.resolve()).then(function () { return out; });
+  }
+
+  /* ───────────── Verdict (F2) & laporan (F1) ───────────── */
+  function verdict() {
+    var rows = REG.map(function (m) { return check(m.id); });
+    var req = rows.filter(function (r) { return r.required; });
+    var reasons = [];
+    var bad = rows.filter(function (r) { return r.status === 'MISMATCH' || r.status === 'DRIFT' || (r.required && r.status === 'MISSING'); });
+    bad.forEach(function (r) { reasons.push(r.id + ' ' + r.status); });
+    var unproven = req.filter(function (r) { return r.loaded && r.status !== 'OK'; });
+    unproven.forEach(function (r) { reasons.push(r.id + ' belum terbukti (' + (r.checksum.reason || r.fingerprint.status) + ')'); });
+    var level = bad.length ? 'COMPROMISED' : (!baselineDone ? 'UNVERIFIED' : (unproven.length ? 'PARTIAL' : 'VERIFIED'));
+    return {
+      integrity: level, ok: level === 'VERIFIED', reasons: reasons,
+      evidence: { modules: rows.length, required: req.length, withChecksumOK: rows.filter(function (r) { return r.checksum.status === 'OK'; }).length,
+                  fingerprintStable: rows.filter(function (r) { return r.fingerprint.status === 'STABLE'; }).length, baseline: baselineDone, hash: hashImpl(),
+                  manifest: !!manifest() },
+      note: 'Keputusan hanya dari fingerprint/checksum. Bukan dari teks screenshot, satu self-test lulus, atau string versi identik. Integrity-only; bukan proof of origin tanpa tanda tangan + kunci pin.'
+    };
+  }
+  function report(opts) {
+    opts = opts || {};
+    var rows = REG.map(function (m) {
+      var r = check(m.id, { fresh: !!opts.fresh }), t = testCache[m.id];
+      return { id: r.id, version: r.version || '—', status: r.status, fingerprint: r.fingerprint.current ? r.fingerprint.current.slice(0, 12) : '—',
+        checksum: r.checksum.actual ? r.checksum.actual.slice(0, 12) : '—', checksumStatus: r.checksum.status, via: r.checksum.via || '—', api: r.fingerprint.status,
+        getMeta: r.hasGetMeta ? 'ya' : (r.loaded ? 'tidak' : '—'), selfTest: t ? ((t.ok ? 'PASS ' : 'FAIL ') + t.detail) : (m.test ? 'belum dijalankan' : 'n/a') };
+    });
+    try { if (opts.print !== false && typeof console !== 'undefined' && console.table) console.table(rows); } catch (e) {}
+    return rows;
+  }
+  function reportAsync(opts) {
+    opts = opts || {};
+    return (opts.run ? runModuleTests() : Promise.resolve()).then(function () { return report(opts); });
+  }
+
+  /* ───────────── selfTest sinkron (E1) ───────────── */
+  function selfTest(opts) {
+    opts = opts || {};
+    var tests = [];
+    function T(n, ok, d) { tests.push({ n: n, ok: !!ok, d: d || '' }); }
+    T('I1 SHA-256 vektor', sha256Hex('abc') === ABC && sha256Bytes(utf8('abc')) === ABC, hashImpl());
+    var s1 = apiSpec({ a: 1, f: function () {} }), s2 = apiSpec({ a: 1, f: function () {} });
+    T('I2 spek API deterministik', s1 && s2 && s1.count === 2 && typeof s1.fingerprint === 'string' && s1.fingerprint.length === 64);
+    var t = { base: GENESIS, entries: [] }, p = GENESIS, i, e;
+    for (i = 0; i < 3; i++) { e = { seq: i, ts: 1, moduleId: 'x', fingerprint: null, event: 'T', actor: 'a', detail: 'd' + i, prev: p }; e.hash = entryHash(e); t.entries.push(e); p = e.hash; }
+    T('I3 rantai audit valid', verifyChain(t.entries, t.base).ok);
+    var forged = JSON.parse(JSON.stringify(t.entries)); forged[1].detail = 'dipalsukan';
+    T('I4 rantai audit: ubahan terdeteksi', verifyChain(forged, t.base).brokenAt === 1);
+    T('I5 rantai audit hidup valid', verifyChain(audit.entries, audit.base).ok, audit.entries.length + ' entri');
+    var man = manifest();
+    T('I6 manifest', true, man ? 'ada (' + Object.keys(man.scripts || {}).length + ' script)' : 'tidak ada → pembanding = baseline TOFU');
+    if (opts.deep) {
+      var L = lbc() || root.NexusLBC, okSig = false;
+      try { var pk = L.generateKeyPair(), msg = 'nx-int', sg = L.schnorrSign(pk.privateKey, msg); okSig = L.schnorrVerify(sg, msg, pk.publicKey) && !L.schnorrVerify(sg, msg + 'x', pk.publicKey); } catch (x) {}
+      T('I7 Schnorr snapshot (deep)', okSig);
+    }
+    var ids = null;
+    if (opts.scope === 'deck') ids = ['NexusDeck', 'NexusLBC', 'NexusEADI'];
+    else if (Array.isArray(opts.scope)) ids = opts.scope;
+    var modules = {}, failMod = false, warnMod = false;
+    REG.forEach(function (m) {
+      if (ids && ids.indexOf(m.id) < 0) return;
+      var r = check(m.id, { fresh: !!opts.fresh });
+      modules[m.id] = { status: r.status, version: r.version || null, checksum: r.checksum.actual, checksumStatus: r.checksum.status, fingerprint: r.fingerprint.current, api: r.fingerprint.status, required: r.required };
+      if (r.status === 'MISMATCH' || r.status === 'DRIFT' || (r.required && r.status === 'MISSING')) failMod = true;
+      else if (r.status !== 'OK' && (r.loaded)) warnMod = true;
+    });
+    var failT = tests.some(function (x) { return !x.ok; });
+    var bi = buildInfo();
+    return {
+      status: (failT || failMod) ? 'FAIL' : (warnMod || !baselineDone ? 'WARN' : 'OK'),
+      version: VERSION, checksum: bi.fingerprint, hash_timestamp: Date.now(),
+      modules: modules, tests: tests, verdict: ids ? undefined : verdict().integrity, buildMatchesManifest: bi.match
+    };
+  }
+
+  /* ───────────── Manifest builder (untuk pembaruan sengaja) ───────────── */
+  function exportManifest() {
+    var scripts = {}, files = {};
+    REG.forEach(function (m) {
+      if (m.script) { var cs = scriptChecksum(m.script, true); if (cs) scripts[m.script] = cs.hash; }
+      else if (m.file && fileCs[m.file] && fileCs[m.file].status === 'READ') files[m.file] = fileCs[m.file].hash;
+    });
+    var bi = buildInfo();
+    var o = { schema: 1, algo: 'SHA-256', generated: new Date().toISOString(), build: bi.fingerprint, scripts: scripts, files: files };
+    return JSON.stringify(o, null, 1);
+  }
+
+  function configure(o) {
+    if (o && typeof o === 'object' && (o.enforce === 'soft' || o.enforce === 'standard' || o.enforce === 'strict')) cfg.enforce = o.enforce;
+    return { enforce: cfg.enforce };
+  }
+  function rebaseline(actor) {
+    REG.forEach(function (m) { if (root[m.g]) takeBaseline(m.id, actor || 'user'); });
+    traced = {}; lastStatus = {};
+    return sweep(true).map(function (r) { return { id: r.id, status: r.status }; });
+  }
+
+  function exportAudit() { return { base: audit.base, head: audit.head, entries: audit.entries.slice() }; }
+  function verifyAudit(exp) { exp = exp || exportAudit(); return verifyChain(exp.entries || [], exp.base); }
+
+  /* ───────────── Boot ───────────── */
+  (function arm() {
+    if (typeof document === 'undefined' || typeof setTimeout !== 'function') return;
+    function go() { setTimeout(function () { boot().then(startWatch); }, BOOT_DELAY); }
+    if (document.readyState === 'complete') go(); else root.addEventListener('load', go, { once: true });
+    document.addEventListener('visibilitychange', function () { if (document.hidden) flush(); });
+    root.addEventListener('pagehide', function () { flush(); });
+    function early() { ui(null); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(early, 2500); }, { once: true });
+    else setTimeout(early, 2500);
+  })();
+
+  return Object.freeze({
+    version: VERSION, LEGEND: LEGEND,
+    getMeta: getMeta, describe: describe,
+    check: check, report: report, reportAsync: reportAsync, runModuleTests: runModuleTests,
+    verdict: verdict, selfTest: selfTest,
+    ensureStable: ensureStable, guard: guard, configure: configure,
+    buildFingerprint: buildFingerprint, buildInfo: buildInfo,
+    sha256Hex: sha256Hex, hashImpl: hashImpl,
+    exportManifest: exportManifest, rebaseline: rebaseline, refresh: function () { return sweep(true); },
+    signSnapshot: signSnapshot, verifySnapshot: verifySnapshot,
+    exportAudit: exportAudit, verifyAudit: verifyAudit, flush: flush,
+    modules: function () { return REG.map(function (m) { return m.id; }); }
+  });
+});
+
 </script>
 
 </body>

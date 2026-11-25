@@ -485,7 +485,8 @@
   const API = { version: '3.0.0', canonicalize, canonicalJSON, MPTNode, MerklePatriciaTrie, SECP256K1, G, mod, modInv, isOnCurve,
     pointAdd, pointMultiply, generatePrivateKey, getPublicKey, generateSchnorrProof, verifySchnorrProof,
     schnorrSign, schnorrVerify, schnorrGetPublicKey, generateKeyPair, taggedHash, verifyMPTProof,
-    sha256, sha256Hex, bytesToHex, hexToBytes, toBytes, selfTest };
+    sha256, sha256Hex, bytesToHex, hexToBytes, toBytes, selfTest,
+    getMeta: function () { var b = { id: 'NexusLBC', version: '3.0.0', checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; } };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   global.NexusLBC = API;
   ['canonicalize', 'MPTNode', 'MerklePatriciaTrie', 'SECP256K1', 'mod', 'modInv', 'pointAdd', 'pointMultiply', 'generateSchnorrProof', 'verifySchnorrProof']

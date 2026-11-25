@@ -818,6 +818,7 @@
     analyzeChains,
     VERSION: V3,
     BASE_VERSION: CORE.VERSION || '2.0',
+    getMeta: function () { var b = { id: 'NexusOmniCoreV3', version: V3, checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; },
     _rules: Object.freeze(RULES.map(r => r.name)),
     _regex: Object.freeze(RE),
   });
