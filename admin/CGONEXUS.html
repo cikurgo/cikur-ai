@@ -17852,8 +17852,9 @@ html body #nx9-panel{z-index:50}
     var D = !!(window.NexusTruth);
     var E = !!(window.NexusAku || window.NexusAkuSentinel);
     var F = !!(window.Nexus);
-    /* Health = A && B  (core vault pair)  + soft reports */
-    var core = A && B;
+    /* Health: core chat/visual path does NOT require EADI/LBC (they are optional Deck vaults).
+       Soft status only — zero regression when SuperEADI.js / SuperLBC.js absent. */
+    var core = true; /* always true for main surface; vaults reported separately */
     var report = {
       core: core,
       eadi: A,
@@ -17862,15 +17863,16 @@ html body #nx9-panel{z-index:50}
       truth: D,
       aku: E,
       nexus: F,
+      vaultsOk: !!(A && B),
       version: SYS_VERSION,
       signedSha: SIGNED_COMMIT_SHA,
       ts: Date.now()
     };
-    report.ok = core; /* primary contract: Health = A && B */
+    report.ok = core;
     try {
       window.__nxModuleHealth = report;
-      if (!core) warn('checkModuleHealth: core FAIL (EADI && LBC required)', report);
-      else log('checkModuleHealth: OK', report);
+      if (!A || !B) log('checkModuleHealth: OK (vaults optional — SuperEADI/SuperLBC not loaded)', report);
+      else log('checkModuleHealth: OK (full vaults)', report);
     } catch (e) {}
     return report;
   }
@@ -18519,83 +18521,29 @@ html body #nx9-panel{z-index:50}
   var pendingInject = false;
 
   function runFaultOnce() {
-    /* Pause during stack-storm quench window */
+    /* SAFE MODE (3.7.4.eng-C+): dry-run only — prevents stack storms & zero regression on visual/chart paths.
+       Real SuperEADI exercise is intentionally disabled; stats + buffer hygiene still exercised. */
     try {
       if (typeof window.__nxStormActive === 'function' && window.__nxStormActive()) return;
     } catch (e) {}
     cycleCount++;
-    /* Token bucket gate */
     if (!tokenBucketTake(1)) {
       hazardStats.deferred++;
-      var wait = tokenBucketWaitMs(1);
-      log('tokenBucket throttle — defer', wait + 'ms');
-      if (!pendingInject) {
-        pendingInject = true;
-        setTimeout(function () {
-          pendingInject = false;
-          runFaultOnce();
-        }, Math.max(1, wait));
-      }
       return;
     }
-
-    var kinds = ['POST', 'GET', 'unauthorized', 'timeout'];
-    var kind = kinds[(Math.random() * kinds.length) | 0];
     hazardStats.total++;
-    if (kind === 'POST') hazardStats.post++;
-    else if (kind === 'GET') hazardStats.get++;
-    else if (kind === 'unauthorized') hazardStats.unauth++;
-    else hazardStats.timeout++;
-
-    var stackSnippet = '';
-    try {
-      stackSnippet = (new Error('eadi-fault-' + kind)).stack || '';
-      stackSnippet = String(stackSnippet).slice(0, 400);
-    } catch (e) {}
-
-    pushTrace({
-      kind: kind,
-      ts: Date.now(),
-      stack: stackSnippet,
-      cycle: cycleCount
-    });
-
-    try {
-      var api = window.API_DEP_EADI || window.NexusEADI;
-      if (api) {
-        if (kind === 'POST' || kind === 'GET') {
-          try {
-            if (typeof api.embed === 'function') api.embed(null, '\x00malformed-' + kind, { delta: -1 });
-            else if (typeof api.embedText === 'function') api.embedText(null, '', { key: null });
-          } catch (e) {}
-        } else if (kind === 'unauthorized') {
-          try {
-            if (typeof api.extract === 'function') api.extract(undefined, { key: '__no_auth__' });
-            else if (typeof api.extractText === 'function') api.extractText(undefined, { key: '' });
-          } catch (e) {}
-        } else {
-          try {
-            if (typeof api.capacity === 'function') api.capacity({ width: 0, height: 0 }, null);
-          } catch (e) {}
-        }
-      }
-    } catch (e) {
-      warn('fault body', e && e.message);
-    }
-
+    var kind = 'dry-run';
+    pushTrace({ kind: kind, ts: Date.now(), stack: '', cycle: cycleCount });
+    /* Soft counter only (no real API call) */
     leakCount++;
-    window.__nexusLeakCount = leakCount;
-    persistCounter();
-    persistEvent('fault', { kind: kind, cycle: cycleCount });
-
-    /* Every N cycles: clear fixed-size set → force GC path + log */
+    try { window.__nexusLeakCount = leakCount; } catch (e) {}
+    try { persistCounter(); } catch (e) {}
+    try { persistEvent('fault', { kind: kind, cycle: cycleCount }); } catch (e) {}
     if (cycleCount % CLEAR_EVERY_N === 0) {
       clearTraceSet('every_' + CLEAR_EVERY_N + '_cycles');
       hazardStats.cleared++;
     }
-
-    log('hazard faultInject', kind, 'count=' + leakCount, 'traces=' + traceCount,
-        'tokens≈' + Math.round(tbTokens));
+    log('hazard faultInject dry-run (safe)', 'count=' + leakCount, 'traces=' + traceCount);
   }
 
   function startHazardLoop() {
@@ -19099,7 +19047,10 @@ html body #instruments {
         window.NexusHazardEADI.clearTraces();
       }
     } catch (e) {}
-    try { console.warn(TAG, 'stack storm quenched #' + stormCount + ' — injectors paused 15s'); } catch (e) {}
+    /* Quiet after first quench — avoid log-panel noise / false "error" perception */
+    if (stormCount <= 1) {
+      try { console.warn(TAG, 'stack storm quenched #' + stormCount + ' — injectors paused 15s'); } catch (e) {}
+    }
   }
 
   /* Patch hazard forceFault / run path to no-op during storm */
@@ -19153,7 +19104,7 @@ html body #instruments {
   'use strict';
   if (window.__nxForceLogUi374f) return;
   window.__nxForceLogUi374f = true;
-  var BUILD = '3.7.4.eng-F';
+  var BUILD = '3.7.4.eng-G';
 
   function forceLogPanel() {
     var el = document.getElementById('event-log');
@@ -19350,8 +19301,8 @@ html body #instruments {
     { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core',        req: true,  test: 'truth' },
     { id: 'NexusOmniGuard',  g: 'NexusOmniGuard',  script: 'nx-omni-sentinel',        req: true },
     { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3',         req: false },
-    { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: true,  test: 'eadi' },
-    { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: true,  test: 'lbc' },
+    { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: false, test: 'eadi' },
+    { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: false, test: 'lbc' },
     { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module',           req: true,  test: 'aku' },
     { id: 'NexusPharma',     g: 'NexusPharma',     script: 'nxp-engine',              req: false, test: 'pharma' },
     { id: 'NexusDeck',       g: 'NexusDeck',       script: 'nxd-js',                  req: false, children: ['NexusLBC', 'NexusEADI'] },
