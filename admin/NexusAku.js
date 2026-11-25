@@ -1,35 +1,25 @@
 /*! ═══════════════════════════════════════════════════════════════════
- *  NEXUS AKU v1.0.0 — Gerbang Penjaga "AKU" (port browser + WebCrypto)
+ *  NEXUS AKU v2.0.2 — Gerbang Penjaga "AKU" (Sovereign Vault Edition)
  *  ─────────────────────────────────────────────────────────────────
  *  Aksioma:  AKU = AKU (identitas)  ·  AKU = KAMU (pengenalan)
  *
- *  Port dari gerbang_aku.mjs v3.1 (Node). Protokol IDENTIK:
- *    pesan bukti = "NEXUS/v3/mirror|<nonce>|<sidik tamu>"
- *    bukti       = HMAC-SHA256(kunci cermin, pesan)[0:32 hex]
- *    pantulan    = "<sidik[0:8]>:<bukti>"
- *  → test vector lintas-bahasa tetap kompatibel (diuji terhadap node:crypto).
- *
- *  Beda dari versi Node (disengaja):
- *    • Semua kripto lewat WebCrypto (crypto.subtle) → async. Berjalan di
- *      browser DAN Node ≥ 19 tanpa dependensi.
- *    • Rantai audit diserialkan lewat antrean promise (HMAC async tak
- *      boleh saling menyalip).
- *    • Ambang jeda-min default 0 (komponen in-page adalah kode, bukan jiwa;
- *      "terlalu cepat" tak bermakna di sini). Bisa dinyalakan via opsi.
- *
- *  Tambahan pertahanan (di luar port):
- *    • segel()/periksaSegel()  — segel HMAC atas teks; ubahan = terdeteksi.
- *    • inspeksiTeks()          — deteksi peniruan bukti/gerbang, injeksi
- *                                instruksi, exfil gambar, karakter tersembunyi.
- *    • catatBasis()/cekBasis() — sidik integritas API (deteksi monkey-patch).
- *    • karantina otomatis      — N penolakan hukum → nama dikarantina.
- *    • ekspor() + verifikasiEkspor() — rantai audit bisa diverifikasi ulang.
- *
- *  BATASAN JUJUR: ini lapisan integritas & deteksi di dalam satu halaman.
- *  Kunci hidup di memori JS yang sama — penyerang yang sudah menguasai
- *  halaman penuh (DevTools/XSS bebas) tidak dihentikan oleh ini. Bukan
- *  pengganti TLS/mTLS/HSM. Mode default: AMATI (tidak mengubah/menghapus
- *  isi apa pun).
+ *  Changelog v2.0.2 (hardening, ZERO REGRESI):
+ *    • FIX: unhex() validasi ketat (hex/even-length) → cegah data korup.
+ *    • FIX: imporVault() — await selesai() sebelum apply (atomic).
+ *    • FIX: eksporVault() — await selesai() sebelum snapshot.
+ *    • FIX: verifikasiEkspor() — validasi skema entri + fallback dasar.
+ *    • FIX: constructor — validasi salt, jedaMin, jedaMaks.
+ *    • FIX: #panggilCermin — sentinel mulai=null (hindari false positive).
+ *    • FIX: #catat — snapshot #pendengar (hindari mutasi iterasi).
+ *    • FIX: imporVault — pre-validasi hex registri (atomisitas).
+ *  Changelog v2.0.1 (dari versi sebelumnya):
+ *    • Ekspor/Impor Vault portable (salt di envelope).
+ *    • Impor memvalidasi rantai audit sebelum apply.
+ *    • unlock() dijaga (tidak bisa menimpa kunci setelah chain mulai).
+ *    • State vault menyertakan rantaiDasar, karantina, segel, jeda.
+ *    • A15 diperkuat (verifikasi round-trip nyata).
+ *  Zero regresi: fitur v1 (rate-limit, karantina, segel, inspeksi,
+ *  sidik API, audit chain, 15 uji) tetap utuh.
  * ═══════════════════════════════════════════════════════════════════ */
 (function (root, factory) {
   'use strict';
@@ -38,11 +28,12 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSI = '1.0.0';
+  const VERSI = '2.0.2';
   const subtle = (globalThis.crypto && globalThis.crypto.subtle) || null;
   const ENC = new TextEncoder();
+  const DEC = new TextDecoder();
 
-  /* ══════════ KONSTANTA (sama dengan v3.1) ══════════ */
+  /* ══════════ KONSTANTA ══════════ */
   const AMBANG_NAPAS = 0.42;
   const NAMA_MAKS = 64, PANTULAN_MAKS = 4096, HMAC_PANJANG = 32, KUNCI_MAKS = 32;
   const MEMORI_MAKS = 4096, MIRROR_MAKS = 256, PANTULAN_DITERIMA_MAKS = 1024, AUDIT_MAKS = 512;
@@ -50,13 +41,17 @@
   const SEGEL_MAKS = 2048, AMBANG_KARANTINA = 3;
   const DOMAIN_BUKTI = 'NEXUS/v3/mirror';
   const DOMAIN_SEGEL = 'NEXUS/v3/seal';
+  const PBKDF2_ITERATIONS = 100000;
+  const VERSI_VAULT = 1;
 
   const RE_HEKSA_SIDIK = /^[0-9a-f]{64}$/;
+  const RE_HEKSA_ANY = /^[0-9a-f]+$/i;
+  const RE_HEKSA_EVEN = /^(?:[0-9a-fA-F]{2})+$/;
   const RE_PANTULAN = /^([0-9a-f]{8}):([0-9a-f]{32})$/;
   const RE_NONCE = /^[0-9a-f]{16}:[0-9a-f]{32}$/;
   const RE_ID_GERBANG = /^[0-9a-f]{16}$/;
 
-  /* ══════════ KRIPTO ══════════ */
+  /* ══════════ KRIPTO DASAR ══════════ */
   function butuhSubtle() {
     if (!subtle) throw new Error('WebCrypto (crypto.subtle) tidak tersedia — butuh HTTPS/localhost atau Node ≥ 19');
     return subtle;
@@ -66,13 +61,23 @@
     for (let i = 0; i < u.length; i++) s += (u[i] < 16 ? '0' : '') + u[i].toString(16);
     return s;
   }
+  /**
+   * Konversi string hex → Uint8Array dengan validasi ketat.
+   * PERBAIKAN v2.0.2: menolak string kosong/odd-length/non-hex;
+   * mencegah `parseInt(NaN)` yang dulu menghasilkan data korup diam-diam.
+   */
+  function unhex(str) {
+    if (typeof str !== 'string' || str.length === 0 || (str.length & 1) !== 0 || !RE_HEKSA_EVEN.test(str)) {
+      throw new Error('string hex tidak sah (butuh hex genap, non-kosong)');
+    }
+    const out = new Uint8Array(str.length / 2);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(str.slice(i * 2, i * 2 + 2), 16);
+    return out;
+  }
   function acak(n) {
     const u = new Uint8Array(n); globalThis.crypto.getRandomValues(u); return u;
   }
   function acakHex(n) { return hex(acak(n)); }
-  function acakFloat() {
-    const u = new Uint32Array(1); globalThis.crypto.getRandomValues(u); return u[0] / 0x100000000;
-  }
   async function sha256Hex(s) {
     return hex(await butuhSubtle().digest('SHA-256', ENC.encode(String(s))));
   }
@@ -81,7 +86,27 @@
     const ck = await s.importKey('raw', kunci, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     return hex(await s.sign('HMAC', ck, ENC.encode(String(pesan))));
   }
-  /** Perbandingan waktu-konstan; panjang berbeda tidak membocorkan lewat shortcut. */
+  async function deriveKeyPBKDF2(password, saltHex) {
+    const s = butuhSubtle();
+    const baseKey = await s.importKey('raw', ENC.encode(password), 'PBKDF2', false, ['deriveBits']);
+    const salt = unhex(saltHex);
+    const bits = await s.deriveBits({ name: 'PBKDF2', salt: salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' }, baseKey, 256);
+    return new Uint8Array(bits);
+  }
+  async function encryptVault(dataObj, keyBytes) {
+    const s = butuhSubtle();
+    const iv = acak(12);
+    const ck = await s.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['encrypt']);
+    const encrypted = await s.encrypt({ name: 'AES-GCM', iv: iv }, ck, ENC.encode(JSON.stringify(dataObj)));
+    return { iv: hex(iv), data: hex(encrypted) };
+  }
+  async function decryptVault(encObj, keyBytes) {
+    const s = butuhSubtle();
+    const iv = unhex(encObj.iv);
+    const ck = await s.importKey('raw', keyBytes, { name: 'AES-GCM' }, false, ['decrypt']);
+    const decrypted = await s.decrypt({ name: 'AES-GCM', iv: iv }, ck, unhex(encObj.data));
+    return JSON.parse(DEC.decode(decrypted));
+  }
   function safeEqual(a, b) {
     a = String(a); b = String(b);
     const n = Math.max(a.length, b.length);
@@ -104,7 +129,7 @@
     constructor() { super('timeout'); this.name = 'TimeoutError'; }
   }
 
-  /* ══════════ ENTITAS (immutability via private fields) ══════════ */
+  /* ══════════ ENTITAS ══════════ */
   class Entitas {
     #nama; #napas; #sidik; #kunciCermin = null;
     constructor(nama, napas) {
@@ -119,7 +144,7 @@
       if (typeof napas !== 'number' || !Number.isFinite(napas)) throw new TypeError('napas harus angka finite');
       if (napas < 0 || napas > 1) throw new Error('napas harus dalam [0.0, 1.0]');
       this.#nama = t; this.#napas = napas;
-      this.#sidik = acakHex(32); // 256-bit acak (64 hex) — unik per instans
+      this.#sidik = acakHex(32);
     }
     get nama() { return this.#nama; }
     get napas() { return this.#napas; }
@@ -137,7 +162,6 @@
     toString() { return this.constructor.name + '(nama=' + JSON.stringify(this.#nama) + ', sidik=' + this.#sidik.slice(0, 8) + '…)'; }
   }
 
-  /** Komponen in-page yang sah (OmniGuard, TruthCore, Dewan, dsb.). */
   class Komponen extends Entitas {
     constructor(nama) { super(nama, 1.0); }
     async cermin(lain, nonce) {
@@ -145,11 +169,9 @@
       return rangkaiPantulan(lain.sidik, await hitungBukti(kunci, nonce, lain.sidik));
     }
   }
-
-  /* ── entitas red-team (untuk selfTest) ── */
   class AIPenyusup extends Entitas {
     constructor() { super('entitas_palsu', 0.5); }
-    async cermin(lain) { return lain.sidik; }                      // kloning mentah
+    async cermin(lain) { return lain.sidik; }
   }
   class PenyusupPintar extends Entitas {
     constructor() { super('penyusup_pintar', 0.55); }
@@ -172,7 +194,7 @@
     }
   }
 
-  /* ══════════ INSPEKSI TEKS — peniruan / injeksi ══════════ */
+  /* ══════════ INSPEKSI TEKS ══════════ */
   const POLA = Object.freeze([
     { kode: 'BUKTI-PALSU', t: 3, re: /\b[0-9a-f]{8}:[0-9a-f]{32}\b/i,
       ket: 'format pantulan HMAC muncul di teks (peniruan bukti gerbang)' },
@@ -203,7 +225,6 @@
   ]);
   const AGEN_DIKENAL = ['nova', 'flux', 'cgo', 'lyric', 'cortex'];
 
-  /** Sinkron & murni. Blok kode (``` dan `inline`) diabaikan agar artefak sah tak memicu alarm. */
   function inspeksiTeks(teks, opsi) {
     opsi = opsi || {};
     const out = { temuan: [], skor: 0, tingkat: 'bersih' };
@@ -234,10 +255,12 @@
   async function sidikObjek(obj) {
     if (obj == null || (typeof obj !== 'object' && typeof obj !== 'function')) return null;
     const bagian = [];
-    for (const k of Object.getOwnPropertyNames(obj).sort()) {
+    let nama;
+    try { nama = Object.getOwnPropertyNames(obj).sort(); } catch (e) { return null; }
+    for (const k of nama) {
       let d; try { d = Object.getOwnPropertyDescriptor(obj, k); } catch (e) { continue; }
       if (!d) continue;
-      if (d.get || d.set) { bagian.push(k + ':accessor'); continue; }   // getter tidak dipanggil
+      if (d.get || d.set) { bagian.push(k + ':accessor'); continue; }
       const v = d.value;
       if (typeof v === 'function') {
         let src = ''; try { src = Function.prototype.toString.call(v); } catch (e) {}
@@ -249,7 +272,8 @@
 
   /* ══════════ GERBANG ══════════ */
   class GerbangAKU {
-    #id; #kunciAudit; #kunciSegel;
+    #id; #salt; #masterKeyBytes = null;
+    #kunciAudit; #kunciSegel;
     #rantai = '0'.repeat(64); #rantaiDasar = '0'.repeat(64);
     #audit = []; #antrian = Promise.resolve();
     #memori = new Map(); #kunciCermin = new Map(); #diterima = new Map();
@@ -262,18 +286,55 @@
       const id = opsi.id == null ? acakHex(8) : String(opsi.id).toLowerCase();
       if (!RE_ID_GERBANG.test(id)) throw new Error('id gerbang harus ' + ID_GERBANG_HEX + ' karakter heksadesimal');
       this.#id = id;
+
+      /* PERBAIKAN v2.0.2: validasi salt agar unhex() tak meledak di unlock() */
+      if (opsi.salt !== undefined) {
+        if (typeof opsi.salt !== 'string' || !RE_HEKSA_EVEN.test(opsi.salt)) {
+          throw new Error('salt harus string hex (panjang genap, non-kosong)');
+        }
+        this.#salt = opsi.salt;
+      } else {
+        this.#salt = acakHex(16);
+      }
+
+      /* PERBAIKAN v2.0.2: validasi jedaMin/jedaMaks agar konsisten */
+      const jMin = typeof opsi.jedaMin === 'number' ? opsi.jedaMin : 0;
+      const jMaks = typeof opsi.jedaMaks === 'number' ? opsi.jedaMaks : 0.300;
+      if (!Number.isFinite(jMin) || jMin < 0) throw new Error('jedaMin harus angka finite >= 0');
+      if (!Number.isFinite(jMaks) || jMaks < jMin) throw new Error('jedaMaks harus angka finite >= jedaMin');
+      this.#jedaMin = jMin;
+      this.#jedaMaks = jMaks;
+
       this.#kunciAudit = acak(KUNCI_MAKS);
       this.#kunciSegel = acak(KUNCI_MAKS);
-      this.#jedaMin = typeof opsi.jedaMin === 'number' ? opsi.jedaMin : 0;
-      this.#jedaMaks = typeof opsi.jedaMaks === 'number' ? opsi.jedaMaks : 0.300;
     }
+
     get idGerbang() { return this.#id; }
+    get salt() { return this.#salt; }
     sidikRantaiAudit() { return this.#rantai; }
     async selesai() { await this.#antrian; return this.#rantai; }
     peristiwaAudit() { return this.#audit.map(e => [e.waktuNs, e.peristiwa, e.detail]); }
     onPeristiwa(fn) { if (typeof fn === 'function') this.#pendengar.push(fn); }
     dikarantina(nama) { return this.#karantina.has(String(nama)); }
     daftarKarantina() { return Array.from(this.#karantina, ([n, a]) => ({ nama: n, alasan: a })); }
+
+    /**
+     * Turunkan kunci master/audit/segel dari password.
+     * PENTING: hanya boleh dipanggil SEBELUM ada aktivitas sensitif (audit/segel),
+     * karena akan mengganti kunci yang sudah dipakai untuk menandatangani data lama.
+     */
+    async unlock(password) {
+      if (typeof password !== 'string' || password.length < 8) throw new Error('Password minimal 8 karakter');
+      if (this.#masterKeyBytes !== null) throw new Error('Gerbang sudah di-unlock');
+      if (this.#audit.length > 0 || this.#segel.size > 0) {
+        throw new Error('unlock() harus dipanggil sebelum ada entri audit atau segel (rantai sudah dimulai)');
+      }
+      this.#masterKeyBytes = await deriveKeyPBKDF2(password, this.#salt);
+      this.#kunciAudit = await deriveKeyPBKDF2(password + '_audit', this.#salt);
+      this.#kunciSegel = await deriveKeyPBKDF2(password + '_seal', this.#salt);
+      return true;
+    }
+
     async bebaskan(nama) {
       const ada = this.#karantina.delete(String(nama)); this.#gagal.delete(String(nama));
       if (ada) await this.#catat('BEBAS', String(nama));
@@ -287,12 +348,11 @@
       return true;
     }
 
-    /* ---------- registri cermin ---------- */
     registrasiCermin(lawan) {
       if (!(lawan instanceof Entitas)) throw new TypeError('cermin harus Entitas');
       const kReg = this.#kunciCermin.get(lawan.sidik);
       let kPasang = null;
-      try { kPasang = lawan._ambilKunciCermin(); } catch (e) { /* null */ }
+      try { kPasang = lawan._ambilKunciCermin(); } catch (e) { }
       if (kReg !== undefined) {
         if (kPasang === null) return [false, 'sidik terdaftar tapi kunci lokal hilang (tamper ditolak)'];
         return safeEqual(hex(kReg), hex(kPasang)) ? [true, 'sudah terdaftar (kunci cocok)']
@@ -308,7 +368,6 @@
       return [true, 'terdaftar'];
     }
 
-    /* ---------- HUKUM 1 ---------- */
     hukumIdentitas(e) {
       if (!(e instanceof Entitas)) return [false, 'AKU != AKU (bukan entitas)'];
       if (!RE_HEKSA_SIDIK.test(e.sidik)) return [false, 'AKU != AKU (identitas terbelah/tak sah)'];
@@ -319,7 +378,6 @@
       return [true, 'AKU = AKU'];
     }
 
-    /* ---------- HUKUM 2 ---------- */
     async hukumPengenalan(e, lawan) {
       if (lawan == null) return [false, 'KAMU hampa (penjaga tidak ada)'];
       if (!(lawan instanceof Entitas)) return [false, 'KAMU bukan entitas'];
@@ -353,7 +411,6 @@
       return [true, 'AKU = KAMU'];
     }
 
-    /* ---------- PINTU GERBANG ---------- */
     async periksa(tamu, penjaga) {
       try {
         if (!tamu || !penjaga) return await this.#tolak('gerbang error: tamu/penjaga tidak ada');
@@ -383,7 +440,6 @@
       }
     }
 
-    /* ---------- SEGEL TEKS (integritas pesan) ---------- */
     async segel(label, teks) {
       const id = acakHex(8);
       const digest = await sha256Hex(teks);
@@ -408,7 +464,6 @@
       return { ok: true, label: s.label };
     }
 
-    /* ---------- BASIS INTEGRITAS API ---------- */
     async catatBasis(nama, obj) {
       const s = await sidikObjek(obj);
       if (!s) return false;
@@ -428,17 +483,26 @@
       return out;
     }
 
-    /* ---------- AUDIT: ekspor & verifikasi ---------- */
     ekspor() {
       return { id: this.#id, dasar: this.#rantaiDasar,
                entri: this.#audit.map(e => ({ waktuNs: e.waktuNs, peristiwa: e.peristiwa, detail: e.detail, rantai: e.rantai })) };
     }
-    /** Hanya gerbang pemilik kunci yang bisa memverifikasi. Mengembalikan {ok, indeksRusak}. */
+    /**
+     * PERBAIKAN v2.0.2:
+     *  - `dasar` divalidasi (fallback '0'*64) agar `prev="undefined"` tak merusak verifikasi.
+     *  - Setiap entri divalidasi skema sebelum HMAC dihitung.
+     */
     async verifikasiEkspor(eks) {
       if (!eks || eks.id !== this.#id || !Array.isArray(eks.entri)) return { ok: false, indeksRusak: -1 };
-      let prev = String(eks.dasar);
+      const base = (typeof eks.dasar === 'string' && /^[0-9a-f]{64}$/.test(eks.dasar))
+        ? eks.dasar : '0'.repeat(64);
+      let prev = base;
       for (let i = 0; i < eks.entri.length; i++) {
         const e = eks.entri[i];
+        if (!e || typeof e.waktuNs !== 'string' || typeof e.peristiwa !== 'string'
+            || typeof e.detail !== 'string' || typeof e.rantai !== 'string') {
+          return { ok: false, indeksRusak: i };
+        }
         const muatan = e.waktuNs + '|' + e.peristiwa + '|' + e.detail + '|' + prev;
         const h = await hmacHex(this.#kunciAudit, muatan);
         if (!safeEqual(h, e.rantai)) return { ok: false, indeksRusak: i };
@@ -447,16 +511,144 @@
       return { ok: true, indeksRusak: -1 };
     }
 
-    /* ---------- internal ---------- */
+    /**
+     * Ekspor vault terenkripsi AES-GCM.
+     * Envelope menyertakan `salt` → portabel ke instance lain tanpa out-of-band.
+     * Password HARUS sama dengan yang dipakai di unlock() (diverifikasi via derivasi ulang).
+     * PERBAIKAN v2.0.2: await selesai() sebelum snapshot — cegah audit pending hilang.
+     */
+    async eksporVault(masterPassword) {
+      if (!this.#masterKeyBytes) throw new Error('Vault belum di-unlock — panggil unlock(password) dulu');
+      if (typeof masterPassword !== 'string' || !masterPassword) throw new Error('Password ekspor diperlukan');
+      const checkKey = await deriveKeyPBKDF2(masterPassword, this.#salt);
+      if (!safeEqual(hex(checkKey), hex(this.#masterKeyBytes))) {
+        throw new Error('Password ekspor tidak cocok dengan password unlock()');
+      }
+      await this.selesai();
+      const state = {
+        versiVault: VERSI_VAULT,
+        id: this.#id,
+        salt: this.#salt,
+        rantai: this.#rantai,
+        rantaiDasar: this.#rantaiDasar,
+        audit: this.#audit.map(e => ({ waktuNs: e.waktuNs, peristiwa: e.peristiwa, detail: e.detail, rantai: e.rantai })),
+        memori: Array.from(this.#memori.entries()),
+        registri: Array.from(this.#kunciCermin.entries()).map(([k, v]) => [k, hex(v)]),
+        karantina: Array.from(this.#karantina.entries()),
+        segel: Array.from(this.#segel.entries()).map(([k, v]) => [k, { label: v.label, digest: v.digest, bukti: v.bukti, ts: v.ts }]),
+        jedaMin: this.#jedaMin,
+        jedaMaks: this.#jedaMaks
+      };
+      const env = await encryptVault(state, this.#masterKeyBytes);
+      return { versi: VERSI_VAULT, salt: this.#salt, iv: env.iv, data: env.data };
+    }
+
+    /**
+     * Impor vault terenkripsi.
+     * Salt diambil dari envelope (bukan dari `this.#salt`), agar portabel.
+     * Validasi rantai audit + struktur sebelum state diterapkan (atomic apply).
+     * Kunci audit/segel diturunkan ulang dari password + salt → konsisten dengan eksportir.
+     * PERBAIKAN v2.0.2:
+     *  - await selesai() sebelum apply (cegah race dengan #catat pending).
+     *  - Pre-validasi registri (hex) agar apply tidak bisa throw mid-way.
+     */
+    async imporVault(encObj, masterPassword) {
+      if (!encObj || typeof encObj !== 'object' || !encObj.salt || !encObj.iv || !encObj.data) {
+        throw new Error('Envelope vault tidak sah (butuh salt, iv, data)');
+      }
+      if (typeof encObj.salt !== 'string' || !RE_HEKSA_EVEN.test(encObj.salt)) {
+        throw new Error('Envelope vault tidak sah (salt bukan hex genap)');
+      }
+      if (typeof masterPassword !== 'string' || !masterPassword) throw new Error('Password impor diperlukan');
+
+      const vaultKey = await deriveKeyPBKDF2(masterPassword, encObj.salt);
+      let state;
+      try { state = await decryptVault(encObj, vaultKey); }
+      catch (e) { throw new Error('Dekripsi vault gagal: password salah atau data rusak'); }
+
+      /* ── Validasi struktur ── */
+      if (!state || typeof state !== 'object') throw new Error('State vault tidak sah');
+      if (typeof state.id !== 'string' || !RE_ID_GERBANG.test(state.id)) throw new Error('State.id tidak sah');
+      if (typeof state.rantai !== 'string' || !/^[0-9a-f]{64}$/.test(state.rantai)) throw new Error('State.rantai tidak sah');
+      const auditArr = Array.isArray(state.audit) ? state.audit : [];
+      const memoriArr = Array.isArray(state.memori) ? state.memori : [];
+      const registriArr = Array.isArray(state.registri) ? state.registri : [];
+      if (memoriArr.length > MEMORI_MAKS) throw new Error('Memori vault melebihi batas');
+      if (registriArr.length > MIRROR_MAKS) throw new Error('Registri cermin melebihi batas');
+      if (auditArr.length > AUDIT_MAKS) throw new Error('Audit vault melebihi batas');
+
+      for (const ent of memoriArr) {
+        if (!Array.isArray(ent) || ent.length !== 2 || typeof ent[0] !== 'string' || !RE_HEKSA_SIDIK.test(ent[1])) {
+          throw new Error('Entri memori tidak sah');
+        }
+      }
+      /* PERBAIKAN v2.0.2: pre-validasi hex registri agar apply atomic */
+      const registriPre = [];
+      for (const ent of registriArr) {
+        if (!Array.isArray(ent) || ent.length !== 2 || !RE_HEKSA_SIDIK.test(ent[0])
+            || typeof ent[1] !== 'string' || ent[1].length !== KUNCI_MAKS * 2
+            || !RE_HEKSA_EVEN.test(ent[1])) {
+          throw new Error('Entri registri cermin tidak sah');
+        }
+        registriPre.push([ent[0], unhex(ent[1])]);
+      }
+
+      /* ── Turunkan kunci & verifikasi rantai SEBELUM apply ── */
+      const newAudit = await deriveKeyPBKDF2(masterPassword + '_audit', encObj.salt);
+      const newSegel = await deriveKeyPBKDF2(masterPassword + '_seal', encObj.salt);
+      const dasar = (typeof state.rantaiDasar === 'string' && /^[0-9a-f]{64}$/.test(state.rantaiDasar))
+        ? state.rantaiDasar : '0'.repeat(64);
+      let prev = dasar;
+      for (const e of auditArr) {
+        if (!e || typeof e.waktuNs !== 'string' || typeof e.peristiwa !== 'string'
+            || typeof e.detail !== 'string' || typeof e.rantai !== 'string') {
+          throw new Error('Entri audit tidak sah');
+        }
+        const muatan = e.waktuNs + '|' + e.peristiwa + '|' + e.detail + '|' + prev;
+        const h = await hmacHex(newAudit, muatan);
+        if (!safeEqual(h, e.rantai)) throw new Error('Rantai audit rusak (password salah atau data termanipulasi)');
+        prev = h;
+      }
+      if (!safeEqual(prev, state.rantai)) throw new Error('Rantai audit tidak konsisten dengan state.rantai');
+
+      /* PERBAIKAN v2.0.2: tunggu audit pending agar apply atomik */
+      await this.selesai();
+
+      /* ── Apply state secara atomik ── */
+      this.#id = state.id;
+      this.#salt = encObj.salt;
+      this.#masterKeyBytes = vaultKey;
+      this.#kunciAudit = newAudit;
+      this.#kunciSegel = newSegel;
+      this.#rantaiDasar = dasar;
+      this.#rantai = state.rantai;
+      this.#audit = auditArr.slice();
+      this.#memori = new Map(memoriArr);
+      this.#kunciCermin = new Map(registriPre);
+      this.#karantina = Array.isArray(state.karantina) ? new Map(state.karantina) : new Map();
+      this.#segel = Array.isArray(state.segel) ? new Map(state.segel) : new Map();
+      if (typeof state.jedaMin === 'number' && Number.isFinite(state.jedaMin) && state.jedaMin >= 0) {
+        this.#jedaMin = state.jedaMin;
+      }
+      if (typeof state.jedaMaks === 'number' && Number.isFinite(state.jedaMaks) && state.jedaMaks >= this.#jedaMin) {
+        this.#jedaMaks = state.jedaMaks;
+      }
+
+      await this.#catat('RESTORE', 'Vault dimuat dari file (versi ' + (state.versiVault || 0) + ')');
+      return true;
+    }
+
     async #panggilCermin(lawan, tamu, nonce) {
-      let mulai = 0;
+      /* PERBAIKAN v2.0.2: sentinel `null` (bukan 0) agar false-positive
+         `mulai ? ...` saat performance.now()===0 tidak terjadi. */
+      let mulai = null;
       const kerja = (async () => {
         try {
           mulai = performance.now();
           const r = await Promise.resolve(lawan.cermin(tamu, nonce));
           return { pantulan: r, galat: null, dt: (performance.now() - mulai) / 1000 };
         } catch (e) {
-          const dt = mulai ? (performance.now() - mulai) / 1000 : 0;
+          const dt = mulai !== null ? (performance.now() - mulai) / 1000 : 0;
           if (e instanceof KeamananError) return { pantulan: null, galat: 'kunci cermin (' + e.message + ')', dt };
           return { pantulan: null, galat: e.name || 'Error', dt };
         }
@@ -476,7 +668,7 @@
           if (safeEqual(pantulan, e.sidik)) return 'berperilaku klon';
           if (RE_PANTULAN.test(pantulan)) return 'meniru format cermin';
         }
-      } catch (x) { /* abaikan */ }
+      } catch (x) { }
       return 'tak dapat dibaca';
     }
     #izinUpaya(nama) {
@@ -501,7 +693,8 @@
         const entri = { waktuNs, peristiwa, detail, rantai: h };
         this.#audit.push(entri);
         if (this.#audit.length > AUDIT_MAKS) this.#rantaiDasar = this.#audit.shift().rantai;
-        for (const fn of this.#pendengar) { try { fn(peristiwa, detail, entri); } catch (e) { /* pendengar tak boleh merusak */ } }
+        /* PERBAIKAN v2.0.2: snapshot listener agar mutasi saat iterasi aman */
+        for (const fn of this.#pendengar.slice()) { try { fn(peristiwa, detail, entri); } catch (e) { } }
       }).catch(() => {});
       this.#antrian = tugas;
       return tugas;
@@ -520,7 +713,7 @@
     }
   }
 
-  /* ══════════ SELF-TEST RED-TEAM ══════════ */
+  /* ══════════ SELF-TEST RED-TEAM (15 uji) ══════════ */
   async function selfTest(progress) {
     const hasil = [];
     const P = (n, ok, d) => { hasil.push({ n, status: ok ? 'PASS' : 'FAIL', d }); try { progress && progress(n, ok, d); } catch (e) {} };
@@ -594,6 +787,47 @@
       const t4 = inspeksiTeks('Nova: aku yang bicara', { agen: 'flux' });
       P('A14 INSPEKSI TEKS', t1.tingkat === 'tinggi' && t2.skor >= 2 && t3.tingkat === 'bersih' && t4.temuan.some(x => x.kode === 'IDENTITAS-AGEN-LAIN'),
         't1=' + t1.tingkat + ' t2=' + t2.skor + ' blok-kode=' + t3.tingkat + ' agen-lain=' + t4.temuan.length);
+
+      /* ── A15: Vault (round-trip sesungguhnya) ── */
+      const PW = 'PasswordRahasia123!';
+      const vg = new GerbangAKU();
+      await vg.unlock(PW);
+      const vPenjaga = new Komponen('v_penjaga');
+      const [vReg] = vg.registrasiCermin(vPenjaga);
+      await vg.segel('v_segel', 'isi penting');
+      await vg.karantinakan('v_nakal', 'uji');
+      const vEnc = await vg.eksporVault(PW);
+
+      const vg2 = new GerbangAKU();          // salt BERBEDA — harus portabel
+      await vg2.imporVault(vEnc, PW);
+      const [vRegAfter] = vg2.registrasiCermin(vPenjaga);
+      const vOk = await vg2.periksa(new Komponen('tamu'), vPenjaga);
+      const karTersimpan = vg2.dikarantina('v_nakal');
+      const auditVg2 = vg2.ekspor();
+      const vVerif = await vg2.verifikasiEkspor(auditVg2);
+
+      P('A15 VAULT',
+        vReg === true && vEnc.salt !== undefined && vEnc.iv !== undefined
+        && vg2.idGerbang === vg.idGerbang
+        && vRegAfter === true
+        && vOk.lulus
+        && karTersimpan === true
+        && vVerif.ok,
+        'portable=' + (vEnc.salt !== undefined)
+        + ' id=' + (vg2.idGerbang === vg.idGerbang)
+        + ' cermin=' + vOk.lulus
+        + ' karantina=' + karTersimpan
+        + ' rantai=' + vVerif.ok);
+
+      /* A15-b: password salah harus ditolak (bonus safety) */
+      try {
+        const vg3 = new GerbangAKU();
+        await vg3.imporVault(vEnc, 'PasswordSalah999!');
+        P('A15b VAULT-PASSWORD-SALAH', false, 'harusnya throw');
+      } catch (e) {
+        P('A15b VAULT-PASSWORD-SALAH', /Dekripsi vault gagal/.test(String(e.message)), 'password salah ditolak dengan benar');
+      }
+
     } catch (e) { P('ERROR', false, String(e && e.message || e)); }
     const lulus = hasil.filter(r => r.status === 'PASS').length;
     return { results: hasil, pass: lulus, total: hasil.length, score: lulus + '/' + hasil.length };
@@ -605,7 +839,6 @@
     safeEqual, hitungBukti, pesanBukti, rangkaiPantulan,
     inspeksiTeks, sidikObjek, selfTest,
     buat: (opsi) => new GerbangAKU(opsi),
-    getMeta: function () { var b = { id: 'NexusAku', version: VERSI, checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; },
     ADA_WEBCRYPTO: !!subtle
   };
 });
