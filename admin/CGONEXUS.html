@@ -6290,6 +6290,24 @@ window.__nxMemInjected = 0; window.__nxMemTotal = null;
 function nxRefreshMemTotal() {
   try { return cortex.store.getAll().then(a => { window.__nxMemTotal = (a || []).length; }).catch(() => {}); } catch (e) { return Promise.resolve(); }
 }
+/* Bukti nyata status modul untuk Dewan (aditif). Hanya fakta terukur dari NexusIntegrity; gagal → [] (perilaku lama). */
+function nxIntegrityFacts(T) {
+  try {
+    const I = window.NexusIntegrity; if (!I || typeof I.report !== 'function') return [];
+    const rows = I.report({ print: false }), v = I.verdict();
+    const mod = rows.map(r => String(r.id).replace(/^Nexus/, '') + ':' + (r.version && r.version !== '—' ? 'v' + String(r.version).slice(0, 14) : '?') + '=' + r.status).join(', ');
+    const tests = rows.filter(r => /^(PASS|FAIL)/.test(r.selfTest || '')).map(r => String(r.id).replace(/^Nexus/, '') + ':' + r.selfTest).join(', ');
+    const ev = v.evidence || {};
+    const out = [
+      T('integritas=', 'integrity=') + v.integrity + ' (' + ev.withChecksumOK + '/' + ev.modules + T(' checksum cocok', ' checksums match') + ')',
+      T('modul-terukur: ', 'measured-modules: ') + mod
+    ];
+    if (tests) out.push('self-test: ' + tests);
+    out.push(T('catatan-modul: OK = kode termuat & checksum cocok (bukan skor kelengkapan fitur); modul yang TIDAK tercantum di baris ini = TAK DIKETAHUI, bukan 0%; jangan mengubah status ini menjadi persentase tanpa bukti uji',
+               'module-note: OK = code loaded & checksum matches (not a feature-completeness score); a module NOT listed here = UNKNOWN, not 0%; do not turn this status into a percentage without test evidence'));
+    return out;
+  } catch (e) { return []; }
+}
 function nxRuntimeFacts() {
   try {
     const w = window, en = settings.lang === 'en';
@@ -6309,7 +6327,7 @@ function nxRuntimeFacts() {
       T('modul: ', 'modules: ') + 'pharma=' + yn(w.NexusPharma) + ', rare=' + yn(w.NexusRare) + ', omni-guard=' + yn(w.NexusOmniGuard) + ', chartjs=' + yn(typeof Chart !== 'undefined'),
       'deck: LBC=' + (w.NexusLBC ? T('termuat', 'loaded') : T('TIDAK termuat', 'NOT loaded')) + ', EADI=' + (w.NexusEADI ? T('termuat', 'loaded') : T('TIDAK termuat', 'NOT loaded')),
       T('aturan-kejujuran=aktif', 'honesty-rules=active')
-    ].join('; ') + '.';
+    ].concat(nxIntegrityFacts(T)).join('; ') + '.';
   } catch (e) { return ''; }
 }
 function nxRuntimeBlock() { const f = nxRuntimeFacts(); return f ? '\n\n' + f : ''; }
@@ -19240,6 +19258,7 @@ html body #instruments {
   window.addEventListener('load', function () { setTimeout(forceLogPanel, 300); }, { once: true });
 })();
 </script>
+
 
 
 
