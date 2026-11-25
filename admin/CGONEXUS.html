@@ -4371,7 +4371,14 @@ function tokenize(text, final) {
                 const re = new RegExp('\\n`{' + k + ',}[ \\t]*(?=\\n|$)', 'g'); re.lastIndex = nl;
                 const m = re.exec(text);
                 if (!m && CHART_FENCE_ALIAS.test(lang)) {
-                    const rest = text.slice(nl + 1), z = rest.search(/`{3,}[ \t]*(?:\n|$)/);
+                    const rest = text.slice(nl + 1);
+                    let z = -1, zq = rest.indexOf('```');
+                    while (zq >= 0) {   // fence penutup di ujung baris (mis. "}|```"), pemindaian linear
+                        let q = zq; while (rest[q] === '`') q++;
+                        let r = q; while (rest[r] === ' ' || rest[r] === '\t') r++;
+                        if (r >= rest.length || rest[r] === '\n') { z = zq; break; }
+                        zq = rest.indexOf('```', q);
+                    }
                     if (z > 0) {
                         out.push({ t: 'code', lang, code: rest.slice(0, z), done: true });
                         let e = nl + 1 + z; while (text[e] === '`') e++; while (text[e] === ' ' || text[e] === '\t') e++;
@@ -4461,9 +4468,15 @@ function repairChartSrc(code) {
     try {
         c = c.replace(/\r\n?/g, '\n').trim();
         c = c.replace(/^`{3,}[^\n]*\n/, '');                         // sisa pembuka fence
-        c = c.replace(/(?:[|\s]*`{3,}[ \t]*)+$/, '').trim();          // sisa penutup fence (mis. "}|```")
-        c = c.replace(/[|\s]+$/, '');                                 // "|" liar di ujung
-        c = c.replace(/^\s*(?:const|let|var)\s+[\w$]+\s*=\s*/, '').replace(/^\s*new\s+Chart\s*\([^,{]*,\s*/, '').replace(/\)\s*;?\s*$/, function (m) { return /^\s*new\s+Chart/.test(code) ? '' : m; });
+        // sisa penutup fence / "|" liar di ujung — tanpa regex berulang (linear)
+        const junk = ch => ch === ' ' || ch === '\t' || ch === '\n' || ch === '|';
+        let e = c.length;
+        for (;;) {
+            while (e > 0 && junk(c[e - 1])) e--;
+            let b = e; while (b > 0 && c[b - 1] === '`') b--;
+            if (e - b >= 3) e = b; else break;
+        }
+        c = c.slice(0, e);
         // objek tanpa kurung pembuka: "type: 'doughnut', data: {...}"
         if (c && c[0] !== '{' && c[0] !== '[' && /^["']?[A-Za-z_$][\w$]*["']?\s*:/.test(c)) c = '{' + c;
         // seimbangkan kurung (abaikan isi string)
@@ -19258,6 +19271,7 @@ html body #instruments {
   window.addEventListener('load', function () { setTimeout(forceLogPanel, 300); }, { once: true });
 })();
 </script>
+
 
 
 
