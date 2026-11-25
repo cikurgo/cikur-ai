@@ -4477,8 +4477,12 @@ function repairChartSrc(code) {
             if (e - b >= 3) e = b; else break;
         }
         c = c.slice(0, e);
-        // objek tanpa kurung pembuka: "type: 'doughnut', data: {...}"
-        if (c && c[0] !== '{' && c[0] !== '[' && /^["']?[A-Za-z_$][\w$]*["']?\s*:/.test(c)) c = '{' + c;
+        // objek tanpa kurung pembuka: type: 'doughnut'  ATAU  "data":{...}
+        if (c && c[0] !== '{' && c[0] !== '[') {
+            if (/^["']?[A-Za-z_$][\w$]*["']?\s*:/.test(c) || /^["'](?:type|data|datasets|labels|options)["']\s*:/.test(c)) {
+                c = '{' + c;
+            }
+        }
         // seimbangkan kurung (abaikan isi string)
         let st = [], inS = false, q = '', esc = false;
         for (let i = 0; i < c.length; i++) {
@@ -4489,18 +4493,47 @@ function repairChartSrc(code) {
             else if (ch === '}' || ch === ']') { if (st.length) st.pop(); }
         }
         while (st.length) c += (st.pop() === '{' ? '}' : ']');
+        // Buang penutup berlebih di ujung (AI sering menambah }] ekstra)
+        while ((c.match(/\{/g) || []).length < (c.match(/\}/g) || []).length) c = c.replace(/\}\s*$/, '');
+        while ((c.match(/\[/g) || []).length < (c.match(/\]/g) || []).length) c = c.replace(/\]\s*$/, '');
+        // Normalisasi ke JSON valid + auto-type jika hilang
+        try {
+            const normalized = c.replace(/(['"])?([a-zA-Z0-9_]+)\1\s*:/g, '"$2":').replace(/'/g, '"');
+            const parsed = JSON.parse(normalized);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                if (!parsed.type && (parsed.data || parsed.datasets || parsed.labels)) {
+                    const ds = (parsed.data && parsed.data.datasets) || parsed.datasets || [];
+                    const first = ds[0] && Array.isArray(ds[0].data) ? ds[0].data : null;
+                    const isGauge = first && first.length === 2 && first.every(function (n) { return typeof n === 'number'; });
+                    parsed.type = isGauge ? 'doughnut' : 'bar';
+                    if (!parsed.data && (parsed.labels || parsed.datasets)) {
+                        parsed.data = { labels: parsed.labels || [], datasets: parsed.datasets || [] };
+                        delete parsed.labels; delete parsed.datasets;
+                    }
+                }
+                c = JSON.stringify(parsed);
+            }
+        } catch (parseErr) { /* biarkan bentuk asli */ }
     } catch (e) { return String(code == null ? '' : code); }
     return c;
 }
 function looksLikeChartConfig(c) {
     c = String(c || '').trim();
-    if (!c || c.length < 12) return false;
+    if (!c || c.length < 10) return false;
     // buang fence sisa bila ada
-    c = c.replace(/^```(?:json|chart)?\s*/i, '').replace(/```\s*$/,'').trim();
-    if (c[0] !== '{' && c[0] !== '[') return false;
-    // sinyal Chart.js yang umum
-    if (/\b(type|data|datasets|labels)\b/.test(c) && /[{,]\s*"?(type|data|datasets|labels)"?\s*:/.test(c)) return true;
+    c = c.replace(/^```(?:json|chart|javascript|js)?\s*/i, '').replace(/```\s*$/,'').trim();
+    // Terima juga partial yang mulai dengan "data": atau data:
+    if (c[0] !== '{' && c[0] !== '[') {
+        if (/^["']?(?:type|data|datasets|labels|options)["']?\s*:/.test(c)) {
+            c = '{' + c;
+        } else {
+            return false;
+        }
+    }
+    // sinyal Chart.js yang umum (longgar tapi aman)
+    if (/\b(type|data|datasets|labels)\b/.test(c) && /[{,]\s*"?(type|data|datasets|labels|options)"?\s*:/.test(c)) return true;
     if (/"type"\s*:\s*"(bar|line|pie|doughnut|radar|polarArea|bubble|scatter)"/.test(c)) return true;
+    if (/\bdatasets\s*:\s*\[/.test(c) || /"datasets"\s*:\s*\[/.test(c)) return true;
     return false;
 }
 function looksLikeThreeCode(c) {
@@ -4632,10 +4665,9 @@ function blockHTML(b) {
         case 'code': {
             const lang0 = String(b.lang || '').toLowerCase().trim();
             // Chart: fence chart, atau json yang terlihat seperti config Chart.js
-            if (lang0 === 'chart' || (lang0 === 'json' && looksLikeChartConfig(b.code))) {
-                return b.done ? chartHtml(b.code) : '<div class="ui-pending"></div>';
-            }
-            if (CHART_FENCE_ALIAS.test(lang0)) {
+            // Chart: fence chart/json, alias, ATAU javascript/js yang isinya config Chart (bukan kode eksekusi)
+            if (lang0 === 'chart' || lang0 === 'json' || CHART_FENCE_ALIAS.test(lang0) ||
+                ((lang0 === 'javascript' || lang0 === 'js' || lang0 === '') && looksLikeChartConfig(b.code))) {
                 return b.done ? chartHtml(repairChartSrc(b.code)) : '<div class="ui-pending"></div>';
             }
             // 3D: scene3d resmi atau kode/HTML yang terdeteksi Three.js
@@ -5507,6 +5539,8 @@ function buildChart(el) {
             el.innerHTML = '<p class="err">grafik: konfigurasi kosong</p>';
             return;
         }
+        // Selalu lewat repair dulu (partial "data":{...}, trailing }], missing type, dll)
+        raw = repairChartSrc(raw);
         let cfg = looseJsonParse(raw);
         if (Array.isArray(cfg)) {
             cfg = { type: 'bar', data: { labels: cfg.map((_, i) => String(i + 1)), datasets: [{ label: 'data', data: cfg }] } };
@@ -5514,9 +5548,17 @@ function buildChart(el) {
         if (!cfg || typeof cfg !== 'object') throw new Error('bukan objek');
         // Bentuk longgar: {labels, datasets} tanpa wrapper data
         if (!cfg.type && !cfg.data && (cfg.labels || cfg.datasets)) {
-            cfg = { type: 'bar', data: { labels: cfg.labels || [], datasets: cfg.datasets || [] } };
+            const ds = cfg.datasets || [];
+            const first = ds[0] && Array.isArray(ds[0].data) ? ds[0].data : null;
+            const isGauge = first && first.length === 2 && first.every(function (n) { return typeof n === 'number'; });
+            cfg = { type: isGauge ? 'doughnut' : 'bar', data: { labels: cfg.labels || [], datasets: ds } };
         }
-        if (!cfg.type && cfg.data) cfg.type = 'bar';
+        if (!cfg.type && cfg.data) {
+            const ds = (cfg.data.datasets) || [];
+            const first = ds[0] && Array.isArray(ds[0].data) ? ds[0].data : null;
+            const isGauge = first && first.length === 2 && first.every(function (n) { return typeof n === 'number'; });
+            cfg.type = isGauge ? 'doughnut' : 'bar';
+        }
         // --- Robust type sanitization (Chart.js 4 only knows these controllers) ---
         var VALID_TYPES = { bar:1, line:1, pie:1, doughnut:1, radar:1, polarArea:1, bubble:1, scatter:1 };
         var t = String(cfg.type || 'bar').toLowerCase().trim();
@@ -19364,7 +19406,10 @@ html body #instruments {
     DRIFT: 'termuat; spek API berubah sejak baseline (mis. patch runtime)',
     LOADED: 'termuat; bukti artefak belum cukup (checksum SKIP / baseline belum ada)',
     OK: 'termuat, checksum cocok, spek API stabil',
-    unknown: 'modul tidak mendeklarasikan versi — keputusan integritas tetap dari fingerprint'
+    unknown: 'modul tidak mendeklarasikan versi — keputusan integritas tetap dari fingerprint',
+    LIVE: 'kapabilitas nyata di klien (bukan mock); siap dipakai sesuai lingkupnya',
+    PARTIAL: 'berfungsi sebagian; belum memenuhi kriteria produksi penuh',
+    FRAMEWORK: 'kerangka/API ada; belum ada jalur data hidup / uji keamanan / node nyata'
   };
 
   /* ───────────── SHA-256 internal (sinkron) ───────────── */
@@ -19437,16 +19482,16 @@ html body #instruments {
 
   /* ───────────── Registri modul ───────────── */
   var REG = [
-    { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core', sibling: 'nexus_truth_core_v13_7_2.js',        req: true,  test: 'truth' },
-    { id: 'NexusOmniGuard',  g: 'NexusOmniGuard',  script: 'nx-omni-sentinel',        req: true },
-    { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3', sibling: 'nexus_omni-core_v3.js',         req: false },
-    { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: true,  test: 'eadi' },
-    { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: true,  test: 'lbc' },
-    { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module', sibling: 'NexusAku.js',           req: true,  test: 'aku' },
-    { id: 'NexusPharma',     g: 'NexusPharma',     script: 'nxp-engine',              req: false, test: 'pharma' },
-    { id: 'NexusDeck',       g: 'NexusDeck',       script: 'nxd-js',                  req: false, children: ['NexusLBC', 'NexusEADI'] },
-    { id: 'NexusDeckAI',     g: 'NexusDeckAI',     script: 'nxd2-js',                 req: false },
-    { id: 'NexusArchitect',  g: 'NexusArchitect',  script: 'nx-architect-patch-374',  req: false }
+    { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core', sibling: 'nexus_truth_core_v13_7_2.js', req: true,  test: 'truth',  tier: 'LIVE',      note: 'SSRF guard + entity/quote verification aktif di klien' },
+    { id: 'NexusOmniGuard',  g: 'NexusOmniGuard',  script: 'nx-omni-sentinel',        req: true,               tier: 'PARTIAL',   note: 'pemindaian statis Aegis; belum pen-test / SOC-2 otomatis' },
+    { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3', sibling: 'nexus_omni-core_v3.js', req: false,              tier: 'LIVE',      note: 'deobfuscation + chain analysis murni klien' },
+    { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: true,  test: 'eadi',  tier: 'LIVE',      note: 'watermark DCT ratio + CRC framing penuh di klien' },
+    { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: true,  test: 'lbc',   tier: 'PARTIAL',   note: 'MPT+Schnorr BIP-340 di klien; TIDAK ada node jaringan yang dapat ditulis' },
+    { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module', sibling: 'NexusAku.js',           req: true,  test: 'aku',   tier: 'PARTIAL',   note: 'gerbang jati diri + HMAC; belum jalur identitas terdistribusi' },
+    { id: 'NexusPharma',     g: 'NexusPharma',     script: 'nxp-engine',              req: false, test: 'pharma', tier: 'PARTIAL',  note: 'mesin farmasi; integrasi data/prod bergantung host' },
+    { id: 'NexusDeck',       g: 'NexusDeck',       script: 'nxd-js',                  req: false, children: ['NexusLBC', 'NexusEADI'], tier: 'PARTIAL', note: 'deck mengorkestrasi LBC+EADI; kesiapan = min(anak)' },
+    { id: 'NexusDeckAI',     g: 'NexusDeckAI',     script: 'nxd2-js',                 req: false,               tier: 'PARTIAL',   note: 'lapisan AI deck; bergantung model/host' },
+    { id: 'NexusArchitect',  g: 'NexusArchitect',  script: 'nx-architect-patch-374',  req: false,               tier: 'FRAMEWORK', note: 'patch arsitektur; bukan runtime produksi mandiri' }
   ];
   var BY = {};
   REG.forEach(function (m) { BY[m.id] = m; });
@@ -19549,7 +19594,9 @@ html body #instruments {
       artifact: { kind: m.script ? 'script-text' : (m.file ? 'file' : 'none'), ref: m.script || m.file || null },
       checksum: { actual: null, expected: null, via: null, status: 'SKIP', reason: '' },
       fingerprint: { current: null, baseline: null, count: 0, status: 'PENDING' },
-      status: 'MISSING'
+      status: 'MISSING',
+      tier: m.tier || 'FRAMEWORK',
+      tierNote: m.note || ''
     };
     if (!loaded) return r;
     r.version = verOf(obj);
@@ -19829,7 +19876,8 @@ html body #instruments {
     return {
       id: id, version: r.version || b.version || 'unknown',
       checksum: r.checksum.actual, fingerprint: r.fingerprint.current,
-      source: r.artifact.kind, status: r.status, checksumStatus: r.checksum.status
+      source: r.artifact.kind, status: r.status, checksumStatus: r.checksum.status,
+      tier: r.tier || 'FRAMEWORK', tierNote: r.tierNote || ''
     };
   }
   function getMeta(id) {
@@ -19906,19 +19954,37 @@ html body #instruments {
     var unproven = req.filter(function (r) { return r.loaded && r.status !== 'OK'; });
     unproven.forEach(function (r) { reasons.push(r.id + ' belum terbukti (' + (r.checksum.reason || r.fingerprint.status) + ')'); });
     var level = bad.length ? 'COMPROMISED' : (!baselineDone ? 'UNVERIFIED' : (unproven.length ? 'PARTIAL' : 'VERIFIED'));
+    var live = rows.filter(function (r) { return r.loaded && r.tier === 'LIVE'; });
+    var partial = rows.filter(function (r) { return r.loaded && r.tier === 'PARTIAL'; });
+    var framework = rows.filter(function (r) { return r.loaded && r.tier === 'FRAMEWORK'; });
+    var readinessScore = 0, readinessN = 0;
+    rows.forEach(function (r) {
+      if (!r.loaded) return;
+      readinessN++;
+      readinessScore += r.tier === 'LIVE' ? 1 : (r.tier === 'PARTIAL' ? 0.45 : 0.1);
+    });
+    var readinessPct = readinessN ? Math.round((readinessScore / readinessN) * 100) : 0;
     return {
       integrity: level, ok: level === 'VERIFIED', reasons: reasons,
       evidence: { modules: rows.length, required: req.length, withChecksumOK: rows.filter(function (r) { return r.checksum.status === 'OK'; }).length,
                   fingerprintStable: rows.filter(function (r) { return r.fingerprint.status === 'STABLE'; }).length, baseline: baselineDone, hash: hashImpl(),
                   manifest: !!manifest() },
-      note: 'Keputusan hanya dari fingerprint/checksum. Bukan dari teks screenshot, satu self-test lulus, atau string versi identik. Integrity-only; bukan proof of origin tanpa tanda tangan + kunci pin.'
+      readiness: {
+        pct: readinessPct,
+        live: live.map(function (r) { return r.id; }),
+        partial: partial.map(function (r) { return r.id; }),
+        framework: framework.map(function (r) { return r.id; }),
+        note: 'LIVE=kapabilitas nyata klien; PARTIAL=celah produksi (tanpa node/pen-test/data hidup); FRAMEWORK=kerangka saja. Jangan samakan self-test lulus dengan siap OTF/produksi.'
+      },
+      note: 'Integritas = fingerprint/checksum saja. Kesiapan operasional = field readiness (hasil audit dewan). Bukan proof of origin tanpa tanda tangan + kunci pin.'
     };
   }
   function report(opts) {
     opts = opts || {};
     var rows = REG.map(function (m) {
       var r = check(m.id, { fresh: !!opts.fresh }), t = testCache[m.id];
-      return { id: r.id, version: r.version || '—', status: r.status, fingerprint: r.fingerprint.current ? r.fingerprint.current.slice(0, 12) : '—',
+      return { id: r.id, version: r.version || '—', status: r.status, tier: r.tier || 'FRAMEWORK', tierNote: r.tierNote || '',
+        fingerprint: r.fingerprint.current ? r.fingerprint.current.slice(0, 12) : '—',
         checksum: r.checksum.actual ? r.checksum.actual.slice(0, 12) : '—', checksumStatus: r.checksum.status, via: r.checksum.via || '—', api: r.fingerprint.status,
         getMeta: r.hasGetMeta ? 'ya' : (r.loaded ? 'tidak' : '—'), selfTest: t ? ((t.ok ? 'PASS ' : 'FAIL ') + t.detail) : (m.test ? 'belum dijalankan' : 'n/a') };
     });

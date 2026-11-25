@@ -47,7 +47,11 @@
     DRIFT: 'termuat; spek API berubah sejak baseline (mis. patch runtime)',
     LOADED: 'termuat; bukti artefak belum cukup (checksum SKIP / baseline belum ada)',
     OK: 'termuat, checksum cocok, spek API stabil',
-    unknown: 'modul tidak mendeklarasikan versi — keputusan integritas tetap dari fingerprint'
+    unknown: 'modul tidak mendeklarasikan versi — keputusan integritas tetap dari fingerprint',
+    /* Tier kesiapan operasional (bukan integritas load) — hasil audit dewan */
+    LIVE: 'kapabilitas nyata di klien (bukan mock); siap dipakai sesuai lingkupnya',
+    PARTIAL: 'berfungsi sebagian; belum memenuhi kriteria produksi penuh',
+    FRAMEWORK: 'kerangka/API ada; belum ada jalur data hidup / uji keamanan / node nyata'
   };
 
   /* ───────────── SHA-256 internal (sinkron) ───────────── */
@@ -119,17 +123,21 @@
   }
 
   /* ───────────── Registri modul ───────────── */
+  /* tier: LIVE | PARTIAL | FRAMEWORK — kejujuran kesiapan operasional (audit dewan).
+     LIVE      = kapabilitas nyata di klien sesuai lingkup modul
+     PARTIAL   = jalan, tetapi celah produksi (tanpa node/pen-test/data hidup)
+     FRAMEWORK = kerangka/API; belum ada operasi nyata */
   var REG = [
-    { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core', sibling: 'nexus_truth_core_v13_7_2.js',        req: true,  test: 'truth' },
-    { id: 'NexusOmniGuard',  g: 'NexusOmniGuard',  script: 'nx-omni-sentinel',        req: true },
-    { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3', sibling: 'nexus_omni-core_v3.js',         req: false },
-    { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: true,  test: 'eadi' },
-    { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: true,  test: 'lbc' },
-    { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module', sibling: 'NexusAku.js',           req: true,  test: 'aku' },
-    { id: 'NexusPharma',     g: 'NexusPharma',     script: 'nxp-engine',              req: false, test: 'pharma' },
-    { id: 'NexusDeck',       g: 'NexusDeck',       script: 'nxd-js',                  req: false, children: ['NexusLBC', 'NexusEADI'] },
-    { id: 'NexusDeckAI',     g: 'NexusDeckAI',     script: 'nxd2-js',                 req: false },
-    { id: 'NexusArchitect',  g: 'NexusArchitect',  script: 'nx-architect-patch-374',  req: false }
+    { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core', sibling: 'nexus_truth_core_v13_7_2.js', req: true,  test: 'truth',  tier: 'LIVE',      note: 'SSRF guard + entity/quote verification aktif di klien' },
+    { id: 'NexusOmniGuard',  g: 'NexusOmniGuard',  script: 'nx-omni-sentinel',        req: true,               tier: 'PARTIAL',   note: 'pemindaian statis Aegis; belum pen-test / SOC-2 otomatis' },
+    { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3', sibling: 'nexus_omni-core_v3.js', req: false,              tier: 'LIVE',      note: 'deobfuscation + chain analysis murni klien' },
+    { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: true,  test: 'eadi',  tier: 'LIVE',      note: 'watermark DCT ratio + CRC framing penuh di klien' },
+    { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: true,  test: 'lbc',   tier: 'PARTIAL',   note: 'MPT+Schnorr BIP-340 di klien; TIDAK ada node jaringan yang dapat ditulis' },
+    { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module', sibling: 'NexusAku.js',           req: true,  test: 'aku',   tier: 'PARTIAL',   note: 'gerbang jati diri + HMAC; belum jalur identitas terdistribusi' },
+    { id: 'NexusPharma',     g: 'NexusPharma',     script: 'nxp-engine',              req: false, test: 'pharma', tier: 'PARTIAL',  note: 'mesin farmasi; integrasi data/prod bergantung host' },
+    { id: 'NexusDeck',       g: 'NexusDeck',       script: 'nxd-js',                  req: false, children: ['NexusLBC', 'NexusEADI'], tier: 'PARTIAL', note: 'deck mengorkestrasi LBC+EADI; kesiapan = min(anak)' },
+    { id: 'NexusDeckAI',     g: 'NexusDeckAI',     script: 'nxd2-js',                 req: false,               tier: 'PARTIAL',   note: 'lapisan AI deck; bergantung model/host' },
+    { id: 'NexusArchitect',  g: 'NexusArchitect',  script: 'nx-architect-patch-374',  req: false,               tier: 'FRAMEWORK', note: 'patch arsitektur; bukan runtime produksi mandiri' }
   ];
   var BY = {};
   REG.forEach(function (m) { BY[m.id] = m; });
@@ -232,7 +240,9 @@
       artifact: { kind: m.script ? 'script-text' : (m.file ? 'file' : 'none'), ref: m.script || m.file || null },
       checksum: { actual: null, expected: null, via: null, status: 'SKIP', reason: '' },
       fingerprint: { current: null, baseline: null, count: 0, status: 'PENDING' },
-      status: 'MISSING'
+      status: 'MISSING',
+      tier: m.tier || 'FRAMEWORK',
+      tierNote: m.note || ''
     };
     if (!loaded) return r;
     r.version = verOf(obj);
@@ -512,7 +522,8 @@
     return {
       id: id, version: r.version || b.version || 'unknown',
       checksum: r.checksum.actual, fingerprint: r.fingerprint.current,
-      source: r.artifact.kind, status: r.status, checksumStatus: r.checksum.status
+      source: r.artifact.kind, status: r.status, checksumStatus: r.checksum.status,
+      tier: r.tier || 'FRAMEWORK', tierNote: r.tierNote || ''
     };
   }
   function getMeta(id) {
@@ -589,19 +600,38 @@
     var unproven = req.filter(function (r) { return r.loaded && r.status !== 'OK'; });
     unproven.forEach(function (r) { reasons.push(r.id + ' belum terbukti (' + (r.checksum.reason || r.fingerprint.status) + ')'); });
     var level = bad.length ? 'COMPROMISED' : (!baselineDone ? 'UNVERIFIED' : (unproven.length ? 'PARTIAL' : 'VERIFIED'));
+    var live = rows.filter(function (r) { return r.loaded && r.tier === 'LIVE'; });
+    var partial = rows.filter(function (r) { return r.loaded && r.tier === 'PARTIAL'; });
+    var framework = rows.filter(function (r) { return r.loaded && r.tier === 'FRAMEWORK'; });
+    /* Skor kesiapan operasional kasar: LIVE=1, PARTIAL=0.45, FRAMEWORK=0.1 (selaras audit dewan ~22%) */
+    var readinessScore = 0, readinessN = 0;
+    rows.forEach(function (r) {
+      if (!r.loaded) return;
+      readinessN++;
+      readinessScore += r.tier === 'LIVE' ? 1 : (r.tier === 'PARTIAL' ? 0.45 : 0.1);
+    });
+    var readinessPct = readinessN ? Math.round((readinessScore / readinessN) * 100) : 0;
     return {
       integrity: level, ok: level === 'VERIFIED', reasons: reasons,
       evidence: { modules: rows.length, required: req.length, withChecksumOK: rows.filter(function (r) { return r.checksum.status === 'OK'; }).length,
                   fingerprintStable: rows.filter(function (r) { return r.fingerprint.status === 'STABLE'; }).length, baseline: baselineDone, hash: hashImpl(),
                   manifest: !!manifest() },
-      note: 'Keputusan hanya dari fingerprint/checksum. Bukan dari teks screenshot, satu self-test lulus, atau string versi identik. Integrity-only; bukan proof of origin tanpa tanda tangan + kunci pin.'
+      readiness: {
+        pct: readinessPct,
+        live: live.map(function (r) { return r.id; }),
+        partial: partial.map(function (r) { return r.id; }),
+        framework: framework.map(function (r) { return r.id; }),
+        note: 'LIVE=kapabilitas nyata klien; PARTIAL=celah produksi (tanpa node/pen-test/data hidup); FRAMEWORK=kerangka saja. Jangan samakan self-test lulus dengan siap OTF/produksi.'
+      },
+      note: 'Integritas = fingerprint/checksum saja. Kesiapan operasional = field readiness (hasil audit dewan). Bukan proof of origin tanpa tanda tangan + kunci pin.'
     };
   }
   function report(opts) {
     opts = opts || {};
     var rows = REG.map(function (m) {
       var r = check(m.id, { fresh: !!opts.fresh }), t = testCache[m.id];
-      return { id: r.id, version: r.version || '—', status: r.status, fingerprint: r.fingerprint.current ? r.fingerprint.current.slice(0, 12) : '—',
+      return { id: r.id, version: r.version || '—', status: r.status, tier: r.tier || 'FRAMEWORK', tierNote: r.tierNote || '',
+        fingerprint: r.fingerprint.current ? r.fingerprint.current.slice(0, 12) : '—',
         checksum: r.checksum.actual ? r.checksum.actual.slice(0, 12) : '—', checksumStatus: r.checksum.status, via: r.checksum.via || '—', api: r.fingerprint.status,
         getMeta: r.hasGetMeta ? 'ya' : (r.loaded ? 'tidak' : '—'), selfTest: t ? ((t.ok ? 'PASS ' : 'FAIL ') + t.detail) : (m.test ? 'belum dijalankan' : 'n/a') };
     });
