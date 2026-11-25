@@ -4397,14 +4397,29 @@ function tokenize(text, final) {
             if (m) {
                 const kind = m[1], j = i + m[0].length;
                 if (kind === 'CHART') {
-                    if (text[j] === '|') {
-                        const b = text.indexOf('{', j);
-                        if (b < 0) return pend(i);
+                    // Terima [UI:CHART|{...}]  ATAU  [UI:CHART]{...}  ATAU  [UI:CHART] {...}
+                    let j2 = j;
+                    if (text[j2] === '|') j2++;
+                    while (j2 < n && (text[j2] === ' ' || text[j2] === '\n' || text[j2] === '\t')) j2++;
+                    const b = text[j2] === '{' ? j2 : text.indexOf('{', j2);
+                    if (b >= 0) {
                         const e = scanJson(text, b);
                         if (e < 0) return pend(i);
-                        let k = e; while (text[k] === ' ') k++;
+                        let k = e; while (k < n && (text[k] === ' ' || text[k] === '\n' || text[k] === '\t')) k++;
                         if (k >= n) return pend(i);
-                        if (text[k] === ']') { pushMd(i, true); out.push({ t: 'chart', cfg: text.slice(b, e), done: true }); i = from = k + 1; continue; }
+                        if (text[k] === ']') {
+                            pushMd(i, true);
+                            out.push({ t: 'chart', cfg: text.slice(b, e), done: true });
+                            i = from = k + 1;
+                            continue;
+                        }
+                        // Tanpa penutup ] — tetap ambil JSON jika lengkap (AI sering lupa ])
+                        if (e > b) {
+                            pushMd(i, true);
+                            out.push({ t: 'chart', cfg: text.slice(b, e), done: true });
+                            i = from = e;
+                            continue;
+                        }
                     }
                 } else if (text[j] === '|' || text[j] === ']') {
                     const h = text.indexOf(']', j);
@@ -4467,6 +4482,12 @@ function repairChartSrc(code) {
     let c = String(code == null ? '' : code);
     try {
         c = c.replace(/\r\n?/g, '\n').trim();
+        // Strip tag AI: [UI:CHART|{...}] / [UI:CHART]{...} / "[UI:CHART]{...
+        // Pola lengkap: optional quote + [UI:CHART + optional | + optional ] + whitespace
+        c = c.replace(/^["']?\s*\[?\s*UI:CHART\s*\|?\s*\]?\s*/i, '');
+        // Jika masih ada sampah sebelum '{' (sisa tag/quote), potong ke brace pertama
+        const brace0 = c.indexOf('{');
+        if (brace0 > 0) c = c.slice(brace0);
         c = c.replace(/^`{3,}[^\n]*\n/, '');                         // sisa pembuka fence
         // sisa penutup fence / "|" liar di ujung — tanpa regex berulang (linear)
         const junk = ch => ch === ' ' || ch === '\t' || ch === '\n' || ch === '|';
@@ -4494,8 +4515,10 @@ function repairChartSrc(code) {
         }
         while (st.length) c += (st.pop() === '{' ? '}' : ']');
         // Buang penutup berlebih di ujung (AI sering menambah }] ekstra)
-        while ((c.match(/\{/g) || []).length < (c.match(/\}/g) || []).length) c = c.replace(/\}\s*$/, '');
-        while ((c.match(/\[/g) || []).length < (c.match(/\]/g) || []).length) c = c.replace(/\]\s*$/, '');
+        let _g = 24;
+        while (_g-- && (c.match(/\{/g) || []).length < (c.match(/\}/g) || []).length) c = c.replace(/\}\s*$/, '');
+        _g = 24;
+        while (_g-- && (c.match(/\[/g) || []).length < (c.match(/\]/g) || []).length) c = c.replace(/\]\s*$/, '');
         // Normalisasi ke JSON valid + auto-type jika hilang
         try {
             const normalized = c.replace(/(['"])?([a-zA-Z0-9_]+)\1\s*:/g, '"$2":').replace(/'/g, '"');
@@ -4520,8 +4543,11 @@ function repairChartSrc(code) {
 function looksLikeChartConfig(c) {
     c = String(c || '').trim();
     if (!c || c.length < 10) return false;
-    // buang fence sisa bila ada
+    // buang fence + tag [UI:CHART]
     c = c.replace(/^```(?:json|chart|javascript|js)?\s*/i, '').replace(/```\s*$/,'').trim();
+    c = c.replace(/^["']?\s*\[?\s*UI:CHART\s*\|?\s*\]?\s*/i, '');
+    const brace = c.indexOf('{');
+    if (brace > 0) c = c.slice(brace);
     // Terima juga partial yang mulai dengan "data": atau data:
     if (c[0] !== '{' && c[0] !== '[') {
         if (/^["']?(?:type|data|datasets|labels|options)["']?\s*:/.test(c)) {
