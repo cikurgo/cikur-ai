@@ -120,12 +120,12 @@
 
   /* ───────────── Registri modul ───────────── */
   var REG = [
-    { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core',        req: true,  test: 'truth' },
+    { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core', sibling: 'nexus_truth_core_v13_7_2.js',        req: true,  test: 'truth' },
     { id: 'NexusOmniGuard',  g: 'NexusOmniGuard',  script: 'nx-omni-sentinel',        req: true },
-    { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3',         req: false },
+    { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3', sibling: 'nexus_omni-core_v3.js',         req: false },
     { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: true,  test: 'eadi' },
     { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: true,  test: 'lbc' },
-    { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module',           req: true,  test: 'aku' },
+    { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module', sibling: 'NexusAku.js',           req: true,  test: 'aku' },
     { id: 'NexusPharma',     g: 'NexusPharma',     script: 'nxp-engine',              req: false, test: 'pharma' },
     { id: 'NexusDeck',       g: 'NexusDeck',       script: 'nxd-js',                  req: false, children: ['NexusLBC', 'NexusEADI'] },
     { id: 'NexusDeckAI',     g: 'NexusDeckAI',     script: 'nxd2-js',                 req: false },
@@ -613,6 +613,36 @@
     return (opts.run ? runModuleTests() : Promise.resolve()).then(function () { return report(opts); });
   }
 
+
+  /* ───────────── Tautan ke file mandiri (informasi; tidak memengaruhi status/verdict) ─────────────
+     Membandingkan kode inline di HTML dengan file .js mandiri di folder yang sama. Hanya berjalan bila dipanggil, hanya lewat http/https. */
+  function norm(t) { return String(t == null ? '' : t).replace(/\r\n?/g, '\n').trim(); }
+  function links() {
+    var rows = REG.filter(function (m) { return m.sibling; });
+    var proto = String(root.location && root.location.protocol || '');
+    function row(m, st, why, extra) { var o = { id: m.id, file: m.sibling, status: st, detail: why || '' }; if (extra) for (var k in extra) o[k] = extra[k]; return o; }
+    if (typeof fetch !== 'function' || typeof document === 'undefined') return Promise.resolve(rows.map(function (m) { return row(m, 'SKIP', 'tanpa DOM/fetch'); }));
+    if (proto !== 'http:' && proto !== 'https:') return Promise.resolve(rows.map(function (m) { return row(m, 'SKIP', 'protokol ' + proto + ' — file mandiri tak dapat dibaca (butuh http/https)'); }));
+    return Promise.all(rows.map(function (m) {
+      var el = document.getElementById(m.script);
+      if (!el) return row(m, 'SKIP', 'tag inline tak ditemukan');
+      var url; try { url = new URL(m.sibling, root.location.href).href; } catch (e) { return row(m, 'SKIP', 'URL tak valid'); }
+      return fetch(url, { cache: 'no-store', credentials: 'omit' }).then(function (r) {
+        if (r.status === 404) return row(m, 'ABSEN', 'file tidak ada di folder yang sama');
+        if (!r.ok) return row(m, 'SKIP', 'HTTP ' + r.status);
+        return r.text().then(function (txt) {
+          var a = norm(el.textContent), b = norm(txt);
+          var same = a === b, inc = !same && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0);
+          return row(m, same ? 'SINKRON' : (inc ? 'SINKRON' : 'BEDA'), same ? 'identik' : (inc ? 'salah satu memuat yang lain (pembungkus berbeda)' : 'isi berbeda'),
+            { inlineSha: sha256Hex(a).slice(0, 12), fileSha: sha256Hex(b).slice(0, 12) });
+        });
+      }).catch(function (e) { return row(m, 'SKIP', 'fetch gagal: ' + String(e && e.message || e).slice(0, 60)); });
+    })).then(function (out) {
+      try { if (typeof console !== 'undefined' && console.table) console.table(out); } catch (e) {}
+      return out;
+    });
+  }
+
   /* ───────────── selfTest sinkron (E1) ───────────── */
   function selfTest(opts) {
     opts = opts || {};
@@ -695,7 +725,7 @@
     version: VERSION, LEGEND: LEGEND,
     getMeta: getMeta, describe: describe,
     check: check, report: report, reportAsync: reportAsync, runModuleTests: runModuleTests,
-    verdict: verdict, selfTest: selfTest,
+    verdict: verdict, selfTest: selfTest, links: links,
     ensureStable: ensureStable, guard: guard, configure: configure,
     buildFingerprint: buildFingerprint, buildInfo: buildInfo,
     sha256Hex: sha256Hex, hashImpl: hashImpl,

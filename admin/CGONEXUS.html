@@ -4450,10 +4450,9 @@ function looksLikeChartConfig(c) {
     // buang fence sisa bila ada
     c = c.replace(/^```(?:json|chart)?\s*/i, '').replace(/```\s*$/,'').trim();
     if (c[0] !== '{' && c[0] !== '[') return false;
-    // sinyal Chart.js yang umum + gauge (disimulasikan via doughnut)
-    if (/\b(type|data|datasets|labels|value|needle|gauge)\b/.test(c) && /[{,]\s*"?(type|data|datasets|labels|value)"?\s*:/.test(c)) return true;
-    if (/"type"\s*:\s*"(bar|line|pie|doughnut|radar|polarArea|bubble|scatter|gauge)"/.test(c)) return true;
-    if (/\bgauge\b/i.test(c) && /\b(value|data|max|min)\b/i.test(c)) return true;
+    // sinyal Chart.js yang umum
+    if (/\b(type|data|datasets|labels)\b/.test(c) && /[{,]\s*"?(type|data|datasets|labels)"?\s*:/.test(c)) return true;
+    if (/"type"\s*:\s*"(bar|line|pie|doughnut|radar|polarArea|bubble|scatter)"/.test(c)) return true;
     return false;
 }
 function looksLikeThreeCode(c) {
@@ -4610,22 +4609,8 @@ function blockHTML(b) {
                 try { return window.__nxrFence(b.code); } catch (e) {}
             }
             // Full HTML → langsung tayang di sandbox (bukan hanya tombol EXEC)
-            // Jika isi HTML sebenarnya config Chart / gauge → prioritaskan jalur chart (hindari kotak putih HTML LIVE)
             if (lang0 === 'html' || lang0 === 'htm') {
                 if (!b.done) return '<div class="ui-pending"></div>';
-                try {
-                    var hc = String(b.code || '');
-                    // ekstrak JSON chart dari <script> atau body
-                    var jm = hc.match(/\{[\s\S]*"(?:type|data|datasets)"[\s\S]*\}/);
-                    if (jm && looksLikeChartConfig(jm[0])) {
-                        return chartHtml(jm[0]);
-                    }
-                    if (/\bnew\s+Chart\s*\(/.test(hc) || /\btype\s*:\s*['"]gauge['"]/i.test(hc)) {
-                        // biarkan HTML LIVE tapi banyak kasus gauge murni JSON lebih baik lewat chart
-                        var pure = hc.replace(/<[^>]+>/g, ' ').trim();
-                        if (looksLikeChartConfig(pure)) return chartHtml(pure);
-                    }
-                } catch (zh) {}
                 return htmlPreviewHtml(b.code);
             }
             return codeHtml(b.lang, b.code);
@@ -5482,13 +5467,9 @@ function buildChart(el) {
         // --- Robust type sanitization (Chart.js 4 only knows these controllers) ---
         var VALID_TYPES = { bar:1, line:1, pie:1, doughnut:1, radar:1, polarArea:1, bubble:1, scatter:1 };
         var t = String(cfg.type || 'bar').toLowerCase().trim();
-        var wantGauge = (t === 'gauge' || t === 'speedometer' || t === 'meter' || !!cfg.gauge);
         // AI often invents flowchart/pipeline/diagram/flow for "Diagram Alir"
         if (!VALID_TYPES[t]) {
-            if (wantGauge || /gauge|speedo|meter/.test(t)) {
-                t = 'doughnut';
-                wantGauge = true;
-            } else if (/pipeline|flow|diagram|alir|sankey|gantt|tree|org|process|step|funnel/.test(t)) {
+            if (/pipeline|flow|diagram|alir|sankey|gantt|tree|org|process|step|funnel/.test(t)) {
                 t = 'bar';
             } else if (/area|areaChart|filled/.test(t)) {
                 t = 'line';
@@ -5502,74 +5483,6 @@ function buildChart(el) {
             cfg.type = t;
         } else {
             cfg.type = t;
-        }
-        // --- Gauge → semi-circle doughnut (native Chart.js, no plugin) ---
-        if (wantGauge) {
-            cfg.type = 'doughnut';
-            var gVal = null, gMax = 100;
-            try {
-                if (typeof cfg.value === 'number') gVal = cfg.value;
-                else if (cfg.data && typeof cfg.data.value === 'number') gVal = cfg.data.value;
-                else if (cfg.data && Array.isArray(cfg.data.datasets) && cfg.data.datasets[0] && Array.isArray(cfg.data.datasets[0].data) && cfg.data.datasets[0].data.length) {
-                    gVal = Number(cfg.data.datasets[0].data[0]);
-                }
-                if (typeof cfg.max === 'number') gMax = cfg.max;
-                else if (cfg.data && typeof cfg.data.max === 'number') gMax = cfg.data.max;
-            } catch (zg) {}
-            if (!Number.isFinite(gVal)) gVal = 0;
-            if (!Number.isFinite(gMax) || gMax <= 0) gMax = 100;
-            gVal = Math.max(0, Math.min(gMax, gVal));
-            var rest = Math.max(0, gMax - gVal);
-            var col = (cfg.color || cfg.backgroundColor || '#38bdf8');
-            cfg.data = {
-                labels: [String(cfg.label || 'Nilai'), 'Sisa'],
-                datasets: [{
-                    data: [gVal, rest],
-                    backgroundColor: [col, 'rgba(148,163,184,0.12)'],
-                    borderWidth: 0,
-                    hoverOffset: 2
-                }]
-            };
-            cfg.options = Object.assign({}, cfg.options || {}, {
-                responsive: true,
-                maintainAspectRatio: false,
-                rotation: -90,
-                circumference: 180,
-                cutout: '72%',
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function (ctx) {
-                                if (ctx.dataIndex === 0) return (cfg.label || 'Nilai') + ': ' + gVal + (cfg.unit ? ' ' + cfg.unit : '');
-                                return '';
-                            }
-                        }
-                    }
-                }
-            });
-            // Center text via afterDraw plugin (inline, no external dependency)
-            cfg.plugins = [{
-                id: 'nxGaugeCenter',
-                afterDraw: function (chart) {
-                    try {
-                        var meta = chart.getDatasetMeta(0);
-                        if (!meta || !meta.data || !meta.data[0]) return;
-                        var cx = meta.data[0].x, cy = meta.data[0].y;
-                        var ctx2 = chart.ctx;
-                        ctx2.save();
-                        ctx2.textAlign = 'center';
-                        ctx2.textBaseline = 'middle';
-                        ctx2.fillStyle = '#e2e8f0';
-                        ctx2.font = '600 22px system-ui,sans-serif';
-                        ctx2.fillText(String(Math.round(gVal * 10) / 10) + (cfg.unit === '%' || !cfg.unit ? '%' : ''), cx, cy - 6);
-                        ctx2.fillStyle = '#94a3b8';
-                        ctx2.font = '400 11px system-ui,sans-serif';
-                        ctx2.fillText(String(cfg.label || 'real'), cx, cy + 16);
-                        ctx2.restore();
-                    } catch (ze) {}
-                }
-            }];
         }
         // Strip plugins / controllers that would require extra registration and break render
         if (cfg.plugins && typeof cfg.plugins === 'object') {
@@ -17939,8 +17852,8 @@ html body #nx9-panel{z-index:50}
     var D = !!(window.NexusTruth);
     var E = !!(window.NexusAku || window.NexusAkuSentinel);
     var F = !!(window.Nexus);
-    /* Health: main surface does not require EADI/LBC (optional Deck vaults). Soft status only. */
-    var core = true;
+    /* Health = A && B  (core vault pair)  + soft reports */
+    var core = A && B;
     var report = {
       core: core,
       eadi: A,
@@ -17949,16 +17862,15 @@ html body #nx9-panel{z-index:50}
       truth: D,
       aku: E,
       nexus: F,
-      vaultsOk: !!(A && B),
       version: SYS_VERSION,
       signedSha: SIGNED_COMMIT_SHA,
       ts: Date.now()
     };
-    report.ok = core;
+    report.ok = core; /* primary contract: Health = A && B */
     try {
       window.__nxModuleHealth = report;
-      if (!A || !B) log('checkModuleHealth: OK (vaults optional — SuperEADI/SuperLBC not loaded)', report);
-      else log('checkModuleHealth: OK (full vaults)', report);
+      if (!core) warn('checkModuleHealth: core FAIL (EADI && LBC required)', report);
+      else log('checkModuleHealth: OK', report);
     } catch (e) {}
     return report;
   }
@@ -18607,27 +18519,83 @@ html body #nx9-panel{z-index:50}
   var pendingInject = false;
 
   function runFaultOnce() {
-    /* SAFE MODE: dry-run only — prevents stack storms; zero regression on visual/chart paths. */
+    /* Pause during stack-storm quench window */
     try {
       if (typeof window.__nxStormActive === 'function' && window.__nxStormActive()) return;
     } catch (e) {}
     cycleCount++;
+    /* Token bucket gate */
     if (!tokenBucketTake(1)) {
       hazardStats.deferred++;
+      var wait = tokenBucketWaitMs(1);
+      log('tokenBucket throttle — defer', wait + 'ms');
+      if (!pendingInject) {
+        pendingInject = true;
+        setTimeout(function () {
+          pendingInject = false;
+          runFaultOnce();
+        }, Math.max(1, wait));
+      }
       return;
     }
+
+    var kinds = ['POST', 'GET', 'unauthorized', 'timeout'];
+    var kind = kinds[(Math.random() * kinds.length) | 0];
     hazardStats.total++;
-    var kind = 'dry-run';
-    pushTrace({ kind: kind, ts: Date.now(), stack: '', cycle: cycleCount });
+    if (kind === 'POST') hazardStats.post++;
+    else if (kind === 'GET') hazardStats.get++;
+    else if (kind === 'unauthorized') hazardStats.unauth++;
+    else hazardStats.timeout++;
+
+    var stackSnippet = '';
+    try {
+      stackSnippet = (new Error('eadi-fault-' + kind)).stack || '';
+      stackSnippet = String(stackSnippet).slice(0, 400);
+    } catch (e) {}
+
+    pushTrace({
+      kind: kind,
+      ts: Date.now(),
+      stack: stackSnippet,
+      cycle: cycleCount
+    });
+
+    try {
+      var api = window.API_DEP_EADI || window.NexusEADI;
+      if (api) {
+        if (kind === 'POST' || kind === 'GET') {
+          try {
+            if (typeof api.embed === 'function') api.embed(null, '\x00malformed-' + kind, { delta: -1 });
+            else if (typeof api.embedText === 'function') api.embedText(null, '', { key: null });
+          } catch (e) {}
+        } else if (kind === 'unauthorized') {
+          try {
+            if (typeof api.extract === 'function') api.extract(undefined, { key: '__no_auth__' });
+            else if (typeof api.extractText === 'function') api.extractText(undefined, { key: '' });
+          } catch (e) {}
+        } else {
+          try {
+            if (typeof api.capacity === 'function') api.capacity({ width: 0, height: 0 }, null);
+          } catch (e) {}
+        }
+      }
+    } catch (e) {
+      warn('fault body', e && e.message);
+    }
+
     leakCount++;
-    try { window.__nexusLeakCount = leakCount; } catch (e) {}
-    try { persistCounter(); } catch (e) {}
-    try { persistEvent('fault', { kind: kind, cycle: cycleCount }); } catch (e) {}
+    window.__nexusLeakCount = leakCount;
+    persistCounter();
+    persistEvent('fault', { kind: kind, cycle: cycleCount });
+
+    /* Every N cycles: clear fixed-size set → force GC path + log */
     if (cycleCount % CLEAR_EVERY_N === 0) {
       clearTraceSet('every_' + CLEAR_EVERY_N + '_cycles');
       hazardStats.cleared++;
     }
-    log('hazard faultInject dry-run (safe)', 'count=' + leakCount, 'traces=' + traceCount);
+
+    log('hazard faultInject', kind, 'count=' + leakCount, 'traces=' + traceCount,
+        'tokens≈' + Math.round(tbTokens));
   }
 
   function startHazardLoop() {
@@ -19131,9 +19099,7 @@ html body #instruments {
         window.NexusHazardEADI.clearTraces();
       }
     } catch (e) {}
-    if (stormCount <= 1) {
-      try { console.warn(TAG, 'stack storm quenched #' + stormCount + ' — injectors paused 15s'); } catch (e) {}
-    }
+    try { console.warn(TAG, 'stack storm quenched #' + stormCount + ' — injectors paused 15s'); } catch (e) {}
   }
 
   /* Patch hazard forceFault / run path to no-op during storm */
@@ -19187,7 +19153,7 @@ html body #instruments {
   'use strict';
   if (window.__nxForceLogUi374f) return;
   window.__nxForceLogUi374f = true;
-  var BUILD = '3.7.4.eng-G';
+  var BUILD = '3.7.4.eng-F';
 
   function forceLogPanel() {
     var el = document.getElementById('event-log');
@@ -19238,11 +19204,12 @@ html body #instruments {
 </script>
 
 
+
 <script type="application/json" id="nx-integrity-manifest">{
  "schema": 1,
  "algo": "SHA-256",
  "generated": "2026-11-25",
- "build": "1e167d50760296f7c58e05445c03852bd90dcdf1aa40b41f70463ba0c5e31b51",
+ "build": "d377f898ed852e0aefe8ecb8328279baa8c9414e31be20f3e9c91b22bbd5c205",
  "scripts": {
   "nexus-truth-core": "f8fa49e8ef847b465e509dbe2ae9fc9c8e93256e467d756b660a8584e1af26fe",
   "nx-omni-sentinel": "16aeaf188d0f5e0cbd69bf4223fa477b45e382b392e2d6b148c9e722b19e7919",
@@ -19251,7 +19218,7 @@ html body #instruments {
   "nxp-engine": "6c3dc7e36309bc02c9823a5d18bd7164f93d8071365d23145f1ccd1be76df35a",
   "nxd-js": "b8b9f764854faecd7a8e81a6bc7a2d370db347249f51c834fca9fbf4f9bc28cd",
   "nxd2-js": "430a1fc1f15982f79df4ec31d0e8167d4ebb39ac359945594ddb984ab1febb60",
-  "nx-architect-patch-374": "225a520105d04ddd1b6c4ee8b4de0b18a2c21d71200428e69ef0cc7d27154790"
+  "nx-architect-patch-374": "2a81477f147840a2898741074e70926929d68b388478de1767168b1bd736c266"
  },
  "files": {
   "SuperEADI.js": "589c71353bff702fde9e9b238090b9833ad8304ea4b182912f0665bc6e01f5d7",
@@ -19381,12 +19348,12 @@ html body #instruments {
 
   /* ───────────── Registri modul ───────────── */
   var REG = [
-    { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core',        req: true,  test: 'truth' },
+    { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core', sibling: 'nexus_truth_core_v13_7_2.js',        req: true,  test: 'truth' },
     { id: 'NexusOmniGuard',  g: 'NexusOmniGuard',  script: 'nx-omni-sentinel',        req: true },
-    { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3',         req: false },
-    { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: false, test: 'eadi' },
-    { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: false, test: 'lbc' },
-    { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module',           req: true,  test: 'aku' },
+    { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3', sibling: 'nexus_omni-core_v3.js',         req: false },
+    { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: true,  test: 'eadi' },
+    { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: true,  test: 'lbc' },
+    { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module', sibling: 'NexusAku.js',           req: true,  test: 'aku' },
     { id: 'NexusPharma',     g: 'NexusPharma',     script: 'nxp-engine',              req: false, test: 'pharma' },
     { id: 'NexusDeck',       g: 'NexusDeck',       script: 'nxd-js',                  req: false, children: ['NexusLBC', 'NexusEADI'] },
     { id: 'NexusDeckAI',     g: 'NexusDeckAI',     script: 'nxd2-js',                 req: false },
@@ -19874,6 +19841,36 @@ html body #instruments {
     return (opts.run ? runModuleTests() : Promise.resolve()).then(function () { return report(opts); });
   }
 
+
+  /* ───────────── Tautan ke file mandiri (informasi; tidak memengaruhi status/verdict) ─────────────
+     Membandingkan kode inline di HTML dengan file .js mandiri di folder yang sama. Hanya berjalan bila dipanggil, hanya lewat http/https. */
+  function norm(t) { return String(t == null ? '' : t).replace(/\r\n?/g, '\n').trim(); }
+  function links() {
+    var rows = REG.filter(function (m) { return m.sibling; });
+    var proto = String(root.location && root.location.protocol || '');
+    function row(m, st, why, extra) { var o = { id: m.id, file: m.sibling, status: st, detail: why || '' }; if (extra) for (var k in extra) o[k] = extra[k]; return o; }
+    if (typeof fetch !== 'function' || typeof document === 'undefined') return Promise.resolve(rows.map(function (m) { return row(m, 'SKIP', 'tanpa DOM/fetch'); }));
+    if (proto !== 'http:' && proto !== 'https:') return Promise.resolve(rows.map(function (m) { return row(m, 'SKIP', 'protokol ' + proto + ' — file mandiri tak dapat dibaca (butuh http/https)'); }));
+    return Promise.all(rows.map(function (m) {
+      var el = document.getElementById(m.script);
+      if (!el) return row(m, 'SKIP', 'tag inline tak ditemukan');
+      var url; try { url = new URL(m.sibling, root.location.href).href; } catch (e) { return row(m, 'SKIP', 'URL tak valid'); }
+      return fetch(url, { cache: 'no-store', credentials: 'omit' }).then(function (r) {
+        if (r.status === 404) return row(m, 'ABSEN', 'file tidak ada di folder yang sama');
+        if (!r.ok) return row(m, 'SKIP', 'HTTP ' + r.status);
+        return r.text().then(function (txt) {
+          var a = norm(el.textContent), b = norm(txt);
+          var same = a === b, inc = !same && (a.indexOf(b) >= 0 || b.indexOf(a) >= 0);
+          return row(m, same ? 'SINKRON' : (inc ? 'SINKRON' : 'BEDA'), same ? 'identik' : (inc ? 'salah satu memuat yang lain (pembungkus berbeda)' : 'isi berbeda'),
+            { inlineSha: sha256Hex(a).slice(0, 12), fileSha: sha256Hex(b).slice(0, 12) });
+        });
+      }).catch(function (e) { return row(m, 'SKIP', 'fetch gagal: ' + String(e && e.message || e).slice(0, 60)); });
+    })).then(function (out) {
+      try { if (typeof console !== 'undefined' && console.table) console.table(out); } catch (e) {}
+      return out;
+    });
+  }
+
   /* ───────────── selfTest sinkron (E1) ───────────── */
   function selfTest(opts) {
     opts = opts || {};
@@ -19956,7 +19953,7 @@ html body #instruments {
     version: VERSION, LEGEND: LEGEND,
     getMeta: getMeta, describe: describe,
     check: check, report: report, reportAsync: reportAsync, runModuleTests: runModuleTests,
-    verdict: verdict, selfTest: selfTest,
+    verdict: verdict, selfTest: selfTest, links: links,
     ensureStable: ensureStable, guard: guard, configure: configure,
     buildFingerprint: buildFingerprint, buildInfo: buildInfo,
     sha256Hex: sha256Hex, hashImpl: hashImpl,

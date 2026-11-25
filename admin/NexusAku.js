@@ -198,7 +198,7 @@
       re: /<script\b|javascript:\s*\S|\bon(?:error|load|click)\s*=/i,
       ket: 'penanda skrip aktif di luar blok kode' },
     { kode: 'KARAKTER-TERSEMBUNYI', t: 1,
-      re: /[​-‏‪-‮⁦-⁩]{3,}/,
+      re: /[\u200b-\u200f\u202a-\u202e\u2066-\u2069]{3,}/,
       ket: 'deret karakter nol-lebar/bidi (penyelundupan instruksi tersembunyi)' }
   ]);
   const AGEN_DIKENAL = ['nova', 'flux', 'cgo', 'lyric', 'cortex'];
