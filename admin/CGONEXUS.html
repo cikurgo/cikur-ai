@@ -40,7 +40,7 @@ return fetch(url,init).then(function(res){['arrayBuffer','blob','json','text','f
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';document.head.appendChild(s);})()"></script>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;800&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
 <script>
@@ -4918,24 +4918,26 @@ return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Conte
   var CDNS=[
     'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
     'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js',
-    'https://unpkg.com/three@0.128.0/build/three.min.js'
+    'https://unpkg.com/three@0.128.0/build/three.min.js',
+    'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/build/three.min.js'
   ];
   var i=0,done=false;
-  function fail(){if(done)return;done=true;send('error','Three.js gagal dimuat (cek koneksi/CDN)')}
+  function fail(){if(done)return;done=true;send('error','Three.js gagal dimuat (cek koneksi/CDN/ad-block). Visual 3D memerlukan jaringan.')}
   function tryNext(){
     if(done)return;
     if(typeof THREE!=='undefined'){done=true;boot();return}
     if(i>=CDNS.length){fail();return}
     var s=document.createElement('script');
     s.src=CDNS[i++];
+    s.crossOrigin='anonymous';
     s.onload=function(){if(typeof THREE!=='undefined'){done=true;boot()}else tryNext()};
     s.onerror=function(){tryNext()};
     document.head.appendChild(s);
   }
-  setTimeout(function(){if(!done&&typeof THREE==='undefined')fail()},12000);
+  setTimeout(function(){if(!done&&typeof THREE==='undefined')fail()},16000);
   tryNext();
   function boot(){
-if(typeof THREE==='undefined'){send('error','Three.js gagal dimuat (cek koneksi)');return}
+if(typeof THREE==='undefined'){send('error','Three.js gagal dimuat (cek koneksi/CDN)');return}
 var renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});document.body.appendChild(renderer.domElement);
 var scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(55,1,.1,1000),frames=[],paused=false,off=false,clock=new THREE.Clock(),ok=false,target=new THREE.Vector3(),az=0,el=.3,dist=6;
 camera.position.set(0,2,6);scene.add(new THREE.AmbientLight(0xffffff,.6));var dl=new THREE.DirectionalLight(0xffffff,.9);dl.position.set(5,8,5);scene.add(dl);
@@ -5620,6 +5622,19 @@ function buildChart(el) {
         if (!el.style.height && !el.style.minHeight) {
             try { el.style.minHeight = '220px'; } catch (z) {}
         }
+        // Harden: Chart global must exist (CDN may have failed / ad-block / offline)
+        if (typeof Chart === 'undefined') {
+            el.innerHTML = '<p class="err">Chart.js belum termuat (CDN gagal / offline / diblokir). Muat ulang halaman atau cek koneksi.</p>';
+            try { logEvent('ERROR', 'Chart: Chart global undefined'); } catch (z) {}
+            return;
+        }
+        // Destroy any previous instance bound to this element (prevents "canvas is already in use")
+        try { destroyChartOn(el); } catch (z) {}
+        // Normalize options that commonly break responsive layout / zero-size canvas
+        cfg = cfg || {};
+        cfg.options = cfg.options || {};
+        if (cfg.options.responsive === undefined) cfg.options.responsive = true;
+        if (cfg.options.maintainAspectRatio === undefined) cfg.options.maintainAspectRatio = false;
         const cv = document.createElement('canvas');
         cv.setAttribute('role', 'img');
         cv.setAttribute('aria-label', 'Chart');
@@ -5634,6 +5649,8 @@ function buildChart(el) {
             msg = 'tipe grafik tidak dikenali (dipetakan ke bar). Detail: ' + msg.slice(0, 80);
         } else if (/canvas is already in use/i.test(msg)) {
             msg = 'kanvas grafik bentrok — coba scroll ulang / clear history';
+        } else if (/Chart is not defined|Chart is not a constructor/i.test(msg)) {
+            msg = 'Chart.js belum tersedia (CDN gagal). Muat ulang halaman.';
         }
         el.innerHTML = '<p class="err">grafik gagal dirender: ' + escapeHtml(msg.slice(0, 160)) + '</p>';
         try { logEvent('ERROR', 'Chart: ' + (e.message || e)); } catch (z) {}
