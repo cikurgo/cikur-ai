@@ -1,8 +1,16 @@
 /*! ═══════════════════════════════════════════════════════════════════
- *  NEXUS AKU v2.0.2 — Gerbang Penjaga "AKU" (Sovereign Vault Edition)
+ *  NEXUS AKU v2.0.3 — Gerbang Penjaga "AKU" (Sovereign Vault Edition)
  *  ─────────────────────────────────────────────────────────────────
  *  Aksioma:  AKU = AKU (identitas)  ·  AKU = KAMU (pengenalan)
  *
+ *  Changelog v2.0.3 (hardening lanjutan, ZERO REGRESI):
+ *    • FIX: acak() — guard CSPRNG (crypto.getRandomValues) hilang.
+ *    • FIX: imporVault() — validasi iv/data hex dini; reset peta ephemeral
+ *           (#diterima/#upaya/#gagal/#basis) agar restore benar-benar bersih.
+ *    • FIX: imporVault() — validasi struktur segel sebelum apply.
+ *    • FIX: onPeristiwa() — batas pendengar + unsubscribe (aditif).
+ *    • FIX: segel() — coerce teks ke string (cegah digest objek tak sengaja).
+ *    • FIX: #catat detail — slice batas panjang (cegah audit membengkak).
  *  Changelog v2.0.2 (hardening, ZERO REGRESI):
  *    • FIX: unhex() validasi ketat (hex/even-length) → cegah data korup.
  *    • FIX: imporVault() — await selesai() sebelum apply (atomic).
@@ -28,7 +36,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSI = '2.0.2';
+  const VERSI = '2.0.3';
   const subtle = (globalThis.crypto && globalThis.crypto.subtle) || null;
   const ENC = new TextEncoder();
   const DEC = new TextDecoder();
@@ -39,6 +47,8 @@
   const MEMORI_MAKS = 4096, MIRROR_MAKS = 256, PANTULAN_DITERIMA_MAKS = 1024, AUDIT_MAKS = 512;
   const MAX_UPAYA = 5, JENDELA_UPAYA = 10.0, ID_GERBANG_HEX = 16;
   const SEGEL_MAKS = 2048, AMBANG_KARANTINA = 3;
+  const PENDENGAR_MAKS = 64;
+  const DETAIL_AUDIT_MAKS = 512;
   const DOMAIN_BUKTI = 'NEXUS/v3/mirror';
   const DOMAIN_SEGEL = 'NEXUS/v3/seal';
   const PBKDF2_ITERATIONS = 100000;
@@ -75,7 +85,13 @@
     return out;
   }
   function acak(n) {
-    const u = new Uint8Array(n); globalThis.crypto.getRandomValues(u); return u;
+    const c = globalThis.crypto;
+    if (!c || typeof c.getRandomValues !== 'function') {
+      throw new Error('CSPRNG (crypto.getRandomValues) tidak tersedia — penandatanganan/identitas dibatalkan demi keamanan');
+    }
+    const u = new Uint8Array(n);
+    c.getRandomValues(u);
+    return u;
   }
   function acakHex(n) { return hex(acak(n)); }
   async function sha256Hex(s) {
@@ -314,7 +330,19 @@
     sidikRantaiAudit() { return this.#rantai; }
     async selesai() { await this.#antrian; return this.#rantai; }
     peristiwaAudit() { return this.#audit.map(e => [e.waktuNs, e.peristiwa, e.detail]); }
-    onPeristiwa(fn) { if (typeof fn === 'function') this.#pendengar.push(fn); }
+    /**
+     * Daftarkan listener peristiwa audit. Mengembalikan fungsi unsubscribe (aditif).
+     * Batas PENDENGAR_MAKS mencegah kebocoran memori jika caller lupa melepaskan.
+     */
+    onPeristiwa(fn) {
+      if (typeof fn !== 'function') return function () {};
+      if (this.#pendengar.length >= PENDENGAR_MAKS) this.#pendengar.shift();
+      this.#pendengar.push(fn);
+      return function () {
+        const i = this.#pendengar.indexOf(fn);
+        if (i >= 0) this.#pendengar.splice(i, 1);
+      }.bind(this);
+    }
     dikarantina(nama) { return this.#karantina.has(String(nama)); }
     daftarKarantina() { return Array.from(this.#karantina, ([n, a]) => ({ nama: n, alasan: a })); }
 
@@ -442,9 +470,10 @@
 
     async segel(label, teks) {
       const id = acakHex(8);
-      const digest = await sha256Hex(teks);
+      const body = String(teks == null ? '' : teks);
+      const digest = await sha256Hex(body);
       const bukti = await hmacHex(this.#kunciSegel, DOMAIN_SEGEL + '|' + id + '|' + digest);
-      this.#segel.set(id, { label: String(label).slice(0, 64), digest, bukti, ts: Date.now() });
+      this.#segel.set(id, { label: String(label == null ? '' : label).slice(0, 64), digest, bukti, ts: Date.now() });
       if (this.#segel.size > SEGEL_MAKS) this.#segel.delete(this.#segel.keys().next().value);
       return { id, digest };
     }
@@ -456,7 +485,7 @@
         await this.#catat('SEGEL-RUSAK', s.label + ': bukti segel tak cocok');
         return { ok: false, alasan: 'bukti segel rusak' };
       }
-      const dig = await sha256Hex(teks);
+      const dig = await sha256Hex(String(teks == null ? '' : teks));
       if (!safeEqual(dig, s.digest)) {
         await this.#catat('SEGEL-BERUBAH', s.label + ': isi berubah sejak disegel');
         return { ok: false, alasan: 'isi berubah sejak disegel', label: s.label };
@@ -559,6 +588,13 @@
       if (typeof encObj.salt !== 'string' || !RE_HEKSA_EVEN.test(encObj.salt)) {
         throw new Error('Envelope vault tidak sah (salt bukan hex genap)');
       }
+      /* PERBAIKAN v2.0.3: validasi iv/data hex dini (pesan lebih jelas sebelum decrypt) */
+      if (typeof encObj.iv !== 'string' || !RE_HEKSA_EVEN.test(encObj.iv) || encObj.iv.length !== 24) {
+        throw new Error('Envelope vault tidak sah (iv harus hex 12-byte / 24 nibble)');
+      }
+      if (typeof encObj.data !== 'string' || !RE_HEKSA_EVEN.test(encObj.data) || encObj.data.length < 32) {
+        throw new Error('Envelope vault tidak sah (data bukan ciphertext hex valid)');
+      }
       if (typeof masterPassword !== 'string' || !masterPassword) throw new Error('Password impor diperlukan');
 
       const vaultKey = await deriveKeyPBKDF2(masterPassword, encObj.salt);
@@ -573,13 +609,22 @@
       const auditArr = Array.isArray(state.audit) ? state.audit : [];
       const memoriArr = Array.isArray(state.memori) ? state.memori : [];
       const registriArr = Array.isArray(state.registri) ? state.registri : [];
+      const karantinaArr = Array.isArray(state.karantina) ? state.karantina : [];
+      const segelArr = Array.isArray(state.segel) ? state.segel : [];
       if (memoriArr.length > MEMORI_MAKS) throw new Error('Memori vault melebihi batas');
       if (registriArr.length > MIRROR_MAKS) throw new Error('Registri cermin melebihi batas');
       if (auditArr.length > AUDIT_MAKS) throw new Error('Audit vault melebihi batas');
+      if (karantinaArr.length > MEMORI_MAKS) throw new Error('Karantina vault melebihi batas');
+      if (segelArr.length > SEGEL_MAKS) throw new Error('Segel vault melebihi batas');
 
       for (const ent of memoriArr) {
         if (!Array.isArray(ent) || ent.length !== 2 || typeof ent[0] !== 'string' || !RE_HEKSA_SIDIK.test(ent[1])) {
           throw new Error('Entri memori tidak sah');
+        }
+      }
+      for (const ent of karantinaArr) {
+        if (!Array.isArray(ent) || ent.length !== 2 || typeof ent[0] !== 'string' || typeof ent[1] !== 'string') {
+          throw new Error('Entri karantina tidak sah');
         }
       }
       /* PERBAIKAN v2.0.2: pre-validasi hex registri agar apply atomic */
@@ -591,6 +636,22 @@
           throw new Error('Entri registri cermin tidak sah');
         }
         registriPre.push([ent[0], unhex(ent[1])]);
+      }
+      /* PERBAIKAN v2.0.3: validasi struktur segel sebelum apply */
+      const segelPre = new Map();
+      for (const ent of segelArr) {
+        if (!Array.isArray(ent) || ent.length !== 2 || typeof ent[0] !== 'string'
+            || !ent[1] || typeof ent[1] !== 'object'
+            || typeof ent[1].digest !== 'string' || !/^[0-9a-f]{64}$/.test(ent[1].digest)
+            || typeof ent[1].bukti !== 'string' || !/^[0-9a-f]{64}$/.test(ent[1].bukti)) {
+          throw new Error('Entri segel tidak sah');
+        }
+        segelPre.set(ent[0], {
+          label: String(ent[1].label == null ? '' : ent[1].label).slice(0, 64),
+          digest: ent[1].digest,
+          bukti: ent[1].bukti,
+          ts: typeof ent[1].ts === 'number' && Number.isFinite(ent[1].ts) ? ent[1].ts : 0
+        });
       }
 
       /* ── Turunkan kunci & verifikasi rantai SEBELUM apply ── */
@@ -625,8 +686,15 @@
       this.#audit = auditArr.slice();
       this.#memori = new Map(memoriArr);
       this.#kunciCermin = new Map(registriPre);
-      this.#karantina = Array.isArray(state.karantina) ? new Map(state.karantina) : new Map();
-      this.#segel = Array.isArray(state.segel) ? new Map(state.segel) : new Map();
+      this.#karantina = new Map(karantinaArr.map(function (e) {
+        return [String(e[0]).slice(0, NAMA_MAKS), String(e[1]).slice(0, 200)];
+      }));
+      this.#segel = segelPre;
+      /* PERBAIKAN v2.0.3: reset peta ephemeral sesi agar restore bersih */
+      this.#diterima = new Map();
+      this.#upaya = new Map();
+      this.#gagal = new Map();
+      this.#basis = new Map();
       if (typeof state.jedaMin === 'number' && Number.isFinite(state.jedaMin) && state.jedaMin >= 0) {
         this.#jedaMin = state.jedaMin;
       }
@@ -685,16 +753,18 @@
       this.#memori.set(nama, sidik);
     }
     #catat(peristiwa, detail) {
+      const ev = String(peristiwa == null ? '' : peristiwa).slice(0, 64);
+      const det = String(detail == null ? '' : detail).slice(0, DETAIL_AUDIT_MAKS);
       const tugas = this.#antrian.then(async () => {
         const waktuNs = String(BigInt(Date.now()) * 1000000n);
         const prev = this.#rantai;
-        const h = await hmacHex(this.#kunciAudit, waktuNs + '|' + peristiwa + '|' + detail + '|' + prev);
+        const h = await hmacHex(this.#kunciAudit, waktuNs + '|' + ev + '|' + det + '|' + prev);
         this.#rantai = h;
-        const entri = { waktuNs, peristiwa, detail, rantai: h };
+        const entri = { waktuNs, peristiwa: ev, detail: det, rantai: h };
         this.#audit.push(entri);
         if (this.#audit.length > AUDIT_MAKS) this.#rantaiDasar = this.#audit.shift().rantai;
         /* PERBAIKAN v2.0.2: snapshot listener agar mutasi saat iterasi aman */
-        for (const fn of this.#pendengar.slice()) { try { fn(peristiwa, detail, entri); } catch (e) { } }
+        for (const fn of this.#pendengar.slice()) { try { fn(ev, det, entri); } catch (e) { } }
       }).catch(() => {});
       this.#antrian = tugas;
       return tugas;
@@ -839,6 +909,14 @@
     safeEqual, hitungBukti, pesanBukti, rangkaiPantulan,
     inspeksiTeks, sidikObjek, selfTest,
     buat: (opsi) => new GerbangAKU(opsi),
+    getMeta: function () {
+      var b = { id: 'NexusAku', version: VERSI, checksum: null, fingerprint: null, source: 'none', status: 'SKIP' };
+      try {
+        var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null;
+        if (I && typeof I.describe === 'function') return I.describe(b.id, b);
+      } catch (e) {}
+      return b;
+    },
     ADA_WEBCRYPTO: !!subtle
   };
 });
