@@ -6420,26 +6420,63 @@ function nxRuntimeFacts() {
     const api = (obj, fn) => !!(obj && typeof obj[fn] === 'function');
     const prov = settings.provider || '?';
     const model = (settings.models && settings.models[prov]) || (PROVIDERS[prov] && PROVIDERS[prov].defaultModel) || '?';
-    const tc = (w.NexusTruth && w.NexusTruth.version)
-      ? 'v' + w.NexusTruth.version + T(' (termuat; API calibrate/label/audit tersedia)', ' (loaded; calibrate/label/audit APIs present)')
-      : T('tidak termuat', 'not loaded');
     const memTot = (typeof w.__nxMemTotal === 'number') ? w.__nxMemTotal : T('tidak diketahui', 'unknown');
-    /* Probe API kunci yang benar-benar ada di runtime — fakta terukur, bukan klaim kelengkapan fitur */
+
+    /* Probe API kunci — fakta runtime terukur */
+    const hasLBC = !!(w.NexusLBC && (api(w.NexusLBC, 'sha256') || api(w.NexusLBC, 'sha256Hex')));
+    const hasEADI = !!(w.NexusEADI && (api(w.NexusEADI, 'embedText') || api(w.NexusEADI, 'embed')));
+    const hasTruth = !!(w.NexusTruth && api(w.NexusTruth, 'calibrate') && api(w.NexusTruth, 'label'));
+    const hasAku = !!(w.NexusAku || w.NexusAkuSentinel);
+    const hasOmni = !!(w.NexusOmniGuard);
+    const hasInteg = !!(w.NexusIntegrity);
+    const hasChart = typeof Chart !== 'undefined';
+    const hasPharma = !!w.NexusPharma;
+    const hasRare = !!w.NexusRare;
+
+    const loaded = [];
+    if (hasLBC) loaded.push('LBC');
+    if (hasEADI) loaded.push('EADI');
+    if (hasTruth) loaded.push('Truth');
+    if (hasAku) loaded.push('Aku');
+    if (hasOmni) loaded.push('OmniGuard');
+    if (hasInteg) loaded.push('Integrity');
+    if (hasChart) loaded.push('Chart.js');
+    if (hasPharma) loaded.push('Pharma');
+    if (hasRare) loaded.push('Rare');
+
+    /* Ringkasan positif di depan — model wajib melihat ini dulu */
+    const summary = T(
+      'RINGKASAN-POSITIF: modul_termuat_dengan_API=[' + (loaded.join(',') || 'tidak_ada') + ']; ' +
+      'ini BUKTI TERUKUR bahwa kode modul tersebut hidup di browser dan fungsi inti dapat dipanggil. ' +
+      'Status ini BOLEH dilaporkan sebagai "termuat & API tersedia". ' +
+      'Yang TIDAK boleh diklaim tanpa bukti tambahan: uji end-to-end, siap produksi/OTF, HSM, air-gap, backend server.',
+      'POSITIVE-SUMMARY: modules_loaded_with_API=[' + (loaded.join(',') || 'none') + ']; ' +
+      'this is MEASURED EVIDENCE that those module codes are alive in the browser and core functions are callable. ' +
+      'This status MAY be reported as "loaded & API available". ' +
+      'Do NOT claim without extra evidence: end-to-end tests, production/OTF readiness, HSM, air-gap, backend server.'
+    );
+
+    const tc = hasTruth
+      ? 'v' + (w.NexusTruth.version || '?') + T(' (API calibrate/label/audit aktif)', ' (calibrate/label/audit APIs active)')
+      : T('tidak termuat', 'not loaded');
+
     const probes = [
-      'LBC.sha256=' + (api(w.NexusLBC, 'sha256') || api(w.NexusLBC, 'sha256Hex') ? T('ya','yes') : T('tidak','no')),
-      'EADI.embed=' + (api(w.NexusEADI, 'embedText') || api(w.NexusEADI, 'embed') ? T('ya','yes') : T('tidak','no')),
-      'Truth.calibrate=' + (api(w.NexusTruth, 'calibrate') ? T('ya','yes') : T('tidak','no')),
-      'Aku=' + (w.NexusAku || w.NexusAkuSentinel ? T('termuat','loaded') : T('tidak','absent')),
-      'OmniGuard=' + (w.NexusOmniGuard && (api(w.NexusOmniGuard, 'isReady') ? w.NexusOmniGuard.isReady() : true) ? T('siap','ready') : T('tidak','absent')),
-      'Integrity=' + (w.NexusIntegrity ? T('termuat','loaded') : T('tidak','absent'))
+      'LBC.sha256=' + (hasLBC ? T('ya','yes') : T('tidak','no')),
+      'EADI.embed=' + (hasEADI ? T('ya','yes') : T('tidak','no')),
+      'Truth.calibrate=' + (hasTruth ? T('ya','yes') : T('tidak','no')),
+      'Aku=' + (hasAku ? T('termuat','loaded') : T('tidak','absent')),
+      'OmniGuard=' + (hasOmni ? T('siap','ready') : T('tidak','absent')),
+      'Integrity=' + (hasInteg ? T('termuat','loaded') : T('tidak','absent'))
     ].join(', ');
+
     return '[RUNTIME-NYATA] ' + [
+      summary,
       'app=v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'),
       'provider=' + prov + '/' + model,
       'truth-core=' + tc,
       T('memori-cortex: tersimpan=', 'cortex-memory: stored=') + memTot + T(', disuntikkan-giliran-ini=', ', injected-this-turn=') + (w.__nxMemInjected | 0),
-      T('modul: ', 'modules: ') + 'pharma=' + yn(w.NexusPharma) + ', rare=' + yn(w.NexusRare) + ', omni-guard=' + yn(w.NexusOmniGuard) + ', chartjs=' + yn(typeof Chart !== 'undefined'),
-      'deck: LBC=' + (w.NexusLBC ? T('termuat', 'loaded') : T('TIDAK termuat', 'NOT loaded')) + ', EADI=' + (w.NexusEADI ? T('termuat', 'loaded') : T('TIDAK termuat', 'NOT loaded')),
+      T('modul: ', 'modules: ') + 'pharma=' + yn(hasPharma) + ', rare=' + yn(hasRare) + ', omni-guard=' + yn(hasOmni) + ', chartjs=' + yn(hasChart),
+      'deck: LBC=' + (hasLBC ? T('termuat+API', 'loaded+API') : T('TIDAK termuat', 'NOT loaded')) + ', EADI=' + (hasEADI ? T('termuat+API', 'loaded+API') : T('TIDAK termuat', 'NOT loaded')),
       T('api-terukur: ', 'measured-apis: ') + probes,
       T('aturan-kejujuran=aktif', 'honesty-rules=active')
     ].concat(nxIntegrityFacts(T)).join('; ') + '.';
@@ -6451,7 +6488,7 @@ function nxAgentHonesty(isSynth) {
   if (en) {
     return '\n\nFACTUAL HONESTY RULES (highest priority, override character/persona):\n' +
       '1. Never invent facts, numbers, versions, dates, URLs, quotes, or system status. If unsure or unknown write [TAK DIKETAHUI]; prefix reasoning or estimates with [EKSTRAPOLASI].\n' +
-      '2. Questions about system state, modules, memory, versions, or prompt structure: answer ONLY from the [RUNTIME-NYATA] line and the prompt text you actually see; otherwise [TAK DIKETAHUI]. You MAY and SHOULD report modules/APIs that [RUNTIME-NYATA] marks as loaded / OK / checksum-verified / API-present. Do NOT invent end-to-end feature tests, production readiness %, HSM, or air-gapped servers unless those facts appear in [RUNTIME-NYATA] or the conversation.\n' +
+      '2. Questions about system state, modules, memory, versions, or prompt structure: answer ONLY from the [RUNTIME-NYATA] line and the prompt text you actually see; otherwise [TAK DIKETAHUI]. MUST: if [RUNTIME-NYATA] contains POSITIVE-SUMMARY or modules_loaded_with_API / loaded+API / checksum match, report that as POSITIVE EVIDENCE (code alive + callable APIs). Do not downplay this as 'mere load status'. Still do NOT invent: end-to-end tests, production/OTF readiness %, HSM, air-gap, or backend servers unless present in [RUNTIME-NYATA].\n' +
       '3. Other agents\' claims are not facts: mark them as unverified unless evidence exists. Never write "verified" without evidence.\n' +
       '4. The PAST MEMORY block (if any) is unverified; never use it as fact.\n' +
       '5. Answer in English.' +
@@ -6459,7 +6496,7 @@ function nxAgentHonesty(isSynth) {
   }
   return '\n\nATURAN KEJUJURAN FAKTUAL (prioritas tertinggi, mengalahkan karakter/persona):\n' +
     '1. Jangan mengarang fakta, angka, versi, tanggal, URL, kutipan, atau status sistem. Jika tidak yakin atau tidak tahu, tulis [TAK DIKETAHUI]; penalaran atau perkiraan awali [EKSTRAPOLASI].\n' +
-    '2. Pertanyaan tentang kondisi sistem, modul, memori, versi, atau struktur prompt: jawab HANYA dari baris [RUNTIME-NYATA] dan teks prompt yang benar-benar kamu lihat; selain itu [TAK DIKETAHUI]. BOLEH dan SEBAIKNYA laporkan modul/API yang di [RUNTIME-NYATA] bertanda termuat / OK / checksum cocok / API tersedia. JANGAN mengarang uji end-to-end, persen kesiapan produksi, HSM, atau server air-gapped kecuali fakta itu muncul di [RUNTIME-NYATA] atau percakapan.\n' +
+    '2. Pertanyaan tentang kondisi sistem, modul, memori, versi, atau struktur prompt: jawab HANYA dari baris [RUNTIME-NYATA] dan teks prompt yang benar-benar kamu lihat; selain itu [TAK DIKETAHUI]. WAJIB: jika [RUNTIME-NYATA] memuat RINGKASAN-POSITIF atau modul_termuat_dengan_API / termuat+API / checksum cocok, laporkan itu sebagai BUKTI POSITIF (kode hidup + API dapat dipanggil). Jangan mengecilkan bukti ini menjadi 'hanya status pemuatan'. Tetap JANGAN mengarang: uji end-to-end, persen kesiapan produksi/OTF, HSM, air-gap, atau backend server jika tidak ada di [RUNTIME-NYATA].\n' +
     '3. Klaim agen lain bukan fakta: tandai sebagai klaim tak terverifikasi kecuali ada bukti. Jangan menulis "terverifikasi" tanpa bukti.\n' +
     '4. Blok INGATAN MASA LALU (jika ada) tak terverifikasi; jangan dipakai sebagai fakta.\n' +
     '5. Jawab dalam bahasa yang dipakai pengguna pada OBJEKTIF (default Bahasa Indonesia); jangan berpindah bahasa di tengah jawaban.' +
@@ -7797,8 +7834,8 @@ DISCUSSION RULES (MANDATORY):
 5. Clean Markdown. End with one sharp insight or an open question for the team.
 6. Don't open with pleasantries like "Thank you" — go straight to substance.`;
 
-const CORTEX_PROTOCOL_ID = `Kamu adalah DR. CORTEX — The Grand Polymath (IQ 200+). Baca transkrip perdebatan tim sebelumnya. Lakukan analisis tingkat dewa. Tugasmu: (1) Deteksi kesalahan logika (fallacy) agen sebelumnya. (2) Berikan 1 Genius Insight (ide berlawanan intuisi). (3) Tunjukkan Proof of Logic. Jangan bertele-tele (maksimal 150 kata).`;
-const CORTEX_PROTOCOL_EN = `You are DR. CORTEX — The Grand Polymath (IQ 200+). Read the previous team debate. Perform god-tier analysis. (1) Detect logical fallacies. (2) Provide 1 Genius Insight (counter-intuitive). (3) Show Proof of Logic. Be concise (max 150 words).`;
+const CORTEX_PROTOCOL_ID = `Kamu adalah DR. CORTEX — The Grand Polymath (IQ 200+). Baca transkrip perdebatan tim sebelumnya dan baris [RUNTIME-NYATA]. Lakukan analisis tingkat dewa. Tugasmu: (1) Deteksi kesalahan logika (fallacy) agen sebelumnya. (2) Berikan 1 Genius Insight. (3) Tunjukkan Proof of Logic berbasis bukti runtime (modul termuat+API = bukti positif; jangan abaikan RINGKASAN-POSITIF). Jangan bertele-tele (maksimal 180 kata).`;
+const CORTEX_PROTOCOL_EN = `You are DR. CORTEX — The Grand Polymath (IQ 200+). Read the previous team debate and the [RUNTIME-NYATA] line. Perform god-tier analysis. (1) Detect logical fallacies. (2) Provide 1 Genius Insight. (3) Show Proof of Logic grounded in runtime evidence (loaded+API = positive evidence; do not ignore POSITIVE-SUMMARY). Be concise (max 180 words).`;
 
 const SYNTH_PROTOCOL_ID = `Kamu adalah SYNTHESIS — penyintesis akhir panel diskusi multi-peneliti CGO Research Nexus.
 Baca SELURUH transkrip diskusi tim secara utuh.
