@@ -2929,7 +2929,7 @@ body[data-swarm][data-busy] #nx10-cons{display:inline-flex}
 </style>
 <style id="nxs-shell-css">
 /* ===== NEXUS SHELL · UI/UX baru (aditif; tidak menyentuh CSS/JS inti) ===== */
-#nxs-root{--nxs-cy:#2de2ff;--nxs-gr:#5dffb0;--nxs-am:#ffc24a;--nxs-rd:#ff3b6b;--nxs-vi:#8b5cf6;--nxs-ink:#e8f1ff;--nxs-dim:rgba(190,208,236,.62);--nxs-bar:60px;
+#nxs-root{--nxs-cy:#2de2ff;--nxs-gr:#5dffb0;--nxs-am:#ffc24a;--nxs-rd:#ff3b6b;--nxs-vi:#8b5cf6;--nxs-ink:#e8f1ff;--nxs-dim:rgba(190,208,236,.62);--nxs-bar:60px;zoom:var(--nxs-z,1);
  position:fixed;inset:0;z-index:2147483000;pointer-events:none;font-family:'Rajdhani','Segoe UI',system-ui,-apple-system,sans-serif;color:var(--nxs-ink);-webkit-tap-highlight-color:transparent}
 #nxs-root *,#nxs-root *::before,#nxs-root *::after{box-sizing:border-box}
 #nxs-root button{font:inherit;color:inherit;cursor:pointer}
@@ -3054,6 +3054,31 @@ body[data-nxs-mode="arch"][data-nxs-tab="audit"] .nxd-panel{z-index:2147483050!i
 body[data-nxs-mode="arch"] #summoner,body[data-nxs-mode="arch"] #summon-hint,body[data-nxs-mode="arch"] #jump-bottom{margin-bottom:calc(var(--nxs-bar,60px) + 16px + env(safe-area-inset-bottom,0px))}
 body[data-nxs-mode="user"] #nxp-lab{z-index:2147483200!important}
 @media(prefers-reduced-motion:reduce){.nxs-shield svg.sh{animation:none}.nxs-big,.nxs-btn{transition:none}}
+
+/* ---- v2: tile, sub-view, fokus Core, menu fitur ---- */
+.nxs-wrap{width:min(46rem,100%)}
+.nxs-sub{font-size:16px}.nxs-chk{font-size:16px;padding:13px 14px}.nxs-field label{font-size:13px}.nxs-note{font-size:13px}
+.nxs-btn{font-size:17px;padding:15px 20px}.nxs-seg button{font-size:16px}
+.nxs-tilegrid{display:grid;gap:12px;grid-template-columns:1fr}
+.nxs-tile{display:grid;grid-template-columns:48px 1fr;grid-template-rows:auto auto;column-gap:14px;align-items:center;text-align:left;padding:18px;border-radius:22px;border:1px solid rgba(255,255,255,.22);background:linear-gradient(160deg,rgba(255,255,255,.17),rgba(255,255,255,.06));-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);min-height:84px;transition:transform .15s,background .2s}
+.nxs-tile:hover,.nxs-tile:focus-visible{background:rgba(255,255,255,.22);transform:translateY(-2px);outline:none}
+.nxs-tile svg{grid-row:1/3;width:44px;height:44px;fill:none;stroke:#9fe8ff;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.nxs-tile b{font:700 18px 'Orbitron','Rajdhani',system-ui,sans-serif;letter-spacing:.03em}
+.nxs-tile span{font-size:15px;color:var(--nxs-dim)}
+.nxs-back{border:0;background:rgba(255,255,255,.12);border-radius:99px;padding:9px 16px;font-size:15px;margin-bottom:12px}
+.nxs-subv .nxs-h3{font-size:22px}
+select.nxs-in{appearance:auto}
+.nxs-list{margin:8px 0 0;padding-left:20px;font-size:15px;line-height:1.5}
+body[data-nxs-mode="arch"][data-nxs-tab="core"][data-nxs-view="focus"] #void>*:not(#cav-stage):not(.aura){visibility:hidden!important}
+body[data-nxs-mode="arch"][data-nxs-tab="core"][data-nxs-view="focus"]>*:not(#void):not(#nxs-root):not(script):not(style):not(link){visibility:hidden!important}
+.nxs-menu{position:absolute;left:10px;right:10px;bottom:6px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;pointer-events:auto;max-width:34rem;margin:0 auto}
+.nxs-mi{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px;border-radius:14px;border:1px solid rgba(45,226,255,.35);background:rgba(5,14,28,.82);font-size:20px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.nxs-mi span{font:600 11px 'Rajdhani',system-ui,sans-serif;letter-spacing:.05em;color:var(--nxs-ink)}
+.nxs-mi:hover{background:rgba(45,226,255,.16)}
+.nxs-focus{position:absolute;right:10px;top:calc(max(10px,env(safe-area-inset-top)) + 8px);pointer-events:auto;background:rgba(5,14,28,.9)}
+#nxs-root[data-view="council"] .nxs-hud,#nxs-root[data-view="council"] .nxs-menu{display:none}
+#nxs-land .nxs-big b{font-size:clamp(17px,4.6vw,20px)}
+body[data-nxs-mode="arch"] #nxp-lab{z-index:2147483200!important}
 </style>
 </head>
 <body data-theme="cyber" data-state="idle">
@@ -3079,28 +3104,54 @@ body[data-nxs-mode="user"] #nxp-lab{z-index:2147483200!important}
     <p id="nxs-sh-s">Memeriksa perlindungan…</p>
     <div class="nxs-checks" id="nxs-checks"></div>
   </div>
-  <div class="nxs-glass">
-    <div class="nxs-h3">NexusPharma</div>
-    <p class="nxs-sub">Alat sederhana untuk data kesehatan. Semua diproses di perangkat ini.</p>
-    <div class="nxs-seg" role="tablist"><button type="button" role="tab" aria-selected="true" data-u="health">Cek Kesehatan</button><button type="button" role="tab" aria-selected="false" data-u="enc">Enkripsi Data Medis</button></div>
-    <div id="nxs-u-health">
-      <div class="nxs-row3">
-        <div class="nxs-field"><label for="nxs-age">Usia</label><input class="nxs-in" id="nxs-age" type="number" inputmode="numeric" min="1" max="120" placeholder="30"></div>
-        <div class="nxs-field"><label for="nxs-wt">Berat (kg)</label><input class="nxs-in" id="nxs-wt" type="number" inputmode="decimal" min="2" max="400" placeholder="65"></div>
-        <div class="nxs-field"><label for="nxs-ht">Tinggi (cm)</label><input class="nxs-in" id="nxs-ht" type="number" inputmode="decimal" min="50" max="250" placeholder="165"></div>
-      </div>
-      <button type="button" class="nxs-btn" id="nxs-bmi-go">Cek Sekarang</button>
-      <div class="nxs-out" id="nxs-bmi-out" hidden></div>
-      <p class="nxs-note">Perkiraan umum berbasis IMT (WHO untuk dewasa). Bukan diagnosis medis; konsultasikan ke tenaga kesehatan.</p>
-    </div>
-    <div id="nxs-u-enc" hidden>
-      <div class="nxs-field"><label for="nxs-enc-in">Data medis (contoh: catatan / hasil lab)</label><textarea class="nxs-in" id="nxs-enc-in" maxlength="4000" placeholder="Tulis data contoh di sini…"></textarea></div>
-      <div class="nxs-field"><label for="nxs-enc-pw">Kata sandi</label><input class="nxs-in" id="nxs-enc-pw" type="password" autocomplete="new-password" placeholder="Kata sandi untuk mengunci data"></div>
-      <div class="nxs-btns"><button type="button" class="nxs-btn" id="nxs-enc-go">Enkripsi</button><button type="button" class="nxs-btn g" id="nxs-dec-go" disabled>Uji Dekripsi</button><button type="button" class="nxs-btn g" id="nxs-enc-copy" disabled>Salin</button></div>
-      <div class="nxs-out" id="nxs-enc-out" hidden></div>
-      <p class="nxs-note">Simulasi AES-256-GCM + PBKDF2 (WebCrypto). Tidak ada data yang dikirim atau disimpan.</p>
+  <div id="nxs-tiles">
+    <div class="nxs-h3" style="margin:6px 4px 10px">NexusPharma · pilih layanan</div>
+    <div class="nxs-tilegrid">
+      <button type="button" class="nxs-tile" data-go="health"><svg viewBox="0 0 24 24"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 21l8.8-8.3a5 5 0 0 0 0-7.1z"/></svg><b>Cek Kesehatan</b><span>Hitung IMT dan berat badan ideal</span></button>
+      <button type="button" class="nxs-tile" data-go="drug"><svg viewBox="0 0 24 24"><path d="M10.5 20.5a5 5 0 0 1-7-7l9-9a5 5 0 0 1 7 7z"/><path d="M8.5 8.5l7 7"/></svg><b>Cek Obat</b><span>Analisis kelayakan senyawa obat</span></button>
+      <button type="button" class="nxs-tile" data-go="enc"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg><b>Kunci Data Medis</b><span>Simulasi enkripsi AES-256</span></button>
     </div>
     <button type="button" class="nxs-link" id="nxs-lab">Buka Lab NexusPharma lengkap →</button>
+  </div>
+
+  <div class="nxs-glass nxs-subv" id="nxs-u-health" hidden>
+    <button type="button" class="nxs-back">← Kembali</button>
+    <div class="nxs-h3">Cek Kesehatan</div><p class="nxs-sub">Isi data berikut, lalu tekan Cek Sekarang.</p>
+    <div class="nxs-row3">
+      <div class="nxs-field"><label for="nxs-age">Usia</label><input class="nxs-in" id="nxs-age" type="number" inputmode="numeric" min="1" max="120" placeholder="30"></div>
+      <div class="nxs-field"><label for="nxs-wt">Berat (kg)</label><input class="nxs-in" id="nxs-wt" type="number" inputmode="decimal" min="2" max="400" placeholder="65"></div>
+      <div class="nxs-field"><label for="nxs-ht">Tinggi (cm)</label><input class="nxs-in" id="nxs-ht" type="number" inputmode="decimal" min="50" max="250" placeholder="165"></div>
+    </div>
+    <button type="button" class="nxs-btn" id="nxs-bmi-go">Cek Sekarang</button>
+    <div class="nxs-out" id="nxs-bmi-out" hidden></div>
+    <p class="nxs-note">Perkiraan umum berbasis IMT (WHO untuk dewasa). Bukan diagnosis medis; konsultasikan ke tenaga kesehatan.</p>
+  </div>
+
+  <div class="nxs-glass nxs-subv" id="nxs-u-drug" hidden>
+    <button type="button" class="nxs-back">← Kembali</button>
+    <div class="nxs-h3">Cek Obat</div><p class="nxs-sub">Penapisan awal kelayakan senyawa sebagai obat oral memakai mesin NexusPharma (aturan Lipinski dan filter tambahan).</p>
+    <div class="nxs-field"><label for="nxs-d-pre">Pilih contoh obat</label><select class="nxs-in" id="nxs-d-pre"><option value="0">Parasetamol</option><option value="1">Aspirin</option><option value="2">Ibuprofen</option><option value="3">Kustom (isi manual)</option></select></div>
+    <div class="nxs-row3">
+      <div class="nxs-field"><label for="nxs-d-mw">Massa molekul</label><input class="nxs-in" id="nxs-d-mw" type="number" step="any"></div>
+      <div class="nxs-field"><label for="nxs-d-lp">LogP</label><input class="nxs-in" id="nxs-d-lp" type="number" step="any"></div>
+      <div class="nxs-field"><label for="nxs-d-psa">PSA (Å²)</label><input class="nxs-in" id="nxs-d-psa" type="number" step="any"></div>
+      <div class="nxs-field"><label for="nxs-d-hbd">Donor H</label><input class="nxs-in" id="nxs-d-hbd" type="number" step="1"></div>
+      <div class="nxs-field"><label for="nxs-d-hba">Akseptor H</label><input class="nxs-in" id="nxs-d-hba" type="number" step="1"></div>
+      <div class="nxs-field"><label for="nxs-d-rot">Ikatan rotasi</label><input class="nxs-in" id="nxs-d-rot" type="number" step="1"></div>
+    </div>
+    <button type="button" class="nxs-btn" id="nxs-d-go">Analisis Sekarang</button>
+    <div class="nxs-out" id="nxs-d-out" hidden></div>
+    <p class="nxs-note">Hanya penapisan komputasi awal, bukan saran medis atau dosis. Tanyakan dokter/apoteker.</p>
+  </div>
+
+  <div class="nxs-glass nxs-subv" id="nxs-u-enc" hidden>
+    <button type="button" class="nxs-back">← Kembali</button>
+    <div class="nxs-h3">Kunci Data Medis</div><p class="nxs-sub">Tulis data, buat kata sandi, lalu kunci. Data tidak dikirim ke mana pun.</p>
+    <div class="nxs-field"><label for="nxs-enc-in">Data medis (catatan / hasil lab)</label><textarea class="nxs-in" id="nxs-enc-in" maxlength="4000" placeholder="Tulis data contoh di sini…"></textarea></div>
+    <div class="nxs-field"><label for="nxs-enc-pw">Kata sandi</label><input class="nxs-in" id="nxs-enc-pw" type="password" autocomplete="new-password" placeholder="Kata sandi untuk mengunci data"></div>
+    <div class="nxs-btns"><button type="button" class="nxs-btn" id="nxs-enc-go">Kunci</button><button type="button" class="nxs-btn g" id="nxs-dec-go" disabled>Uji Buka Kunci</button><button type="button" class="nxs-btn g" id="nxs-enc-copy" disabled>Salin</button></div>
+    <div class="nxs-out" id="nxs-enc-out" hidden></div>
+    <p class="nxs-note">Simulasi AES-256-GCM + PBKDF2 (WebCrypto). Tidak ada data yang disimpan.</p>
   </div>
 </div></section>
 
@@ -3116,6 +3167,15 @@ body[data-nxs-mode="user"] #nxp-lab{z-index:2147483200!important}
         <div class="nxs-chips" id="nxs-mods" style="margin-top:8px"></div>
       </div>
     </div></div>
+    <div class="nxs-menu" id="nxs-menu">
+      <button type="button" class="nxs-mi" data-f="council">💬<span>Council / Chat</span></button>
+      <button type="button" class="nxs-mi" data-f="settings">⚙<span>Pengaturan AI</span></button>
+      <button type="button" class="nxs-mi" data-f="studio">🧊<span>3D Studio</span></button>
+      <button type="button" class="nxs-mi" data-f="pharma">⚗<span>Lab Pharma</span></button>
+      <button type="button" class="nxs-mi" data-f="swarm">🕸<span>Swarm</span></button>
+      <button type="button" class="nxs-mi" data-f="test">🛡<span>Self-Test</span></button>
+    </div>
+    <button type="button" class="nxs-ab nxs-focus" id="nxs-focus" hidden>◂ Kembali ke Fokus</button>
   </section>
 
   <section class="nxs-pane solid" data-p="omni" aria-label="OmniGuard"><div class="nxs-in-wrap">
@@ -20697,13 +20757,22 @@ function push(box,txt,cls){if(!box)return;var n=box.scrollTop+box.clientHeight>=
 function kv(box,rows){box.textContent='';rows.forEach(function(r){box.appendChild(el('span','',r[0]));var b=el('b','',r[1]);box.appendChild(b)})}
 function tag(ok,t){return el('span','nxs-tag '+ok,t)}
 
+/* ---------- zoom adaptif (HP yang merender halaman selebar desktop) ---------- */
+function fitZ(){var w=window.innerWidth,t=false;try{t=matchMedia('(pointer:coarse)').matches||/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)}catch(e){}root.style.setProperty('--nxs-z',t&&w>520?Math.min(2.6,w/430).toFixed(2):'1')}
+fitZ();window.addEventListener('resize',fitZ,{passive:true});
+var view='focus';
+function setView(v){view=v;root.setAttribute('data-view',v);body.setAttribute('data-nxs-view',v);var f=$('#nxs-focus');if(f)f.hidden=v!=='council'||tab!=='core'}
+var _st=null;
+$('#nxs-focus').onclick=function(){setView('focus')};
+$$('[data-f]').forEach(function(b){b.onclick=function(){var f=b.getAttribute('data-f');setView('council');var c=function(id){try{var e=$(id);e&&e.click()}catch(x){}};
+ if(f==='council'){try{$('#chat-input').focus()}catch(e){}}else if(f==='settings')c('#settings-btn');else if(f==='studio')c('#studio-btn');else if(f==='swarm')c('#multiagent-btn');else if(f==='test')c('#diag-btn');else if(f==='pharma'){try{g('NexusPharmaLab').open('mon')}catch(e){}}}});
 /* ---------- mode & tab ---------- */
 function setMode(m){mode=m;root.setAttribute('data-mode',m);body.setAttribute('data-nxs-mode',m);body.classList.toggle('nxs-cover',m!=='arch');
  if(m==='arch'){setTab(tab);try{window.dispatchEvent(new Event('resize'))}catch(e){}}else{body.removeAttribute('data-nxs-tab');closeDeck()}
  if(m==='user')refreshUser();
  try{var f=m==='land'?$('#nxs-go-user'):m==='user'?$('.nxs-switch',$('#nxs-user')):$('#nxs-nav [aria-selected="true"]');f&&f.focus({preventScroll:true})}catch(e){}}
 function closeDeck(){try{var d=g('NexusDeck');d&&d.open&&d.open('council')}catch(e){}}
-function setTab(t){tab=t;root.setAttribute('data-tab',t);body.setAttribute('data-nxs-tab',t);
+function setTab(t){tab=t;var _f=$('#nxs-focus');if(_f)_f.hidden=view!=='council'||t!=='core';root.setAttribute('data-tab',t);body.setAttribute('data-nxs-tab',t);
  $$('.nxs-pane').forEach(function(p){p.classList.toggle('on',p.getAttribute('data-p')===t)});
  $$('#nxs-nav [data-t]').forEach(function(b){b.setAttribute('aria-selected',b.getAttribute('data-t')===t?'true':'false')});
  if(t!=='audit')closeDeck();
@@ -20799,7 +20868,22 @@ function refreshUser(){var lvl='ok',t='Data Anda Terlindungi',s='Perlindungan ak
  if(lvl==='bad'){t='Perlindungan Terganggu';s='Terdeteksi masalah keamanan. Hubungi administrator sistem.'}
  var sh=$('#nxs-shield');sh.setAttribute('data-lvl',lvl);$('#nxs-sh-t').textContent=t;$('#nxs-sh-s').textContent=s;$('#nxs-sh-k').setAttribute('d',lvl==='ok'?'M21 32l8 8 15-17':'M32 20v16M32 44v.5');
  var c=$('#nxs-checks');c.textContent='';rows.forEach(function(r){var d=el('div','nxs-chk');d.setAttribute('data-s',r[1]);d.appendChild(el('i'));d.appendChild(el('span','',r[0]));d.appendChild(el('em','',r[2]));c.appendChild(d)})}
-$$('[data-u]').forEach(function(b){b.onclick=function(){var k=b.getAttribute('data-u');$$('[data-u]').forEach(function(x){x.setAttribute('aria-selected',x===b?'true':'false')});$('#nxs-u-health').hidden=k!=='health';$('#nxs-u-enc').hidden=k!=='enc'}});
+function showU(k){['health','drug','enc'].forEach(function(x){$('#nxs-u-'+x).hidden=x!==k});$('#nxs-tiles').hidden=!!k;var u=$('#nxs-user');if(u)u.scrollTop=0}
+$$('[data-go]').forEach(function(b){b.onclick=function(){showU(b.getAttribute('data-go'))}});
+$$('.nxs-back').forEach(function(b){b.onclick=function(){showU('')}});
+var PRE=[[151.16,.46,49.3,2,2,1],[180.16,1.19,63.6,1,3,3],[206.28,3.97,37.3,1,2,4],null];
+function fillPre(){var p=PRE[+$('#nxs-d-pre').value];if(!p)return;['mw','lp','psa','hbd','hba','rot'].forEach(function(k,i){$('#nxs-d-'+k).value=p[i]})}
+$('#nxs-d-pre').onchange=fillPre;fillPre();
+$('#nxs-d-go').onclick=function(){var o=$('#nxs-d-out'),P=g('NexusPharma');o.hidden=false;o.textContent='';
+ if(!P||!P.analyzeCandidate){o.textContent='Mesin NexusPharma tidak tersedia.';return}
+ var v=function(k){return parseFloat($('#nxs-d-'+k).value)},a={mw:v('mw'),logP:v('lp'),psa:v('psa'),hbd:v('hbd'),hba:v('hba'),rotB:v('rot')};
+ for(var k in a)if(!isFinite(a[k])){o.textContent='Lengkapi semua kolom dengan angka.';return}
+ try{var r=P.analyzeCandidate(a),d=r.drugLikeness||{},ok=d.status==='LULUS'||(r.lipinski&&r.lipinski.pass);
+  o.appendChild(el('div','big',(d.score!=null?Math.round(d.score):'—')+'/100'));
+  o.appendChild(el('div','',ok?'Cocok sebagai kandidat obat oral':'Kurang cocok sebagai kandidat obat oral'));
+  o.appendChild(el('div','nxs-note','Lipinski: '+(r.lipinski&&r.lipinski.pass?'lulus':'tidak lulus')+' · pelanggaran: '+(r.lipinski?r.lipinski.count:'—')));
+  var vs=(d.violations||[]).filter(function(x){return!/^Tidak ada/i.test(x)});if(vs.length){var u=el('ul','nxs-list');vs.slice(0,6).forEach(function(x){u.appendChild(el('li','',x))});o.appendChild(u)}
+ }catch(e){o.textContent='Gagal menganalisis: '+(e&&e.message||e)}};
 $('#nxs-bmi-go').onclick=function(){var w=parseFloat($('#nxs-wt').value),h=parseFloat($('#nxs-ht').value),a=parseInt($('#nxs-age').value,10),o=$('#nxs-bmi-out');o.hidden=false;o.textContent='';
  if(!(w>0)||!(h>0)){o.textContent='Isi berat dan tinggi badan dengan benar.';return}
  var m=h/100,b=w/(m*m),c=b<18.5?'Berat badan kurang':b<25?'Berat badan normal':b<30?'Berat badan berlebih':'Obesitas';
@@ -20823,7 +20907,7 @@ $('#nxs-lab').onclick=function(){var p=g('NexusPharmaLab');try{p&&p.open&&p.open
 /* ---------- loop ---------- */
 function tick(){if(mode==='user')refreshUser();else if(mode==='arch'){if(tab==='core')telemetry();else if(tab==='omni')omni();else if(tab==='audit')audit()}}
 timer=setInterval(function(){if(!document.hidden)tick()},1000);
-setMode('land');
+setView('focus');setMode('land');
 window.NexusShell={mode:function(){return mode},tab:function(){return tab},setMode:setMode,setTab:setTab};
 }catch(err){try{console.warn('[NEXUS SHELL] gagal dimuat (fitur lama tetap aman):',err);var r=document.getElementById('nxs-root');if(r)r.style.display='none';document.body.classList.remove('nxs-cover')}catch(e){}}
 })();
