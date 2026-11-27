@@ -6388,7 +6388,7 @@ window.__nxMemInjected = 0; window.__nxMemTotal = null;
 function nxRefreshMemTotal() {
   try { return cortex.store.getAll().then(a => { window.__nxMemTotal = (a || []).length; }).catch(() => {}); } catch (e) { return Promise.resolve(); }
 }
-/* Bukti nyata status modul untuk Dewan (aditif). Hanya fakta terukur dari NexusIntegrity; gagal → [] (perilaku lama). */
+/* Bukti nyata status modul untuk Dewan (aditif). Hanya fakta terukur dari NexusIntegrity + API probe; gagal → [] (perilaku lama). */
 function nxIntegrityFacts(T) {
   try {
     const I = window.NexusIntegrity; if (!I || typeof I.report !== 'function') return [];
@@ -6396,13 +6396,19 @@ function nxIntegrityFacts(T) {
     const mod = rows.map(r => String(r.id).replace(/^Nexus/, '') + ':' + (r.version && r.version !== '—' ? 'v' + String(r.version).slice(0, 14) : '?') + '=' + r.status).join(', ');
     const tests = rows.filter(r => /^(PASS|FAIL)/.test(r.selfTest || '')).map(r => String(r.id).replace(/^Nexus/, '') + ':' + r.selfTest).join(', ');
     const ev = v.evidence || {};
+    const rd = v.readiness || {};
     const out = [
-      T('integritas=', 'integrity=') + v.integrity + ' (' + ev.withChecksumOK + '/' + ev.modules + T(' checksum cocok', ' checksums match') + ')',
+      T('integritas=', 'integrity=') + v.integrity + ' (' + (ev.withChecksumOK|0) + '/' + (ev.modules|0) + T(' checksum cocok', ' checksums match') + ')',
       T('modul-terukur: ', 'measured-modules: ') + mod
     ];
     if (tests) out.push('self-test: ' + tests);
-    out.push(T('catatan-modul: OK = kode termuat & checksum cocok (bukan skor kelengkapan fitur); modul yang TIDAK tercantum di baris ini = TAK DIKETAHUI, bukan 0%; jangan mengubah status ini menjadi persentase tanpa bukti uji',
-               'module-note: OK = code loaded & checksum matches (not a feature-completeness score); a module NOT listed here = UNKNOWN, not 0%; do not turn this status into a percentage without test evidence'));
+    if (rd.live || rd.partial) {
+      out.push(T('kesiapan-terukur: LIVE=', 'measured-readiness: LIVE=') + ((rd.live||[]).join(',')||'-') +
+               ' PARTIAL=' + ((rd.partial||[]).join(',')||'-') +
+               (rd.pct != null ? ' ~' + rd.pct + '%' : ''));
+    }
+    out.push(T('catatan-modul: status OK/STABLE = kode termuat + checksum cocok (bukti integritas kode, bukan klaim seluruh fitur sudah diuji end-to-end); modul yang tercantum dengan status OK BOLEH dilaporkan sebagai "termuat & terverifikasi checksum"; modul yang TIDAK tercantum = TAK DIKETAHUI, bukan 0%; dilarang mengubah status ini menjadi klaim "100% siap produksi/OTF" tanpa bukti uji terpisah',
+               'module-note: OK/STABLE = code loaded + checksum matches (code-integrity evidence, not a claim that every feature was end-to-end tested); modules listed as OK MAY be reported as "loaded & checksum-verified"; modules NOT listed = UNKNOWN, not 0%; do not turn this into a "100% production/OTF ready" claim without separate test evidence'));
     return out;
   } catch (e) { return []; }
 }
@@ -6411,12 +6417,22 @@ function nxRuntimeFacts() {
     const w = window, en = settings.lang === 'en';
     const T = (id, e) => en ? e : id;
     const yn = v => v ? T('ada', 'present') : T('tidak ada', 'absent');
+    const api = (obj, fn) => !!(obj && typeof obj[fn] === 'function');
     const prov = settings.provider || '?';
     const model = (settings.models && settings.models[prov]) || (PROVIDERS[prov] && PROVIDERS[prov].defaultModel) || '?';
     const tc = (w.NexusTruth && w.NexusTruth.version)
-      ? 'v' + w.NexusTruth.version + T(' (modul tersedia, BELUM dijalankan otomatis pada jawaban ini)', ' (module present, NOT auto-run on this answer)')
+      ? 'v' + w.NexusTruth.version + T(' (termuat; API calibrate/label/audit tersedia)', ' (loaded; calibrate/label/audit APIs present)')
       : T('tidak termuat', 'not loaded');
     const memTot = (typeof w.__nxMemTotal === 'number') ? w.__nxMemTotal : T('tidak diketahui', 'unknown');
+    /* Probe API kunci yang benar-benar ada di runtime — fakta terukur, bukan klaim kelengkapan fitur */
+    const probes = [
+      'LBC.sha256=' + (api(w.NexusLBC, 'sha256') || api(w.NexusLBC, 'sha256Hex') ? T('ya','yes') : T('tidak','no')),
+      'EADI.embed=' + (api(w.NexusEADI, 'embedText') || api(w.NexusEADI, 'embed') ? T('ya','yes') : T('tidak','no')),
+      'Truth.calibrate=' + (api(w.NexusTruth, 'calibrate') ? T('ya','yes') : T('tidak','no')),
+      'Aku=' + (w.NexusAku || w.NexusAkuSentinel ? T('termuat','loaded') : T('tidak','absent')),
+      'OmniGuard=' + (w.NexusOmniGuard && (api(w.NexusOmniGuard, 'isReady') ? w.NexusOmniGuard.isReady() : true) ? T('siap','ready') : T('tidak','absent')),
+      'Integrity=' + (w.NexusIntegrity ? T('termuat','loaded') : T('tidak','absent'))
+    ].join(', ');
     return '[RUNTIME-NYATA] ' + [
       'app=v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'),
       'provider=' + prov + '/' + model,
@@ -6424,6 +6440,7 @@ function nxRuntimeFacts() {
       T('memori-cortex: tersimpan=', 'cortex-memory: stored=') + memTot + T(', disuntikkan-giliran-ini=', ', injected-this-turn=') + (w.__nxMemInjected | 0),
       T('modul: ', 'modules: ') + 'pharma=' + yn(w.NexusPharma) + ', rare=' + yn(w.NexusRare) + ', omni-guard=' + yn(w.NexusOmniGuard) + ', chartjs=' + yn(typeof Chart !== 'undefined'),
       'deck: LBC=' + (w.NexusLBC ? T('termuat', 'loaded') : T('TIDAK termuat', 'NOT loaded')) + ', EADI=' + (w.NexusEADI ? T('termuat', 'loaded') : T('TIDAK termuat', 'NOT loaded')),
+      T('api-terukur: ', 'measured-apis: ') + probes,
       T('aturan-kejujuran=aktif', 'honesty-rules=active')
     ].concat(nxIntegrityFacts(T)).join('; ') + '.';
   } catch (e) { return ''; }
@@ -6434,7 +6451,7 @@ function nxAgentHonesty(isSynth) {
   if (en) {
     return '\n\nFACTUAL HONESTY RULES (highest priority, override character/persona):\n' +
       '1. Never invent facts, numbers, versions, dates, URLs, quotes, or system status. If unsure or unknown write [TAK DIKETAHUI]; prefix reasoning or estimates with [EKSTRAPOLASI].\n' +
-      '2. Questions about system state, modules, memory, versions, or prompt structure: answer ONLY from the [RUNTIME-NYATA] line and the prompt text you actually see; otherwise [TAK DIKETAHUI]. Never claim to have run, verified, or accessed anything without evidence in the conversation.\n' +
+      '2. Questions about system state, modules, memory, versions, or prompt structure: answer ONLY from the [RUNTIME-NYATA] line and the prompt text you actually see; otherwise [TAK DIKETAHUI]. You MAY and SHOULD report modules/APIs that [RUNTIME-NYATA] marks as loaded / OK / checksum-verified / API-present. Do NOT invent end-to-end feature tests, production readiness %, HSM, or air-gapped servers unless those facts appear in [RUNTIME-NYATA] or the conversation.\n' +
       '3. Other agents\' claims are not facts: mark them as unverified unless evidence exists. Never write "verified" without evidence.\n' +
       '4. The PAST MEMORY block (if any) is unverified; never use it as fact.\n' +
       '5. Answer in English.' +
@@ -6442,7 +6459,7 @@ function nxAgentHonesty(isSynth) {
   }
   return '\n\nATURAN KEJUJURAN FAKTUAL (prioritas tertinggi, mengalahkan karakter/persona):\n' +
     '1. Jangan mengarang fakta, angka, versi, tanggal, URL, kutipan, atau status sistem. Jika tidak yakin atau tidak tahu, tulis [TAK DIKETAHUI]; penalaran atau perkiraan awali [EKSTRAPOLASI].\n' +
-    '2. Pertanyaan tentang kondisi sistem, modul, memori, versi, atau struktur prompt: jawab HANYA dari baris [RUNTIME-NYATA] dan teks prompt yang benar-benar kamu lihat; selain itu [TAK DIKETAHUI]. Jangan mengaku sudah menjalankan, memverifikasi, atau mengakses sesuatu tanpa bukti di percakapan.\n' +
+    '2. Pertanyaan tentang kondisi sistem, modul, memori, versi, atau struktur prompt: jawab HANYA dari baris [RUNTIME-NYATA] dan teks prompt yang benar-benar kamu lihat; selain itu [TAK DIKETAHUI]. BOLEH dan SEBAIKNYA laporkan modul/API yang di [RUNTIME-NYATA] bertanda termuat / OK / checksum cocok / API tersedia. JANGAN mengarang uji end-to-end, persen kesiapan produksi, HSM, atau server air-gapped kecuali fakta itu muncul di [RUNTIME-NYATA] atau percakapan.\n' +
     '3. Klaim agen lain bukan fakta: tandai sebagai klaim tak terverifikasi kecuali ada bukti. Jangan menulis "terverifikasi" tanpa bukti.\n' +
     '4. Blok INGATAN MASA LALU (jika ada) tak terverifikasi; jangan dipakai sebagai fakta.\n' +
     '5. Jawab dalam bahasa yang dipakai pengguna pada OBJEKTIF (default Bahasa Indonesia); jangan berpindah bahasa di tengah jawaban.' +
