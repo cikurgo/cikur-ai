@@ -1,3 +1,4 @@
+
 // nexus.omni-core.v3.js — HARDENED EDITION v3.2.1 (FINAL)
 // NO eval, NO Function, NO execution of analyzed code.
 // ---------------------------------------------------------------
@@ -833,3 +834,4 @@
 
   if (typeof module !== 'undefined' && module.exports) module.exports = nexusV3;
 })();
+

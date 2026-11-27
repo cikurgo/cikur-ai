@@ -1,3 +1,4 @@
+
 /*! ═══════════════════════════════════════════════════════════════════
  *  NEXUS INTEGRITY v1.0.0 — Verifikasi integritas modul (aditif, non-mutating)
  *  ─────────────────────────────────────────────────────────────────
@@ -180,13 +181,22 @@
   }
 
   /* ───────────── Artefak: script-text / file ───────────── */
+  /* Normalisasi sumber yang konsisten di semua jalur (hash, links, export).
+     Hanya normalisasi newline; TIDAK trim — agar cocok dengan textContent browser
+     dan dengan cara manifest dibuat. Ini menghilangkan false-MISMATCH. */
+  function normalizeSource(t) {
+    return String(t == null ? '' : t).replace(/\r\n?/g, '\n');
+  }
   function scriptChecksum(id, fresh) {
     if (!fresh && csCache[id] !== undefined) return csCache[id];
     var out = null;
     try {
       if (typeof document !== 'undefined') {
         var el = document.getElementById(id);
-        if (el && el.tagName === 'SCRIPT') { var t = el.textContent || ''; out = { hash: sha256Hex(t), bytes: t.length }; }
+        if (el && el.tagName === 'SCRIPT') {
+          var t = normalizeSource(el.textContent || '');
+          out = { hash: sha256Hex(t), bytes: t.length };
+        }
       }
     } catch (e) { out = null; }
     csCache[id] = out;
@@ -646,7 +656,9 @@
 
   /* ───────────── Tautan ke file mandiri (informasi; tidak memengaruhi status/verdict) ─────────────
      Membandingkan kode inline di HTML dengan file .js mandiri di folder yang sama. Hanya berjalan bila dipanggil, hanya lewat http/https. */
-  function norm(t) { return String(t == null ? '' : t).replace(/\r\n?/g, '\n').trim(); }
+  /* norm untuk perbandingan sibling — sama dengan normalizeSource (tanpa trim)
+     agar status SINKRON/BEDA konsisten dengan checksum utama & manifest. */
+  function norm(t) { return normalizeSource(t); }
   function links() {
     var rows = REG.filter(function (m) { return m.sibling; });
     var proto = String(root.location && root.location.protocol || '');
@@ -765,3 +777,4 @@
     modules: function () { return REG.map(function (m) { return m.id; }); }
   });
 });
+
