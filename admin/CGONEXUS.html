@@ -10353,11 +10353,766 @@ setInterval(function(){if(!document.hidden)sync()},900);sync();
 }catch(err){console.warn('[HOLO-DOCK] gagal dimuat:',err)}})();
 </script>
 <!-- ═══════════════ NEXUS · SPATIAL COMMAND DECK (LBC VAULT + EADI VAULT) ═══════════════
-     Syarat: SuperLBC.js dan SuperEADI.js berada di folder yang SAMA dengan CGONEXUS.html.
+     SuperLBC.js + SuperEADI.js INLINED (v3.0) — full offline / zero external dependency.
      Blok ini mandiri (prefix "nxd-"), tidak mengubah/menimpa kode NEXUS yang sudah ada. -->
 <script>(function(){window.__nxdErr=window.__nxdErr||[];window.addEventListener('error',function(e){try{if(e&&e.filename&&/Super(LBC|EADI)\.js/i.test(e.filename))window.__nxdErr.push(String(e.message||'error').slice(0,140)+' @'+String(e.filename).split('/').pop()+':'+(e.lineno||0))}catch(x){}})})();</script>
-<script src="SuperLBC.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('SuperLBC.js')" onload="(window.__nxdLoaded=window.__nxdLoaded||[]).push('SuperLBC.js')"></script>
-<script src="SuperEADI.js" onerror="(window.__nxdMissing=window.__nxdMissing||[]).push('SuperEADI.js')" onload="(window.__nxdLoaded=window.__nxdLoaded||[]).push('SuperEADI.js')"></script>
+<script id="nx-super-lbc">
+/* SuperLBC.js v3.0 — inlined for full offline/sync (zero external dependency) */
+/*====================================================================*
+ * SuperLBC.js v3.0 – Merkle-Patricia Trie + Schnorr BIP-340 (secp256k1)
+ * NEXUS core · 100% client-side · tanpa dependensi eksternal.
+ * Berjalan di browser (classic/module), Web Worker, dan Node.js.
+ *
+ * API utama : window.NexusLBC  (juga module.exports)
+ * Baru v3  : aritmetika Jacobian + tangga Montgomery (reguler, tanpa invers per langkah),
+ *             Schnorr BIP-340 standar (x-only, tagged hash, nonce hedged, self-verify),
+ *             bukti Merkle (membership/absence) + serialisasi trie.
+ * Kompatibel: canonicalize, MPTNode, MerklePatriciaTrie, SECP256K1, mod,
+ *             modInv, pointAdd, pointMultiply, generateSchnorrProof,
+ *             verifySchnorrProof tetap tersedia sebagai global bila belum dipakai.
+ *====================================================================*/
+(function (global) {
+  'use strict';
+
+  /*------------------------- 0. Utilitas byte ---------------------------*/
+  const enc = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+  const utf8 = s => enc ? enc.encode(s) : Uint8Array.from(unescape(encodeURIComponent(s)), c => c.charCodeAt(0));
+
+  function toBytes(x) {
+    if (x instanceof Uint8Array) return x;
+    if (typeof x === 'string') return utf8(x);
+    if (x instanceof ArrayBuffer) return new Uint8Array(x);
+    if (ArrayBuffer.isView(x)) return new Uint8Array(x.buffer, x.byteOffset, x.byteLength);
+    if (Array.isArray(x)) {
+      if (!x.every(b => Number.isInteger(b) && b >= 0 && b <= 255)) throw new TypeError('Array byte harus berisi integer 0-255');
+      return Uint8Array.from(x);
+    }
+    throw new TypeError('Tipe data tidak didukung (butuh Uint8Array, ArrayBuffer, Array byte, atau string)');
+  }
+  const bytesToHex = b => Array.from(toBytes(b), v => v.toString(16).padStart(2, '0')).join('');
+  function hexToBytes(h) {
+    if (typeof h !== 'string') throw new TypeError('Hex harus string');
+    h = h.replace(/^0x/i, '');
+    if (h.length % 2 || /[^0-9a-f]/i.test(h)) throw new TypeError('String hex tidak valid');
+    const out = new Uint8Array(h.length / 2);
+    for (let i = 0; i < out.length; i++) out[i] = parseInt(h.substr(i * 2, 2), 16);
+    return out;
+  }
+  const bytesToInt = b => { const h = bytesToHex(b); return h ? BigInt('0x' + h) : 0n; };
+  const intToBytes32 = n => hexToBytes(n.toString(16).padStart(64, '0'));
+  function concat(...arr) {
+    const parts = arr.map(toBytes), out = new Uint8Array(parts.reduce((s, p) => s + p.length, 0));
+    let o = 0; for (const p of parts) { out.set(p, o); o += p.length; }
+    return out;
+  }
+  function randomBytes(n) {
+    const c = global.crypto;
+    if (!c || typeof c.getRandomValues !== 'function') throw new Error('CSPRNG (crypto.getRandomValues) tidak tersedia; penandatanganan dibatalkan demi keamanan');
+    const out = new Uint8Array(n);
+    for (let i = 0; i < n; i += 65536) c.getRandomValues(out.subarray(i, Math.min(n, i + 65536)));
+    return out;
+  }
+
+  /*------------------------- 1. SHA-256 sinkron -------------------------*/
+  const K = new Uint32Array(64), H0 = new Uint32Array(8);
+  (function initConst() {
+    const primes = []; for (let n = 2; primes.length < 64; n++) if (primes.every(p => n % p)) primes.push(n);
+    const frac = v => Math.floor((v - Math.floor(v)) * 4294967296);
+    primes.forEach((p, i) => { K[i] = frac(Math.cbrt(p)); if (i < 8) H0[i] = frac(Math.sqrt(p)); });
+  })();
+  function sha256(data) {
+    const msg = toBytes(data), len = msg.length;
+    const total = ((len + 9 + 63) >> 6) << 6, buf = new Uint8Array(total);
+    buf.set(msg); buf[len] = 0x80;
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(total - 8, Math.floor(len / 0x20000000), false);
+    dv.setUint32(total - 4, (len << 3) >>> 0, false);
+    const h = Uint32Array.from(H0), w = new Uint32Array(64);
+    const rr = (x, n) => (x >>> n) | (x << (32 - n));
+    for (let off = 0; off < total; off += 64) {
+      for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4, false);
+      for (let i = 16; i < 64; i++) {
+        const s0 = rr(w[i - 15], 7) ^ rr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+        const s1 = rr(w[i - 2], 17) ^ rr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+      }
+      let [a, b, c, d, e, f, g, hh] = h;
+      for (let i = 0; i < 64; i++) {
+        const t1 = (hh + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+        const t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+        hh = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+      }
+      h[0] += a; h[1] += b; h[2] += c; h[3] += d; h[4] += e; h[5] += f; h[6] += g; h[7] += hh;
+    }
+    const out = new Uint8Array(32), odv = new DataView(out.buffer);
+    h.forEach((v, i) => odv.setUint32(i * 4, v, false));
+    return out;
+  }
+  const sha256Hex = d => bytesToHex(sha256(d));
+
+  /*------------------------- 2. Canonical JSON --------------------------*/
+  const MAX_DEPTH = 512;
+  function canonicalize(node, _seen, _depth) {
+    const seen = _seen || new WeakSet(), depth = _depth || 0;
+    if (depth > MAX_DEPTH) throw new RangeError('Struktur terlalu dalam untuk dikanonikalkan');
+    if (node && typeof node === 'object' && typeof node.toJSON === 'function') node = node.toJSON();
+    switch (typeof node) {
+      case 'bigint': throw new TypeError('BigInt tidak didukung dalam JSON kanonik (ubah ke string lebih dulu)');
+      case 'undefined': case 'function': case 'symbol': return undefined;
+      case 'number': return Number.isFinite(node) ? (node === 0 ? 0 : node) : null;
+    }
+    if (node === null || typeof node !== 'object') return node;
+    if (seen.has(node)) throw new TypeError('Referensi melingkar tidak dapat dikanonikalkan');
+    seen.add(node);
+    try {
+      if (ArrayBuffer.isView(node)) node = Array.from(node);
+      if (Array.isArray(node)) return node.map(v => { const r = canonicalize(v, seen, depth + 1); return r === undefined ? null : r; });
+      const out = {};
+      for (const k of Object.keys(node).sort()) {
+        const r = canonicalize(node[k], seen, depth + 1);
+        if (r !== undefined) Object.defineProperty(out, k, { value: r, enumerable: true, writable: true, configurable: true });
+      }
+      return out;
+    } finally { seen.delete(node); }
+  }
+  function canonicalJSON(value) {
+    const s = JSON.stringify(canonicalize(value));
+    if (s === undefined) throw new TypeError('Nilai tidak dapat diserialisasi ke JSON');
+    return s;
+  }
+
+  /*------------------------- 3. Merkle-Patricia Trie --------------------*/
+  const MPT_TAG = utf8('NEXUS/MPT/v1');
+  class MPTNode {
+    constructor() { this.isLeaf = false; this.value = null; this.children = new Map(); this.hash = null; }
+  }
+  const HEX_KEY = /^[0-9a-f]+$/i;
+  function keyToNibbles(hexKey, strict) {
+    if (typeof hexKey !== 'string' || !HEX_KEY.test(hexKey)) {
+      if (strict) throw new TypeError('Kunci harus string hex tidak kosong (0-9, a-f)');
+      return null;
+    }
+    return Array.from(hexKey, c => parseInt(c, 16));
+  }
+
+  function serializeNode(isLeaf, value, entries) {
+    const parts = [MPT_TAG, Uint8Array.of(isLeaf ? 1 : 0)];
+    if (isLeaf) { const l = new Uint8Array(4); new DataView(l.buffer).setUint32(0, value.length, false); parts.push(l, value); }
+    for (const [nib, h] of entries.slice().sort((a, b) => a[0] - b[0])) parts.push(Uint8Array.of(nib), h);
+    return concat(...parts);
+  }
+
+  class MerklePatriciaTrie {
+    constructor() { this.root = new MPTNode(); this.size = 0; this.root.hash = this._hashNode(this.root); }
+
+    /* hash = SHA-256(tag ‖ flag ‖ [len(4) ‖ value] ‖ (nibble ‖ childHash)*) */
+    _serialize(node) {
+      return serializeNode(node.isLeaf, node.value, Array.from(node.children.entries()).map(([n, c]) => [n, c.hash]));
+    }
+    _hashNode(node) { return sha256(this._serialize(node)); }
+
+    _path(nibs) {
+      const path = [this.root]; let cur = this.root;
+      for (const n of nibs) { cur = cur.children.get(n); if (!cur) return null; path.push(cur); }
+      return path;
+    }
+    _rehash(path) { for (let i = path.length - 1; i >= 0; i--) path[i].hash = this._hashNode(path[i]); }
+
+    /* Sisipkan kunci hex → nilai (Uint8Array/Array byte/ArrayBuffer/string). Mengembalikan root hash (hex). */
+    async put(hexKey, valueBuf) { return this.putSync(hexKey, valueBuf); }
+    putSync(hexKey, valueBuf) {
+      const nibs = keyToNibbles(hexKey, true), value = Uint8Array.from(toBytes(valueBuf));
+      const path = [this.root]; let node = this.root;
+      for (const n of nibs) {
+        if (!node.children.has(n)) { const c = new MPTNode(); c.hash = this._hashNode(c); node.children.set(n, c); }
+        node = node.children.get(n); path.push(node);
+      }
+      if (!node.isLeaf) this.size++;
+      node.isLeaf = true; node.value = value;
+      this._rehash(path);
+      return this.rootHashHex;
+    }
+
+    get(hexKey) {
+      const nibs = keyToNibbles(hexKey, false), path = nibs && this._path(nibs);
+      const node = path && path[path.length - 1];
+      return node && node.isLeaf ? Uint8Array.from(node.value) : null;
+    }
+    has(hexKey) { return this.get(hexKey) !== null; }
+
+    /* Hapus kunci; node kosong dipangkas agar root hash identik dengan trie yang tak pernah memuatnya. */
+    delete(hexKey) {
+      const nibs = keyToNibbles(hexKey, false), path = nibs && this._path(nibs);
+      if (!path || !path[path.length - 1].isLeaf) return false;
+      const last = path[path.length - 1]; last.isLeaf = false; last.value = null; this.size--;
+      for (let i = path.length - 1; i > 0; i--) {
+        if (path[i].isLeaf || path[i].children.size) break;
+        path[i - 1].children.delete(nibs[i - 1]); path.length = i;
+      }
+      this._rehash(path);
+      return true;
+    }
+    clear() { this.root = new MPTNode(); this.size = 0; this.root.hash = this._hashNode(this.root); }
+
+
+    /* Bukti membership/absence: urutan simpul dari akar; tiap langkah memuat saudara (hash) selain jalur kunci. */
+    getProof(hexKey) {
+      const nibs = keyToNibbles(hexKey, true), steps = []; let node = this.root, found = true;
+      for (let i = 0; i <= nibs.length; i++) {
+        const next = i === nibs.length ? null : nibs[i];
+        steps.push({ leaf: node.isLeaf, value: node.isLeaf ? bytesToHex(node.value) : null,
+          siblings: Array.from(node.children.entries()).filter(([n]) => n !== next).sort((a, b) => a[0] - b[0]).map(([n, c]) => [n, bytesToHex(c.hash)]) });
+        if (next === null) break;
+        const nx = node.children.get(next);
+        if (!nx) { found = false; break; }
+        node = nx;
+      }
+      if (found && !node.isLeaf) found = false;
+      return { key: hexKey.toLowerCase(), found, steps };
+    }
+
+    /* Serialisasi / pemulihan (mis. localStorage). Root hash bisa diverifikasi saat memuat. */
+    toJSON() {
+      const out = [], walk = (node, pre) => {
+        if (node.isLeaf) out.push([pre, bytesToHex(node.value)]);
+        for (const [n, c] of Array.from(node.children.entries()).sort((a, b) => a[0] - b[0])) walk(c, pre + n.toString(16));
+      };
+      walk(this.root, '');
+      return { version: 1, root: this.rootHashHex, entries: out.filter(e => e[0] !== '') };
+    }
+    static fromJSON(obj, expectedRootHex) {
+      if (!obj || obj.version !== 1 || !Array.isArray(obj.entries)) throw new TypeError('Format trie tidak dikenal');
+      const t = new MerklePatriciaTrie();
+      for (const [k, v] of obj.entries) t.putSync(k, hexToBytes(v));
+      const want = (expectedRootHex || obj.root || '').toLowerCase();
+      if (want && t.rootHashHex !== want) throw new Error('Root hash tidak cocok: data trie rusak atau diubah');
+      return t;
+    }
+
+    get rootHash() { return Uint8Array.from(this.root.hash); }
+    get rootHashHex() { return bytesToHex(this.root.hash); }
+    _traverse(hexKey) { const n = keyToNibbles(hexKey, false), p = n && this._path(n); return p ? p[p.length - 1] : null; }
+  }
+
+
+  /* Verifikasi bukti terhadap root hash tepercaya. Mengembalikan { valid, found, value } (tidak melempar). */
+  function verifyMPTProof(rootHashHex, proof) {
+    const bad = { valid: false, found: false, value: null };
+    try {
+      const nibs = keyToNibbles(proof.key, true), steps = proof.steps;
+      if (!Array.isArray(steps) || !steps.length || steps.length > nibs.length + 1) return bad;
+      let childHash = null;
+      for (let i = steps.length - 1; i >= 0; i--) {
+        const s = steps[i], entries = s.siblings.map(([n, h]) => {
+          const hb = hexToBytes(h);
+          if (!Number.isInteger(n) || n < 0 || n > 15 || hb.length !== 32) throw new TypeError('sibling cacat');
+          return [n, hb];
+        });
+        if (i < steps.length - 1) entries.push([nibs[i], childHash]);
+        if (new Set(entries.map(e => e[0])).size !== entries.length) return bad;
+        const v = s.leaf ? hexToBytes(s.value) : null;
+        if (s.leaf && v === null) return bad;
+        childHash = sha256(serializeNode(!!s.leaf, v, entries));
+      }
+      if (bytesToHex(childHash) !== String(rootHashHex).toLowerCase()) return bad;
+      const last = steps[steps.length - 1], complete = steps.length === nibs.length + 1;
+      if (complete) return last.leaf ? { valid: true, found: true, value: hexToBytes(last.value) } : { valid: true, found: false, value: null };
+      if (last.siblings.some(([n]) => n === nibs[steps.length - 1])) return bad;   // pemotongan jalur oleh prover
+      return { valid: true, found: false, value: null };
+    } catch (e) { return bad; }
+  }
+
+  /*------------------------- 4. secp256k1 -------------------------------*/
+  const SECP256K1 = Object.freeze({
+    P: 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2fn,
+    N: 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n,
+    Gx: 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798n,
+    Gy: 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8n,
+    B: 7n,
+  });
+  const G = Object.freeze({ x: SECP256K1.Gx, y: SECP256K1.Gy });
+
+  function mod(n, m) { return ((n % m) + m) % m; }
+  function modInv(a, m) {
+    a = mod(a, m);
+    if (a === 0n) throw new RangeError('Invers modular tidak ada untuk 0');
+    let [r0, r1, t0, t1] = [m, a, 0n, 1n];
+    while (r1 !== 0n) { const q = r0 / r1; [r0, r1] = [r1, r0 - q * r1]; [t0, t1] = [t1, t0 - q * t1]; }
+    if (r0 !== 1n) throw new RangeError('Invers modular tidak ada (bilangan tidak koprima)');
+    return mod(t0, m);
+  }
+  function isOnCurve(pt) {
+    const { P, B } = SECP256K1;
+    return !!pt && typeof pt.x === 'bigint' && typeof pt.y === 'bigint' && pt.x >= 0n && pt.x < P && pt.y >= 0n && pt.y < P &&
+      mod(pt.y * pt.y - (pt.x * pt.x * pt.x + B), P) === 0n;
+  }
+  /* ---- Koordinat Jacobian (a = 0): tanpa invers modular per operasi ---- */
+  const jInf = () => ({ X: 1n, Y: 1n, Z: 0n });
+  const toJ = pt => (pt ? { X: pt.x, Y: pt.y, Z: 1n } : jInf());
+  function fromJ(p) {
+    if (p.Z === 0n) return null;
+    const m = SECP256K1.P, zi = modInv(p.Z, m), zi2 = zi * zi % m;
+    return { x: p.X * zi2 % m, y: p.Y * zi2 % m * zi % m };
+  }
+  function jDouble(p) {
+    const m = SECP256K1.P;
+    if (p.Z === 0n || p.Y === 0n) return jInf();
+    const A = p.X * p.X % m, B = p.Y * p.Y % m, Cc = B * B % m, t = p.X + B;
+    const D = mod(2n * (t * t - A - Cc), m), E = 3n * A, F = E * E % m;
+    const X3 = mod(F - 2n * D, m);
+    return { X: X3, Y: mod(E * (D - X3) - 8n * Cc, m), Z: mod(2n * p.Y * p.Z, m) };
+  }
+  function jAdd(p, q) {
+    if (p.Z === 0n) return q;
+    if (q.Z === 0n) return p;
+    const m = SECP256K1.P, Z1 = p.Z * p.Z % m, Z2 = q.Z * q.Z % m;
+    const U1 = p.X * Z2 % m, U2 = q.X * Z1 % m, S1 = p.Y * q.Z % m * Z2 % m, S2 = q.Y * p.Z % m * Z1 % m;
+    if (U1 === U2) return S1 === S2 ? jDouble(p) : jInf();
+    const H = mod(U2 - U1, m), R = mod(S2 - S1, m), HH = H * H % m, HHH = H * HH % m, V = U1 * HH % m;
+    const X3 = mod(R * R - HHH - 2n * V, m);
+    return { X: X3, Y: mod(R * (V - X3) - S1 * HHH, m), Z: H * p.Z % m * q.Z % m };
+  }
+  /* Tangga Montgomery: 256 iterasi tetap, urutan operasi seragam (add+double tiap bit). */
+  function jMul(k, pt) {
+    k = mod(k, SECP256K1.N);
+    if (k === 0n || !pt) return jInf();
+    let R0 = jInf(), R1 = toJ(pt);
+    for (let i = 255; i >= 0; i--) {
+      if ((k >> BigInt(i)) & 1n) { R0 = jAdd(R0, R1); R1 = jDouble(R1); }
+      else { R1 = jAdd(R0, R1); R0 = jDouble(R0); }
+    }
+    return R0;
+  }
+  function pointAdd(A, Q) { return fromJ(jAdd(toJ(A), toJ(Q))); }
+  function pointMultiply(k, pt) {
+    if (typeof k !== 'bigint') throw new TypeError('Skalar harus BigInt');
+    return fromJ(jMul(k, pt));
+  }
+  const samePoint = (a, b) => (!a && !b) || (!!a && !!b && a.x === b.x && a.y === b.y);
+
+  function parsePrivateKey(k) {
+    let d;
+    if (typeof k === 'bigint') d = k;
+    else if (typeof k === 'string') d = bytesToInt(hexToBytes(k));
+    else if (k instanceof Uint8Array || Array.isArray(k)) d = bytesToInt(toBytes(k));
+    else throw new TypeError('Private key harus BigInt, hex string, atau byte array');
+    if (d < 1n || d >= SECP256K1.N) throw new RangeError('Private key di luar rentang [1, N-1]');
+    return d;
+  }
+  function parsePublicKey(pk) {
+    let pt = pk;
+    if (typeof pk === 'string' || pk instanceof Uint8Array) {
+      const b = typeof pk === 'string' ? hexToBytes(pk) : pk;
+      if (b.length !== 65 || b[0] !== 4) throw new TypeError('Public key bytes harus 65 byte tak terkompresi (0x04‖x‖y)');
+      pt = { x: bytesToInt(b.subarray(1, 33)), y: bytesToInt(b.subarray(33)) };
+    }
+    if (!isOnCurve(pt)) throw new RangeError('Public key tidak berada pada kurva secp256k1');
+    return pt;
+  }
+  function randomScalar() {
+    for (;;) { const k = bytesToInt(randomBytes(32)); if (k >= 1n && k < SECP256K1.N) return k; }
+  }
+  const generatePrivateKey = randomScalar;
+  const getPublicKey = priv => pointMultiply(parsePrivateKey(priv), G);
+
+  /*------------------------- 5. Schnorr ---------------------------------*/
+  const SCHNORR_TAG = utf8('NEXUS/LBC/schnorr/v1');
+  function challenge(R, PK, msg) {
+    return mod(bytesToInt(sha256(concat(SCHNORR_TAG, intToBytes32(R.x), intToBytes32(R.y), intToBytes32(PK.x), intToBytes32(PK.y), toBytes(msg)))), SECP256K1.N);
+  }
+  /* Bukti = { R:{x,y}, s }. Nonce acak CSPRNG; tantangan memakai hash R‖PK‖pesan. */
+  async function generateSchnorrProof(privateKey, messageHash) {
+    const d = parsePrivateKey(privateKey), PK = getPublicKey(d), msg = toBytes(messageHash);
+    let k, R;
+    do { k = randomScalar(); R = pointMultiply(k, G); } while (!R);
+    const s = mod(k + challenge(R, PK, msg) * d, SECP256K1.N);
+    return { R, s };
+  }
+  /* Verifikasi: s·G == R + c·PK. Input cacat → false (tidak melempar). */
+  async function verifySchnorrProof(publicKey, messageHash, proof) {
+    try {
+      const PK = parsePublicKey(publicKey), msg = toBytes(messageHash);
+      if (!proof || typeof proof.s !== 'bigint' || proof.s < 0n || proof.s >= SECP256K1.N || !isOnCurve(proof.R)) return false;
+      const c = challenge(proof.R, PK, msg);
+      return samePoint(pointMultiply(proof.s, G), pointAdd(proof.R, pointMultiply(c, PK)));
+    } catch (e) { return false; }
+  }
+
+  /*------------------------- 5b. Schnorr BIP-340 (standar) --------------*/
+  const tagCache = new Map();
+  function taggedHash(tag, ...msgs) {
+    let th = tagCache.get(tag);
+    if (!th) { th = sha256(utf8(tag)); tagCache.set(tag, th); }
+    return sha256(concat(th, th, ...msgs));
+  }
+  function powMod(b, e, m) { let r = 1n; b %= m; while (e > 0n) { if (e & 1n) r = r * b % m; b = b * b % m; e >>= 1n; } return r; }
+  function liftX(x) {
+    const p = SECP256K1.P;
+    if (x < 0n || x >= p) return null;
+    const c = mod(x * x * x + SECP256K1.B, p), y = powMod(c, (p + 1n) / 4n, p);
+    return mod(y * y, p) === c ? { x, y: y % 2n === 0n ? y : p - y } : null;
+  }
+  const xorBytes = (a, b) => a.map((v, i) => v ^ b[i]);
+  const asHex = v => (typeof v === 'string' ? hexToBytes(v) : toBytes(v));
+
+  /* Kunci publik x-only 32 byte (BIP-340). */
+  function schnorrGetPublicKey(privateKey) { return intToBytes32(pointMultiply(parsePrivateKey(privateKey), G).x); }
+  function generateKeyPair() {
+    const d = randomScalar();
+    return { privateKey: bytesToHex(intToBytes32(d)), publicKey: bytesToHex(schnorrGetPublicKey(d)) };
+  }
+  /* Tanda tangan 64 byte. msg: bytes/string(UTF-8). aux (32 byte) opsional → nonce hedged; tanpa CSPRNG jatuh ke deterministik. */
+  function schnorrSign(privateKey, message, aux) {
+    const msg = toBytes(message), N = SECP256K1.N, d0 = parsePrivateKey(privateKey), Pt = pointMultiply(d0, G);
+    const d = Pt.y % 2n === 0n ? d0 : N - d0;
+    let a = aux === undefined ? null : toBytes(aux);
+    if (a && a.length !== 32) throw new RangeError('aux harus 32 byte');
+    if (!a) { try { a = randomBytes(32); } catch (e) { a = new Uint8Array(32); } }
+    const t = xorBytes(intToBytes32(d), taggedHash('BIP0340/aux', a));
+    const k0 = mod(bytesToInt(taggedHash('BIP0340/nonce', t, intToBytes32(Pt.x), msg)), N);
+    if (k0 === 0n) throw new Error('Nonce nol – ulangi dengan aux berbeda');
+    const R = pointMultiply(k0, G), k = R.y % 2n === 0n ? k0 : N - k0;
+    const e = mod(bytesToInt(taggedHash('BIP0340/challenge', intToBytes32(R.x), intToBytes32(Pt.x), msg)), N);
+    const sig = concat(intToBytes32(R.x), intToBytes32(mod(k + e * d, N)));
+    if (!schnorrVerify(sig, msg, intToBytes32(Pt.x))) throw new Error('Self-verify gagal (kemungkinan fault); tanda tangan dibuang');
+    return sig;
+  }
+  /* sig/publicKey: bytes atau hex string; message: bytes/string(UTF-8). Input cacat → false. */
+  function schnorrVerify(signature, message, publicKey) {
+    try {
+      const sig = asHex(signature), pk = asHex(publicKey), msg = toBytes(message), N = SECP256K1.N;
+      if (sig.length !== 64 || pk.length !== 32) return false;
+      const Pt = liftX(bytesToInt(pk)), r = bytesToInt(sig.subarray(0, 32)), s = bytesToInt(sig.subarray(32));
+      if (!Pt || r >= SECP256K1.P || s >= N) return false;
+      const e = mod(bytesToInt(taggedHash('BIP0340/challenge', sig.subarray(0, 32), pk, msg)), N);
+      const R = fromJ(jAdd(jMul(s, G), jMul(mod(-e, N), Pt)));
+      return !!R && R.y % 2n === 0n && R.x === r;
+    } catch (e) { return false; }
+  }
+
+  /*------------------------- 6. Self-test -------------------------------*/
+  async function selfTest() {
+    const r = [], t = (name, ok) => r.push({ name, ok: !!ok });
+    t('SHA-256 "abc"', sha256Hex('abc') === 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+    t('SHA-256 kosong', sha256Hex('') === 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+    t('SHA-256 multi-blok', sha256Hex('a'.repeat(1000)) === '41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3');
+    t('Konstanta N (64 digit hex)', SECP256K1.N.toString(16).length === 64);
+    t('G pada kurva', isOnCurve(G));
+    t('N·G = ∞', pointMultiply(SECP256K1.N, G) === null);
+    t('2G = G+G', samePoint(pointMultiply(2n, G), pointAdd(G, G)));
+    t('Kanonik urut kunci', canonicalJSON({ b: 1, a: [2, { d: 1, c: 2 }] }) === '{"a":[2,{"c":2,"d":1}],"b":1}');
+    const cyc = {}; cyc.self = cyc; let thr = false; try { canonicalize(cyc); } catch (e) { thr = true; } t('Tolak referensi melingkar', thr);
+    const a = new MerklePatriciaTrie(), b = new MerklePatriciaTrie();
+    a.putSync('abc', 'satu'); a.putSync('abd', 'dua'); b.putSync('abd', 'dua'); b.putSync('abc', 'satu');
+    t('Root hash deterministik (urutan bebas)', a.rootHashHex === b.rootHashHex);
+    const before = a.rootHashHex; a.putSync('abc', 'ubah');
+    t('Root hash berubah saat nilai berubah', a.rootHashHex !== before);
+    a.putSync('abc', 'satu'); a.putSync('ff', 'x'); a.delete('ff');
+    t('Delete memulihkan root hash', a.rootHashHex === before && a.size === 2);
+    const priv = generatePrivateKey(), pub = getPublicKey(priv), msg = sha256('nexus');
+    const proof = await generateSchnorrProof(priv, msg);
+    t('Schnorr: bukti valid lolos', await verifySchnorrProof(pub, msg, proof));
+    t('Schnorr: pesan diubah ditolak', !(await verifySchnorrProof(pub, sha256('palsu'), proof)));
+    t('Schnorr: kunci lain ditolak', !(await verifySchnorrProof(getPublicKey(generatePrivateKey()), msg, proof)));
+    t('Schnorr: input cacat → false', (await verifySchnorrProof(pub, msg, { R: null, s: 1n })) === false);
+    // Vektor resmi BIP-340 (0 dan 1)
+    const v0 = { sk: '0000000000000000000000000000000000000000000000000000000000000003', pk: 'F9308A019258C31049344F85F89D5229B531C845836F99B08601F113BCE036F9',
+      aux: '00'.repeat(32), msg: '00'.repeat(32), sig: 'E907831F80848D1069A5371B402410364BDF1C5F8307B0084C55F1CE2DCA821525F66A4A85EA8B71E482A74F382D2CE5EBEEE8FDB2172F477DF4900D310536C0' };
+    const v1 = { sk: 'B7E151628AED2A6ABF7158809CF4F3C762E7160F38B4DA56A784D9045190CFEF', pk: 'DFF1D77F2A671C5F36183726DB2341BE58FEAE1DA2DECED843240F7B502BA659',
+      aux: '00'.repeat(31) + '01', msg: '243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89', sig: '6896BD60EEAE296DB48A229FF71DFE071BDE413E6D43F917DC8DCF8C78DE33418906D11AC976ABCCB20B091292BFF4EA897EFCB639EA871CFA95F6DE339E4B0A' };
+    for (const [i, v] of [v0, v1].entries()) {
+      t('BIP-340 vektor ' + i + ': kunci publik', bytesToHex(schnorrGetPublicKey(v.sk)) === v.pk.toLowerCase());
+      t('BIP-340 vektor ' + i + ': tanda tangan identik', bytesToHex(schnorrSign(v.sk, hexToBytes(v.msg), hexToBytes(v.aux))) === v.sig.toLowerCase());
+      t('BIP-340 vektor ' + i + ': verifikasi', schnorrVerify(v.sig, hexToBytes(v.msg), v.pk));
+    }
+    const kp = generateKeyPair(), sg = schnorrSign(kp.privateKey, 'halo nexus');
+    t('BIP-340: round-trip + tolak pesan lain', schnorrVerify(sg, 'halo nexus', kp.publicKey) && !schnorrVerify(sg, 'halo', kp.publicKey));
+    const tampered = Uint8Array.from(sg); tampered[40] ^= 1;
+    t('BIP-340: tanda tangan diubah ditolak', !schnorrVerify(tampered, 'halo nexus', kp.publicKey));
+    // Bukti Merkle
+    const mt = new MerklePatriciaTrie(); ['a1', 'a1f', 'b2', '0c9'].forEach((k, i) => mt.putSync(k, 'v' + i));
+    const root = mt.rootHashHex, pf = mt.getProof('a1f'), pa = mt.getProof('a2'), pn = mt.getProof('a');
+    const vf = verifyMPTProof(root, pf), va = verifyMPTProof(root, pa), vn = verifyMPTProof(root, pn);
+    t('Bukti membership valid', vf.valid && vf.found && new TextDecoder().decode(vf.value) === 'v1');
+    t('Bukti absence valid', va.valid && !va.found && vn.valid && !vn.found);
+    const forged = JSON.parse(JSON.stringify(pf)); forged.steps[forged.steps.length - 1].value = bytesToHex(utf8('palsu'));
+    t('Bukti dipalsukan ditolak', !verifyMPTProof(root, forged).valid && !verifyMPTProof('00'.repeat(32), pf).valid);
+    t('Serialisasi trie bolak-balik', MerklePatriciaTrie.fromJSON(JSON.parse(JSON.stringify(mt.toJSON()))).rootHashHex === root);
+    return { ok: r.every(x => x.ok), results: r };
+  }
+
+  /*------------------------- 7. Ekspor ----------------------------------*/
+  const API = { version: '3.0.0', canonicalize, canonicalJSON, MPTNode, MerklePatriciaTrie, SECP256K1, G, mod, modInv, isOnCurve,
+    pointAdd, pointMultiply, generatePrivateKey, getPublicKey, generateSchnorrProof, verifySchnorrProof,
+    schnorrSign, schnorrVerify, schnorrGetPublicKey, generateKeyPair, taggedHash, verifyMPTProof,
+    sha256, sha256Hex, bytesToHex, hexToBytes, toBytes, selfTest,
+    getMeta: function () { var b = { id: 'NexusLBC', version: '3.0.0', checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; } };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  global.NexusLBC = API;
+  ['canonicalize', 'MPTNode', 'MerklePatriciaTrie', 'SECP256K1', 'mod', 'modInv', 'pointAdd', 'pointMultiply', 'generateSchnorrProof', 'verifySchnorrProof']
+    .forEach(n => { if (!(n in global)) global[n] = API[n]; });
+})(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this);
+
+try{(window.__nxdLoaded=window.__nxdLoaded||[]).push("SuperLBC.js")}catch(e){}
+</script>
+<script id="nx-super-eadi">
+/* SuperEADI.js v3.0 — inlined for full offline/sync (zero external dependency) */
+/**
+ * SuperEADI.js v3.0 – Ratio-based DCT Watermarking (Titanium Grade)
+ * NEXUS core · 100% client-side (Canvas 2D / OffscreenCanvas), tanpa dependensi.
+ *
+ * API utama : window.NexusEADI (juga module.exports)
+ * Kompatibel: dct2D, idct2D, embedSVD, extractSVD tetap tersedia sebagai global bila belum dipakai.
+ *
+ * Baru v3: redundansi + voting lunak (tahan kompresi), kunci sebar blok, framing payload ber-CRC32
+ *          (embedBytes/embedText tanpa perlu tahu panjang), laporan PSNR.
+ * Perbaikan utama v2:
+ *  - Rumus rata-rata embed diperbaiki (c2 dulu memakai c1 yang sudah berubah).
+ *  - Warna asli dipertahankan (hanya luminans yang digeser, bukan diubah jadi abu-abu).
+ *  - Tiap blok diverifikasi pasca-kuantisasi 8-bit dan diperkuat otomatis bila lemah.
+ *  - Hanya blok 8×8 penuh yang dipakai (blok tepi berpadding nol tidak bisa diekstrak andal).
+ *  - Validasi input, cek kapasitas, penanganan canvas tercemar, DCT berbasis tabel (jauh lebih cepat).
+ */
+(function (global) {
+  'use strict';
+
+  const clamp = v => Math.max(0, Math.min(255, Math.round(v)));
+  // Luminans (Y) – koefisien BT.601 (dipertahankan agar kompatibel dengan gambar lama)
+  const rgbToY = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
+
+  // Koefisien DCT mid-frequency yang dipakai
+  const U1 = 4, V1 = 5, U2 = 5, V2 = 4;
+  const DELTA = 25;            // jarak rasio: makin besar makin tahan kompresi, visual makin terlihat
+  const MAX_ATTEMPTS = 5, MAX_PIXELS = 100e6;
+
+  /*---------------------- DCT 8×8 (separabel, tabel cosinus) ----------------------*/
+  const COS = Array.from({ length: 8 }, (_, u) => Array.from({ length: 8 }, (_, x) => Math.cos((2 * x + 1) * u * Math.PI / 16)));
+  const C = u => (u === 0 ? Math.SQRT1_2 : 1);
+  const grid = () => Array.from({ length: 8 }, () => new Array(8).fill(0));
+
+  const dct2D = block => {
+    const tmp = grid(), coeff = grid();
+    for (let u = 0; u < 8; u++) for (let y = 0; y < 8; y++) {
+      let s = 0; for (let x = 0; x < 8; x++) s += block[x][y] * COS[u][x];
+      tmp[u][y] = s;
+    }
+    for (let u = 0; u < 8; u++) for (let v = 0; v < 8; v++) {
+      let s = 0; for (let y = 0; y < 8; y++) s += tmp[u][y] * COS[v][y];
+      coeff[u][v] = 0.25 * C(u) * C(v) * s;
+    }
+    return coeff;
+  };
+  const idct2D = coeff => {
+    const tmp = grid(), block = grid();
+    for (let u = 0; u < 8; u++) for (let y = 0; y < 8; y++) {
+      let s = 0; for (let v = 0; v < 8; v++) s += C(v) * coeff[u][v] * COS[v][y];
+      tmp[u][y] = s;
+    }
+    for (let x = 0; x < 8; x++) for (let y = 0; y < 8; y++) {
+      let s = 0; for (let u = 0; u < 8; u++) s += C(u) * tmp[u][y] * COS[u][x];
+      block[x][y] = 0.25 * s;
+    }
+    return block;
+  };
+
+  /*---------------------- Blok & piksel ----------------------*/
+  // Blok Y 8×8 (nol bila di luar gambar) – dipertahankan untuk kompatibilitas
+  const getBlock = (data, w, h, bx, by) => {
+    const block = grid();
+    for (let x = 0; x < 8; x++) {
+      if (by + x >= h) continue;
+      for (let y = 0; y < 8; y++) {
+        if (bx + y >= w) continue;
+        const i = ((by + x) * w + bx + y) * 4;
+        block[x][y] = rgbToY(data[i], data[i + 1], data[i + 2]);
+      }
+    }
+    return block;
+  };
+
+  /* Tanamkan satu bit ke satu blok penuh. true bila margin akhir cukup kuat. */
+  function embedBlock(data, w, bx, by, bit, delta) {
+    const Y0 = grid(), px = [];
+    for (let x = 0; x < 8; x++) for (let y = 0; y < 8; y++) {
+      const i = ((by + x) * w + bx + y) * 4;
+      px.push(i); Y0[x][y] = rgbToY(data[i], data[i + 1], data[i + 2]);
+    }
+    const c = dct2D(Y0), margin = (a, b) => (bit ? a - b : b - a);
+    if (margin(c[U1][V1], c[U2][V2]) >= delta) return true;      // sudah memenuhi
+    const m = (c[U1][V1] + c[U2][V2]) / 2;                       // rata-rata dihitung SEBELUM diubah
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const d = delta * (1 + 0.5 * attempt), cc = c.map(r => r.slice());
+      cc[U1][V1] = bit ? m + d / 2 : m - d / 2;
+      cc[U2][V2] = bit ? m - d / 2 : m + d / 2;
+      const Yn = idct2D(cc), out = [], Yq = grid();
+      px.forEach((i, k) => {
+        const x = k >> 3, y = k & 7, dY = Yn[x][y] - Y0[x][y];   // geser Y, pertahankan warna
+        const r = clamp(data[i] + dY), g = clamp(data[i + 1] + dY), b = clamp(data[i + 2] + dY);
+        out.push(r, g, b); Yq[x][y] = rgbToY(r, g, b);
+      });
+      const q = dct2D(Yq), ok = margin(q[U1][V1], q[U2][V2]) >= delta / 2;   // cek setelah kuantisasi 8-bit
+      if (ok || attempt === MAX_ATTEMPTS - 1) {
+        px.forEach((i, k) => { data[i] = out[k * 3]; data[i + 1] = out[k * 3 + 1]; data[i + 2] = out[k * 3 + 2]; });
+        return ok;
+      }
+    }
+    return false;
+  }
+
+  /*---------------------- Sumber gambar & canvas ----------------------*/
+  function dimsOf(src) {
+    if (!src || typeof src !== 'object') throw new TypeError('Sumber gambar tidak valid (butuh img/canvas/ImageBitmap)');
+    if ('complete' in src && (!src.complete || (src.naturalWidth === 0 && !src.width))) throw new Error('Gambar belum selesai dimuat atau rusak');
+    const w = src.naturalWidth || src.videoWidth || src.width, h = src.naturalHeight || src.videoHeight || src.height;
+    if (!(w > 0 && h > 0)) throw new Error('Dimensi gambar tidak valid');
+    if (w * h > MAX_PIXELS) throw new RangeError('Gambar terlalu besar (maks 100 megapiksel)');
+    return { w: Math.floor(w), h: Math.floor(h) };
+  }
+  function makeCanvas(w, h) {
+    if (typeof document !== 'undefined') { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+    if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h);
+    throw new Error('Canvas 2D tidak tersedia di lingkungan ini');
+  }
+  function readPixels(src) {
+    const { w, h } = dimsOf(src), canvas = makeCanvas(w, h);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) throw new Error('Tidak dapat membuat konteks Canvas 2D');
+    ctx.drawImage(src, 0, 0);
+    let imgData;
+    try { imgData = ctx.getImageData(0, 0, w, h); }
+    catch (e) { throw new Error('Canvas tercemar: gambar lintas-origin tanpa CORS tidak dapat dibaca (' + (e && e.name || 'SecurityError') + ')'); }
+    return { w, h, canvas, ctx, imgData };
+  }
+
+  /*---------------------- Tata letak blok (redundansi + kunci sebar) ----------------------*/
+  const strSeed = s => { let h = 2166136261; for (const ch of String(s)) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const mulberry = a => () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  function parseOpts(opts, w, h) {
+    const o = opts || {}, delta = o.delta > 0 ? +o.delta : DELTA, rep = o.redundancy === undefined ? 1 : Math.floor(+o.redundancy);
+    if (!(rep >= 1 && rep <= 99) || !Number.isFinite(rep)) throw new RangeError('redundancy harus bilangan bulat 1-99');
+    const total = (w >> 3) * (h >> 3), order = Array.from({ length: total }, (_, i) => i);
+    if (o.key !== undefined && o.key !== '') { const rnd = mulberry(strSeed(o.key)); for (let i = total - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; } }
+    return { delta, rep, order, total, cap: Math.floor(total / rep), bw: w >> 3 };
+  }
+  const blockXY = (L, idx) => { const b = L.order[idx]; return [(b % L.bw) * 8, Math.floor(b / L.bw) * 8]; };
+  const capacityOf = (w, h, opts) => parseOpts(opts, w, h).cap;
+  const capacity = (src, opts) => { const { w, h } = dimsOf(src); return capacityOf(w, h, opts); };
+  const psnrOf = (a, b) => { let se = 0, n = 0; for (let i = 0; i < a.length; i += 4) for (let k = 0; k < 3; k++) { const d = a[i + k] - b[i + k]; se += d * d; n++; } return se === 0 ? Infinity : 10 * Math.log10(255 * 255 / (se / n)); };
+
+  /*---------------------- EMBED ----------------------*/
+  // opts: { delta=25, redundancy=1, key }. redundancy=r → tiap bit ditanam di r blok berjauhan (voting lunak saat ekstrak).
+  const embedSVD = (imageElement, payload, opts) => {
+    if (typeof payload !== 'string' || !/^[01]+$/.test(payload)) throw new Error('Payload must be binary string');
+    const { w, h, canvas, ctx, imgData } = readPixels(imageElement), L = parseOpts(opts, w, h);
+    if (payload.length > L.cap) throw new RangeError(`Payload ${payload.length} bit melebihi kapasitas gambar (${L.cap} bit pada redundancy ${L.rep})`);
+    const data = imgData.data, before = data.slice(); let weak = 0;
+    for (let i = 0; i < payload.length; i++) {
+      const bit = payload.charCodeAt(i) === 49 ? 1 : 0;
+      for (let k = 0; k < L.rep; k++) { const [bx, by] = blockXY(L, i + k * L.cap); if (!embedBlock(data, w, bx, by, bit, L.delta)) weak++; }
+    }
+    ctx.putImageData(imgData, 0, 0);
+    canvas.nexusReport = { bits: payload.length, capacity: L.cap, redundancy: L.rep, weakBlocks: weak, delta: L.delta, psnr: psnrOf(before, data) };
+    return canvas;
+  };
+
+  /*---------------------- EXTRACT ----------------------*/
+  function readBits(data, w, h, n, L) {
+    const bits = [], m = Math.min(n, L.cap);
+    for (let i = 0; i < m; i++) {
+      let sum = 0;
+      for (let k = 0; k < L.rep; k++) { const [bx, by] = blockXY(L, i + k * L.cap), c = dct2D(getBlock(data, w, h, bx, by)); sum += c[U1][V1] - c[U2][V2]; }
+      bits.push(sum > 0 ? '1' : '0');                              // r=1 identik dengan aturan lama: c1 > c2 → '1'
+    }
+    return bits.join('');
+  }
+  const extractSVD = (imageElement, payloadLength, opts) => {
+    const n = Math.floor(+payloadLength);
+    if (!Number.isFinite(n) || n < 1) throw new RangeError('payloadLength harus bilangan bulat positif');
+    const { w, h, imgData } = readPixels(imageElement);
+    return readBits(imgData.data, w, h, n, parseOpts(opts, w, h));
+  };
+
+  /*---------------------- Framing ber-CRC32 (tanpa perlu panjang) ----------------------*/
+  // Header 72 bit: magic "NX"(16) ‖ versi(8) ‖ panjang byte(16) ‖ CRC32 payload(32), lalu payload.
+  const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = u8 => { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const HDR_BITS = 72;
+  const bytesToBits = u8 => Array.from(u8, b => b.toString(2).padStart(8, '0')).join('');
+  const bitsToBytes = bits => Uint8Array.from(bits.match(/.{8}/g) || [], b => parseInt(b, 2));
+  function embedBytes(imageElement, bytes, opts) {
+    const u8 = bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes);
+    if (u8.length > 65535) throw new RangeError('Payload maksimum 65535 byte');
+    const hd = new Uint8Array(9), dv = new DataView(hd.buffer);
+    dv.setUint16(0, 0x4E58); hd[2] = 1; dv.setUint16(3, u8.length); dv.setUint32(5, crc32(u8));
+    return embedSVD(imageElement, bytesToBits(hd) + bytesToBits(u8), opts);
+  }
+  /* Hasil: { ok, bytes, length, crcOk, reason } – tidak melempar untuk gambar tanpa watermark. */
+  function extractBytes(imageElement, opts) {
+    const { w, h, imgData } = readPixels(imageElement), L = parseOpts(opts, w, h), data = imgData.data;
+    if (L.cap < HDR_BITS) return { ok: false, reason: 'Gambar terlalu kecil' };
+    const hd = bitsToBytes(readBits(data, w, h, HDR_BITS, L)), dv = new DataView(hd.buffer);
+    if (dv.getUint16(0) !== 0x4E58 || hd[2] !== 1) return { ok: false, reason: 'Tanda watermark tidak ditemukan (kunci/redundancy salah, atau gambar rusak)' };
+    const len = dv.getUint16(3), crc = dv.getUint32(5);
+    if (HDR_BITS + len * 8 > L.cap) return { ok: false, reason: 'Panjang di header melebihi kapasitas' };
+    const body = bitsToBytes(readBits(data, w, h, HDR_BITS + len * 8, L).slice(HDR_BITS)), crcOk = crc32(body) === crc;
+    return { ok: crcOk, bytes: body, length: len, crcOk, reason: crcOk ? '' : 'CRC tidak cocok (payload rusak)' };
+  }
+  const embedText = (img, text, opts) => embedBytes(img, new TextEncoder().encode(String(text)), opts);
+  const extractText = (img, opts) => { const r = extractBytes(img, opts); return r.ok ? { ...r, text: new TextDecoder().decode(r.bytes) } : r; };
+
+  /*---------------------- Helper bit ----------------------*/
+  const textToBits = s => Array.from(new TextEncoder().encode(String(s)), b => b.toString(2).padStart(8, '0')).join('');
+  const bitsToText = bits => {
+    if (!/^[01]*$/.test(bits)) throw new TypeError('Bukan string biner');
+    const bytes = bits.match(/.{8}/g) || [];
+    return new TextDecoder().decode(Uint8Array.from(bytes, b => parseInt(b, 2)));
+  };
+  const hexToBits = hex => {
+    if (typeof hex !== 'string' || /[^0-9a-f]/i.test(hex)) throw new TypeError('Hex tidak valid');
+    return Array.from(hex, ch => parseInt(ch, 16).toString(2).padStart(4, '0')).join('');
+  };
+  const bitsToHex = bits => {
+    if (!/^[01]*$/.test(bits) || bits.length % 4) throw new TypeError('Bit harus kelipatan 4 dan biner');
+    return (bits.match(/.{4}/g) || []).map(b => parseInt(b, 2).toString(16)).join('');
+  };
+
+  /*---------------------- Self-test (tanpa canvas) ----------------------*/
+  function selfTest() {
+    const r = [], t = (name, ok) => r.push({ name, ok: !!ok });
+    let seed = 12345; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const blk = grid().map(row => row.map(() => rnd() * 255));
+    const back = idct2D(dct2D(blk));
+    t('DCT→IDCT bolak-balik', blk.every((row, x) => row.every((v, y) => Math.abs(v - back[x][y]) < 1e-9)));
+    const w = 8, mk = () => { const d = new Uint8ClampedArray(256); for (let i = 0; i < 64; i++) { d[i * 4] = 40 + rnd() * 170; d[i * 4 + 1] = 40 + rnd() * 170; d[i * 4 + 2] = 40 + rnd() * 170; d[i * 4 + 3] = 255; } return d; };
+    let okAll = true, alphaKept = true;
+    for (let n = 0; n < 40; n++) {
+      const bit = n & 1, d = mk(); embedBlock(d, w, 0, 0, bit, DELTA);
+      const noisy = d.map((v, i) => (i & 3) === 3 ? v : clamp(v + (rnd() * 4 - 2)));       // simulasi derau ±2
+      const c = dct2D(getBlock(noisy, 8, 8, 0, 0));
+      if ((c[U1][V1] > c[U2][V2] ? 1 : 0) !== bit) okAll = false;
+      for (let i = 3; i < 256; i += 4) if (d[i] !== 255) alphaKept = false;
+    }
+    t('Bit bertahan setelah kuantisasi + derau', okAll);
+    t('Kanal alpha tidak berubah', alphaKept);
+    t('Helper teks↔bit (UTF-8)', bitsToText(textToBits('Nexus ✓')) === 'Nexus ✓');
+    t('Helper hex↔bit', bitsToHex(hexToBits('a5f0')) === 'a5f0');
+    t('CRC32 vektor standar', crc32(new TextEncoder().encode('123456789')) === 0xCBF43926);
+    t('Tata letak kunci sebar deterministik & permutasi', (() => { const a = parseOpts({ key: 'k' }, 64, 64).order, b = parseOpts({ key: 'k' }, 64, 64).order; return a.join() === b.join() && new Set(a).size === 64; })());
+    return { ok: r.every(x => x.ok), results: r };
+  }
+
+  /*---------------------- Ekspor ----------------------*/
+  const API = { version: '3.0.0', DELTA, dct2D, idct2D, getBlock, rgbToY, embedSVD, extractSVD, capacity,
+    embedBytes, extractBytes, embedText, extractText, crc32,
+    textToBits, bitsToText, hexToBits, bitsToHex, selfTest,
+    getMeta: function () { var b = { id: 'NexusEADI', version: '3.0.0', checksum: null, fingerprint: null, source: 'none', status: 'SKIP' }; try { var I = typeof globalThis !== 'undefined' ? globalThis.NexusIntegrity : null; if (I && typeof I.describe === 'function') return I.describe(b.id, b); } catch (e) {} return b; } };
+  if (typeof module !== 'undefined' && module.exports) module.exports = API;
+  global.NexusEADI = API;
+  ['dct2D', 'idct2D', 'embedSVD', 'extractSVD'].forEach(n => { if (!(n in global)) global[n] = API[n]; });
+})(typeof globalThis !== 'undefined' ? globalThis : typeof self !== 'undefined' ? self : this);
+
+try{(window.__nxdLoaded=window.__nxdLoaded||[]).push("SuperEADI.js")}catch(e){}
+</script>
 <script id="nxd-resolve">
 /* Resolver duck-typing: jika file termuat tetapi global bernama lain, buat alias NexusLBC / NexusEADI (hanya bila API cocok) */
 (function(){try{
@@ -19823,8 +20578,8 @@ html body #instruments {
     { id: 'NexusTruth',      g: 'NexusTruth',      script: 'nexus-truth-core', sibling: 'nexus_truth_core_v13_7_2.js', req: true,  test: 'truth',  tier: 'LIVE',      note: 'SSRF guard + entity/quote verification aktif di klien' },
     { id: 'NexusOmniGuard',  g: 'NexusOmniGuard',  script: 'nx-omni-sentinel',        req: true,               tier: 'PARTIAL',   note: 'pemindaian statis Aegis; belum pen-test / SOC-2 otomatis' },
     { id: 'NexusOmniCoreV3', g: 'NexusOmniCoreV3', script: 'nx-omni-core-v3', sibling: 'nexus_omni-core_v3.js', req: false,              tier: 'LIVE',      note: 'deobfuscation + chain analysis murni klien' },
-    { id: 'NexusEADI',       g: 'NexusEADI',       file: 'SuperEADI.js',              req: true,  test: 'eadi',  tier: 'LIVE',      note: 'watermark DCT ratio + CRC framing penuh di klien' },
-    { id: 'NexusLBC',        g: 'NexusLBC',        file: 'SuperLBC.js',               req: true,  test: 'lbc',   tier: 'PARTIAL',   note: 'MPT+Schnorr BIP-340 di klien; TIDAK ada node jaringan yang dapat ditulis' },
+    { id: 'NexusEADI',       g: 'NexusEADI',       script: 'nx-super-eadi', sibling: 'SuperEADI.js', req: true,  test: 'eadi',  tier: 'LIVE',      note: 'watermark DCT ratio + CRC framing penuh di klien (inlined)' },
+    { id: 'NexusLBC',        g: 'NexusLBC',        script: 'nx-super-lbc', sibling: 'SuperLBC.js', req: true,  test: 'lbc',   tier: 'PARTIAL',   note: 'MPT+Schnorr BIP-340 di klien; TIDAK ada node jaringan yang dapat ditulis (inlined)' },
     { id: 'NexusAku',        g: 'NexusAku',        script: 'nx-aku-module', sibling: 'NexusAku.js',           req: true,  test: 'aku',   tier: 'PARTIAL',   note: 'gerbang jati diri + HMAC; belum jalur identitas terdistribusi' },
     { id: 'NexusPharma',     g: 'NexusPharma',     script: 'nxp-engine',              req: false, test: 'pharma', tier: 'PARTIAL',  note: 'mesin farmasi; integrasi data/prod bergantung host' },
     { id: 'NexusDeck',       g: 'NexusDeck',       script: 'nxd-js',                  req: false, children: ['NexusLBC', 'NexusEADI'], tier: 'PARTIAL', note: 'deck mengorkestrasi LBC+EADI; kesiapan = min(anak)' },
