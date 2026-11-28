@@ -6388,6 +6388,183 @@ window.__nxMemInjected = 0; window.__nxMemTotal = null;
 function nxRefreshMemTotal() {
   try { return cortex.store.getAll().then(a => { window.__nxMemTotal = (a || []).length; }).catch(() => {}); } catch (e) { return Promise.resolve(); }
 }
+
+/* ── NEXUS ROBUST v1.0.1 · system-command bridge (aditif, zero-regresi) ──
+   Menangkap intent "cek/uji seluruh sistem/fungsi" di klien, menjalankan
+   runDiagnostics + NexusIntegrity.reportAsync({run:true}), lalu menampilkan
+   laporan terstruktur. Dewan tetap memakai [RUNTIME-NYATA]; fakta modul
+   kini bisa diisi self-test yang baru saja dijalankan. */
+window.__nxLastSystemReport = null;
+window.__nxSystemTestRunning = false;
+
+function nxIsSystemTestIntent(text) {
+  /* Zero-regresi: HANYA perintah sistem murni yang pendek.
+     Jangan menelan pertanyaan domain ("uji fungsi watermark EADI lalu jelaskan…"). */
+  var t = String(text || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!t || t.length > 120) return false;
+  // Tolak jika ada kata domain / permintaan penjelasan / aksi non-diagnostik
+  if (/\b(watermark|eadi|lbc|pharma|obat|drug|scene3d|chart|gambar|jelaskan|explain|bagaimana|how|kenapa|why|perbaiki|fix|buatkan|tuliskan|aspirin|molekul)\b/.test(t)) return false;
+  // Buang sapaan / kata pengantar berulang (Nexus, tolong, coba, …)
+  for (var i = 0; i < 4; i++) {
+    var n = t.replace(/^(nexus[,:\s]+|tolong\s+|mohon\s+|coba\s+|please\s+)/, '');
+    if (n === t) break;
+    t = n.trim();
+  }
+  var pure = /^(cek|periksa|uji|test|audit|scan|diagnos(?:e|is|tik)?|status)\s+(seluruh\s+|semua\s+|full\s+)?(sistem|system|fungsi|function|modul|module|integritas|integrity)(\s+(penuh|lengkap|full))?\s*[.!?]?$/i;
+  var pure2 = /^(self[\s-]?test|run\s*diagnostics|diagnostik(\s+sistem)?)\s*[.!?]?$/i;
+  var pure3 = /^(cek|uji|periksa)\s+(seluruh|semua)\s+(sistem|fungsi|modul)\s*[.!?]?$/i;
+  return pure.test(t) || pure2.test(t) || pure3.test(t);
+}
+
+async function nxRunFullSystemReport(opts) {
+  opts = opts || {};
+  if (window.__nxSystemTestRunning) {
+    return { ok: false, reason: 'already-running', report: window.__nxLastSystemReport };
+  }
+  window.__nxSystemTestRunning = true;
+  const lines = [];
+  const push = (s) => { lines.push(String(s)); };
+  try {
+    push('=== NEXUS FULL SYSTEM REPORT ===');
+    push('waktu: ' + new Date().toISOString());
+    push('app: v' + (typeof APP_VERSION !== 'undefined' ? APP_VERSION : '?'));
+
+    // 1) Built-in diagnostics (sync)
+    try {
+      if (typeof runDiagnostics === 'function') {
+        try { runDiagnostics(); } catch (de) { push('diagnostics: ERROR — ' + String(de && de.message || de).slice(0, 100)); }
+        push('diagnostics: dijalankan (detail PASS/FAIL di panel event)');
+      } else {
+        push('diagnostics: fungsi runDiagnostics tidak tersedia');
+      }
+    } catch (e) {
+      push('diagnostics: ERROR — ' + String(e && e.message || e).slice(0, 120));
+    }
+
+    // 2) Module self-tests via Integrity
+    let rows = [];
+    let verdict = null;
+    try {
+      const I = window.NexusIntegrity;
+      if (I && typeof I.reportAsync === 'function') {
+        rows = await I.reportAsync({ run: true, print: false, fresh: !!opts.fresh });
+        if (typeof I.verdict === 'function') verdict = I.verdict();
+      } else if (I && typeof I.report === 'function') {
+        rows = I.report({ print: false, fresh: !!opts.fresh });
+        if (typeof I.verdict === 'function') verdict = I.verdict();
+      } else {
+        push('integrity: NexusIntegrity tidak termuat');
+      }
+    } catch (e) {
+      push('integrity: ERROR — ' + String(e && e.message || e).slice(0, 120));
+    }
+
+    if (verdict) {
+      push('integritas: ' + (verdict.integrity || '?') + (verdict.ok ? ' (ok)' : ''));
+      if (verdict.reasons && verdict.reasons.length) {
+        push('alasan: ' + verdict.reasons.slice(0, 8).join('; '));
+      }
+      if (verdict.readiness) {
+        const rd = verdict.readiness;
+        push('kesiapan: ~' + (rd.pct != null ? rd.pct : '?') + '% · LIVE=[' + ((rd.live||[]).join(',')||'-') + '] PARTIAL=[' + ((rd.partial||[]).join(',')||'-') + ']');
+      }
+    }
+
+    if (rows && rows.length) {
+      push('--- modul ---');
+      rows.forEach(function (r) {
+        const st = r.selfTest || 'n/a';
+        push(
+          (r.id || '?') +
+          ' | v' + String(r.version || '?').slice(0, 16) +
+          ' | status=' + (r.status || '?') +
+          ' | checksum=' + (r.checksumStatus || '?') +
+          ' | api=' + (r.api || '?') +
+          ' | tier=' + (r.tier || '?') +
+          ' | test=' + st
+        );
+      });
+    }
+
+    // 3) Quick API probes (honest, measured)
+    try {
+      const w = window;
+      const probes = [];
+      probes.push('NexusTruth=' + (w.NexusTruth && typeof w.NexusTruth.calibrate === 'function' ? 'API' : '—'));
+      probes.push('NexusLBC=' + (w.NexusLBC && typeof w.NexusLBC.sha256Hex === 'function' ? 'API' : '—'));
+      probes.push('NexusEADI=' + (w.NexusEADI && typeof w.NexusEADI.embedSVD === 'function' ? 'API' : '—'));
+      probes.push('NexusAku=' + (w.NexusAku && typeof w.NexusAku.selfTest === 'function' ? 'API' : '—'));
+      probes.push('NexusOmniCoreV3=' + (w.NexusOmniCoreV3 && typeof w.NexusOmniCoreV3.analyze === 'function' ? 'API' : '—'));
+      probes.push('NexusIntegrity=' + (w.NexusIntegrity && typeof w.NexusIntegrity.verdict === 'function' ? 'API' : '—'));
+      probes.push('NexusPharma=' + (w.NexusPharma && typeof w.NexusPharma.selfTest === 'function' ? 'API' : '—'));
+      push('api-probe: ' + probes.join(', '));
+    } catch (e) {}
+
+    push('=== END REPORT ===');
+    push('Catatan: status OK/STABLE = kode termuat + checksum cocok. Self-test PASS = uji internal modul lulus. Bukan klaim siap produksi/OTF tanpa bukti terpisah.');
+
+    const text = lines.join('\n');
+    window.__nxLastSystemReport = { ts: Date.now(), text: text, rows: rows, verdict: verdict };
+    return { ok: true, text: text, rows: rows, verdict: verdict };
+  } catch (e) {
+    const text = 'System report gagal: ' + String(e && e.message || e);
+    window.__nxLastSystemReport = { ts: Date.now(), text: text, error: true };
+    return { ok: false, text: text };
+  } finally {
+    window.__nxSystemTestRunning = false;
+  }
+}
+
+/** Intercept: jika user meminta uji sistem, jalankan laporan nyata lalu tampilkan; kembalikan true jika sudah ditangani. */
+async function nxTryHandleSystemCommand(userText) {
+  if (!nxIsSystemTestIntent(userText)) return false;
+  try {
+    if (typeof showToast === 'function') showToast('Menjalankan uji sistem penuh…', 2200, false);
+  } catch (e) {}
+  try {
+    if (typeof logEvent === 'function') logEvent('SYSTEM', '[ROBUST] System-test intent terdeteksi — menjalankan laporan terukur');
+  } catch (e) {}
+
+  // Tampilkan pesan user
+  try {
+    if (typeof addMessageToUI === 'function') addMessageToUI('user', userText);
+    if (typeof chatHistory !== 'undefined' && Array.isArray(chatHistory)) {
+      chatHistory.push({ role: 'user', content: userText });
+    }
+  } catch (e) {}
+
+  const res = await nxRunFullSystemReport({ fresh: true });
+  const body = res && res.text ? res.text : 'Laporan tidak tersedia.';
+
+  // Suntik ke UI sebagai pesan sistem / assistant lokal (tanpa API call)
+  try {
+    if (typeof addMessageToUI === 'function') {
+      addMessageToUI('ai', '```\n' + body + '\n```\n\nLaporan di atas dihasilkan **lokal di browser** (runDiagnostics + NexusIntegrity.reportAsync). Dewan AI tidak dipanggil untuk pertanyaan ini agar tidak ada invent status.');
+    }
+    if (typeof chatHistory !== 'undefined' && Array.isArray(chatHistory)) {
+      chatHistory.push({ role: 'assistant', content: body });
+    }
+  } catch (e) {
+    try { console.log(body); } catch (x) {}
+  }
+  try {
+    if (typeof saveToStorage === 'function') saveToStorage();
+  } catch (e) {}
+  try {
+    if (typeof chatInput !== 'undefined' && chatInput) {
+      chatInput.disabled = false;
+      chatInput.value = '';
+      chatInput.style.height = 'auto';
+      try { chatInput.focus(); } catch (e2) {}
+    }
+    if (typeof sendBtn !== 'undefined' && sendBtn) { sendBtn.disabled = false; sendBtn.style.display = ''; }
+    if (typeof stopBtn !== 'undefined' && stopBtn) stopBtn.style.display = 'none';
+    if (typeof setStatus === 'function') setStatus('ready');
+  } catch (e) {}
+  return true;
+}
+
+
 /* Bukti nyata status modul untuk Dewan (aditif). Hanya fakta terukur dari NexusIntegrity + API probe; gagal → [] (perilaku lama). */
 function nxIntegrityFacts(T) {
   try {
@@ -7220,6 +7397,23 @@ async function sendMessage(forceNormal) {
         return;
     }
 
+    /* ROBUST: tangani uji sistem di klien — sinkron ke modul, tanpa HTTP, tanpa invent status */
+    if (!forceNormal) {
+        try {
+            if (typeof nxTryHandleSystemCommand === 'function') {
+                const handled = await nxTryHandleSystemCommand(userText);
+                if (handled) {
+                    chatInput.value = '';
+                    try { localStorage.removeItem('spc_draft'); } catch (e) {}
+                    chatInput.style.height = 'auto';
+                    return;
+                }
+            }
+        } catch (e) {
+            try { console.warn('[ROBUST] system command handler', e); } catch (x) {}
+        }
+    }
+
     isGenerating = true;
     setStatus('busy');
     lastUserRaw = userText;
@@ -7301,6 +7495,7 @@ async function sendMessage(forceNormal) {
         if (!response.ok) {
             let errMsg = `HTTP ${response.status}`;
             if (response.status === 401 || response.status === 403) errMsg = 'Invalid or missing API key.';
+            else if (response.status === 413) errMsg = 'HTTP 413 Request Entity Too Large — payload/prompt terlalu besar. Perpendek input, nonaktifkan memori panjang, atau muat modul eksternal (bukan satu file HTML monolitik).';
             else if (response.status === 402) errMsg = 'Free-tier rate limit / quota. Tunggu sebentar atau isi API key Pollinations (enter.pollinations.ai).';
             else if (response.status === 429) errMsg = 'Rate limited. Wait and retry.';
             try {
@@ -8395,6 +8590,21 @@ async function sendMultiAgentMessage() {
     if (userText.length > MAX_INPUT_CHARS) {
         showToast(`Terlalu panjang (maks ${MAX_INPUT_CHARS})`, 3000, true);
         return;
+    }
+
+    /* ROBUST: system-test intent di mode multi-agen juga ditangani lokal */
+    try {
+        if (typeof nxTryHandleSystemCommand === 'function') {
+            const handled = await nxTryHandleSystemCommand(userText);
+            if (handled) {
+                chatInput.value = '';
+                try { localStorage.removeItem('spc_draft'); } catch (e) {}
+                chatInput.style.height = 'auto';
+                return;
+            }
+        }
+    } catch (e) {
+        try { console.warn('[ROBUST] multi system command', e); } catch (x) {}
     }
 
     if (localBrainActive) {   // v6.9.4 soft guard: ≤2 ronde OK; >2 butuh UNLOCK (anti VRAM/overheat)
