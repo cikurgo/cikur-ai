@@ -35,11 +35,15 @@ var init={};for(var k in opts)init[k]=opts[k];init.signal=ctl.signal;
 return fetch(url,init).then(function(res){['arrayBuffer','blob','json','text','formData'].forEach(function(m){var f=res[m];if(typeof f==='function')res[m]=function(){return f.call(res).then(function(v){done();return v},function(e){done();throw e})}});return res},function(err){done();if(timedOut){var te=new DOMException('Permintaan melebihi batas waktu '+(ms/1000)+' detik dan dibatalkan','TimeoutError');try{if(typeof showToast==='function')showToast('Timeout: permintaan melebihi '+(ms/1000)+' detik dan dibatalkan',3500,true)}catch(x){}try{window.dispatchEvent(new CustomEvent('nxFetchTimeout',{detail:{url:String(url),ms:ms}}))}catch(x){}throw te}throw err})};
 })();
 </script>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@18.0.10/lib/marked.umd.js"></script>
+<script>window.marked||document.write('<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"><\/script>')</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/json5/2.2.3/index.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script>window.JSON5||document.write('<script src="https://cdn.jsdelivr.net/npm/json5@2.2.3/dist/index.min.js"><\/script>')</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script>window.DOMPurify||document.write('<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"><\/script>')</script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" onerror="this.onerror=null;this.href='https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/styles/atom-one-dark.min.css'">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>window.hljs||document.write('<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.9.0/highlight.min.js"><\/script>')</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';document.head.appendChild(s);})()"></script>
 <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;800&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
@@ -3775,7 +3779,10 @@ function saveToStorage() {
     let n = STORE_MAX, warned = false;
     while (n >= 0) {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, history: chatHistory.slice(-n), lastArtifact: lastCompiledArtifact }));
+            const payload = JSON.stringify({ settings, history: chatHistory.slice(-n), lastArtifact: lastCompiledArtifact });
+            /* FIX: override setItem (nx13) membuang data lama diam-diam bila >5MB → paksa jalur pemangkasan */
+            if (payload.length > 5 * 1024 * 1024) throw new Error('payload > 5MB');
+            localStorage.setItem(STORAGE_KEY, payload);
             if (warned) logEvent('SYSTEM', 'Storage penuh: riwayat tersimpan dipangkas ke ' + n + ' pesan.');
             return;
         } catch (e) { warned = true; n = n > 4 ? Math.floor(n / 2) : -1; }
@@ -19951,7 +19958,11 @@ html body #nx9-panel{z-index:50}
   }
 
   function persistCounter() {
-    window.__nexusLeakCount = leakCount;
+    /* FIX: jangan menulis lewat accessor __nexusLeakCount (setter memanggil persistCounter → rekursi tak terbatas) */
+    try {
+      var d = Object.getOwnPropertyDescriptor(window, '__nexusLeakCount');
+      if (!d || !d.get) window.__nexusLeakCount = leakCount;
+    } catch (e) {}
     return idbPut({
       id: 'counter',
       value: leakCount,
@@ -20691,7 +20702,7 @@ html body #instruments {
 {
  "schema": 1,
  "algo": "SHA-256",
- "generated": "2026-11-27",
+ "generated": "2026-11-28",
  "note": "Hashes use newline-normalized source (no trim). Consistent with NexusIntegrity.normalizeSource.",
  "scripts": {
   "nexus-truth-core": "f8fa49e8ef847b465e509dbe2ae9fc9c8e93256e467d756b660a8584e1af26fe",
@@ -20713,7 +20724,7 @@ html body #instruments {
   "nexus_truth_core_v13_7_2.js": "97c2ae2718fe18c3f273027450d58ecf6ff433467e7e98234d752861b3024588",
   "nexus-integrity.js": "77e7247026a892cd4739fad3311e21f1b53ff7827cb8631b100ec50e24545eba"
  },
- "build": "180a0baa84ff2da4e68cab769bcec17b45825b256ef7c913f6d242cbfe0f907d"
+ "build": "cb5dc77ac7de2b0adb4509532594e4c51b8611ba86f3c08322a3b841a95704f4"
 }
 
 </script>
